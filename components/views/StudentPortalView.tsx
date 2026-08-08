@@ -283,11 +283,16 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           </div>
 
           {pendingActivities.length === 0 ? (
-            <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb] space-y-3">
-              <CheckCircle2 className="w-12 h-12 text-[#4ade80] mx-auto opacity-80" />
-              <p className="text-sm font-semibold text-white">Você não possui atividades pendentes!</p>
-              <p className="text-xs">
-                Todas as atividades disponibilizadas para a turma {student.turma} foram concluídas. Confira suas notas na aba <strong>&ldquo;Correções&rdquo;</strong>.
+            <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb] space-y-3 shadow-xl">
+              <div className="w-16 h-16 bg-[#4ade80]/10 border border-[#4ade80]/30 rounded-2xl flex items-center justify-center mx-auto text-[#4ade80] text-2xl font-black">
+                🍃
+              </div>
+              <p className="text-base font-extrabold text-white">Nenhuma Missão Pendente na Vila da Folha!</p>
+              <p className="text-xs text-[#bccabb] max-w-md mx-auto leading-relaxed">
+                Dattebayo! Você concluiu todos os pergaminhos e treinos de Sociologia para a turma <strong className="text-white">{student.turma}</strong>. Descanse no Ichiraku Lamen enquanto o Sensei prepara novas missões! 🍜
+              </p>
+              <p className="text-[11px] font-semibold text-[#4ade80] pt-2">
+                Confira o resultado dos seus jutsus e notas na aba &ldquo;Correções e Notas&rdquo;.
               </p>
             </div>
           ) : (
@@ -499,8 +504,14 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           </div>
 
           {submittedActivities.length === 0 ? (
-            <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb]">
-              Você ainda não enviou nenhuma atividade. Acesse a aba <strong>&ldquo;Atividades a Fazer&rdquo;</strong> para responder.
+            <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb] space-y-3 shadow-xl">
+              <div className="w-16 h-16 bg-[#c0c1ff]/10 border border-[#c0c1ff]/30 rounded-2xl flex items-center justify-center mx-auto text-[#c0c1ff] text-2xl font-black">
+                📜
+              </div>
+              <p className="text-base font-extrabold text-white">Nenhum Pergaminho de Treino Entregue Ainda!</p>
+              <p className="text-xs text-[#bccabb] max-w-md mx-auto leading-relaxed">
+                Você ainda não entregou nenhum pergaminho para avaliação do Sensei. Acesse a aba <strong>&ldquo;Atividades a Fazer&rdquo;</strong>, concentre seu chakra e envie suas respostas! ⚡
+              </p>
             </div>
           ) : (
             <div className="space-y-6">
@@ -633,8 +644,14 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           </div>
 
           {studentLibraryFiles.length === 0 ? (
-            <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb]">
-              Nenhum arquivo disponibilizado para sua turma até o momento.
+            <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb] space-y-3 shadow-xl">
+              <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center mx-auto text-amber-400 text-2xl font-black">
+                🌀
+              </div>
+              <p className="text-base font-extrabold text-white">Biblioteca do Clã sem Arquivos!</p>
+              <p className="text-xs text-[#bccabb] max-w-md mx-auto leading-relaxed">
+                Nenhum pergaminho ou documento foi liberado para sua turma ainda. Fique atento aos novos lançamentos do Sensei!
+              </p>
             </div>
           ) : (
             <div className="space-y-3">

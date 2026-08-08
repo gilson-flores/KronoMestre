@@ -276,13 +276,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                     {/* Right Actions */}
                     <div className="flex flex-wrap items-center gap-2.5 self-end lg:self-center">
-                      <button
-                        onClick={() => onSelectActivityForGrading(act)}
-                        className="px-4 py-2 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full text-xs flex items-center gap-1.5 transition-all shadow-md shadow-[#4ade80]/10 cursor-pointer"
-                      >
-                        <CheckCheck className="w-4 h-4 stroke-[2.5]" />
-                        <span>{act.pendingCorrection > 0 ? `Corrigir (${act.pendingCorrection})` : 'Acessar Correções'}</span>
-                      </button>
+                      {isCorrecoes && (
+                        <button
+                          onClick={() => onSelectActivityForGrading(act)}
+                          className="px-4 py-2 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full text-xs flex items-center gap-1.5 transition-all shadow-md shadow-[#4ade80]/10 cursor-pointer"
+                        >
+                          <CheckCheck className="w-4 h-4 stroke-[2.5]" />
+                          <span>{act.pendingCorrection > 0 ? `Corrigir (${act.pendingCorrection})` : 'Acessar Correções'}</span>
+                        </button>
+                      )}
 
                       {!isCorrecoes && (
                         <button
