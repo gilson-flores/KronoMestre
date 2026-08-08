@@ -160,7 +160,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                         <div className="bg-[#171f33] p-4 rounded-xl border border-white/5 space-y-1">
                           <span className="text-xs font-bold text-[#c0c1ff] flex items-center gap-1.5">
                             <MessageSquare className="w-4 h-4" />
-                            <span>Feedback do Prof. Silva:</span>
+                            <span>Feedback do Professor:</span>
                           </span>
                           <p className="text-xs text-[#dae2fd] italic">
                             "{submission.teacherFeedback}"
@@ -170,7 +170,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                     </div>
                   ) : isSubmitted ? (
                     <div className="bg-[#131b2e] p-4 rounded-2xl border border-white/5 text-xs text-[#bccabb] italic">
-                      Sua resposta foi enviada ao Prof. Silva e está aguardando correção.
+                      Sua resposta foi enviada ao professor e está aguardando correção.
                     </div>
                   ) : (
                     /* Response Input Area */

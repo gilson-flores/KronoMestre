@@ -93,14 +93,14 @@ export const GradingView: React.FC<GradingViewProps> = ({
         {/* Counter Badge */}
         <div className="glass-panel px-6 py-3 rounded-full border border-white/10 flex items-center gap-6 shrink-0 self-start lg:self-center">
           <div className="text-center">
-            <span className="text-xl font-extrabold text-[#4ade80]">{gradedCount}/35</span>
+            <span className="text-xl font-extrabold text-[#4ade80]">{gradedCount}/{submissions.length}</span>
             <span className="block text-[10px] font-bold text-[#bccabb] tracking-wider uppercase">
               Corrigidos
             </span>
           </div>
           <div className="w-px h-8 bg-white/10"></div>
           <div className="text-center">
-            <span className="text-xl font-extrabold text-white">{pendingCount || 23}</span>
+            <span className="text-xl font-extrabold text-white">{pendingCount}</span>
             <span className="block text-[10px] font-bold text-[#bccabb] tracking-wider uppercase">
               Pendentes
             </span>
@@ -108,9 +108,14 @@ export const GradingView: React.FC<GradingViewProps> = ({
         </div>
       </div>
 
-      {/* Student Cards Grid (Matching Image 2) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {submissions.map((sub) => {
+      {/* Student Cards Grid */}
+      {submissions.length === 0 ? (
+        <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb]">
+          Nenhuma resposta enviada para esta atividade ainda.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {submissions.map((sub) => {
           const isSaved = savedSuccessId === sub.studentId;
 
           return (
@@ -235,6 +240,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
           );
         })}
       </div>
+      )}
     </div>
   );
 };

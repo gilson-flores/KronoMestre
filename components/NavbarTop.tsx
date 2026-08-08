@@ -3,6 +3,7 @@
 import React from 'react';
 import { Bell, Settings, Search, BookOpen } from 'lucide-react';
 import { UserRole, TeacherUser, StudentUser } from '@/lib/types';
+import { formatAvatarUrl } from '@/lib/utils';
 
 interface NavbarTopProps {
   role: UserRole;
@@ -67,9 +68,12 @@ export const NavbarTop: React.FC<NavbarTopProps> = ({
         {user && (
           <div className="flex items-center gap-2 pl-2 border-l border-white/10">
             <img
-              src={'avatarUrl' in user ? user.avatarUrl : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150'}
+              src={formatAvatarUrl('avatarUrl' in user ? user.avatarUrl : '')}
               alt={'name' in user ? user.name : user.fullName}
               className="w-8 h-8 rounded-full object-cover border border-[#4ade80]/30"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150';
+              }}
             />
             <div className="hidden lg:block text-left">
               <p className="text-xs font-bold text-white leading-tight">

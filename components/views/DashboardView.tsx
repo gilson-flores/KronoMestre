@@ -12,7 +12,8 @@ import {
   Pencil,
   FileSpreadsheet,
   Eye,
-  CheckCheck
+  CheckCheck,
+  Trash2
 } from 'lucide-react';
 import { Activity } from '@/lib/types';
 
@@ -22,6 +23,7 @@ interface DashboardViewProps {
   onSelectActivityForGrading: (act: Activity) => void;
   onEditActivity: (act: Activity) => void;
   onGenerateDossier: (act: Activity) => void;
+  onDeleteActivity?: (act: Activity) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -30,12 +32,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onSelectActivityForGrading,
   onEditActivity,
   onGenerateDossier,
+  onDeleteActivity,
 }) => {
-  // Calculate top KPI stats from state
+  // Calculate top KPI stats from real state
   const totalSubmissions = activities.reduce((acc, a) => acc + a.totalSubmissions, 0);
   const totalExpected = activities.reduce((acc, a) => acc + a.totalStudents, 0);
-  const completionRate = totalExpected > 0 ? Math.round((totalSubmissions / totalExpected) * 100) : 87;
+  const completionRate = totalExpected > 0 ? Math.round((totalSubmissions / totalExpected) * 100) : 0;
   const pendingCorrections = activities.reduce((acc, a) => acc + a.pendingCorrection, 0);
+
+  const activitiesWithGrades = activities.filter((a) => a.averageGrade !== undefined && a.averageGrade > 0);
+  const overallAverage = activitiesWithGrades.length > 0
+    ? (activitiesWithGrades.reduce((acc, a) => acc + (a.averageGrade || 0), 0) / activitiesWithGrades.length).toFixed(1)
+    : '0.0';
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -59,7 +67,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </button>
       </div>
 
-      {/* KPI Metrics Cards (Matching Image 1) */}
+      {/* KPI Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* Metric 1 */}
         <div className="glass-panel p-6 rounded-3xl border border-white/10 relative overflow-hidden group">
@@ -73,7 +81,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
           <div className="text-4xl font-extrabold text-white mb-2">{completionRate}%</div>
           <div className="flex items-center gap-1.5 text-xs text-[#4ade80] font-semibold">
-            <span>↗ +5% este mês</span>
+            <span>{totalSubmissions} entregas de {totalExpected} esperadas</span>
           </div>
         </div>
 
@@ -87,8 +95,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <BarChart3 className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-4xl font-extrabold text-white mb-2">7.4</div>
-          <div className="text-xs text-[#bccabb]">Turma 3º A liderando</div>
+          <div className="text-4xl font-extrabold text-white mb-2">{overallAverage}</div>
+          <div className="text-xs text-[#bccabb]">
+            {activitiesWithGrades.length > 0 ? `${activitiesWithGrades.length} atividade(s) avaliada(s)` : 'Nenhuma avaliação concluída'}
+          </div>
         </div>
 
         {/* Metric 3 */}
@@ -101,9 +111,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <AlertTriangle className="w-5 h-5" />
             </div>
           </div>
-          <div className="text-4xl font-extrabold text-white mb-2">{pendingCorrections || 12}</div>
+          <div className="text-4xl font-extrabold text-white mb-2">{pendingCorrections}</div>
           <div className="flex items-center gap-1.5 text-xs text-rose-300 font-semibold">
-            <span>⚠ Prazo próximo</span>
+            <span>{pendingCorrections > 0 ? 'Aguardando correção pedagógica' : 'Todas as correções em dia'}</span>
           </div>
         </div>
       </div>
@@ -113,7 +123,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <h2 className="text-xl font-bold text-white tracking-tight">Atividades Recentes</h2>
 
         <div className="space-y-4">
-          {activities.map((act) => {
+          {activities.length === 0 ? (
+            <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb]">
+              Nenhuma atividade cadastrada no momento. Clique em "+ Nova Atividade" para começar.
+            </div>
+          ) : (
+            activities.map((act) => {
             let Icon = FileText;
             if (act.type === 'Simulado') Icon = FileQuestion;
             if (act.type === 'Dinâmica') Icon = Users2;
@@ -227,11 +242,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         <span>Ver Resultados</span>
                       </button>
                     )}
+
+                    {onDeleteActivity && (
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`Tem certeza que deseja excluir a atividade "${act.title}"?`)) {
+                            onDeleteActivity(act);
+                          }
+                        }}
+                        className="px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 rounded-full text-xs font-bold border border-rose-500/20 flex items-center gap-1.5 transition-colors cursor-pointer"
+                        title="Excluir Atividade"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Excluir</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
             );
-          })}
+          })
+        )}
         </div>
       </div>
     </div>

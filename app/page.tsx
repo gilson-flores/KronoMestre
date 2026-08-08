@@ -55,6 +55,30 @@ export default function Home() {
 
     const loadData = async () => {
       try {
+        // 0. Carregar Dados do Professor
+        const { data: authUser } = await client.auth.getUser();
+        const activeEmail = authUser?.user?.email || teacher.email;
+
+        if (activeEmail) {
+          const { data: teacherRow } = await client
+            .from('teachers')
+            .select('*')
+            .eq('email', activeEmail)
+            .maybeSingle();
+
+          if (teacherRow) {
+            setTeacher({
+              id: teacherRow.id,
+              name: teacherRow.name,
+              subject: teacherRow.subject || 'Sociologia',
+              email: teacherRow.email,
+              avatarUrl: teacherRow.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
+              phone: teacherRow.phone || '',
+              school: teacherRow.school || '',
+            });
+          }
+        }
+
         // 1. Carregar Alunos do Supabase
         const { data: dbStudents } = await client.from('students').select('*');
         if (dbStudents && dbStudents.length > 0) {
@@ -107,7 +131,7 @@ export default function Home() {
               status: act.status,
               deadline: act.deadline,
               totalSubmissions: act.total_submissions || subs.length,
-              totalStudents: act.total_students || 35,
+              totalStudents: act.total_students || 0,
               pendingCorrection: act.pending_correction || subs.filter((s) => s.status === 'pending').length,
               averageGrade: act.average_grade ? Number(act.average_grade) : undefined,
               completedDate: act.completed_date,
@@ -161,6 +185,25 @@ export default function Home() {
         });
       } catch (err) {
         console.error('Erro ao salvar atividade no Supabase:', err);
+      }
+    }
+  };
+
+  const handleDeleteActivity = async (activity: Activity) => {
+    setActivities((prev) => prev.filter((a) => a.id !== activity.id));
+    if (selectedActivityForGrading?.id === activity.id) {
+      setSelectedActivityForGrading(null);
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('submissions').delete().eq('activity_id', activity.id);
+        const { error } = await supabase.from('activities').delete().eq('id', activity.id);
+        if (error) {
+          console.error('Erro ao excluir atividade no Supabase:', error);
+        }
+      } catch (err) {
+        console.error('Erro ao excluir atividade no Supabase:', err);
       }
     }
   };
@@ -412,6 +455,7 @@ export default function Home() {
               onSelectActivityForGrading={handleSelectActivityForGrading}
               onEditActivity={(act) => alert(`Editando atividade: ${act.title}`)}
               onGenerateDossier={handleGenerateDossier}
+              onDeleteActivity={handleDeleteActivity}
             />
           )}
 
@@ -422,15 +466,22 @@ export default function Home() {
               onSelectActivityForGrading={handleSelectActivityForGrading}
               onEditActivity={(act) => alert(`Editando atividade: ${act.title}`)}
               onGenerateDossier={handleGenerateDossier}
+              onDeleteActivity={handleDeleteActivity}
             />
           )}
 
           {currentTab === 'grading' && (
-            <GradingView
-              activity={selectedActivityForGrading || activities[3]}
-              onBack={() => setCurrentTab('atividades')}
-              onUpdateSubmission={handleUpdateSubmission}
-            />
+            selectedActivityForGrading || activities[0] ? (
+              <GradingView
+                activity={selectedActivityForGrading || activities[0]}
+                onBack={() => setCurrentTab('atividades')}
+                onUpdateSubmission={handleUpdateSubmission}
+              />
+            ) : (
+              <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb]">
+                Nenhuma atividade selecionada para correção.
+              </div>
+            )
           )}
 
           {currentTab === 'alunos' && (
@@ -516,26 +567,45 @@ export default function Home() {
                         return;
                       }
                       
-                      const { error } = await supabase
+                      const payload: any = {
+                        email: teacher.email,
+                        name: teacher.name,
+                        subject: teacher.subject,
+                        avatar_url: teacher.avatarUrl,
+                        phone: teacher.phone || null,
+                        school: teacher.school || null,
+                      };
+
+                      if (teacher.id) {
+                        payload.id = teacher.id;
+                      }
+
+                      const { data: updatedData, error } = await supabase
                         .from('teachers')
-                        .update({
-                          name: teacher.name,
-                          subject: teacher.subject,
-                          avatar_url: teacher.avatarUrl,
-                          phone: teacher.phone,
-                          school: teacher.school
-                        })
-                        .eq('email', teacher.email);
+                        .upsert(payload, { onConflict: 'email' })
+                        .select('*')
+                        .maybeSingle();
 
                       if (error) {
                         console.error('Erro ao salvar no Supabase:', error);
-                        alert('Erro ao salvar configurações.');
+                        alert(`Erro ao salvar configurações no Supabase: ${error.message}`);
                       } else {
-                        alert('Configurações atualizadas com sucesso!');
+                        if (updatedData) {
+                          setTeacher({
+                            id: updatedData.id,
+                            name: updatedData.name,
+                            subject: updatedData.subject || 'Sociologia',
+                            email: updatedData.email,
+                            avatarUrl: updatedData.avatar_url || teacher.avatarUrl,
+                            phone: updatedData.phone || '',
+                            school: updatedData.school || '',
+                          });
+                        }
+                        alert('Configurações salvas e sincronizadas com sucesso com a tabela teachers!');
                       }
-                    } catch (err) {
+                    } catch (err: any) {
                       console.error(err);
-                      alert('Erro ao atualizar configurações.');
+                      alert('Erro ao atualizar configurações: ' + (err?.message || ''));
                     }
                   }}
                   className="py-3 px-6 bg-[#4ade80] text-[#003919] font-bold rounded-full cursor-pointer hover:bg-[#6bfb9a] transition-all"

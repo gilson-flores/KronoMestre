@@ -12,6 +12,7 @@ import {
   FileCheck
 } from 'lucide-react';
 import { TeacherUser } from '@/lib/types';
+import { formatAvatarUrl } from '@/lib/utils';
 
 interface SidebarProps {
   currentTab: string;
@@ -43,9 +44,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex flex-col items-center pt-2 text-center">
           <div className="relative mb-3">
             <img
-              src={teacher.avatarUrl}
-              alt={teacher.name}
+              src={formatAvatarUrl(teacher.avatarUrl)}
+              alt={teacher.name || 'Professor'}
               className="w-20 h-20 rounded-full object-cover border-2 border-[#4ade80]/40 shadow-lg"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250';
+              }}
             />
             <span className="absolute bottom-0 right-1 w-4 h-4 bg-[#4ade80] border-2 border-[#0b1326] rounded-full"></span>
           </div>

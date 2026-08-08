@@ -55,31 +55,65 @@ export const AuthView: React.FC<AuthViewProps> = ({
         password: teacherPassword,
       });
 
-      if (authData?.user) {
-        onLoginTeacher({
-          id: authData.user.id,
-          name: authData.user.user_metadata?.full_name || teacherEmail.split('@')[0],
-          subject: 'Sociologia',
-          email: authData.user.email || teacherEmail,
-          avatarUrl: teacher.avatarUrl,
-        });
-        return;
-      }
-
-      // 2. Se não autenticou no Supabase Auth, verificar na tabela 'teachers' do Supabase
+      // Buscar perfil na tabela 'teachers'
       const { data: dbTeacher, error: dbError } = await supabase
         .from('teachers')
         .select('*')
         .eq('email', teacherEmail)
         .maybeSingle();
 
+      if (authData?.user) {
+        let teacherProfile: TeacherUser = {
+          id: dbTeacher?.id || authData.user.id,
+          name: dbTeacher?.name || authData.user.user_metadata?.full_name || teacherEmail.split('@')[0],
+          subject: dbTeacher?.subject || 'Sociologia',
+          email: authData.user.email || teacherEmail,
+          avatarUrl: dbTeacher?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
+          phone: dbTeacher?.phone || '',
+          school: dbTeacher?.school || '',
+        };
+
+        // Upsert na tabela 'teachers' para garantir sincronização com Supabase
+        const { data: upsertedTeacher, error: upsertError } = await supabase
+          .from('teachers')
+          .upsert({
+            id: teacherProfile.id,
+            email: teacherProfile.email,
+            name: teacherProfile.name,
+            subject: teacherProfile.subject,
+            avatar_url: teacherProfile.avatarUrl,
+            phone: teacherProfile.phone || null,
+            school: teacherProfile.school || null,
+          }, { onConflict: 'email' })
+          .select('*')
+          .maybeSingle();
+
+        if (upsertedTeacher) {
+          teacherProfile = {
+            id: upsertedTeacher.id,
+            name: upsertedTeacher.name,
+            subject: upsertedTeacher.subject || 'Sociologia',
+            email: upsertedTeacher.email,
+            avatarUrl: upsertedTeacher.avatar_url || teacherProfile.avatarUrl,
+            phone: upsertedTeacher.phone || '',
+            school: upsertedTeacher.school || '',
+          };
+        }
+
+        onLoginTeacher(teacherProfile);
+        return;
+      }
+
+      // 2. Se não autenticou no Supabase Auth, verificar se existe na tabela 'teachers'
       if (dbTeacher) {
         onLoginTeacher({
           id: dbTeacher.id,
           name: dbTeacher.name,
           subject: dbTeacher.subject || 'Sociologia',
           email: dbTeacher.email,
-          avatarUrl: dbTeacher.avatar_url || teacher.avatarUrl,
+          avatarUrl: dbTeacher.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
+          phone: dbTeacher.phone || '',
+          school: dbTeacher.school || '',
         });
         return;
       }
