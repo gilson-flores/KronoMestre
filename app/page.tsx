@@ -21,6 +21,7 @@ import { StudentPortalView } from '@/components/views/StudentPortalView';
 
 import { NewActivityModal } from '@/components/modals/NewActivityModal';
 import { EditActivityModal } from '@/components/modals/EditActivityModal';
+import { ViewActivityModal } from '@/components/modals/ViewActivityModal';
 import { NewStudentModal } from '@/components/modals/NewStudentModal';
 import { EditStudentModal } from '@/components/modals/EditStudentModal';
 
@@ -49,6 +50,33 @@ export default function Home() {
   const [editingStudent, setEditingStudent] = useState<StudentUser | null>(null);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [isEditActivityModalOpen, setIsEditActivityModalOpen] = useState(false);
+  const [viewingActivity, setViewingActivity] = useState<Activity | null>(null);
+
+  // 0. Carregar atividades do LocalStorage primeiro para evitar perdas
+  useEffect(() => {
+    try {
+      const savedLocalActivities = localStorage.getItem('sensei_activities_v4');
+      if (savedLocalActivities) {
+        const parsed = JSON.parse(savedLocalActivities);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setActivities(parsed);
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao ler atividades do LocalStorage:', e);
+    }
+  }, []);
+
+  // Salvar no LocalStorage sempre que houver alteração em activities
+  useEffect(() => {
+    try {
+      if (activities && activities.length > 0) {
+        localStorage.setItem('sensei_activities_v4', JSON.stringify(activities));
+      }
+    } catch (e) {
+      console.error('Erro ao persistir atividades no LocalStorage:', e);
+    }
+  }, [activities]);
 
   // Carregar dados iniciais do Supabase se configurado
   useEffect(() => {
@@ -124,14 +152,32 @@ export default function Home() {
                 teacherFeedback: sub.teacher_feedback,
               }));
 
+            let parsedQuestions = [];
+            if (act.questions) {
+              if (typeof act.questions === 'string') {
+                try {
+                  parsedQuestions = JSON.parse(act.questions);
+                } catch {
+                  parsedQuestions = [];
+                }
+              } else if (Array.isArray(act.questions)) {
+                parsedQuestions = act.questions;
+              }
+            }
+
             return {
               id: act.id,
               title: act.title,
-              description: act.description,
-              turma: act.turma,
-              type: act.type,
-              status: act.status,
-              deadline: act.deadline,
+              subject: act.subject || 'Sociologia',
+              description: act.description || '',
+              supportMaterial: act.support_material || act.supportMaterial || '',
+              turma: act.turma || '',
+              type: act.type || 'Avaliação',
+              status: act.status || 'Ativo',
+              deadline: act.deadline || '',
+              maxGrade: act.max_grade ? Number(act.max_grade) : (act.maxGrade || 10),
+              allowGroupWork: act.allow_group_work !== undefined ? Boolean(act.allow_group_work) : Boolean(act.allowGroupWork),
+              questions: parsedQuestions,
               totalSubmissions: act.total_submissions || subs.length,
               totalStudents: act.total_students || 0,
               pendingCorrection: act.pending_correction || subs.filter((s) => s.status === 'pending').length,
@@ -169,21 +215,26 @@ export default function Home() {
 
   // Activity Handlers
   const handleCreateActivity = async (newAct: Activity) => {
-    setActivities([newAct, ...activities]);
+    setActivities((prev) => [newAct, ...prev]);
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('activities').insert({
+        await supabase.from('activities').upsert({
           id: newAct.id,
           title: newAct.title,
-          description: newAct.description,
-          turma: newAct.turma,
+          subject: newAct.subject || 'Sociologia',
+          description: newAct.description || '',
+          support_material: newAct.supportMaterial || '',
+          turma: newAct.turma || '',
           type: newAct.type,
           status: newAct.status,
-          deadline: newAct.deadline,
-          total_submissions: newAct.totalSubmissions,
-          total_students: newAct.totalStudents,
-          pending_correction: newAct.pendingCorrection,
+          deadline: newAct.deadline || '',
+          max_grade: newAct.maxGrade || 10,
+          allow_group_work: newAct.allowGroupWork || false,
+          questions: JSON.stringify(newAct.questions || []),
+          total_submissions: newAct.totalSubmissions || 0,
+          total_students: newAct.totalStudents || 0,
+          pending_correction: newAct.pendingCorrection || 0,
         });
       } catch (err) {
         console.error('Erro ao salvar atividade no Supabase:', err);
@@ -201,15 +252,25 @@ export default function Home() {
       try {
         await supabase
           .from('activities')
-          .update({
+          .upsert({
+            id: updatedAct.id,
             title: updatedAct.title,
-            description: updatedAct.description,
-            turma: updatedAct.turma,
+            subject: updatedAct.subject || 'Sociologia',
+            description: updatedAct.description || '',
+            support_material: updatedAct.supportMaterial || '',
+            turma: updatedAct.turma || '',
             type: updatedAct.type,
             status: updatedAct.status,
-            deadline: updatedAct.deadline,
-          })
-          .eq('id', updatedAct.id);
+            deadline: updatedAct.deadline || '',
+            max_grade: updatedAct.maxGrade || 10,
+            allow_group_work: updatedAct.allowGroupWork || false,
+            questions: JSON.stringify(updatedAct.questions || []),
+            total_submissions: updatedAct.totalSubmissions,
+            total_students: updatedAct.totalStudents,
+            pending_correction: updatedAct.pendingCorrection,
+            average_grade: updatedAct.averageGrade,
+            completed_date: updatedAct.completedDate,
+          });
       } catch (err) {
         console.error('Erro ao atualizar atividade no Supabase:', err);
       }
@@ -561,6 +622,7 @@ export default function Home() {
                 setEditingActivity(act);
                 setIsEditActivityModalOpen(true);
               }}
+              onViewActivity={(act) => setViewingActivity(act)}
               onGenerateDossier={handleGenerateDossier}
               onDeleteActivity={handleDeleteActivity}
             />
@@ -579,6 +641,7 @@ export default function Home() {
                 setEditingActivity(act);
                 setIsEditActivityModalOpen(true);
               }}
+              onViewActivity={(act) => setViewingActivity(act)}
               onGenerateDossier={handleGenerateDossier}
               onDeleteActivity={handleDeleteActivity}
             />
@@ -756,6 +819,17 @@ export default function Home() {
         }}
         activity={editingActivity}
         onSaveActivity={handleSaveActivity}
+      />
+
+      <ViewActivityModal
+        isOpen={Boolean(viewingActivity)}
+        activity={viewingActivity}
+        onClose={() => setViewingActivity(null)}
+        onEditActivity={(act) => {
+          setEditingActivity(act);
+          setIsEditActivityModalOpen(true);
+        }}
+        onGoToGrading={handleSelectActivityForGrading}
       />
 
       <NewStudentModal

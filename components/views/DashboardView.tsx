@@ -16,6 +16,7 @@ import {
   TrendingUp,
   Layers,
   Award,
+  Eye
 } from 'lucide-react';
 import { Activity } from '@/lib/types';
 
@@ -24,6 +25,7 @@ interface DashboardViewProps {
   onOpenNewActivityModal: () => void;
   onSelectActivityForGrading: (act: Activity) => void;
   onEditActivity: (act: Activity) => void;
+  onViewActivity?: (act: Activity) => void;
   onGenerateDossier: (act: Activity) => void;
   onDeleteActivity?: (act: Activity) => void;
   title?: string;
@@ -37,6 +39,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenNewActivityModal,
   onSelectActivityForGrading,
   onEditActivity,
+  onViewActivity,
   onGenerateDossier,
   onDeleteActivity,
   title = 'Studio',
@@ -276,6 +279,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                     {/* Right Actions */}
                     <div className="flex flex-wrap items-center gap-2.5 self-end lg:self-center">
+                      {onViewActivity && (
+                        <button
+                          onClick={() => onViewActivity(act)}
+                          className="px-4 py-2 bg-[#1d273d] hover:bg-[#283654] text-[#dae2fd] hover:text-white rounded-full text-xs font-bold border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+                          title="Ver detalhes da atividade criada"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-sky-400" />
+                          <span>Ver Atividade</span>
+                        </button>
+                      )}
+
                       {isCorrecoes && (
                         <button
                           onClick={() => onSelectActivityForGrading(act)}

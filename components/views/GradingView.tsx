@@ -17,7 +17,8 @@ import {
   UserX,
   ChevronDown,
   Check,
-  Send
+  Send,
+  Loader2
 } from 'lucide-react';
 import { Activity, ActivitySubmission, StudentUser, EssayQuestion } from '@/lib/types';
 import { canStudentAccessActivity } from '@/lib/studentUtils';
@@ -75,6 +76,41 @@ export const GradingView: React.FC<GradingViewProps> = ({
   const [aiDiagnosticMap, setAiDiagnosticMap] = useState<Record<string, AIDiagnostic>>({});
   const [aiErrorMessage, setAiErrorMessage] = useState<string | null>(null);
 
+  // Naruto-themed Gemini AI Feedback state
+  const [generatingFeedbackStudentId, setGeneratingFeedbackStudentId] = useState<string | null>(null);
+
+  const handleGenerateAiFeedback = async (sub: ActivitySubmission, statusAction: 'graded' | 'returned') => {
+    try {
+      setGeneratingFeedbackStudentId(sub.studentId);
+      
+      const objTotal = activity.questions ? activity.questions.filter(q => q.type === 'multiple_choice').length : 0;
+      const objCorrect = sub.objectiveScore ? Math.round(sub.objectiveScore) : 0;
+      const currentScore = (sub.objectiveScore || 0) + (sub.essayScore || 0) + (sub.extraPoints || 0);
+
+      const res = await fetch('/api/gemini/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentName: sub.studentName,
+          activityTitle: activity.title,
+          grade: currentScore,
+          statusAction,
+          essayAnswer: sub.essayAnswer || '',
+          objectiveSummary: { total: objTotal, correct: objCorrect },
+        }),
+      });
+
+      const data = await res.json();
+      if (data.feedback) {
+        handleFeedbackChange(sub.studentId, data.feedback);
+      }
+    } catch (err) {
+      console.error('Erro ao gerar feedback do Sensei com Gemini:', err);
+    } finally {
+      setGeneratingFeedbackStudentId(null);
+    }
+  };
+
   if (activity.id !== prevActivityId) {
     setPrevActivityId(activity.id);
     setSubmissions(activity.submissions || []);
@@ -100,8 +136,8 @@ export const GradingView: React.FC<GradingViewProps> = ({
   };
 
   const handleFeedbackChange = (studentId: string, text: string) => {
-    // Limit feedback to 300 characters
-    const trimmed = text.slice(0, 300);
+    // Limit feedback to 400 characters
+    const trimmed = text.slice(0, 400);
     setSubmissions((prev) =>
       prev.map((sub) => (sub.studentId === studentId ? { ...sub, teacherFeedback: trimmed } : sub))
     );
@@ -740,22 +776,43 @@ export const GradingView: React.FC<GradingViewProps> = ({
           </span>
         </div>
 
-        {/* Teacher Feedback Textarea (Limit 300 chars) */}
+        {/* Teacher Feedback Textarea */}
         <div>
-          <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
             <label className="block text-[11px] font-bold text-[#bccabb] uppercase tracking-wider">
-              Feedback Pedagógico ao Aluno
+              Feedback Pedagógico do Sensei ao Aluno
             </label>
-            <span className="text-[10px] text-[#869486]">
-              {(sub.teacherFeedback || '').length}/300 caracteres
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleGenerateAiFeedback(sub, 'graded')}
+                disabled={generatingFeedbackStudentId === sub.studentId}
+                className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold rounded-lg text-[10px] flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                title="Gerar feedback pedagógico temático de Naruto com o Gemini"
+              >
+                {generatingFeedbackStudentId === sub.studentId ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
+                    <span>Invocando Sensei Gemini... 🍃</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Feedback Ninja (Gemini) ⚡</span>
+                  </>
+                )}
+              </button>
+              <span className="text-[10px] text-[#869486]">
+                {(sub.teacherFeedback || '').length}/400
+              </span>
+            </div>
           </div>
           <textarea
             rows={3}
-            maxLength={300}
+            maxLength={400}
             value={sub.teacherFeedback || ''}
             onChange={(e) => handleFeedbackChange(sub.studentId, e.target.value)}
-            placeholder="Feedback motivacional, com elogio ou alerta e observação de gramática (máx 300 caracteres)..."
+            placeholder="Feedback motivacional do Sensei, observações sobre a resposta e recomendações de estudo..."
             className="w-full bg-[#131b2e] border border-white/10 rounded-2xl p-3.5 text-xs text-[#dae2fd] placeholder-[#869486] focus:outline-none focus:border-[#4ade80] transition-all resize-none"
           />
         </div>
