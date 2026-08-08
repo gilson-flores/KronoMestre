@@ -355,7 +355,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
 
             <p className="text-xs text-[#dae2fd] bg-[#131b2e] p-4 rounded-2xl border border-white/5 leading-relaxed">
-              Tem certeza que deseja excluir a atividade <strong className="text-white">"{activityToDelete.title}"</strong>? Todas as entregas e correções associadas a ela serão removidas.
+              Tem certeza que deseja excluir a atividade <strong className="text-white">&quot;{activityToDelete.title}&quot;</strong>? Todas as entregas e correções associadas a ela serão removidas.
             </p>
 
             <div className="flex items-center justify-end gap-2.5 pt-2">

@@ -62,51 +62,6 @@ export default function Home() {
     }, 6000);
   };
 
-  // 0. Carregar atividades e dados do professor do LocalStorage primeiro para evitar perdas
-  useEffect(() => {
-    try {
-      const savedLocalActivities = localStorage.getItem('sensei_activities_v4');
-      if (savedLocalActivities) {
-        const parsed = JSON.parse(savedLocalActivities);
-        if (Array.isArray(parsed)) {
-          setActivities(parsed);
-        }
-      }
-
-      const savedTeacher = localStorage.getItem('sensei_teacher_v4');
-      if (savedTeacher) {
-        const parsedTeacher = JSON.parse(savedTeacher);
-        if (parsedTeacher && parsedTeacher.name) {
-          setTeacher(parsedTeacher);
-        }
-      }
-    } catch (e) {
-      console.error('Erro ao ler dados do LocalStorage:', e);
-    }
-  }, []);
-
-  // Salvar no LocalStorage sempre que houver alteração em activities
-  useEffect(() => {
-    try {
-      if (activities) {
-        localStorage.setItem('sensei_activities_v4', JSON.stringify(activities));
-      }
-    } catch (e) {
-      console.error('Erro ao persistir atividades no LocalStorage:', e);
-    }
-  }, [activities]);
-
-  // Salvar no LocalStorage sempre que houver alteração em teacher
-  useEffect(() => {
-    try {
-      if (teacher) {
-        localStorage.setItem('sensei_teacher_v4', JSON.stringify(teacher));
-      }
-    } catch (e) {
-      console.error('Erro ao persistir dados do professor no LocalStorage:', e);
-    }
-  }, [teacher]);
-
   // Carregar dados iniciais do Supabase se configurado
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
@@ -119,13 +74,15 @@ export default function Home() {
         const activeEmail = authUser?.user?.email || teacher.email;
 
         if (activeEmail) {
-          const { data: teacherRow } = await client
+          const { data: teacherRow, error: teacherErr } = await client
             .from('teachers')
             .select('*')
             .eq('email', activeEmail)
             .maybeSingle();
 
-          if (teacherRow) {
+          if (teacherErr) {
+            console.error('Erro ao buscar professor no Supabase:', teacherErr.message);
+          } else if (teacherRow) {
             setTeacher({
               id: teacherRow.id,
               name: teacherRow.name,
@@ -244,151 +201,116 @@ export default function Home() {
 
   // Activity Handlers
   const handleCreateActivity = async (newAct: Activity) => {
-    setActivities((prev) => [newAct, ...prev]);
+    if (!isSupabaseConfigured || !supabase) {
+      showGlobalStatus('error', 'ARMADILHA DE BUG DISPARADA: Supabase não está configurado no ambiente. A atividade NÃO foi salva.');
+      return;
+    }
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const fullPayload = {
-          id: newAct.id,
-          title: newAct.title,
-          subject: newAct.subject || 'Sociologia',
-          description: newAct.description || '',
-          support_material: newAct.supportMaterial || '',
-          turma: newAct.turma || '',
-          type: newAct.type,
-          status: newAct.status,
-          deadline: newAct.deadline || '',
-          max_grade: newAct.maxGrade || 10,
-          allow_group_work: newAct.allowGroupWork || false,
-          questions: JSON.stringify(newAct.questions || []),
-          total_submissions: newAct.totalSubmissions || 0,
-          total_students: newAct.totalStudents || 0,
-          pending_correction: newAct.pendingCorrection || 0,
-        };
+    try {
+      const fullPayload = {
+        id: newAct.id,
+        title: newAct.title,
+        subject: newAct.subject || 'Sociologia',
+        description: newAct.description || '',
+        support_material: newAct.supportMaterial || '',
+        turma: newAct.turma || '',
+        type: newAct.type,
+        status: newAct.status,
+        deadline: newAct.deadline || '',
+        max_grade: newAct.maxGrade || 10,
+        allow_group_work: newAct.allowGroupWork || false,
+        questions: newAct.questions || [],
+        total_submissions: newAct.totalSubmissions || 0,
+        total_students: newAct.totalStudents || 0,
+        pending_correction: newAct.pendingCorrection || 0,
+      };
 
-        const { error } = await supabase.from('activities').upsert(fullPayload);
+      const { error } = await supabase.from('activities').insert(fullPayload);
 
-        if (error) {
-          console.warn('Upsert com colunas expandidas falhou no Supabase, tentando com colunas base:', error.message);
-          const basePayload = {
-            id: newAct.id,
-            title: newAct.title,
-            description: newAct.description || '',
-            turma: newAct.turma || '',
-            type: newAct.type,
-            status: newAct.status,
-            deadline: newAct.deadline || '',
-            total_submissions: newAct.totalSubmissions || 0,
-            total_students: newAct.totalStudents || 0,
-            pending_correction: newAct.pendingCorrection || 0,
-          };
-          const { error: fallbackErr } = await supabase.from('activities').upsert(basePayload);
-          if (fallbackErr) {
-            console.error('Erro ao criar atividade no Supabase:', fallbackErr.message);
-            showGlobalStatus('error', `Erro Supabase ao criar atividade: ${fallbackErr.message}`);
-          } else {
-            showGlobalStatus('success', `Atividade "${newAct.title}" salva no Supabase (colunas base) com sucesso!`);
-          }
-        } else {
-          showGlobalStatus('success', `Atividade "${newAct.title}" criada e confirmada no Supabase com sucesso!`);
-        }
-      } catch (err: any) {
-        console.error('Erro ao salvar atividade no Supabase:', err);
-        showGlobalStatus('error', `Erro de conexão com o Supabase: ${err?.message || ''}`);
+      if (error) {
+        console.error('Erro ao criar atividade no Supabase:', error);
+        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao gravar atividade no Supabase (${error.code || 'BD'}): ${error.message}`);
+        return;
       }
-    } else {
-      showGlobalStatus('success', `Atividade "${newAct.title}" salva localmente!`);
+
+      setActivities((prev) => [newAct, ...prev]);
+      showGlobalStatus('success', `Atividade "${newAct.title}" criada e confirmada no Supabase com sucesso!`);
+    } catch (err: any) {
+      console.error('Erro ao salvar atividade no Supabase:', err);
+      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Falha de conexão/execução (${err?.message || 'Erro desconhecido'})`);
     }
   };
 
   const handleSaveActivity = async (updatedAct: Activity) => {
-    setActivities((prev) => prev.map((a) => (a.id === updatedAct.id ? updatedAct : a)));
-    if (selectedActivityForGrading?.id === updatedAct.id) {
-      setSelectedActivityForGrading(updatedAct);
+    if (!isSupabaseConfigured || !supabase) {
+      showGlobalStatus('error', 'ARMADILHA DE BUG DISPARADA: Supabase não está configurado. Alterações NÃO foram gravadas.');
+      return;
     }
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const fullPayload = {
-          id: updatedAct.id,
-          title: updatedAct.title,
-          subject: updatedAct.subject || 'Sociologia',
-          description: updatedAct.description || '',
-          support_material: updatedAct.supportMaterial || '',
-          turma: updatedAct.turma || '',
-          type: updatedAct.type,
-          status: updatedAct.status,
-          deadline: updatedAct.deadline || '',
-          max_grade: updatedAct.maxGrade || 10,
-          allow_group_work: updatedAct.allowGroupWork || false,
-          questions: JSON.stringify(updatedAct.questions || []),
-          total_submissions: updatedAct.totalSubmissions,
-          total_students: updatedAct.totalStudents,
-          pending_correction: updatedAct.pendingCorrection,
-          average_grade: updatedAct.averageGrade,
-          completed_date: updatedAct.completedDate,
-        };
+    try {
+      const fullPayload = {
+        id: updatedAct.id,
+        title: updatedAct.title,
+        subject: updatedAct.subject || 'Sociologia',
+        description: updatedAct.description || '',
+        support_material: updatedAct.supportMaterial || '',
+        turma: updatedAct.turma || '',
+        type: updatedAct.type,
+        status: updatedAct.status,
+        deadline: updatedAct.deadline || '',
+        max_grade: updatedAct.maxGrade || 10,
+        allow_group_work: updatedAct.allowGroupWork || false,
+        questions: updatedAct.questions || [],
+        total_submissions: updatedAct.totalSubmissions,
+        total_students: updatedAct.totalStudents,
+        pending_correction: updatedAct.pendingCorrection,
+        average_grade: updatedAct.averageGrade,
+        completed_date: updatedAct.completedDate,
+      };
 
-        const { error } = await supabase.from('activities').upsert(fullPayload);
+      const { error } = await supabase.from('activities').upsert(fullPayload);
 
-        if (error) {
-          console.warn('Upsert de atualização falhou no Supabase, tentando com colunas base:', error.message);
-          const basePayload = {
-            id: updatedAct.id,
-            title: updatedAct.title,
-            description: updatedAct.description || '',
-            turma: updatedAct.turma || '',
-            type: updatedAct.type,
-            status: updatedAct.status,
-            deadline: updatedAct.deadline || '',
-            total_submissions: updatedAct.totalSubmissions,
-            total_students: updatedAct.totalStudents,
-            pending_correction: updatedAct.pendingCorrection,
-            average_grade: updatedAct.averageGrade,
-            completed_date: updatedAct.completedDate,
-          };
-          const { error: fallbackErr } = await supabase.from('activities').upsert(basePayload);
-          if (fallbackErr) {
-            console.error('Erro ao atualizar atividade no Supabase:', fallbackErr.message);
-            showGlobalStatus('error', `Erro Supabase ao atualizar atividade: ${fallbackErr.message}`);
-          } else {
-            showGlobalStatus('success', `Alterações de "${updatedAct.title}" salvas no Supabase (colunas base)!`);
-          }
-        } else {
-          showGlobalStatus('success', `Alterações de "${updatedAct.title}" salvas e confirmadas no Supabase!`);
-        }
-      } catch (err: any) {
-        console.error('Erro ao atualizar atividade no Supabase:', err);
-        showGlobalStatus('error', `Erro de conexão com o Supabase: ${err?.message || ''}`);
+      if (error) {
+        console.error('Erro ao atualizar atividade no Supabase:', error);
+        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao atualizar atividade no Supabase (${error.code || 'BD'}): ${error.message}`);
+        return;
       }
-    } else {
-      showGlobalStatus('success', `Alterações de "${updatedAct.title}" salvas localmente!`);
+
+      setActivities((prev) => prev.map((a) => (a.id === updatedAct.id ? updatedAct : a)));
+      if (selectedActivityForGrading?.id === updatedAct.id) {
+        setSelectedActivityForGrading(updatedAct);
+      }
+      showGlobalStatus('success', `Alterações da atividade "${updatedAct.title}" salvas e confirmadas no Supabase!`);
+    } catch (err: any) {
+      console.error('Erro ao atualizar atividade no Supabase:', err);
+      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Falha de conexão/execução (${err?.message || 'Erro desconhecido'})`);
     }
   };
 
   const handleDeleteActivity = async (activity: Activity) => {
-    setActivities((prev) => prev.filter((a) => a.id !== activity.id));
-    if (selectedActivityForGrading?.id === activity.id) {
-      setSelectedActivityForGrading(null);
+    if (!isSupabaseConfigured || !supabase) {
+      showGlobalStatus('error', 'ARMADILHA DE BUG DISPARADA: Supabase não está configurado. Atividade NÃO foi excluída.');
+      return;
     }
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('submissions').delete().eq('activity_id', activity.id);
-        const { error } = await supabase.from('activities').delete().eq('id', activity.id);
+    try {
+      await supabase.from('submissions').delete().eq('activity_id', activity.id);
+      const { error } = await supabase.from('activities').delete().eq('id', activity.id);
 
-        if (error) {
-          console.error('Erro ao excluir atividade no Supabase:', error);
-          showGlobalStatus('error', `Erro Supabase ao excluir atividade: ${error.message}`);
-        } else {
-          showGlobalStatus('success', `Atividade "${activity.title}" excluída do Supabase com sucesso!`);
-        }
-      } catch (err: any) {
-        console.error('Erro ao excluir atividade no Supabase:', err);
-        showGlobalStatus('error', `Erro de conexão ao excluir atividade: ${err?.message || ''}`);
+      if (error) {
+        console.error('Erro ao excluir atividade no Supabase:', error);
+        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao excluir atividade no Supabase (${error.code || 'BD'}): ${error.message}`);
+        return;
       }
-    } else {
-      showGlobalStatus('success', `Atividade "${activity.title}" removida!`);
+
+      setActivities((prev) => prev.filter((a) => a.id !== activity.id));
+      if (selectedActivityForGrading?.id === activity.id) {
+        setSelectedActivityForGrading(null);
+      }
+      showGlobalStatus('success', `Atividade "${activity.title}" excluída com sucesso do Supabase!`);
+    } catch (err: any) {
+      console.error('Erro ao excluir atividade no Supabase:', err);
+      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Falha ao excluir (${err?.message || ''})`);
     }
   };
 
@@ -406,71 +328,87 @@ export default function Home() {
     extraPoints?: number,
     registeredInStateSystem?: boolean
   ) => {
-    setActivities((prev) =>
-      prev.map((act) => {
-        if (act.id !== activityId) return act;
-
-        const updatedSubmissions = act.submissions.map((sub) => {
-          if (sub.studentId === studentId) {
-            return {
-              ...sub,
-              essayScore,
-              teacherFeedback: feedback,
-              status,
-              extraPoints: extraPoints !== undefined ? extraPoints : sub.extraPoints,
-              registeredInStateSystem:
-                registeredInStateSystem !== undefined ? registeredInStateSystem : sub.registeredInStateSystem,
-            };
-          }
-          return sub;
-        });
-
-        const pendingCorrection = updatedSubmissions.filter((s) => s.status === 'pending').length;
-
-        return {
-          ...act,
-          pendingCorrection,
-          submissions: updatedSubmissions,
-        };
-      })
-    );
-
-    if (selectedActivityForGrading && selectedActivityForGrading.id === activityId) {
-      setSelectedActivityForGrading((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          submissions: prev.submissions.map((sub) =>
-            sub.studentId === studentId
-              ? {
-                  ...sub,
-                  essayScore,
-                  teacherFeedback: feedback,
-                  status,
-                  extraPoints: extraPoints !== undefined ? extraPoints : sub.extraPoints,
-                  registeredInStateSystem:
-                    registeredInStateSystem !== undefined ? registeredInStateSystem : sub.registeredInStateSystem,
-                }
-              : sub
-          ),
-        };
-      });
+    if (!isSupabaseConfigured || !supabase) {
+      showGlobalStatus('error', 'ARMADILHA DE BUG DISPARADA: Supabase não configurado. Nota NÃO foi salva.');
+      return;
     }
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase
-          .from('submissions')
-          .update({
-            essay_score: essayScore,
-            teacher_feedback: feedback,
-            status: status,
-          })
-          .eq('activity_id', activityId)
-          .eq('student_id', studentId);
-      } catch (err) {
-        console.error('Erro ao atualizar nota no Supabase:', err);
+    try {
+      const updatePayload: any = {
+        essay_score: essayScore,
+        teacher_feedback: feedback,
+        status: status,
+      };
+      if (extraPoints !== undefined) updatePayload.extra_points = extraPoints;
+      if (registeredInStateSystem !== undefined) updatePayload.registered_in_state_system = registeredInStateSystem;
+
+      const { error } = await supabase
+        .from('submissions')
+        .update(updatePayload)
+        .eq('activity_id', activityId)
+        .eq('student_id', studentId);
+
+      if (error) {
+        console.error('Erro ao atualizar nota no Supabase:', error);
+        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Falha ao atualizar nota no Supabase (${error.code || 'BD'}): ${error.message}`);
+        return;
       }
+
+      setActivities((prev) =>
+        prev.map((act) => {
+          if (act.id !== activityId) return act;
+
+          const updatedSubmissions = act.submissions.map((sub) => {
+            if (sub.studentId === studentId) {
+              return {
+                ...sub,
+                essayScore,
+                teacherFeedback: feedback,
+                status,
+                extraPoints: extraPoints !== undefined ? extraPoints : sub.extraPoints,
+                registeredInStateSystem:
+                  registeredInStateSystem !== undefined ? registeredInStateSystem : sub.registeredInStateSystem,
+              };
+            }
+            return sub;
+          });
+
+          const pendingCorrection = updatedSubmissions.filter((s) => s.status === 'pending').length;
+
+          return {
+            ...act,
+            pendingCorrection,
+            submissions: updatedSubmissions,
+          };
+        })
+      );
+
+      if (selectedActivityForGrading && selectedActivityForGrading.id === activityId) {
+        setSelectedActivityForGrading((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            submissions: prev.submissions.map((sub) =>
+              sub.studentId === studentId
+                ? {
+                    ...sub,
+                    essayScore,
+                    teacherFeedback: feedback,
+                    status,
+                    extraPoints: extraPoints !== undefined ? extraPoints : sub.extraPoints,
+                    registeredInStateSystem:
+                      registeredInStateSystem !== undefined ? registeredInStateSystem : sub.registeredInStateSystem,
+                  }
+                : sub
+            ),
+          };
+        });
+      }
+
+      showGlobalStatus('success', 'Nota e feedback sincronizados diretamente no Supabase com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao atualizar nota no Supabase:', err);
+      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro de conexão (${err?.message || ''})`);
     }
   };
 
@@ -485,165 +423,234 @@ export default function Home() {
   ) => {
     if (!currentStudent) return;
 
-    setActivities((prev) =>
-      prev.map((act) => {
-        if (act.id !== activityId) return act;
+    if (!isSupabaseConfigured || !supabase) {
+      showGlobalStatus('error', 'ARMADILHA DE BUG DISPARADA: Supabase não está configurado. Resposta NÃO enviada.');
+      return;
+    }
 
-        const existing = act.submissions.find((s) => s.studentId === studentId);
-        let updatedSubmissions = [...act.submissions];
+    try {
+      const { data: existingSub, error: checkErr } = await supabase
+        .from('submissions')
+        .select('id')
+        .eq('activity_id', activityId)
+        .eq('student_id', studentId)
+        .maybeSingle();
 
-        if (existing) {
-          updatedSubmissions = updatedSubmissions.map((s) =>
-            s.studentId === studentId
-              ? {
-                  ...s,
-                  essayAnswer,
-                  objectiveScore,
-                  maxObjectiveScore,
-                  maxEssayScore,
-                  selectedObjectiveAnswers,
-                  status: 'pending' as const,
-                }
-              : s
-          );
-        } else {
-          updatedSubmissions.push({
-            studentId,
-            studentName: currentStudent.fullName,
-            matricula: currentStudent.matricula,
-            tag: currentStudent.tag,
-            avatarUrl: currentStudent.avatarUrl,
-            submittedAt: new Date().toLocaleDateString('pt-BR'),
-            objectiveScore,
-            maxObjectiveScore,
-            maxEssayScore,
-            status: 'pending',
-            essayAnswer,
-            selectedObjectiveAnswers,
-            teacherFeedback: '',
-          });
-        }
+      if (checkErr) {
+        console.error('Erro ao verificar entrega existente:', checkErr);
+        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao buscar dados da entrega: ${checkErr.message}`);
+        return;
+      }
 
-        const pendingCorrection = updatedSubmissions.filter((s) => s.status === 'pending').length;
+      let saveErr = null;
 
-        return {
-          ...act,
-          totalSubmissions: updatedSubmissions.length,
-          pendingCorrection,
-          submissions: updatedSubmissions,
-        };
-      })
-    );
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const { data: existingSub } = await supabase
+      if (existingSub) {
+        const { error } = await supabase
           .from('submissions')
-          .select('id')
-          .eq('activity_id', activityId)
-          .eq('student_id', studentId)
-          .maybeSingle();
-
-        if (existingSub) {
-          await supabase
-            .from('submissions')
-            .update({
-              essay_answer: essayAnswer,
-              objective_score: objectiveScore,
-              max_objective_score: maxObjectiveScore,
-              max_essay_score: maxEssayScore,
-              status: 'pending',
-            })
-            .eq('id', existingSub.id);
-        } else {
-          await supabase.from('submissions').insert({
-            activity_id: activityId,
-            student_id: studentId,
-            student_name: currentStudent.fullName,
-            matricula: currentStudent.matricula,
-            tag: currentStudent.tag,
-            avatar_url: currentStudent.avatarUrl,
+          .update({
             essay_answer: essayAnswer,
-            status: 'pending',
             objective_score: objectiveScore,
             max_objective_score: maxObjectiveScore,
             max_essay_score: maxEssayScore,
-          });
-        }
-      } catch (err) {
-        console.error('Erro ao enviar resposta para o Supabase:', err);
+            selected_objective_answers: selectedObjectiveAnswers || {},
+            status: 'pending',
+          })
+          .eq('id', existingSub.id);
+        saveErr = error;
+      } else {
+        const { error } = await supabase.from('submissions').insert({
+          activity_id: activityId,
+          student_id: studentId,
+          student_name: currentStudent.fullName,
+          matricula: currentStudent.matricula,
+          tag: currentStudent.tag,
+          avatar_url: currentStudent.avatarUrl,
+          essay_answer: essayAnswer,
+          status: 'pending',
+          objective_score: objectiveScore,
+          max_objective_score: maxObjectiveScore,
+          max_essay_score: maxEssayScore,
+          selected_objective_answers: selectedObjectiveAnswers || {},
+        });
+        saveErr = error;
       }
+
+      if (saveErr) {
+        console.error('Erro ao gravar resposta do aluno no Supabase:', saveErr);
+        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao gravar resposta no Supabase (${saveErr.code || 'BD'}): ${saveErr.message}`);
+        return;
+      }
+
+      setActivities((prev) =>
+        prev.map((act) => {
+          if (act.id !== activityId) return act;
+
+          const existing = act.submissions.find((s) => s.studentId === studentId);
+          let updatedSubmissions = [...act.submissions];
+
+          if (existing) {
+            updatedSubmissions = updatedSubmissions.map((s) =>
+              s.studentId === studentId
+                ? {
+                    ...s,
+                    essayAnswer,
+                    objectiveScore,
+                    maxObjectiveScore,
+                    maxEssayScore,
+                    selectedObjectiveAnswers,
+                    status: 'pending' as const,
+                  }
+                : s
+            );
+          } else {
+            updatedSubmissions.push({
+              studentId,
+              studentName: currentStudent.fullName,
+              matricula: currentStudent.matricula,
+              tag: currentStudent.tag,
+              avatarUrl: currentStudent.avatarUrl,
+              submittedAt: new Date().toLocaleDateString('pt-BR'),
+              objectiveScore,
+              maxObjectiveScore,
+              maxEssayScore,
+              status: 'pending',
+              essayAnswer,
+              selectedObjectiveAnswers,
+              teacherFeedback: '',
+            });
+          }
+
+          const pendingCorrection = updatedSubmissions.filter((s) => s.status === 'pending').length;
+
+          return {
+            ...act,
+            totalSubmissions: updatedSubmissions.length,
+            pendingCorrection,
+            submissions: updatedSubmissions,
+          };
+        })
+      );
+
+      showGlobalStatus('success', 'Resposta do aluno gravada com sucesso no Supabase!');
+    } catch (err: any) {
+      console.error('Erro ao enviar resposta:', err);
+      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro de conexão (${err?.message || ''})`);
     }
   };
 
   const handleImportStudents = async (newStudents: StudentUser[]) => {
-    // Append imported students
-    setStudents((prev) => [...prev, ...newStudents]);
+    if (!isSupabaseConfigured || !supabase) {
+      showGlobalStatus('error', 'ARMADILHA DE BUG DISPARADA: Supabase não está configurado. Alunos NÃO importados.');
+      return;
+    }
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const payload = newStudents.map((s) => ({
-          full_name: s.fullName,
-          turma: s.turma,
-          matricula: s.matricula,
-          tag: s.tag,
-          password_hash: s.passwordHash || '1234',
-          avatar_url: s.avatarUrl,
-        }));
-        await supabase.from('students').insert(payload);
-      } catch (err) {
-        console.error('Erro ao importar alunos no Supabase:', err);
+    try {
+      const payload = newStudents.map((s) => ({
+        full_name: s.fullName,
+        turma: s.turma,
+        matricula: s.matricula,
+        tag: s.tag,
+        password_hash: s.passwordHash || '1234',
+        avatar_url: s.avatarUrl,
+      }));
+
+      const { error } = await supabase.from('students').insert(payload);
+
+      if (error) {
+        console.error('Erro ao importar alunos no Supabase:', error);
+        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao importar alunos no Supabase (${error.code || 'BD'}): ${error.message}`);
+        return;
       }
+
+      setStudents((prev) => [...prev, ...newStudents]);
+      showGlobalStatus('success', `${newStudents.length} aluno(s) importado(s) e confirmados no Supabase!`);
+    } catch (err: any) {
+      console.error('Erro ao importar alunos no Supabase:', err);
+      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Falha na importação (${err?.message || ''})`);
     }
   };
-  const handleCreateStudent = async (newStudent: StudentUser) => {
-    setStudents([...students, newStudent]);
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('students').insert({
-          full_name: newStudent.fullName,
-          turma: newStudent.turma,
-          matricula: newStudent.matricula,
-          tag: newStudent.tag,
-          password_hash: newStudent.passwordHash || '1234',
-          avatar_url: newStudent.avatarUrl,
-        });
-      } catch (err) {
-        console.error('Erro ao cadastrar aluno no Supabase:', err);
+  const handleCreateStudent = async (newStudent: StudentUser) => {
+    if (!isSupabaseConfigured || !supabase) {
+      showGlobalStatus('error', 'ARMADILHA DE BUG DISPARADA: Supabase não está configurado. Aluno NÃO cadastrado.');
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from('students').insert({
+        full_name: newStudent.fullName,
+        turma: newStudent.turma,
+        matricula: newStudent.matricula,
+        tag: newStudent.tag,
+        password_hash: newStudent.passwordHash || '1234',
+        avatar_url: newStudent.avatarUrl,
+      });
+
+      if (error) {
+        console.error('Erro ao cadastrar aluno no Supabase:', error);
+        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao cadastrar aluno no Supabase (${error.code || 'BD'}): ${error.message}`);
+        return;
       }
+
+      setStudents((prev) => [...prev, newStudent]);
+      showGlobalStatus('success', `Aluno "${newStudent.fullName}" cadastrado com sucesso no Supabase!`);
+    } catch (err: any) {
+      console.error('Erro ao cadastrar aluno no Supabase:', err);
+      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro de conexão ao cadastrar aluno (${err?.message || ''})`);
     }
   };
 
   const handleSaveStudent = async (updatedStudent: StudentUser) => {
-    setStudents(students.map((s) => (s.id === updatedStudent.id ? updatedStudent : s)));
+    if (!isSupabaseConfigured || !supabase) {
+      showGlobalStatus('error', 'ARMADILHA DE BUG DISPARADA: Supabase não configurado. Alterações NÃO salvas.');
+      return;
+    }
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase
-          .from('students')
-          .update({
-            full_name: updatedStudent.fullName,
-            turma: updatedStudent.turma,
-            matricula: updatedStudent.matricula,
-            tag: updatedStudent.tag,
-          })
-          .eq('id', updatedStudent.id);
-      } catch (err) {
-        console.error('Erro ao atualizar aluno no Supabase:', err);
+    try {
+      const { error } = await supabase
+        .from('students')
+        .update({
+          full_name: updatedStudent.fullName,
+          turma: updatedStudent.turma,
+          matricula: updatedStudent.matricula,
+          tag: updatedStudent.tag,
+        })
+        .eq('id', updatedStudent.id);
+
+      if (error) {
+        console.error('Erro ao atualizar aluno no Supabase:', error);
+        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao atualizar aluno no Supabase (${error.code || 'BD'}): ${error.message}`);
+        return;
       }
+
+      setStudents((prev) => prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s)));
+      showGlobalStatus('success', `Dados do aluno "${updatedStudent.fullName}" atualizados com sucesso no Supabase!`);
+    } catch (err: any) {
+      console.error('Erro ao atualizar aluno no Supabase:', err);
+      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro de conexão (${err?.message || ''})`);
     }
   };
 
   const handleDeleteStudent = async (studentId: string) => {
-    setStudents(students.filter((s) => s.id !== studentId));
+    if (!isSupabaseConfigured || !supabase) {
+      showGlobalStatus('error', 'ARMADILHA DE BUG DISPARADA: Supabase não configurado. Aluno NÃO excluído.');
+      return;
+    }
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.from('students').delete().eq('id', studentId);
-      } catch (err) {
-        console.error('Erro ao deletar aluno do Supabase:', err);
+    try {
+      const { error } = await supabase.from('students').delete().eq('id', studentId);
+
+      if (error) {
+        console.error('Erro ao deletar aluno do Supabase:', error);
+        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao excluir aluno do Supabase (${error.code || 'BD'}): ${error.message}`);
+        return;
       }
+
+      setStudents((prev) => prev.filter((s) => s.id !== studentId));
+      showGlobalStatus('success', 'Aluno removido com sucesso do Supabase!');
+    } catch (err: any) {
+      console.error('Erro ao deletar aluno do Supabase:', err);
+      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro de conexão (${err?.message || ''})`);
     }
   };
 
@@ -882,63 +889,68 @@ export default function Home() {
                 <button
                   onClick={async () => {
                     try {
-                      // 1. Sempre grava imediatamente no estado e no LocalStorage
-                      setTeacher(teacher);
-                      localStorage.setItem('sensei_teacher_v4', JSON.stringify(teacher));
+                      if (!isSupabaseConfigured || !supabase) {
+                        setTeacherSaveStatus({
+                          type: 'error',
+                          message: 'ARMADILHA DE BUG DISPARADA: Supabase não está configurado. Alterações NÃO salvas.',
+                        });
+                        return;
+                      }
 
-                      let message = 'Informações do professor salvas com sucesso!';
+                      const payload: any = {
+                        email: teacher.email,
+                        name: teacher.name,
+                        subject: teacher.subject,
+                        avatar_url: teacher.avatarUrl,
+                        phone: teacher.phone || null,
+                        school: teacher.school || null,
+                      };
 
-                      // 2. Se o Supabase estiver configurado, grava também no banco
-                      if (isSupabaseConfigured && supabase) {
-                        const payload: any = {
-                          email: teacher.email,
-                          name: teacher.name,
-                          subject: teacher.subject,
-                          avatar_url: teacher.avatarUrl,
-                          phone: teacher.phone || null,
-                          school: teacher.school || null,
+                      if (teacher.id) {
+                        payload.id = teacher.id;
+                      }
+
+                      if (teacher.email) {
+                        try {
+                          await supabase.auth.updateUser({ email: teacher.email });
+                        } catch (e) {
+                          console.log('Sincronização de e-mail de auth opcional:', e);
+                        }
+                      }
+
+                      const { data: updatedData, error } = await supabase
+                        .from('teachers')
+                        .upsert(payload, { onConflict: teacher.id ? 'id' : 'email' })
+                        .select('*')
+                        .maybeSingle();
+
+                      if (error) {
+                        console.error('Erro ao salvar professor no Supabase:', error);
+                        setTeacherSaveStatus({
+                          type: 'error',
+                          message: `ARMADILHA DE BUG DISPARADA: Erro ao salvar no Supabase (${error.code || 'BD'}): ${error.message}`,
+                        });
+                        return;
+                      }
+
+                      if (updatedData) {
+                        const updatedTeacher = {
+                          id: updatedData.id,
+                          name: updatedData.name,
+                          subject: updatedData.subject || 'Sociologia',
+                          email: updatedData.email,
+                          avatarUrl: updatedData.avatar_url || teacher.avatarUrl,
+                          phone: updatedData.phone || '',
+                          school: updatedData.school || '',
                         };
-
-                        if (teacher.id) {
-                          payload.id = teacher.id;
-                        }
-
-                        if (teacher.email) {
-                          try {
-                            await supabase.auth.updateUser({ email: teacher.email });
-                          } catch (e) {
-                            console.log('Sincronização de e-mail de auth opcional:', e);
-                          }
-                        }
-
-                        const { data: updatedData, error } = await supabase
-                          .from('teachers')
-                          .upsert(payload, { onConflict: teacher.id ? 'id' : 'email' })
-                          .select('*')
-                          .maybeSingle();
-
-                        if (error) {
-                          console.error('Erro ao salvar no Supabase:', error);
-                          message = `Informações salvas localmente (Aviso Supabase: ${error.message})`;
-                        } else if (updatedData) {
-                          const updatedTeacher = {
-                            id: updatedData.id,
-                            name: updatedData.name,
-                            subject: updatedData.subject || 'Sociologia',
-                            email: updatedData.email,
-                            avatarUrl: updatedData.avatar_url || teacher.avatarUrl,
-                            phone: updatedData.phone || '',
-                            school: updatedData.school || '',
-                          };
-                          setTeacher(updatedTeacher);
-                          localStorage.setItem('sensei_teacher_v4', JSON.stringify(updatedTeacher));
-                          message = 'Informações do professor salvas e sincronizadas com sucesso!';
-                        }
+                        setTeacher(updatedTeacher);
+                      } else {
+                        setTeacher(teacher);
                       }
 
                       setTeacherSaveStatus({
                         type: 'success',
-                        message,
+                        message: 'Informações do professor gravadas e confirmadas diretamente no Supabase!',
                       });
 
                       setTimeout(() => {
@@ -948,7 +960,7 @@ export default function Home() {
                       console.error('Erro ao salvar professor:', err);
                       setTeacherSaveStatus({
                         type: 'error',
-                        message: 'Erro ao salvar alterações: ' + (err?.message || ''),
+                        message: 'ARMADILHA DE BUG DISPARADA: Falha de conexão (' + (err?.message || '') + ')',
                       });
                     }
                   }}
