@@ -535,10 +535,9 @@ export default function Home() {
                     type="email"
                     value={teacher.email}
                     onChange={(e) => setTeacher({ ...teacher, email: e.target.value })}
-                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-[#bccabb] cursor-not-allowed focus:outline-none"
-                    disabled
+                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-[#4ade80]"
                   />
-                  <p className="text-[10px] text-[#bccabb] mt-1 ml-1">O e-mail não pode ser alterado por aqui pois é seu login.</p>
+                  <p className="text-[10px] text-[#bccabb] mt-1 ml-1">Você pode alterar seu e-mail de contato e acesso do professor por aqui.</p>
                 </div>
                 <div>
                   <label className="block text-[#bccabb] font-semibold mb-1">Telefone</label>
@@ -580,9 +579,17 @@ export default function Home() {
                         payload.id = teacher.id;
                       }
 
+                      if (teacher.email) {
+                        try {
+                          await supabase.auth.updateUser({ email: teacher.email });
+                        } catch (e) {
+                          console.log('Sincronização de e-mail de auth opcional:', e);
+                        }
+                      }
+
                       const { data: updatedData, error } = await supabase
                         .from('teachers')
-                        .upsert(payload, { onConflict: 'email' })
+                        .upsert(payload, { onConflict: teacher.id ? 'id' : 'email' })
                         .select('*')
                         .maybeSingle();
 

@@ -1,0 +1,113 @@
+name: Supabase Migrations Bot
+
+on:
+  # Permitir disparo manual com aprovação de parâmetros no GitHub
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Ambiente para aplicar as migrations'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+      dry_run:
+        description: 'Apenas simular sem aplicar alterações no banco'
+        required: false
+        default: false
+        type: boolean
+
+  # Disparo automático quando novos arquivos de migration forem aprovados e commitados na branch main
+  push:
+    branches:
+      - main
+    paths:
+      - 'supabase/migrations/*.sql'
+
+jobs:
+  apply-migrations:
+    name: Aplicar Migrations com Versionamento Único
+    runs-on: ubuntu-latest
+    
+    # Exige aprovação de ambiente do GitHub Actions quando configurado em Settings -> Environments
+    environment: ${{ inputs.environment || 'production' }}
+
+    steps:
+      - name: 1. Checkout do Código
+        uses: actions/checkout@v4
+
+      - name: 2. Validar Unicidade dos Arquivos de Migration
+        run: |
+          echo "🔍 Verificando unicidade dos nomes dos arquivos de migration..."
+          cd supabase/migrations
+          
+          # Garantir que nenhum nome de arquivo duplicado exista
+          DUPLICATES=$(ls *.sql | cut -d'_' -f1 | sort | uniq -d)
+          if [ -n "$DUPLICATES" ]; then
+            echo "❌ ERRO: Prefixos de versão duplicados encontrados nas migrations:"
+            echo "$DUPLICATES"
+            exit 1
+          fi
+          
+          echo "✅ Todos os arquivos de migration possuem versão única sequencial!"
+          ls -1 *.sql
+
+      - name: 3. Configurar Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: 4. Aplicar Migrations via Supabase CLI
+        if: ${{ !(inputs.dry_run) }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_REF || secrets.SUPABASE_PROJECT_ID }}
+        run: |
+          if [ -n "$SUPABASE_PROJECT_ID" ] && [ -n "$SUPABASE_DB_PASSWORD" ]; then
+            echo "🚀 Vinculando ao projeto Supabase $SUPABASE_PROJECT_ID e aplicando migrations..."
+            supabase link --project-ref "$SUPABASE_PROJECT_ID" --password "$SUPABASE_DB_PASSWORD"
+            supabase db push
+          else
+            echo "⚠️ Secret SUPABASE_PROJECT_ID ou SUPABASE_DB_PASSWORD não configurado no GitHub."
+            echo "Verificando se DATABASE_URL direta foi fornecida..."
+          fi
+
+      - name: 5. Aplicar Migrations via Postgres Direto (Fallback com Controle de Tabela schema_migrations)
+        if: ${{ !(inputs.dry_run) && secrets.DATABASE_URL != '' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          echo "🛠 Executando script de controle de versionamento único no PostgreSQL..."
+          
+          # Criar tabela de controle de migrations se não existir
+          psql "$DATABASE_URL" -c "
+            CREATE TABLE IF NOT EXISTS public.schema_migrations (
+              version VARCHAR(255) PRIMARY KEY,
+              filename VARCHAR(255) NOT NULL,
+              executed_at TIMESTAMPTZ DEFAULT NOW()
+            );
+          "
+          
+          # Iterar em ordem cronológica estrita por nome de arquivo
+          for file in $(ls -1 supabase/migrations/*.sql | sort -V); do
+            filename=$(basename "$file")
+            version=$(echo "$filename" | cut -d'_' -f1)
+            
+            # Verificar se a migration já foi aplicada
+            APPLIED=$(psql "$DATABASE_URL" -t -A -c "SELECT COUNT(*) FROM public.schema_migrations WHERE version='$version' OR filename='$filename';")
+            
+            if [ "$APPLIED" -eq "0" ]; then
+              echo "⚡ Aplicando nova migration: $filename (Versão: $version)"
+              psql "$DATABASE_URL" -f "$file"
+              psql "$DATABASE_URL" -c "INSERT INTO public.schema_migrations (version, filename) VALUES ('$version', '$filename');"
+              echo "✅ Migration $filename concluída com sucesso!"
+            else
+              echo "⏭ Migration $filename já foi executada anteriormente. Ppulando..."
+            fi
+          done
+
+      - name: 6. Relatório de Execução
+        run: |
+          echo "🎉 Processo de sincronização de migrations finalizado com sucesso!"
