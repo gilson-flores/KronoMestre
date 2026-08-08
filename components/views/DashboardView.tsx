@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Plus,
   CheckCircle2,
@@ -48,6 +48,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   isCorrecoesTab,
 }) => {
   const isCorrecoes = isCorrecoesTab || title === 'Correções';
+  const [activityToDelete, setActivityToDelete] = useState<Activity | null>(null);
 
   // Calculate top KPI stats from real state
   const totalActivities = activities.length;
@@ -322,11 +323,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                       {!isCorrecoes && onDeleteActivity && (
                         <button
-                          onClick={() => {
-                            if (window.confirm(`Tem certeza que deseja excluir a atividade "${act.title}"?`)) {
-                              onDeleteActivity(act);
-                            }
-                          }}
+                          onClick={() => setActivityToDelete(act)}
                           className="px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 rounded-full text-xs font-bold border border-rose-500/20 flex items-center gap-1.5 transition-colors cursor-pointer"
                           title="Excluir Atividade"
                         >
@@ -342,6 +339,49 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Custom Delete Confirmation Modal */}
+      {activityToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-[#0e172a] border border-white/15 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="p-3 bg-rose-500/10 rounded-2xl border border-rose-500/20">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Excluir Atividade</h3>
+                <p className="text-xs text-[#bccabb]">Esta ação é irreversível.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-[#dae2fd] bg-[#131b2e] p-4 rounded-2xl border border-white/5 leading-relaxed">
+              Tem certeza que deseja excluir a atividade <strong className="text-white">"{activityToDelete.title}"</strong>? Todas as entregas e correções associadas a ela serão removidas.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setActivityToDelete(null)}
+                className="px-4 py-2.5 bg-white/10 hover:bg-white/15 text-white rounded-full text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onDeleteActivity) {
+                    onDeleteActivity(activityToDelete);
+                  }
+                  setActivityToDelete(null);
+                }}
+                className="px-5 py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-full text-xs transition-all shadow-md shadow-rose-500/20 cursor-pointer"
+              >
+                Sim, Excluir Atividade
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

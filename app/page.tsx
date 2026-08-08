@@ -51,32 +51,52 @@ export default function Home() {
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [isEditActivityModalOpen, setIsEditActivityModalOpen] = useState(false);
   const [viewingActivity, setViewingActivity] = useState<Activity | null>(null);
+  const [teacherSaveStatus, setTeacherSaveStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // 0. Carregar atividades do LocalStorage primeiro para evitar perdas
+  // 0. Carregar atividades e dados do professor do LocalStorage primeiro para evitar perdas
   useEffect(() => {
     try {
       const savedLocalActivities = localStorage.getItem('sensei_activities_v4');
       if (savedLocalActivities) {
         const parsed = JSON.parse(savedLocalActivities);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           setActivities(parsed);
         }
       }
+
+      const savedTeacher = localStorage.getItem('sensei_teacher_v4');
+      if (savedTeacher) {
+        const parsedTeacher = JSON.parse(savedTeacher);
+        if (parsedTeacher && parsedTeacher.name) {
+          setTeacher(parsedTeacher);
+        }
+      }
     } catch (e) {
-      console.error('Erro ao ler atividades do LocalStorage:', e);
+      console.error('Erro ao ler dados do LocalStorage:', e);
     }
   }, []);
 
   // Salvar no LocalStorage sempre que houver alteração em activities
   useEffect(() => {
     try {
-      if (activities && activities.length > 0) {
+      if (activities) {
         localStorage.setItem('sensei_activities_v4', JSON.stringify(activities));
       }
     } catch (e) {
       console.error('Erro ao persistir atividades no LocalStorage:', e);
     }
   }, [activities]);
+
+  // Salvar no LocalStorage sempre que houver alteração em teacher
+  useEffect(() => {
+    try {
+      if (teacher) {
+        localStorage.setItem('sensei_teacher_v4', JSON.stringify(teacher));
+      }
+    } catch (e) {
+      console.error('Erro ao persistir dados do professor no LocalStorage:', e);
+    }
+  }, [teacher]);
 
   // Carregar dados iniciais do Supabase se configurado
   useEffect(() => {
@@ -680,6 +700,25 @@ export default function Home() {
           {currentTab === 'configuracoes' && (
             <div className="glass-panel p-8 rounded-3xl border border-white/10 max-w-2xl space-y-6">
               <h1 className="text-2xl font-bold text-white">Configurações da Conta</h1>
+
+              {teacherSaveStatus && (
+                <div
+                  className={`p-4 rounded-2xl text-xs font-bold flex items-center justify-between transition-all ${
+                    teacherSaveStatus.type === 'success'
+                      ? 'bg-[#4ade80]/20 text-[#4ade80] border border-[#4ade80]/40'
+                      : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                  }`}
+                >
+                  <span>{teacherSaveStatus.message}</span>
+                  <button
+                    onClick={() => setTeacherSaveStatus(null)}
+                    className="text-white hover:opacity-80 ml-2"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
               <div className="space-y-4 text-xs">
                 <div>
                   <label className="block text-[#bccabb] font-semibold mb-1">URL da Imagem de Perfil (Avatar)</label>
@@ -740,44 +779,46 @@ export default function Home() {
                 <button
                   onClick={async () => {
                     try {
-                      if (!isSupabaseConfigured || !supabase) {
-                        alert('Supabase não configurado.');
-                        return;
-                      }
-                      
-                      const payload: any = {
-                        email: teacher.email,
-                        name: teacher.name,
-                        subject: teacher.subject,
-                        avatar_url: teacher.avatarUrl,
-                        phone: teacher.phone || null,
-                        school: teacher.school || null,
-                      };
+                      // 1. Sempre grava imediatamente no estado e no LocalStorage
+                      setTeacher(teacher);
+                      localStorage.setItem('sensei_teacher_v4', JSON.stringify(teacher));
 
-                      if (teacher.id) {
-                        payload.id = teacher.id;
-                      }
+                      let message = 'Informações do professor salvas com sucesso!';
 
-                      if (teacher.email) {
-                        try {
-                          await supabase.auth.updateUser({ email: teacher.email });
-                        } catch (e) {
-                          console.log('Sincronização de e-mail de auth opcional:', e);
+                      // 2. Se o Supabase estiver configurado, grava também no banco
+                      if (isSupabaseConfigured && supabase) {
+                        const payload: any = {
+                          email: teacher.email,
+                          name: teacher.name,
+                          subject: teacher.subject,
+                          avatar_url: teacher.avatarUrl,
+                          phone: teacher.phone || null,
+                          school: teacher.school || null,
+                        };
+
+                        if (teacher.id) {
+                          payload.id = teacher.id;
                         }
-                      }
 
-                      const { data: updatedData, error } = await supabase
-                        .from('teachers')
-                        .upsert(payload, { onConflict: teacher.id ? 'id' : 'email' })
-                        .select('*')
-                        .maybeSingle();
+                        if (teacher.email) {
+                          try {
+                            await supabase.auth.updateUser({ email: teacher.email });
+                          } catch (e) {
+                            console.log('Sincronização de e-mail de auth opcional:', e);
+                          }
+                        }
 
-                      if (error) {
-                        console.error('Erro ao salvar no Supabase:', error);
-                        alert(`Erro ao salvar configurações no Supabase: ${error.message}`);
-                      } else {
-                        if (updatedData) {
-                          setTeacher({
+                        const { data: updatedData, error } = await supabase
+                          .from('teachers')
+                          .upsert(payload, { onConflict: teacher.id ? 'id' : 'email' })
+                          .select('*')
+                          .maybeSingle();
+
+                        if (error) {
+                          console.error('Erro ao salvar no Supabase:', error);
+                          message = `Informações salvas localmente (Aviso Supabase: ${error.message})`;
+                        } else if (updatedData) {
+                          const updatedTeacher = {
                             id: updatedData.id,
                             name: updatedData.name,
                             subject: updatedData.subject || 'Sociologia',
@@ -785,13 +826,27 @@ export default function Home() {
                             avatarUrl: updatedData.avatar_url || teacher.avatarUrl,
                             phone: updatedData.phone || '',
                             school: updatedData.school || '',
-                          });
+                          };
+                          setTeacher(updatedTeacher);
+                          localStorage.setItem('sensei_teacher_v4', JSON.stringify(updatedTeacher));
+                          message = 'Informações do professor salvas e sincronizadas com sucesso!';
                         }
-                        alert('Configurações salvas e sincronizadas com sucesso com a tabela teachers!');
                       }
+
+                      setTeacherSaveStatus({
+                        type: 'success',
+                        message,
+                      });
+
+                      setTimeout(() => {
+                        setTeacherSaveStatus(null);
+                      }, 5000);
                     } catch (err: any) {
-                      console.error(err);
-                      alert('Erro ao atualizar configurações: ' + (err?.message || ''));
+                      console.error('Erro ao salvar professor:', err);
+                      setTeacherSaveStatus({
+                        type: 'error',
+                        message: 'Erro ao salvar alterações: ' + (err?.message || ''),
+                      });
                     }
                   }}
                   className="py-3 px-6 bg-[#4ade80] text-[#003919] font-bold rounded-full cursor-pointer hover:bg-[#6bfb9a] transition-all"
