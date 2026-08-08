@@ -8,8 +8,14 @@ CREATE TABLE IF NOT EXISTS public.teachers (
     subject TEXT NOT NULL DEFAULT 'Sociologia',
     email TEXT UNIQUE NOT NULL,
     avatar_url TEXT,
+    phone TEXT,
+    school TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ensure columns exist if table was already created
+ALTER TABLE public.teachers ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE public.teachers ADD COLUMN IF NOT EXISTS school TEXT;
 
 -- 2. Tabela de Alunos
 CREATE TABLE IF NOT EXISTS public.students (

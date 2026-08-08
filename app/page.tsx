@@ -452,6 +452,15 @@ export default function Home() {
               <h1 className="text-2xl font-bold text-white">Configurações da Conta</h1>
               <div className="space-y-4 text-xs">
                 <div>
+                  <label className="block text-[#bccabb] font-semibold mb-1">URL da Imagem de Perfil (Avatar)</label>
+                  <input
+                    type="text"
+                    value={teacher.avatarUrl}
+                    onChange={(e) => setTeacher({ ...teacher, avatarUrl: e.target.value })}
+                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-[#4ade80]"
+                  />
+                </div>
+                <div>
                   <label className="block text-[#bccabb] font-semibold mb-1">Nome do Professor</label>
                   <input
                     type="text"
@@ -469,9 +478,67 @@ export default function Home() {
                     className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-[#4ade80]"
                   />
                 </div>
+                <div>
+                  <label className="block text-[#bccabb] font-semibold mb-1">E-mail</label>
+                  <input
+                    type="email"
+                    value={teacher.email}
+                    onChange={(e) => setTeacher({ ...teacher, email: e.target.value })}
+                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-[#bccabb] cursor-not-allowed focus:outline-none"
+                    disabled
+                  />
+                  <p className="text-[10px] text-[#bccabb] mt-1 ml-1">O e-mail não pode ser alterado por aqui pois é seu login.</p>
+                </div>
+                <div>
+                  <label className="block text-[#bccabb] font-semibold mb-1">Telefone</label>
+                  <input
+                    type="text"
+                    value={teacher.phone || ''}
+                    onChange={(e) => setTeacher({ ...teacher, phone: e.target.value })}
+                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-[#4ade80]"
+                    placeholder="(00) 00000-0000"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[#bccabb] font-semibold mb-1">Escola / Instituição</label>
+                  <input
+                    type="text"
+                    value={teacher.school || ''}
+                    onChange={(e) => setTeacher({ ...teacher, school: e.target.value })}
+                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-[#4ade80]"
+                  />
+                </div>
                 <button
-                  onClick={() => alert('Configurações atualizadas!')}
-                  className="py-3 px-6 bg-[#4ade80] text-[#003919] font-bold rounded-full cursor-pointer"
+                  onClick={async () => {
+                    try {
+                      if (!isSupabaseConfigured || !supabase) {
+                        alert('Supabase não configurado.');
+                        return;
+                      }
+                      
+                      const { error } = await supabase
+                        .from('teachers')
+                        .update({
+                          name: teacher.name,
+                          subject: teacher.subject,
+                          avatar_url: teacher.avatarUrl,
+                          phone: teacher.phone,
+                          school: teacher.school
+                        })
+                        .eq('email', teacher.email);
+
+                      if (error) {
+                        console.error('Erro ao salvar no Supabase:', error);
+                        alert('Erro ao salvar configurações.');
+                      } else {
+                        alert('Configurações atualizadas com sucesso!');
+                      }
+                    } catch (err) {
+                      console.error(err);
+                      alert('Erro ao atualizar configurações.');
+                    }
+                  }}
+                  className="py-3 px-6 bg-[#4ade80] text-[#003919] font-bold rounded-full cursor-pointer hover:bg-[#6bfb9a] transition-all"
                 >
                   Salvar Alterações
                 </button>

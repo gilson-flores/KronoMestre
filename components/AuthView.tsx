@@ -177,14 +177,6 @@ export const AuthView: React.FC<AuthViewProps> = ({
         {/* Teacher Login Form */}
         {activeTab === 'teacher' && (
           <form onSubmit={handleTeacherSubmit} className="space-y-4">
-            <div className="flex items-center gap-2 text-xs text-[#4ade80] bg-[#4ade80]/10 p-3 rounded-2xl border border-[#4ade80]/20 mb-2">
-              <ShieldCheck className="w-4 h-4 shrink-0" />
-              <span>
-                {isSupabaseConfigured
-                  ? 'Conectado ao Supabase Authentication.'
-                  : 'Autenticação de Professor pronta (Supabase).'}
-              </span>
-            </div>
 
             {teacherError && (
               <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-2xl text-xs font-medium">

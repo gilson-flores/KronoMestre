@@ -6,6 +6,8 @@ export interface TeacherUser {
   subject: string;
   email: string;
   avatarUrl: string;
+  phone?: string;
+  school?: string;
 }
 
 export interface StudentUser {
