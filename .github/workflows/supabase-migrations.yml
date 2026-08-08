@@ -75,10 +75,14 @@ jobs:
           fi
 
       - name: 5. Aplicar Migrations via Postgres Direto (Fallback com Controle de Tabela schema_migrations)
-        if: ${{ !(inputs.dry_run) && secrets.DATABASE_URL != '' }}
+        if: ${{ !(inputs.dry_run) }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "ℹ️ DATABASE_URL não fornecida. Etapa de fallback ignorada."
+            exit 0
+          fi
           echo "🛠 Executando script de controle de versionamento único no PostgreSQL..."
           
           # Criar tabela de controle de migrations se não existir
