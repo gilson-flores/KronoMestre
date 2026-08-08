@@ -6,7 +6,6 @@ import {
   Users,
   FolderOpen,
   Settings,
-  LogOut,
   FileCheck
 } from 'lucide-react';
 import { TeacherUser } from '@/lib/types';
@@ -17,15 +16,13 @@ interface SidebarProps {
   setCurrentTab: (tab: string) => void;
   teacher: TeacherUser;
   onOpenNewContentModal: () => void;
-  onLogout: () => void;
+  onLogout?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentTab,
   setCurrentTab,
   teacher,
-  onOpenNewContentModal,
-  onLogout,
 }) => {
   const navItems = [
     { id: 'painel', label: 'Studio', icon: LayoutDashboard },
@@ -51,7 +48,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="absolute bottom-0 right-1 w-4 h-4 bg-[#4ade80] border-2 border-[#0b1326] rounded-full"></span>
           </div>
           <h2 className="text-xl font-bold tracking-tight text-white">{teacher.name}</h2>
-          <p className="text-xs text-[#bccabb] font-medium mt-0.5">{teacher.subject}</p>
+          <p className="text-xs text-[#bccabb] font-medium mt-0.5 mb-2.5">{teacher.subject}</p>
+
+          {/* Configurações button below teacher name */}
+          <button
+            onClick={() => setCurrentTab('configuracoes')}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer ${
+              currentTab === 'configuracoes'
+                ? 'bg-[#4ade80] text-[#003919] shadow-md'
+                : 'bg-[#171f33] text-[#bccabb] hover:text-white hover:bg-[#222a3d] border border-white/10'
+            }`}
+          >
+            <Settings className="w-3.5 h-3.5" />
+            <span>Configurações</span>
+          </button>
         </div>
 
         {/* Nav links */}
@@ -75,28 +85,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             );
           })}
         </nav>
-      </div>
-
-      {/* Footer links */}
-      <div className="space-y-1 pt-6 border-t border-white/5">
-        <button
-          onClick={() => setCurrentTab('configuracoes')}
-          className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-full text-sm font-medium transition-all duration-200 cursor-pointer ${
-            currentTab === 'configuracoes'
-              ? 'bg-[#171f33] text-white'
-              : 'text-[#bccabb] hover:text-white hover:bg-[#131b2e]'
-          }`}
-        >
-          <Settings className="w-5 h-5" />
-          <span>Configurações</span>
-        </button>
-        <button
-          onClick={onLogout}
-          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-full text-sm font-medium text-rose-400 hover:bg-rose-500/10 transition-all duration-200 cursor-pointer"
-        >
-          <LogOut className="w-5 h-5" />
-          <span>Sair</span>
-        </button>
       </div>
     </aside>
   );

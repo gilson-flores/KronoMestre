@@ -1,14 +1,14 @@
 'use client';
 
 import React from 'react';
-import { Bell, Settings, Search, BookOpen } from 'lucide-react';
+import { Bell, Search, BookOpen } from 'lucide-react';
 import { UserRole, TeacherUser, StudentUser } from '@/lib/types';
 import { formatAvatarUrl } from '@/lib/utils';
 
 interface NavbarTopProps {
   role: UserRole;
   user: TeacherUser | StudentUser | null;
-  onOpenSettings: () => void;
+  onOpenSettings?: () => void;
   globalSearch: string;
   setGlobalSearch: (q: string) => void;
 }
@@ -16,7 +16,6 @@ interface NavbarTopProps {
 export const NavbarTop: React.FC<NavbarTopProps> = ({
   role,
   user,
-  onOpenSettings,
   globalSearch,
   setGlobalSearch,
 }) => {
@@ -47,7 +46,7 @@ export const NavbarTop: React.FC<NavbarTopProps> = ({
         </div>
       </div>
 
-      {/* Right Controls */}
+      {/* Right Controls: Notifications + User Name */}
       <div className="flex items-center gap-3">
         <button
           className="p-2 text-[#bccabb] hover:text-white hover:bg-[#171f33] rounded-full transition-colors relative cursor-pointer"
@@ -55,14 +54,6 @@ export const NavbarTop: React.FC<NavbarTopProps> = ({
         >
           <Bell className="w-5 h-5" />
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#4ade80] rounded-full"></span>
-        </button>
-
-        <button
-          onClick={onOpenSettings}
-          className="p-2 text-[#bccabb] hover:text-white hover:bg-[#171f33] rounded-full transition-colors cursor-pointer"
-          title="Configurações"
-        >
-          <Settings className="w-5 h-5" />
         </button>
 
         {user && (
@@ -75,7 +66,7 @@ export const NavbarTop: React.FC<NavbarTopProps> = ({
                 (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150';
               }}
             />
-            <div className="hidden lg:block text-left">
+            <div className="hidden sm:block text-left">
               <p className="text-xs font-bold text-white leading-tight">
                 {'name' in user ? user.name : user.fullName}
               </p>
