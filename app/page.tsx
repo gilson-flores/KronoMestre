@@ -24,6 +24,7 @@ import { EditActivityModal } from '@/components/modals/EditActivityModal';
 import { ViewActivityModal } from '@/components/modals/ViewActivityModal';
 import { NewStudentModal } from '@/components/modals/NewStudentModal';
 import { EditStudentModal } from '@/components/modals/EditStudentModal';
+import { CheckCircle2, AlertTriangle } from 'lucide-react';
 
 export default function Home() {
   // Auth state
@@ -52,6 +53,14 @@ export default function Home() {
   const [isEditActivityModalOpen, setIsEditActivityModalOpen] = useState(false);
   const [viewingActivity, setViewingActivity] = useState<Activity | null>(null);
   const [teacherSaveStatus, setTeacherSaveStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [globalDbStatus, setGlobalDbStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const showGlobalStatus = (type: 'success' | 'error', message: string) => {
+    setGlobalDbStatus({ type, message });
+    setTimeout(() => {
+      setGlobalDbStatus((current) => (current?.message === message ? null : current));
+    }, 6000);
+  };
 
   // 0. Carregar atividades e dados do professor do LocalStorage primeiro para evitar perdas
   useEffect(() => {
@@ -239,7 +248,7 @@ export default function Home() {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('activities').upsert({
+        const fullPayload = {
           id: newAct.id,
           title: newAct.title,
           subject: newAct.subject || 'Sociologia',
@@ -255,10 +264,40 @@ export default function Home() {
           total_submissions: newAct.totalSubmissions || 0,
           total_students: newAct.totalStudents || 0,
           pending_correction: newAct.pendingCorrection || 0,
-        });
-      } catch (err) {
+        };
+
+        const { error } = await supabase.from('activities').upsert(fullPayload);
+
+        if (error) {
+          console.warn('Upsert com colunas expandidas falhou no Supabase, tentando com colunas base:', error.message);
+          const basePayload = {
+            id: newAct.id,
+            title: newAct.title,
+            description: newAct.description || '',
+            turma: newAct.turma || '',
+            type: newAct.type,
+            status: newAct.status,
+            deadline: newAct.deadline || '',
+            total_submissions: newAct.totalSubmissions || 0,
+            total_students: newAct.totalStudents || 0,
+            pending_correction: newAct.pendingCorrection || 0,
+          };
+          const { error: fallbackErr } = await supabase.from('activities').upsert(basePayload);
+          if (fallbackErr) {
+            console.error('Erro ao criar atividade no Supabase:', fallbackErr.message);
+            showGlobalStatus('error', `Erro Supabase ao criar atividade: ${fallbackErr.message}`);
+          } else {
+            showGlobalStatus('success', `Atividade "${newAct.title}" salva no Supabase (colunas base) com sucesso!`);
+          }
+        } else {
+          showGlobalStatus('success', `Atividade "${newAct.title}" criada e confirmada no Supabase com sucesso!`);
+        }
+      } catch (err: any) {
         console.error('Erro ao salvar atividade no Supabase:', err);
+        showGlobalStatus('error', `Erro de conexão com o Supabase: ${err?.message || ''}`);
       }
+    } else {
+      showGlobalStatus('success', `Atividade "${newAct.title}" salva localmente!`);
     }
   };
 
@@ -270,30 +309,60 @@ export default function Home() {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase
-          .from('activities')
-          .upsert({
+        const fullPayload = {
+          id: updatedAct.id,
+          title: updatedAct.title,
+          subject: updatedAct.subject || 'Sociologia',
+          description: updatedAct.description || '',
+          support_material: updatedAct.supportMaterial || '',
+          turma: updatedAct.turma || '',
+          type: updatedAct.type,
+          status: updatedAct.status,
+          deadline: updatedAct.deadline || '',
+          max_grade: updatedAct.maxGrade || 10,
+          allow_group_work: updatedAct.allowGroupWork || false,
+          questions: JSON.stringify(updatedAct.questions || []),
+          total_submissions: updatedAct.totalSubmissions,
+          total_students: updatedAct.totalStudents,
+          pending_correction: updatedAct.pendingCorrection,
+          average_grade: updatedAct.averageGrade,
+          completed_date: updatedAct.completedDate,
+        };
+
+        const { error } = await supabase.from('activities').upsert(fullPayload);
+
+        if (error) {
+          console.warn('Upsert de atualização falhou no Supabase, tentando com colunas base:', error.message);
+          const basePayload = {
             id: updatedAct.id,
             title: updatedAct.title,
-            subject: updatedAct.subject || 'Sociologia',
             description: updatedAct.description || '',
-            support_material: updatedAct.supportMaterial || '',
             turma: updatedAct.turma || '',
             type: updatedAct.type,
             status: updatedAct.status,
             deadline: updatedAct.deadline || '',
-            max_grade: updatedAct.maxGrade || 10,
-            allow_group_work: updatedAct.allowGroupWork || false,
-            questions: JSON.stringify(updatedAct.questions || []),
             total_submissions: updatedAct.totalSubmissions,
             total_students: updatedAct.totalStudents,
             pending_correction: updatedAct.pendingCorrection,
             average_grade: updatedAct.averageGrade,
             completed_date: updatedAct.completedDate,
-          });
-      } catch (err) {
+          };
+          const { error: fallbackErr } = await supabase.from('activities').upsert(basePayload);
+          if (fallbackErr) {
+            console.error('Erro ao atualizar atividade no Supabase:', fallbackErr.message);
+            showGlobalStatus('error', `Erro Supabase ao atualizar atividade: ${fallbackErr.message}`);
+          } else {
+            showGlobalStatus('success', `Alterações de "${updatedAct.title}" salvas no Supabase (colunas base)!`);
+          }
+        } else {
+          showGlobalStatus('success', `Alterações de "${updatedAct.title}" salvas e confirmadas no Supabase!`);
+        }
+      } catch (err: any) {
         console.error('Erro ao atualizar atividade no Supabase:', err);
+        showGlobalStatus('error', `Erro de conexão com o Supabase: ${err?.message || ''}`);
       }
+    } else {
+      showGlobalStatus('success', `Alterações de "${updatedAct.title}" salvas localmente!`);
     }
   };
 
@@ -307,12 +376,19 @@ export default function Home() {
       try {
         await supabase.from('submissions').delete().eq('activity_id', activity.id);
         const { error } = await supabase.from('activities').delete().eq('id', activity.id);
+
         if (error) {
           console.error('Erro ao excluir atividade no Supabase:', error);
+          showGlobalStatus('error', `Erro Supabase ao excluir atividade: ${error.message}`);
+        } else {
+          showGlobalStatus('success', `Atividade "${activity.title}" excluída do Supabase com sucesso!`);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Erro ao excluir atividade no Supabase:', err);
+        showGlobalStatus('error', `Erro de conexão ao excluir atividade: ${err?.message || ''}`);
       }
+    } else {
+      showGlobalStatus('success', `Atividade "${activity.title}" removida!`);
     }
   };
 
@@ -628,6 +704,33 @@ export default function Home() {
           globalSearch={globalSearch}
           setGlobalSearch={setGlobalSearch}
         />
+
+        {globalDbStatus && (
+          <div className="max-w-7xl w-full mx-auto px-6 pt-4">
+            <div
+              className={`p-4 rounded-2xl text-xs font-bold flex items-center justify-between shadow-lg transition-all animate-fadeIn ${
+                globalDbStatus.type === 'success'
+                  ? 'bg-[#4ade80]/20 text-[#4ade80] border border-[#4ade80]/40'
+                  : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {globalDbStatus.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-[#4ade80]" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                )}
+                <span>{globalDbStatus.message}</span>
+              </div>
+              <button
+                onClick={() => setGlobalDbStatus(null)}
+                className="text-white hover:opacity-80 ml-3 text-sm cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
 
         <main className="flex-1 p-6 md:p-8 max-w-7xl w-full mx-auto">
           {currentTab === 'painel' && (
