@@ -88,15 +88,22 @@ ALTER TABLE public.submissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.schedule_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.library_files ENABLE ROW LEVEL SECURITY;
 
--- Criar políticas de leitura e gravação públicas/autenticadas
-CREATE POLICY "Permitir leitura pública em professores" ON public.teachers FOR SELECT USING (true);
-CREATE POLICY "Permitir leitura pública em alunos" ON public.students FOR SELECT USING (true);
-CREATE POLICY "Permitir alteração de alunos" ON public.students FOR ALL USING (true);
+-- Remover políticas antigas para evitar sobreposição
+DROP POLICY IF EXISTS "Permitir leitura pública em professores" ON public.teachers;
+DROP POLICY IF EXISTS "Permitir leitura pública em alunos" ON public.students;
+DROP POLICY IF EXISTS "Permitir alteração de alunos" ON public.students;
+DROP POLICY IF EXISTS "Permitir acesso total em atividades" ON public.activities;
+DROP POLICY IF EXISTS "Permitir acesso total em entregas" ON public.submissions;
+DROP POLICY IF EXISTS "Permitir acesso total em horários" ON public.schedule_items;
+DROP POLICY IF EXISTS "Permitir acesso total em arquivos" ON public.library_files;
 
-CREATE POLICY "Permitir acesso total em atividades" ON public.activities FOR ALL USING (true);
-CREATE POLICY "Permitir acesso total em entregas" ON public.submissions FOR ALL USING (true);
-CREATE POLICY "Permitir acesso total em horários" ON public.schedule_items FOR ALL USING (true);
-CREATE POLICY "Permitir acesso total em arquivos" ON public.library_files FOR ALL USING (true);
+-- Criar políticas de acesso total com USING e WITH CHECK para permitir SELECT, INSERT, UPDATE e DELETE
+CREATE POLICY "Acesso total professores" ON public.teachers FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Acesso total alunos" ON public.students FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Acesso total atividades" ON public.activities FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Acesso total entregas" ON public.submissions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Acesso total horários" ON public.schedule_items FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Acesso total arquivos" ON public.library_files FOR ALL USING (true) WITH CHECK (true);
 
 -- Inserção de Dados Iniciais de Demonstração
 INSERT INTO public.teachers (name, subject, email, avatar_url)

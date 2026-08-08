@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   initialTeacher,
   initialStudents,
@@ -9,6 +9,7 @@ import {
   initialLibrary,
 } from '@/lib/initialData';
 import { UserRole, TeacherUser, StudentUser, Activity } from '@/lib/types';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { AuthView } from '@/components/AuthView';
 import { Sidebar } from '@/components/Sidebar';
 import { NavbarTop } from '@/components/NavbarTop';
@@ -47,6 +48,77 @@ export default function Home() {
   const [isNewStudentModalOpen, setIsNewStudentModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<StudentUser | null>(null);
 
+  // Carregar dados iniciais do Supabase se configurado
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+    const client = supabase;
+
+    const loadData = async () => {
+      try {
+        // Carregar Alunos
+        const { data: dbStudents } = await client.from('students').select('*');
+        if (dbStudents && dbStudents.length > 0) {
+          const mappedStudents: StudentUser[] = dbStudents.map((s) => ({
+            id: s.id,
+            fullName: s.full_name,
+            turma: s.turma,
+            matricula: s.matricula,
+            tag: s.tag,
+            passwordHash: s.password_hash || '1234',
+            avatarUrl: s.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+          }));
+          setStudents(mappedStudents);
+        }
+
+        // Carregar Atividades
+        const { data: dbActivities } = await client.from('activities').select('*');
+        const { data: dbSubmissions } = await client.from('submissions').select('*');
+
+        if (dbActivities && dbActivities.length > 0) {
+          const mappedActivities: Activity[] = dbActivities.map((act) => {
+            const subs = (dbSubmissions || [])
+              .filter((sub) => sub.activity_id === act.id)
+              .map((sub) => ({
+                studentId: sub.student_id,
+                studentName: sub.student_name,
+                matricula: sub.matricula,
+                tag: sub.tag,
+                avatarUrl: sub.avatar_url,
+                objectiveScore: Number(sub.objective_score || 0),
+                maxObjectiveScore: Number(sub.max_objective_score || 5),
+                essayScore: sub.essay_score !== null ? Number(sub.essay_score) : undefined,
+                maxEssayScore: Number(sub.max_essay_score || 5),
+                status: sub.status,
+                essayAnswer: sub.essay_answer,
+                teacherFeedback: sub.teacher_feedback,
+              }));
+
+            return {
+              id: act.id,
+              title: act.title,
+              description: act.description,
+              turma: act.turma,
+              type: act.type,
+              status: act.status,
+              deadline: act.deadline,
+              totalSubmissions: act.total_submissions || subs.length,
+              totalStudents: act.total_students || 35,
+              pendingCorrection: act.pending_correction || subs.filter((s) => s.status === 'pending').length,
+              averageGrade: act.average_grade ? Number(act.average_grade) : undefined,
+              completedDate: act.completed_date,
+              submissions: subs,
+            };
+          });
+          setActivities(mappedActivities);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar dados do Supabase:', err);
+      }
+    };
+
+    loadData();
+  }, []);
+
   // Auth Handlers
   const handleLoginTeacher = (loggedTeacher: TeacherUser) => {
     setTeacher(loggedTeacher);
@@ -65,8 +137,27 @@ export default function Home() {
   };
 
   // Activity Handlers
-  const handleCreateActivity = (newAct: Activity) => {
+  const handleCreateActivity = async (newAct: Activity) => {
     setActivities([newAct, ...activities]);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('activities').insert({
+          id: newAct.id,
+          title: newAct.title,
+          description: newAct.description,
+          turma: newAct.turma,
+          type: newAct.type,
+          status: newAct.status,
+          deadline: newAct.deadline,
+          total_submissions: newAct.totalSubmissions,
+          total_students: newAct.totalStudents,
+          pending_correction: newAct.pendingCorrection,
+        });
+      } catch (err) {
+        console.error('Erro ao salvar atividade no Supabase:', err);
+      }
+    }
   };
 
   const handleSelectActivityForGrading = (act: Activity) => {
@@ -74,7 +165,7 @@ export default function Home() {
     setCurrentTab('grading');
   };
 
-  const handleUpdateSubmission = (
+  const handleUpdateSubmission = async (
     activityId: string,
     studentId: string,
     essayScore: number,
@@ -106,9 +197,25 @@ export default function Home() {
         };
       })
     );
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('submissions')
+          .update({
+            essay_score: essayScore,
+            teacher_feedback: feedback,
+            status: status,
+          })
+          .eq('activity_id', activityId)
+          .eq('student_id', studentId);
+      } catch (err) {
+        console.error('Erro ao atualizar nota no Supabase:', err);
+      }
+    }
   };
 
-  const handleStudentSubmitAnswer = (activityId: string, studentId: string, essayAnswer: string) => {
+  const handleStudentSubmitAnswer = async (activityId: string, studentId: string, essayAnswer: string) => {
     if (!currentStudent) return;
 
     setActivities((prev) =>
@@ -146,19 +253,93 @@ export default function Home() {
         };
       })
     );
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data: existingSub } = await supabase
+          .from('submissions')
+          .select('id')
+          .eq('activity_id', activityId)
+          .eq('student_id', studentId)
+          .maybeSingle();
+
+        if (existingSub) {
+          await supabase
+            .from('submissions')
+            .update({
+              essay_answer: essayAnswer,
+              status: 'pending',
+            })
+            .eq('id', existingSub.id);
+        } else {
+          await supabase.from('submissions').insert({
+            activity_id: activityId,
+            student_id: studentId,
+            student_name: currentStudent.fullName,
+            matricula: currentStudent.matricula,
+            tag: currentStudent.tag,
+            avatar_url: currentStudent.avatarUrl,
+            essay_answer: essayAnswer,
+            status: 'pending',
+            objective_score: 5.0,
+          });
+        }
+      } catch (err) {
+        console.error('Erro ao enviar resposta para o Supabase:', err);
+      }
+    }
   };
 
   // Student CRUD Handlers
-  const handleCreateStudent = (newStudent: StudentUser) => {
+  const handleCreateStudent = async (newStudent: StudentUser) => {
     setStudents([...students, newStudent]);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('students').insert({
+          full_name: newStudent.fullName,
+          turma: newStudent.turma,
+          matricula: newStudent.matricula,
+          tag: newStudent.tag,
+          password_hash: newStudent.passwordHash || '1234',
+          avatar_url: newStudent.avatarUrl,
+        });
+      } catch (err) {
+        console.error('Erro ao cadastrar aluno no Supabase:', err);
+      }
+    }
   };
 
-  const handleSaveStudent = (updatedStudent: StudentUser) => {
+  const handleSaveStudent = async (updatedStudent: StudentUser) => {
     setStudents(students.map((s) => (s.id === updatedStudent.id ? updatedStudent : s)));
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('students')
+          .update({
+            full_name: updatedStudent.fullName,
+            turma: updatedStudent.turma,
+            matricula: updatedStudent.matricula,
+            tag: updatedStudent.tag,
+          })
+          .eq('id', updatedStudent.id);
+      } catch (err) {
+        console.error('Erro ao atualizar aluno no Supabase:', err);
+      }
+    }
   };
 
-  const handleDeleteStudent = (studentId: string) => {
+  const handleDeleteStudent = async (studentId: string) => {
     setStudents(students.filter((s) => s.id !== studentId));
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('students').delete().eq('id', studentId);
+      } catch (err) {
+        console.error('Erro ao deletar aluno do Supabase:', err);
+      }
+    }
   };
 
   const handleSuperviseStudent = (student: StudentUser) => {
