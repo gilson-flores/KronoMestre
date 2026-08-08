@@ -3,7 +3,7 @@
 
 -- 1. Tabela de Professores
 CREATE TABLE IF NOT EXISTS public.teachers (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     name TEXT NOT NULL,
     subject TEXT NOT NULL DEFAULT 'Sociologia',
     email TEXT UNIQUE NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS public.teachers (
 
 -- 2. Tabela de Alunos
 CREATE TABLE IF NOT EXISTS public.students (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     full_name TEXT NOT NULL,
     turma TEXT NOT NULL,
     matricula TEXT UNIQUE NOT NULL,
@@ -42,9 +42,9 @@ CREATE TABLE IF NOT EXISTS public.activities (
 
 -- 4. Tabela de Entregas / Correções dos Alunos
 CREATE TABLE IF NOT EXISTS public.submissions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     activity_id TEXT NOT NULL REFERENCES public.activities(id) ON DELETE CASCADE,
-    student_id UUID NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
+    student_id TEXT NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
     student_name TEXT NOT NULL,
     matricula TEXT NOT NULL,
     tag TEXT,
@@ -96,14 +96,20 @@ DROP POLICY IF EXISTS "Permitir acesso total em atividades" ON public.activities
 DROP POLICY IF EXISTS "Permitir acesso total em entregas" ON public.submissions;
 DROP POLICY IF EXISTS "Permitir acesso total em horários" ON public.schedule_items;
 DROP POLICY IF EXISTS "Permitir acesso total em arquivos" ON public.library_files;
+DROP POLICY IF EXISTS "Acesso total professores" ON public.teachers;
+DROP POLICY IF EXISTS "Acesso total alunos" ON public.students;
+DROP POLICY IF EXISTS "Acesso total atividades" ON public.activities;
+DROP POLICY IF EXISTS "Acesso total entregas" ON public.submissions;
+DROP POLICY IF EXISTS "Acesso total horários" ON public.schedule_items;
+DROP POLICY IF EXISTS "Acesso total arquivos" ON public.library_files;
 
 -- Criar políticas de acesso total com USING e WITH CHECK para permitir SELECT, INSERT, UPDATE e DELETE
-CREATE POLICY "Acesso total professores" ON public.teachers FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso total alunos" ON public.students FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso total atividades" ON public.activities FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso total entregas" ON public.submissions FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso total horários" ON public.schedule_items FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Acesso total arquivos" ON public.library_files FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Acesso total professores" ON public.teachers FOR ALL TO public USING (true) WITH CHECK (true);
+CREATE POLICY "Acesso total alunos" ON public.students FOR ALL TO public USING (true) WITH CHECK (true);
+CREATE POLICY "Acesso total atividades" ON public.activities FOR ALL TO public USING (true) WITH CHECK (true);
+CREATE POLICY "Acesso total entregas" ON public.submissions FOR ALL TO public USING (true) WITH CHECK (true);
+CREATE POLICY "Acesso total horários" ON public.schedule_items FOR ALL TO public USING (true) WITH CHECK (true);
+CREATE POLICY "Acesso total arquivos" ON public.library_files FOR ALL TO public USING (true) WITH CHECK (true);
 
 -- Inserção de Dados Iniciais de Demonstração
 INSERT INTO public.teachers (name, subject, email, avatar_url)

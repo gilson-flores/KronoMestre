@@ -55,7 +55,7 @@ export default function Home() {
 
     const loadData = async () => {
       try {
-        // Carregar Alunos
+        // 1. Carregar Alunos do Supabase
         const { data: dbStudents } = await client.from('students').select('*');
         if (dbStudents && dbStudents.length > 0) {
           const mappedStudents: StudentUser[] = dbStudents.map((s) => ({
@@ -65,12 +65,27 @@ export default function Home() {
             matricula: s.matricula,
             tag: s.tag,
             passwordHash: s.password_hash || '1234',
-            avatarUrl: s.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+            avatarUrl:
+              s.avatar_url ||
+              'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
           }));
           setStudents(mappedStudents);
+        } else {
+          // Popular banco se estiver vazio
+          for (const st of initialStudents) {
+            await client.from('students').insert({
+              id: st.id,
+              full_name: st.fullName,
+              turma: st.turma,
+              matricula: st.matricula,
+              tag: st.tag,
+              password_hash: st.passwordHash || '1234',
+              avatar_url: st.avatarUrl,
+            });
+          }
         }
 
-        // Carregar Atividades
+        // 2. Carregar Atividades e Entregas do Supabase
         const { data: dbActivities } = await client.from('activities').select('*');
         const { data: dbSubmissions } = await client.from('submissions').select('*');
 
@@ -86,7 +101,10 @@ export default function Home() {
                 avatarUrl: sub.avatar_url,
                 objectiveScore: Number(sub.objective_score || 0),
                 maxObjectiveScore: Number(sub.max_objective_score || 5),
-                essayScore: sub.essay_score !== null ? Number(sub.essay_score) : undefined,
+                essayScore:
+                  sub.essay_score !== null && sub.essay_score !== undefined
+                    ? Number(sub.essay_score)
+                    : undefined,
                 maxEssayScore: Number(sub.max_essay_score || 5),
                 status: sub.status,
                 essayAnswer: sub.essay_answer,
@@ -110,9 +128,41 @@ export default function Home() {
             };
           });
           setActivities(mappedActivities);
+        } else {
+          // Popular atividades no Supabase se estiver vazio
+          for (const act of initialActivities) {
+            await client.from('activities').insert({
+              id: act.id,
+              title: act.title,
+              description: act.description,
+              turma: act.turma,
+              type: act.type,
+              status: act.status,
+              deadline: act.deadline,
+              total_submissions: act.totalSubmissions,
+              total_students: act.totalStudents,
+              pending_correction: act.pendingCorrection,
+            });
+
+            for (const sub of act.submissions) {
+              await client.from('submissions').insert({
+                activity_id: act.id,
+                student_id: sub.studentId,
+                student_name: sub.studentName,
+                matricula: sub.matricula,
+                tag: sub.tag,
+                avatar_url: sub.avatarUrl,
+                objective_score: sub.objectiveScore,
+                essay_score: sub.essayScore,
+                status: sub.status,
+                essay_answer: sub.essayAnswer,
+                teacher_feedback: sub.teacherFeedback,
+              });
+            }
+          }
         }
       } catch (err) {
-        console.error('Erro ao buscar dados do Supabase:', err);
+        console.error('Erro ao carregar dados do Supabase:', err);
       }
     };
 

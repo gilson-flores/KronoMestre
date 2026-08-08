@@ -22,7 +22,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
   // Teacher Supabase Login state
   const [teacherEmail, setTeacherEmail] = useState(teacher.email);
-  const [teacherPassword, setTeacherPassword] = useState('1234');
+  const [teacherPassword, setTeacherPassword] = useState('');
   const [teacherLoading, setTeacherLoading] = useState(false);
   const [teacherError, setTeacherError] = useState('');
 
@@ -41,43 +41,56 @@ export const AuthView: React.FC<AuthViewProps> = ({
     setTeacherLoading(true);
 
     try {
-      if (isSupabaseConfigured && supabase) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: teacherEmail,
-          password: teacherPassword,
+      if (!isSupabaseConfigured || !supabase) {
+        setTeacherError(
+          'Supabase não está configurado. Configure as variáveis NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY no seu ambiente.'
+        );
+        setTeacherLoading(false);
+        return;
+      }
+
+      // 1. Tentar autenticação via Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: teacherEmail,
+        password: teacherPassword,
+      });
+
+      if (authData?.user) {
+        onLoginTeacher({
+          id: authData.user.id,
+          name: authData.user.user_metadata?.full_name || teacherEmail.split('@')[0],
+          subject: 'Sociologia',
+          email: authData.user.email || teacherEmail,
+          avatarUrl: teacher.avatarUrl,
         });
-
-        if (error) {
-          // If Supabase authentication fails, check demo credentials
-          if (teacherEmail === teacher.email || teacherPassword === '1234') {
-            onLoginTeacher(teacher);
-            return;
-          }
-          setTeacherError(error.message || 'Erro ao autenticar com Supabase.');
-          setTeacherLoading(false);
-          return;
-        }
-
-        if (data.user) {
-          onLoginTeacher({
-            id: data.user.id,
-            name: data.user.user_metadata?.full_name || teacher.name,
-            subject: 'Sociologia',
-            email: data.user.email || teacherEmail,
-            avatarUrl: teacher.avatarUrl,
-          });
-          return;
-        }
+        return;
       }
 
-      // Default demo check
-      if (teacherPassword === '1234' || teacherEmail === teacher.email) {
-        onLoginTeacher(teacher);
-      } else {
-        setTeacherError('Credenciais inválidas. Use a senha de demonstração 1234.');
+      // 2. Se não autenticou no Supabase Auth, verificar na tabela 'teachers' do Supabase
+      const { data: dbTeacher, error: dbError } = await supabase
+        .from('teachers')
+        .select('*')
+        .eq('email', teacherEmail)
+        .maybeSingle();
+
+      if (dbTeacher) {
+        onLoginTeacher({
+          id: dbTeacher.id,
+          name: dbTeacher.name,
+          subject: dbTeacher.subject || 'Sociologia',
+          email: dbTeacher.email,
+          avatarUrl: dbTeacher.avatar_url || teacher.avatarUrl,
+        });
+        return;
       }
+
+      // Se não encontrou nem no Supabase Auth nem na tabela 'teachers'
+      setTeacherError(
+        'Acesso negado: E-mail ou senha não cadastrados no Supabase. ' +
+          (authError?.message || dbError?.message || '')
+      );
     } catch (err: any) {
-      setTeacherError('Falha ao conectar. Entre com a senha padrão 1234.');
+      setTeacherError('Erro de conexão com o Supabase: ' + (err.message || 'Verifique sua rede.'));
     } finally {
       setTeacherLoading(false);
     }
@@ -204,7 +217,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 />
                 <Lock className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-[#869486]" />
               </div>
-              <p className="text-[11px] text-[#bccabb] mt-1 ml-1">Senha padrão de demonstração: <span className="font-bold text-white">1234</span></p>
+              <p className="text-[11px] text-[#bccabb] mt-1 ml-1">Autenticação exclusiva via Supabase</p>
             </div>
 
             <button
