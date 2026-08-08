@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { StudentUser, TeacherUser, UserRole } from '@/lib/types';
 import { BookOpen, User, GraduationCap, Lock, ArrowRight, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { DEFAULT_TURMAS, getTurmaLabel, normalizeStudentName } from '@/lib/studentUtils';
 
 interface AuthViewProps {
   students: StudentUser[];
@@ -32,8 +33,10 @@ export const AuthView: React.FC<AuthViewProps> = ({
   const [studentPassword, setStudentPassword] = useState('');
   const [studentError, setStudentError] = useState('');
 
-  // Unique turmas for dropdown select helper
-  const availableTurmas = Array.from(new Set(students.map((s) => s.turma)));
+  // Unique turmas for dropdown select helper (combining defaults and existing student turmas)
+  const availableTurmas = Array.from(
+    new Set([...DEFAULT_TURMAS, ...students.map((s) => s.turma)])
+  ).sort((a, b) => a.localeCompare(b));
 
   const handleTeacherSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,20 +137,26 @@ export const AuthView: React.FC<AuthViewProps> = ({
     e.preventDefault();
     setStudentError('');
 
-    if (!studentFullName.trim() || !studentTurma || !studentPassword) {
-      setStudentError('Por favor, preencha nome completo, turma e senha.');
+    const normalizedInputName = normalizeStudentName(studentFullName);
+
+    if (!normalizedInputName || !studentTurma || !studentPassword) {
+      setStudentError('Por favor, preencha o Nome Completo (MAIÚSCULAS SEM ACENTOS), selecione a Turma e a Senha.');
       return;
     }
 
-    // Match student by Full Name (case insensitive) & Turma
+    // Match student by normalized name & turma code
     const matched = students.find(
       (s) =>
-        s.fullName.trim().toLowerCase() === studentFullName.trim().toLowerCase() &&
+        normalizeStudentName(s.fullName) === normalizedInputName &&
         s.turma === studentTurma
     );
 
     if (!matched) {
-      setStudentError('Aluno não encontrado com este Nome Completo e Turma.');
+      setStudentError(
+        'Aluno não encontrado para a turma ' +
+          studentTurma +
+          '. Certifique-se de que o nome está correto e cadastrado em MAIÚSCULAS sem acentos.'
+      );
       return;
     }
 
@@ -155,7 +164,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
     if (studentPassword === '1234' || studentPassword === matched.passwordHash) {
       onLoginStudent(matched);
     } else {
-      setStudentError('Senha incorreta. A senha padrão cadastrada é 1234.');
+      setStudentError('Senha incorreta. A senha padrão cadastrada para alunos é 1234.');
     }
   };
 
@@ -272,14 +281,16 @@ export const AuthView: React.FC<AuthViewProps> = ({
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">Nome Completo do Aluno</label>
+              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">
+                Nome Completo do Aluno (MAIÚSCULAS SEM ACENTOS)
+              </label>
               <input
                 type="text"
                 required
                 value={studentFullName}
-                onChange={(e) => setStudentFullName(e.target.value)}
-                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
-                placeholder="Ex: Lucas Gabriel Martins ou João Pedro Silva"
+                onChange={(e) => setStudentFullName(normalizeStudentName(e.target.value))}
+                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80] uppercase tracking-wide"
+                placeholder="Ex: LUCAS GABRIEL MARTINS"
               />
             </div>
 
@@ -294,7 +305,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 <option value="">Selecione a sua turma...</option>
                 {availableTurmas.map((t) => (
                   <option key={t} value={t} className="bg-[#0b1326] text-white">
-                    {t}
+                    {getTurmaLabel(t)}
                   </option>
                 ))}
               </select>

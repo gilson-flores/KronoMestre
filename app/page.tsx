@@ -16,11 +16,11 @@ import { NavbarTop } from '@/components/NavbarTop';
 import { DashboardView } from '@/components/views/DashboardView';
 import { GradingView } from '@/components/views/GradingView';
 import { StudentsView } from '@/components/views/StudentsView';
-import { ScheduleView } from '@/components/views/ScheduleView';
 import { LibraryView } from '@/components/views/LibraryView';
 import { StudentPortalView } from '@/components/views/StudentPortalView';
 
 import { NewActivityModal } from '@/components/modals/NewActivityModal';
+import { EditActivityModal } from '@/components/modals/EditActivityModal';
 import { NewStudentModal } from '@/components/modals/NewStudentModal';
 import { EditStudentModal } from '@/components/modals/EditStudentModal';
 
@@ -47,6 +47,8 @@ export default function Home() {
   const [isNewActivityModalOpen, setIsNewActivityModalOpen] = useState(false);
   const [isNewStudentModalOpen, setIsNewStudentModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<StudentUser | null>(null);
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+  const [isEditActivityModalOpen, setIsEditActivityModalOpen] = useState(false);
 
   // Carregar dados iniciais do Supabase se configurado
   useEffect(() => {
@@ -189,6 +191,31 @@ export default function Home() {
     }
   };
 
+  const handleSaveActivity = async (updatedAct: Activity) => {
+    setActivities((prev) => prev.map((a) => (a.id === updatedAct.id ? updatedAct : a)));
+    if (selectedActivityForGrading?.id === updatedAct.id) {
+      setSelectedActivityForGrading(updatedAct);
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('activities')
+          .update({
+            title: updatedAct.title,
+            description: updatedAct.description,
+            turma: updatedAct.turma,
+            type: updatedAct.type,
+            status: updatedAct.status,
+            deadline: updatedAct.deadline,
+          })
+          .eq('id', updatedAct.id);
+      } catch (err) {
+        console.error('Erro ao atualizar atividade no Supabase:', err);
+      }
+    }
+  };
+
   const handleDeleteActivity = async (activity: Activity) => {
     setActivities((prev) => prev.filter((a) => a.id !== activity.id));
     if (selectedActivityForGrading?.id === activity.id) {
@@ -218,7 +245,9 @@ export default function Home() {
     studentId: string,
     essayScore: number,
     feedback: string,
-    status: 'graded' | 'returned' | 'draft'
+    status: 'graded' | 'returned' | 'draft',
+    extraPoints?: number,
+    registeredInStateSystem?: boolean
   ) => {
     setActivities((prev) =>
       prev.map((act) => {
@@ -231,6 +260,9 @@ export default function Home() {
               essayScore,
               teacherFeedback: feedback,
               status,
+              extraPoints: extraPoints !== undefined ? extraPoints : sub.extraPoints,
+              registeredInStateSystem:
+                registeredInStateSystem !== undefined ? registeredInStateSystem : sub.registeredInStateSystem,
             };
           }
           return sub;
@@ -245,6 +277,28 @@ export default function Home() {
         };
       })
     );
+
+    if (selectedActivityForGrading && selectedActivityForGrading.id === activityId) {
+      setSelectedActivityForGrading((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          submissions: prev.submissions.map((sub) =>
+            sub.studentId === studentId
+              ? {
+                  ...sub,
+                  essayScore,
+                  teacherFeedback: feedback,
+                  status,
+                  extraPoints: extraPoints !== undefined ? extraPoints : sub.extraPoints,
+                  registeredInStateSystem:
+                    registeredInStateSystem !== undefined ? registeredInStateSystem : sub.registeredInStateSystem,
+                }
+              : sub
+          ),
+        };
+      });
+    }
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -338,7 +392,26 @@ export default function Home() {
     }
   };
 
-  // Student CRUD Handlers
+  const handleImportStudents = async (newStudents: StudentUser[]) => {
+    // Append imported students
+    setStudents((prev) => [...prev, ...newStudents]);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const payload = newStudents.map((s) => ({
+          full_name: s.fullName,
+          turma: s.turma,
+          matricula: s.matricula,
+          tag: s.tag,
+          password_hash: s.passwordHash || '1234',
+          avatar_url: s.avatarUrl,
+        }));
+        await supabase.from('students').insert(payload);
+      } catch (err) {
+        console.error('Erro ao importar alunos no Supabase:', err);
+      }
+    }
+  };
   const handleCreateStudent = async (newStudent: StudentUser) => {
     setStudents([...students, newStudent]);
 
@@ -451,9 +524,15 @@ export default function Home() {
           {currentTab === 'painel' && (
             <DashboardView
               activities={activities}
+              title="Studio"
+              subtitle="Gerencie avaliações, redações e dinâmicas das suas turmas."
+              showStats={false}
               onOpenNewActivityModal={() => setIsNewActivityModalOpen(true)}
               onSelectActivityForGrading={handleSelectActivityForGrading}
-              onEditActivity={(act) => alert(`Editando atividade: ${act.title}`)}
+              onEditActivity={(act) => {
+                setEditingActivity(act);
+                setIsEditActivityModalOpen(true);
+              }}
               onGenerateDossier={handleGenerateDossier}
               onDeleteActivity={handleDeleteActivity}
             />
@@ -462,9 +541,15 @@ export default function Home() {
           {currentTab === 'atividades' && (
             <DashboardView
               activities={activities}
+              title="Correções"
+              subtitle="Acompanhe o desempenho geral, estatísticas de entrega e pendências de correção."
+              showStats={true}
               onOpenNewActivityModal={() => setIsNewActivityModalOpen(true)}
               onSelectActivityForGrading={handleSelectActivityForGrading}
-              onEditActivity={(act) => alert(`Editando atividade: ${act.title}`)}
+              onEditActivity={(act) => {
+                setEditingActivity(act);
+                setIsEditActivityModalOpen(true);
+              }}
               onGenerateDossier={handleGenerateDossier}
               onDeleteActivity={handleDeleteActivity}
             />
@@ -474,6 +559,9 @@ export default function Home() {
             selectedActivityForGrading || activities[0] ? (
               <GradingView
                 activity={selectedActivityForGrading || activities[0]}
+                allActivities={activities}
+                students={students}
+                onSelectActivity={(act) => setSelectedActivityForGrading(act)}
                 onBack={() => setCurrentTab('atividades')}
                 onUpdateSubmission={handleUpdateSubmission}
               />
@@ -491,10 +579,9 @@ export default function Home() {
               onEditStudent={(s) => setEditingStudent(s)}
               onDeleteStudent={handleDeleteStudent}
               onSuperviseStudent={handleSuperviseStudent}
+              onImportStudents={handleImportStudents}
             />
           )}
-
-          {currentTab === 'horarios' && <ScheduleView schedule={schedule} />}
 
           {currentTab === 'arquivos' && <LibraryView files={library} />}
 
@@ -630,6 +717,16 @@ export default function Home() {
         isOpen={isNewActivityModalOpen}
         onClose={() => setIsNewActivityModalOpen(false)}
         onCreateActivity={handleCreateActivity}
+      />
+
+      <EditActivityModal
+        isOpen={isEditActivityModalOpen}
+        onClose={() => {
+          setIsEditActivityModalOpen(false);
+          setEditingActivity(null);
+        }}
+        activity={editingActivity}
+        onSaveActivity={handleSaveActivity}
       />
 
       <NewStudentModal

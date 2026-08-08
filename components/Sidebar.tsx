@@ -4,9 +4,7 @@ import React from 'react';
 import {
   LayoutDashboard,
   Users,
-  Clock,
   FolderOpen,
-  Plus,
   Settings,
   LogOut,
   FileCheck
@@ -30,10 +28,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
 }) => {
   const navItems = [
-    { id: 'painel', label: 'Painel', icon: LayoutDashboard },
-    { id: 'atividades', label: 'Atividades', icon: FileCheck },
+    { id: 'painel', label: 'Studio', icon: LayoutDashboard },
+    { id: 'atividades', label: 'Correções', icon: FileCheck },
     { id: 'alunos', label: 'Alunos', icon: Users },
-    { id: 'horarios', label: 'Horários', icon: Clock },
     { id: 'arquivos', label: 'Arquivos', icon: FolderOpen },
   ];
 
@@ -56,15 +53,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <h2 className="text-xl font-bold tracking-tight text-white">{teacher.name}</h2>
           <p className="text-xs text-[#bccabb] font-medium mt-0.5">{teacher.subject}</p>
         </div>
-
-        {/* Action Button: Novo Conteúdo */}
-        <button
-          onClick={onOpenNewContentModal}
-          className="w-full py-3 px-4 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full transition-all duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-[#4ade80]/20 cursor-pointer text-sm"
-        >
-          <Plus className="w-5 h-5 stroke-[2.5]" />
-          <span>Novo Conteúdo</span>
-        </button>
 
         {/* Nav links */}
         <nav className="space-y-1.5 pt-2">

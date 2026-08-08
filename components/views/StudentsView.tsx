@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, Plus, UserPlus, Pencil, Trash2, Eye, ShieldCheck } from 'lucide-react';
+import { Search, Plus, UserPlus, Pencil, Trash2, Eye, ShieldCheck, Upload } from 'lucide-react';
 import { StudentUser } from '@/lib/types';
+import { ImportCsvModal } from '@/components/modals/ImportCsvModal';
+import { getTurmaLabel } from '@/lib/studentUtils';
 
 interface StudentsViewProps {
   students: StudentUser[];
@@ -10,6 +12,7 @@ interface StudentsViewProps {
   onEditStudent: (student: StudentUser) => void;
   onDeleteStudent: (studentId: string) => void;
   onSuperviseStudent: (student: StudentUser) => void;
+  onImportStudents: (newStudents: StudentUser[]) => void;
 }
 
 export const StudentsView: React.FC<StudentsViewProps> = ({
@@ -18,11 +21,15 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
   onEditStudent,
   onDeleteStudent,
   onSuperviseStudent,
+  onImportStudents,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTurmaFilter, setSelectedTurmaFilter] = useState('all');
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
-  const turmasList = Array.from(new Set(students.map((s) => s.turma)));
+  // Only include turmas from registered students (no unlinked deduced classes)
+  const turmasSet = new Set(students.map((s) => s.turma).filter(Boolean));
+  const turmasList = Array.from(turmasSet).sort((a, b) => a.localeCompare(b));
 
   const filteredStudents = students.filter((s) => {
     const matchesName =
@@ -38,20 +45,30 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <span className="text-xs font-bold text-[#4ade80] tracking-widest uppercase">
-            — Ensino Médio
+            — Ensino Médio & Técnico
           </span>
           <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight mt-1">
             Gestão de Alunos
           </h1>
         </div>
 
-        <button
-          onClick={onOpenNewStudentModal}
-          className="py-3 px-6 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full transition-all duration-200 flex items-center gap-2 shadow-lg shadow-[#4ade80]/20 cursor-pointer text-sm self-start sm:self-center"
-        >
-          <UserPlus className="w-5 h-5 stroke-[2.5]" />
-          <span>Cadastrar Aluno</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="py-3 px-5 bg-[#171f33] hover:bg-[#222a3d] text-[#4ade80] font-bold rounded-full transition-all duration-200 flex items-center gap-2 border border-[#4ade80]/30 shadow-md cursor-pointer text-sm"
+          >
+            <Upload className="w-4 h-4" />
+            <span>Importar CSV</span>
+          </button>
+
+          <button
+            onClick={onOpenNewStudentModal}
+            className="py-3 px-6 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full transition-all duration-200 flex items-center gap-2 shadow-lg shadow-[#4ade80]/20 cursor-pointer text-sm"
+          >
+            <UserPlus className="w-5 h-5 stroke-[2.5]" />
+            <span>Cadastrar Aluno</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search Container */}
@@ -70,12 +87,12 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
         <select
           value={selectedTurmaFilter}
           onChange={(e) => setSelectedTurmaFilter(e.target.value)}
-          className="w-full sm:w-56 bg-[#131b2e] border border-white/10 rounded-full px-5 py-3 text-sm text-white focus:outline-none focus:border-[#4ade80]"
+          className="w-full sm:w-64 bg-[#131b2e] border border-white/10 rounded-full px-5 py-3 text-sm text-white focus:outline-none focus:border-[#4ade80]"
         >
           <option value="all">Todas as Turmas</option>
           {turmasList.map((t) => (
             <option key={t} value={t} className="bg-[#0b1326] text-white">
-              {t}
+              {getTurmaLabel(t)}
             </option>
           ))}
         </select>
@@ -150,6 +167,12 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
           Carregar Mais Alunos
         </button>
       </div>
+      {/* Import CSV Modal */}
+      <ImportCsvModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImportStudents={onImportStudents}
+      />
     </div>
   );
 };

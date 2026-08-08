@@ -1,8 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { X, Save, Pencil } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Save, Pencil, AlertTriangle } from 'lucide-react';
 import { StudentUser } from '@/lib/types';
+import {
+  normalizeStudentName,
+  validateStudentName,
+  isValidTurmaCode,
+} from '@/lib/studentUtils';
 
 interface EditStudentModalProps {
   isOpen: boolean;
@@ -17,30 +22,50 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
   onClose,
   onSaveStudent,
 }) => {
-  const [fullName, setFullName] = useState('');
-  const [turma, setTurma] = useState('');
-  const [matricula, setMatricula] = useState('');
-  const [tag, setTag] = useState<'REGULAR' | 'PNE' | 'RAD'>('REGULAR');
+  const [prevStudentId, setPrevStudentId] = useState(student?.id);
+  const [fullName, setFullName] = useState(student?.fullName || '');
+  const [turma, setTurma] = useState(student?.turma || '301');
+  const [matricula, setMatricula] = useState(student?.matricula || '');
+  const [tag, setTag] = useState<'REGULAR' | 'PNE' | 'RAD'>(student?.tag || 'REGULAR');
+  const [formError, setFormError] = useState('');
 
-  useEffect(() => {
-    if (student) {
-      setFullName(student.fullName);
-      setTurma(student.turma);
-      setMatricula(student.matricula);
-      setTag(student.tag || 'REGULAR');
-    }
-  }, [student]);
+  if (student && student.id !== prevStudentId) {
+    setPrevStudentId(student.id);
+    setFullName(student.fullName);
+    setTurma(student.turma);
+    setMatricula(student.matricula);
+    setTag(student.tag || 'REGULAR');
+    setFormError('');
+  }
 
   if (!isOpen || !student) return null;
 
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    const normalized = normalizeStudentName(raw);
+    setFullName(normalized);
+    if (formError) setFormError('');
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim()) return;
+    setFormError('');
+
+    const nameVal = validateStudentName(fullName);
+    if (!nameVal.isValid) {
+      setFormError(nameVal.errorMessage || 'Nome do aluno inválido.');
+      return;
+    }
+
+    if (!turma.trim() || !isValidTurmaCode(turma.trim())) {
+      setFormError('Código de turma inválido. Deve ter 3 dígitos (ex: 301) ou 4 dígitos (ex: 3001).');
+      return;
+    }
 
     onSaveStudent({
       ...student,
-      fullName: fullName.trim(),
-      turma,
+      fullName: nameVal.normalized, // GUARANTEED UPPERCASE AND NO SPECIAL CHARACTERS
+      turma: turma.trim(),
       matricula,
       tag,
     });
@@ -67,33 +92,38 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
           </div>
         </div>
 
+        {formError && (
+          <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-2xl text-xs flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+            <span>{formError}</span>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-[#bccabb] mb-1">
-              Nome Completo
+              Nome Completo (MAIÚSCULAS SEM ACENTOS)
             </label>
             <input
               type="text"
               required
               value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#4ade80]"
+              onChange={handleNameChange}
+              className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#4ade80] uppercase tracking-wide font-medium"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">Turma</label>
-              <select
+              <label className="block text-xs font-semibold text-[#bccabb] mb-1">Turma (ex: 301, 1001)</label>
+              <input
+                type="text"
+                required
                 value={turma}
                 onChange={(e) => setTurma(e.target.value)}
+                placeholder="Ex: 301, 302, 1001"
                 className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
-              >
-                <option value="3º Ano B" className="bg-[#0b1326]">3º Ano B</option>
-                <option value="Turma 302" className="bg-[#0b1326]">Turma 302</option>
-                <option value="2º Ano A" className="bg-[#0b1326]">2º Ano A</option>
-                <option value="1º Ano C" className="bg-[#0b1326]">1º Ano C</option>
-              </select>
+              />
             </div>
 
             <div>

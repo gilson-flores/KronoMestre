@@ -1,8 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, UserPlus, CheckCircle2 } from 'lucide-react';
+import { X, UserPlus, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { StudentUser } from '@/lib/types';
+import {
+  normalizeStudentName,
+  validateStudentName,
+  isValidTurmaCode,
+} from '@/lib/studentUtils';
 
 interface NewStudentModalProps {
   isOpen: boolean;
@@ -16,28 +21,53 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
   onCreateStudent,
 }) => {
   const [fullName, setFullName] = useState('');
-  const [turma, setTurma] = useState('3º Ano B');
-  const [matricula, setMatricula] = useState(`2023${Math.floor(100 + Math.random() * 900)}`);
+  const [turma, setTurma] = useState('301');
+  const [customTurma, setCustomTurma] = useState('');
+  const [isCustomTurma, setIsCustomTurma] = useState(false);
+  const [matricula, setMatricula] = useState('2023854');
   const [tag, setTag] = useState<'REGULAR' | 'PNE' | 'RAD'>('REGULAR');
+  const [formError, setFormError] = useState('');
 
   if (!isOpen) return null;
 
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    // Auto normalize to uppercase without special characters
+    const normalized = normalizeStudentName(raw);
+    setFullName(normalized);
+    if (formError) setFormError('');
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim()) return;
+    setFormError('');
+
+    const nameVal = validateStudentName(fullName);
+    if (!nameVal.isValid) {
+      setFormError(nameVal.errorMessage || 'Nome do aluno inválido.');
+      return;
+    }
+
+    const selectedTurmaCode = turma.trim();
+    if (!selectedTurmaCode || !isValidTurmaCode(selectedTurmaCode)) {
+      setFormError('Código de turma inválido. Digite um código válido (ex: 301, 1001).');
+      return;
+    }
 
     const newStudent: StudentUser = {
       id: `s-${Date.now()}`,
-      fullName: fullName.trim(),
-      turma,
+      fullName: nameVal.normalized, // GUARANTEED UPPERCASE AND NO SPECIAL CHARACTERS
+      turma: selectedTurmaCode,
       matricula,
       tag,
       passwordHash: '1234', // default password rule
-      avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+      avatarUrl:
+        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
     };
 
     onCreateStudent(newStudent);
     setFullName('');
+    setFormError('');
     onClose();
   };
 
@@ -57,44 +87,50 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
           </div>
           <div>
             <h2 className="text-xl font-bold text-white">Cadastrar Novo Aluno</h2>
-            <p className="text-xs text-[#bccabb]">O aluno acessará com Nome Completo, Turma e a senha 1234</p>
+            <p className="text-xs text-[#bccabb]">O aluno acessará com Nome Completo (MAIÚSCULAS), Turma e a senha 1234</p>
           </div>
         </div>
 
         {/* Note Box */}
         <div className="flex items-center gap-2 text-xs text-[#4ade80] bg-[#4ade80]/10 p-3 rounded-2xl border border-[#4ade80]/20">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>A senha padrão gerada para todos os cadastrados é <strong>1234</strong>.</span>
+          <span>Nome formatado automaticamente em MAIÚSCULAS e sem acentos. Senha padrão: <strong>1234</strong>.</span>
         </div>
+
+        {formError && (
+          <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-2xl text-xs flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+            <span>{formError}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-[#bccabb] mb-1">
-              Nome Completo do Aluno
+              Nome Completo do Aluno (MAIÚSCULAS SEM ACENTOS)
             </label>
             <input
               type="text"
               required
               value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Ex: Carlos Eduardo Silveira"
-              className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
+              onChange={handleNameChange}
+              placeholder="Ex: CARLOS EDUARDO SILVEIRA"
+              className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80] uppercase tracking-wide font-medium"
             />
+            <p className="text-[11px] text-[#869486] mt-1">Acentos e caracteres especiais são removidos automaticamente.</p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">Turma</label>
-              <select
+              <label className="block text-xs font-semibold text-[#bccabb] mb-1">Turma (ex: 301, 1001)</label>
+              <input
+                type="text"
+                required
                 value={turma}
                 onChange={(e) => setTurma(e.target.value)}
+                placeholder="Ex: 301, 302, 1001"
                 className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
-              >
-                <option value="3º Ano B" className="bg-[#0b1326]">3º Ano B</option>
-                <option value="Turma 302" className="bg-[#0b1326]">Turma 302</option>
-                <option value="2º Ano A" className="bg-[#0b1326]">2º Ano A</option>
-                <option value="1º Ano C" className="bg-[#0b1326]">1º Ano C</option>
-              </select>
+              />
             </div>
 
             <div>

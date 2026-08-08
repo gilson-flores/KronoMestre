@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { StudentUser, Activity, ActivitySubmission } from '@/lib/types';
+import { canStudentAccessActivity } from '@/lib/studentUtils';
 import { GraduationCap, LogOut, CheckCircle2, FileText, Send, Award, MessageSquare } from 'lucide-react';
 
 interface StudentPortalViewProps {
@@ -17,9 +18,9 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   onLogout,
   onSubmitAnswer,
 }) => {
-  // Filter activities for this student's turma
-  const studentActivities = activities.filter(
-    (a) => a.turma === student.turma || a.turma === 'Turma 302' || a.turma === '3º Ano B'
+  // Filter activities authorized for this student based on turma rules
+  const studentActivities = activities.filter((a) =>
+    canStudentAccessActivity(a.turma, student.turma)
   );
 
   const [essayInputs, setEssayInputs] = useState<{ [activityId: string]: string }>({});
@@ -163,7 +164,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                             <span>Feedback do Professor:</span>
                           </span>
                           <p className="text-xs text-[#dae2fd] italic">
-                            "{submission.teacherFeedback}"
+                            &ldquo;{submission.teacherFeedback}&rdquo;
                           </p>
                         </div>
                       )}
