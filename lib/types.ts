@@ -27,13 +27,14 @@ export interface ActivitySubmission {
   tag?: 'REGULAR' | 'PNE' | 'RAD';
   avatarUrl: string;
   submittedAt?: string;
-  objectiveScore: number; // e.g. 4.5
+  objectiveScore: number; // e.g. 5.0 (sai na hora)
   maxObjectiveScore: number; // e.g. 5.0
-  essayScore?: number; // e.g. 4.0
+  essayScore?: number; // e.g. 4.0 (preenchido após o professor mandar/corrigir)
   maxEssayScore: number; // e.g. 5.0
   extraPoints?: number; // Ponto extra por desempenho
   status: 'pending' | 'draft' | 'graded' | 'returned';
   essayAnswer?: string;
+  selectedObjectiveAnswers?: { [questionId: string]: number };
   teacherFeedback?: string;
   registeredInStateSystem?: boolean; // Atividade já registrada no sistema do estado (RCO/SED)
   groupMembers?: string; // Nomes dos alunos do grupo
@@ -94,4 +95,5 @@ export interface LibraryFile {
   turma: string;
   fileSize: string;
   updatedAt: string;
+  driveUrl?: string;
 }

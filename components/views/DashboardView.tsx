@@ -4,6 +4,7 @@ import React from 'react';
 import {
   Plus,
   CheckCircle2,
+  CheckCheck,
   BarChart3,
   AlertTriangle,
   FileQuestion,
@@ -28,6 +29,7 @@ interface DashboardViewProps {
   title?: string;
   subtitle?: string;
   showStats?: boolean;
+  isCorrecoesTab?: boolean;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -40,7 +42,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   title = 'Studio',
   subtitle = 'Gerencie avaliações, redações e dinâmicas das suas turmas.',
   showStats = true,
+  isCorrecoesTab,
 }) => {
+  const isCorrecoes = isCorrecoesTab || title === 'Correções';
+
   // Calculate top KPI stats from real state
   const totalActivities = activities.length;
   const totalSubmissions = activities.reduce((acc, a) => acc + a.totalSubmissions, 0);
@@ -74,13 +79,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={onOpenNewActivityModal}
-          className="self-start sm:self-center py-3 px-6 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full transition-all duration-200 flex items-center gap-2 shadow-lg shadow-[#4ade80]/20 cursor-pointer text-sm"
-        >
-          <Plus className="w-5 h-5 stroke-[2.5]" />
-          <span>Nova Atividade</span>
-        </button>
+        {!isCorrecoes && (
+          <button
+            onClick={onOpenNewActivityModal}
+            className="self-start sm:self-center py-3 px-6 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full transition-all duration-200 flex items-center gap-2 shadow-lg shadow-[#4ade80]/20 cursor-pointer text-sm"
+          >
+            <Plus className="w-5 h-5 stroke-[2.5]" />
+            <span>Nova Atividade</span>
+          </button>
+        )}
       </div>
 
       {/* Production Dashboard (Painel de Informações de Produção) */}
@@ -270,12 +277,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     {/* Right Actions */}
                     <div className="flex flex-wrap items-center gap-2.5 self-end lg:self-center">
                       <button
-                        onClick={() => onEditActivity(act)}
-                        className="px-4 py-2 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] hover:text-white rounded-full text-xs font-bold border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer"
+                        onClick={() => onSelectActivityForGrading(act)}
+                        className="px-4 py-2 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full text-xs flex items-center gap-1.5 transition-all shadow-md shadow-[#4ade80]/10 cursor-pointer"
                       >
-                        <Pencil className="w-3.5 h-3.5 text-[#4ade80]" />
-                        <span>Editar</span>
+                        <CheckCheck className="w-4 h-4 stroke-[2.5]" />
+                        <span>{act.pendingCorrection > 0 ? `Corrigir (${act.pendingCorrection})` : 'Acessar Correções'}</span>
                       </button>
+
+                      {!isCorrecoes && (
+                        <button
+                          onClick={() => onEditActivity(act)}
+                          className="px-4 py-2 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] hover:text-white rounded-full text-xs font-bold border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <Pencil className="w-3.5 h-3.5 text-[#4ade80]" />
+                          <span>Editar</span>
+                        </button>
+                      )}
 
                       {act.status === 'Prazo Encerrado' && (
                         <button
@@ -287,7 +304,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         </button>
                       )}
 
-                      {onDeleteActivity && (
+                      {!isCorrecoes && onDeleteActivity && (
                         <button
                           onClick={() => {
                             if (window.confirm(`Tem certeza que deseja excluir a atividade "${act.title}"?`)) {

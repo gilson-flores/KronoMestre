@@ -68,6 +68,63 @@ export function canStudentAccessActivity(activityTurma: string | undefined, stud
 }
 
 /**
+ * Calculates grade distribution: 50% Objetivas + 50% Dissertativas for mixed activities,
+ * or 100% for single-type activities.
+ */
+export function getActivityGradeDistribution(activity: {
+  maxGrade?: number;
+  type?: string;
+  questions?: Array<{ type: 'multiple_choice' | 'essay' }>;
+}) {
+  const maxGrade = activity.maxGrade ?? 10.0;
+  const questions = activity.questions || [];
+
+  let hasObjective = questions.some((q) => q.type === 'multiple_choice');
+  let hasEssay = questions.some((q) => q.type === 'essay');
+
+  // If questions array is not populated yet, infer from activity type
+  if (questions.length === 0) {
+    if (activity.type === 'Redação') {
+      hasObjective = false;
+      hasEssay = true;
+    } else if (activity.type === 'Simulado') {
+      hasObjective = true;
+      hasEssay = false;
+    } else {
+      hasObjective = true;
+      hasEssay = true;
+    }
+  }
+
+  let maxObjectiveGrade = 0;
+  let maxEssayGrade = 0;
+  let distributionLabel = '';
+
+  if (hasObjective && hasEssay) {
+    maxObjectiveGrade = maxGrade * 0.5;
+    maxEssayGrade = maxGrade * 0.5;
+    distributionLabel = `50% Objetivas (${maxObjectiveGrade.toFixed(1)} pts) + 50% Dissertativas (${maxEssayGrade.toFixed(1)} pts)`;
+  } else if (hasObjective) {
+    maxObjectiveGrade = maxGrade;
+    maxEssayGrade = 0;
+    distributionLabel = `100% Objetivas (${maxObjectiveGrade.toFixed(1)} pts)`;
+  } else {
+    maxObjectiveGrade = 0;
+    maxEssayGrade = maxGrade;
+    distributionLabel = `100% Dissertativas (${maxEssayGrade.toFixed(1)} pts)`;
+  }
+
+  return {
+    maxGrade,
+    hasObjective,
+    hasEssay,
+    maxObjectiveGrade,
+    maxEssayGrade,
+    distributionLabel,
+  };
+}
+
+/**
  * Normalizes a student name:
  * - Converts to UPPERCASE
  * - Removes accents / diacritics (e.g. João -> JOAO, Águia -> AGUIA)

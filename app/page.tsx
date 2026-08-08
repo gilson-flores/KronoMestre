@@ -317,7 +317,15 @@ export default function Home() {
     }
   };
 
-  const handleStudentSubmitAnswer = async (activityId: string, studentId: string, essayAnswer: string) => {
+  const handleStudentSubmitAnswer = async (
+    activityId: string,
+    studentId: string,
+    essayAnswer: string,
+    objectiveScore: number = 0,
+    maxObjectiveScore: number = 5.0,
+    maxEssayScore: number = 5.0,
+    selectedObjectiveAnswers?: { [questionId: string]: number }
+  ) => {
     if (!currentStudent) return;
 
     setActivities((prev) =>
@@ -329,7 +337,17 @@ export default function Home() {
 
         if (existing) {
           updatedSubmissions = updatedSubmissions.map((s) =>
-            s.studentId === studentId ? { ...s, essayAnswer, status: 'pending' as const } : s
+            s.studentId === studentId
+              ? {
+                  ...s,
+                  essayAnswer,
+                  objectiveScore,
+                  maxObjectiveScore,
+                  maxEssayScore,
+                  selectedObjectiveAnswers,
+                  status: 'pending' as const,
+                }
+              : s
           );
         } else {
           updatedSubmissions.push({
@@ -338,19 +356,21 @@ export default function Home() {
             matricula: currentStudent.matricula,
             tag: currentStudent.tag,
             avatarUrl: currentStudent.avatarUrl,
-            objectiveScore: 5.0,
-            maxObjectiveScore: 5.0,
-            maxEssayScore: 5.0,
+            submittedAt: new Date().toLocaleDateString('pt-BR'),
+            objectiveScore,
+            maxObjectiveScore,
+            maxEssayScore,
             status: 'pending',
             essayAnswer,
+            selectedObjectiveAnswers,
             teacherFeedback: '',
           });
         }
 
         return {
           ...act,
-          totalSubmissions: act.totalSubmissions + 1,
-          pendingCorrection: act.pendingCorrection + 1,
+          totalSubmissions: existing ? act.totalSubmissions : act.totalSubmissions + 1,
+          pendingCorrection: existing ? act.pendingCorrection : act.pendingCorrection + 1,
           submissions: updatedSubmissions,
         };
       })
@@ -370,6 +390,9 @@ export default function Home() {
             .from('submissions')
             .update({
               essay_answer: essayAnswer,
+              objective_score: objectiveScore,
+              max_objective_score: maxObjectiveScore,
+              max_essay_score: maxEssayScore,
               status: 'pending',
             })
             .eq('id', existingSub.id);
@@ -383,7 +406,9 @@ export default function Home() {
             avatar_url: currentStudent.avatarUrl,
             essay_answer: essayAnswer,
             status: 'pending',
-            objective_score: 5.0,
+            objective_score: objectiveScore,
+            max_objective_score: maxObjectiveScore,
+            max_essay_score: maxEssayScore,
           });
         }
       } catch (err) {
@@ -489,6 +514,7 @@ export default function Home() {
       <StudentPortalView
         student={currentStudent}
         activities={activities}
+        libraryFiles={library}
         onLogout={handleLogout}
         onSubmitAnswer={handleStudentSubmitAnswer}
       />
@@ -544,6 +570,7 @@ export default function Home() {
               title="Correções"
               subtitle="Acompanhe o desempenho geral, estatísticas de entrega e pendências de correção."
               showStats={true}
+              isCorrecoesTab={true}
               onOpenNewActivityModal={() => setIsNewActivityModalOpen(true)}
               onSelectActivityForGrading={handleSelectActivityForGrading}
               onEditActivity={(act) => {
