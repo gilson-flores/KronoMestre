@@ -268,7 +268,7 @@ export default function Home() {
           return sub;
         });
 
-        const pendingCorrection = updatedSubmissions.filter((s) => s.status !== 'graded').length;
+        const pendingCorrection = updatedSubmissions.filter((s) => s.status === 'pending').length;
 
         return {
           ...act,
@@ -367,10 +367,12 @@ export default function Home() {
           });
         }
 
+        const pendingCorrection = updatedSubmissions.filter((s) => s.status === 'pending').length;
+
         return {
           ...act,
-          totalSubmissions: existing ? act.totalSubmissions : act.totalSubmissions + 1,
-          pendingCorrection: existing ? act.pendingCorrection : act.pendingCorrection + 1,
+          totalSubmissions: updatedSubmissions.length,
+          pendingCorrection,
           submissions: updatedSubmissions,
         };
       })

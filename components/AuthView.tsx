@@ -198,7 +198,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
             }`}
           >
             <User className="w-4 h-4" />
-            <span>Professor (Supabase)</span>
+            <span>Professor</span>
           </button>
 
           <button
@@ -252,7 +252,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 />
                 <Lock className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-[#869486]" />
               </div>
-              <p className="text-[11px] text-[#bccabb] mt-1 ml-1">Autenticação exclusiva via Supabase</p>
+              <p className="text-[11px] text-[#bccabb] mt-1 ml-1">Autenticação do sistema</p>
             </div>
 
             <button

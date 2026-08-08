@@ -20,7 +20,8 @@ import {
   AlertCircle,
   Sparkles,
   Check,
-  X
+  X,
+  RotateCcw
 } from 'lucide-react';
 
 interface StudentPortalViewProps {
@@ -65,16 +66,17 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
   // Split into "A Fazer" and "Entregues/Corrigidas"
   const pendingActivities = authorizedActivities.filter((act) => {
-    const hasSub = act.submissions.some(
+    const sub = act.submissions.find(
       (s) => s.studentId === student.id || s.studentName === student.fullName
     );
-    return !hasSub;
+    return !sub || sub.status === 'returned' || sub.status === 'draft';
   });
 
   const submittedActivities = authorizedActivities.filter((act) => {
-    return act.submissions.some(
+    const sub = act.submissions.find(
       (s) => s.studentId === student.id || s.studentName === student.fullName
     );
+    return sub && sub.status !== 'returned' && sub.status !== 'draft';
   });
 
   // Filter library files for this student's turma
@@ -98,7 +100,12 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     const objectiveQuestions = questions.filter((q) => q.type === 'multiple_choice') as (ActivityQuestion & MultipleChoiceQuestion)[];
     const essayQuestions = questions.filter((q) => q.type === 'essay') as (ActivityQuestion & EssayQuestion)[];
 
-    const essayText = essayInputs[act.id] || '';
+    const existingSub = act.submissions.find(
+      (s) => s.studentId === student.id || s.studentName === student.fullName
+    );
+    const essayText = essayInputs[act.id] !== undefined
+      ? essayInputs[act.id]
+      : (existingSub?.essayAnswer || '');
 
     // If there are essay questions, require text
     if (essayQuestions.length > 0 && !essayText.trim()) {
@@ -303,11 +310,36 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 const objectiveQuestions = questions.filter((q) => q.type === 'multiple_choice') as (ActivityQuestion & MultipleChoiceQuestion)[];
                 const essayQuestions = questions.filter((q) => q.type === 'essay') as (ActivityQuestion & EssayQuestion)[];
 
+                const existingSub = act.submissions.find(
+                  (s) => s.studentId === student.id || s.studentName === student.fullName
+                );
+
                 return (
                   <div
                     key={act.id}
                     className="glass-panel p-6 sm:p-8 rounded-3xl border border-white/10 space-y-6 shadow-xl relative overflow-hidden"
                   >
+                    {/* Banner if activity was returned for re-do */}
+                    {existingSub && existingSub.status === 'returned' && (
+                      <div className="bg-amber-500/20 border border-amber-500/40 p-4 rounded-2xl text-xs text-amber-200 flex items-start gap-3 shadow-lg">
+                        <RotateCcw className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                        <div className="space-y-1">
+                          <p className="font-extrabold text-amber-300 text-sm">
+                            ⚠️ Atividade Devolvida pelo Professor para Refazer!
+                          </p>
+                          {existingSub.teacherFeedback ? (
+                            <p className="text-white">
+                              <strong>Orientações / Observações do Sensei:</strong> &ldquo;{existingSub.teacherFeedback}&rdquo;
+                            </p>
+                          ) : (
+                            <p className="text-[#bccabb]">
+                              Ajuste suas respostas e envie o pergaminho novamente para nova avaliação.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Activity Top Bar */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
                       <div>
@@ -461,7 +493,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                           </label>
                           <textarea
                             rows={5}
-                            value={essayInputs[act.id] || ''}
+                            value={essayInputs[act.id] !== undefined ? essayInputs[act.id] : (existingSub?.essayAnswer || '')}
                             onChange={(e) =>
                               setEssayInputs({ ...essayInputs, [act.id]: e.target.value })
                             }

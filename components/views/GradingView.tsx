@@ -64,8 +64,8 @@ export const GradingView: React.FC<GradingViewProps> = ({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshToast, setRefreshToast] = useState(false);
 
-  // Sub-tabs: 'fila' | 'corrigidas' | 'nao_fizeram'
-  const [activeTab, setActiveTab] = useState<'fila' | 'corrigidas' | 'nao_fizeram'>('fila');
+  // Sub-tabs: 'fila' | 'corrigidas' | 'devolvidas' | 'nao_fizeram'
+  const [activeTab, setActiveTab] = useState<'fila' | 'corrigidas' | 'devolvidas' | 'nao_fizeram'>('fila');
 
   // Activity Switcher Modal/Dropdown state
   const [isActivityDropdownOpen, setIsActivityDropdownOpen] = useState(false);
@@ -120,6 +120,11 @@ export const GradingView: React.FC<GradingViewProps> = ({
   const handleSave = (studentId: string, status: 'graded' | 'returned' | 'draft') => {
     const sub = submissions.find((s) => s.studentId === studentId);
     if (!sub) return;
+
+    // Immediately update local submission status so UI moves card to correct tab
+    setSubmissions((prev) =>
+      prev.map((s) => (s.studentId === studentId ? { ...s, status } : s))
+    );
 
     onUpdateSubmission(
       activity.id,
@@ -215,7 +220,8 @@ export const GradingView: React.FC<GradingViewProps> = ({
 
   // Categorize Submissions & Missing Students
   const pendingQueue = submissions.filter((s) => s.status === 'pending' || s.status === 'draft');
-  const gradedQueue = submissions.filter((s) => s.status === 'graded' || s.status === 'returned');
+  const gradedQueue = submissions.filter((s) => s.status === 'graded');
+  const returnedQueue = submissions.filter((s) => s.status === 'returned');
 
   // Find students in the turma who haven't submitted yet
   const submittedStudentIds = new Set(submissions.map((s) => s.studentId));
@@ -362,6 +368,13 @@ export const GradingView: React.FC<GradingViewProps> = ({
           </div>
           <div className="w-px h-8 bg-white/10"></div>
           <div className="text-center">
+            <span className="text-xl font-extrabold text-sky-400">{returnedQueue.length}</span>
+            <span className="block text-[10px] font-bold text-[#bccabb] tracking-wider uppercase">
+              Devolvidas
+            </span>
+          </div>
+          <div className="w-px h-8 bg-white/10"></div>
+          <div className="text-center">
             <span className="text-xl font-extrabold text-rose-400">{missingStudents.length}</span>
             <span className="block text-[10px] font-bold text-[#bccabb] tracking-wider uppercase">
               Não Fizeram
@@ -371,7 +384,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
       </div>
 
       {/* Correction Sub-Tabs */}
-      <div className="flex items-center gap-2 border-b border-white/10 pb-1">
+      <div className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-1">
         <button
           onClick={() => setActiveTab('fila')}
           className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
@@ -394,6 +407,18 @@ export const GradingView: React.FC<GradingViewProps> = ({
         >
           <CheckCircle2 className="w-4 h-4" />
           <span>Já Corrigidas ({gradedQueue.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('devolvidas')}
+          className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'devolvidas'
+              ? 'bg-sky-500 text-white shadow-md'
+              : 'bg-[#131b2e] text-[#bccabb] hover:text-white hover:bg-[#1c263f]'
+          }`}
+        >
+          <RotateCcw className="w-4 h-4" />
+          <span>Devolvidas ({returnedQueue.length})</span>
         </button>
 
         <button
@@ -454,6 +479,23 @@ export const GradingView: React.FC<GradingViewProps> = ({
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {gradedQueue.map((sub) => renderSubmissionCard(sub))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* TAB 3: DEVOLVIDAS PARA REFAZER */}
+      {activeTab === 'devolvidas' && (
+        <>
+          {returnedQueue.length === 0 ? (
+            <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb] space-y-2">
+              <RotateCcw className="w-10 h-10 text-sky-400 mx-auto opacity-80" />
+              <p className="text-sm font-bold text-white">Nenhuma atividade devolvida no momento.</p>
+              <p className="text-xs">Quando você clicar em &ldquo;Devolver para Refazer&rdquo;, a atividade aparecerá aqui e o aluno poderá enviar uma nova resposta no portal.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {returnedQueue.map((sub) => renderSubmissionCard(sub))}
             </div>
           )}
         </>
@@ -733,9 +775,17 @@ export const GradingView: React.FC<GradingViewProps> = ({
 
         {/* Save success feedback toast */}
         {isSaved && (
-          <div className="p-3 bg-[#4ade80]/20 border border-[#4ade80]/40 text-[#4ade80] rounded-2xl text-xs font-bold flex items-center gap-2">
+          <div className={`p-3 rounded-2xl text-xs font-bold flex items-center gap-2 ${
+            sub.status === 'returned'
+              ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300'
+              : 'bg-[#4ade80]/20 border border-[#4ade80]/40 text-[#4ade80]'
+          }`}>
             <UserCheck className="w-4 h-4" />
-            <span>Nota e feedback registrados com sucesso!</span>
+            <span>
+              {sub.status === 'returned'
+                ? 'Atividade devolvida ao aluno para refazer!'
+                : 'Nota e feedback registrados com sucesso!'}
+            </span>
           </div>
         )}
 
