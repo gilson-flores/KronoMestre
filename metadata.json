@@ -1,0 +1,6 @@
+{
+  "name": "Sociologia On-line",
+  "description": "Plataforma de gestão de atividades, alunos e notas para aulas de Sociologia",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

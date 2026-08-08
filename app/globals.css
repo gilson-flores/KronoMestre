@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --font-montserrat: 'Montserrat', sans-serif;
+  --font-inter: 'Inter', sans-serif;
+}
+
+body {
+  font-family: var(--font-montserrat);
+  background-color: #0b1326;
+  color: #dae2fd;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Glassmorphism utility classes */
+.glass-panel {
+  background: rgba(23, 31, 51, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-panel-hover {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-panel-hover:hover {
+  background: rgba(34, 42, 61, 0.85);
+  border-color: rgba(107, 251, 154, 0.3);
+  box-shadow: 0 0 25px rgba(74, 222, 128, 0.08);
+}
+
+.glass-card-selected {
+  background: rgba(34, 42, 61, 0.9);
+  border: 1px solid rgba(107, 251, 154, 0.5);
+  box-shadow: 0 0 20px rgba(107, 251, 154, 0.12);
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0b1326;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #222a3d;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #31394d;
+}
