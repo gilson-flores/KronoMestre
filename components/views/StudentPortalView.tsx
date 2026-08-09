@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { StudentUser, Activity, LibraryFile, ActivityQuestion, MultipleChoiceQuestion, EssayQuestion } from '@/lib/types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { StudentUser, TeacherUser, Activity, LibraryFile, ChatMessage, ActivityQuestion, MultipleChoiceQuestion, EssayQuestion } from '@/lib/types';
 import { canStudentAccessActivity, getActivityGradeDistribution } from '@/lib/studentUtils';
+import { MessagesView } from './MessagesView';
 import {
   LogOut,
   CheckCircle2,
@@ -24,13 +25,22 @@ import {
   RotateCcw,
   ShieldAlert,
   CopyX,
-  ClipboardX
+  ClipboardX,
+  Users,
+  ArrowLeft,
+  Eye,
+  FileQuestion,
+  Users2,
+  PenTool
 } from 'lucide-react';
 
 interface StudentPortalViewProps {
   student: StudentUser;
+  teacher?: TeacherUser;
   activities: Activity[];
   libraryFiles?: LibraryFile[];
+  messages?: ChatMessage[];
+  students?: StudentUser[];
   onLogout: () => void;
   onSubmitAnswer: (
     activityId: string,
@@ -39,25 +49,68 @@ interface StudentPortalViewProps {
     objectiveScore: number,
     maxObjectiveScore: number,
     maxEssayScore: number,
-    selectedObjectiveAnswers?: { [questionId: string]: number }
+    selectedObjectiveAnswers?: { [questionId: string]: number },
+    groupMembers?: string
   ) => void;
+  onSendMessage?: (msg: {
+    threadId: string;
+    senderId: string;
+    senderName: string;
+    senderRole: 'teacher' | 'student';
+    senderAvatar?: string;
+    recipientId: string;
+    recipientName: string;
+    content: string;
+    activityId?: string;
+    activityTitle?: string;
+  }) => void;
+  onMarkThreadAsRead?: (threadId: string, currentRole: 'teacher' | 'student') => void;
 }
 
 export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   student,
+  teacher = {
+    id: 'teacher-1',
+    name: 'Dra. Helena Vance',
+    subject: 'Sociologia',
+    email: 'helena.vance@escola.edu.br',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
+    school: 'Colégio Estadual de Alta Performance',
+  },
   activities,
   libraryFiles = [],
+  messages = [],
+  students = [],
   onLogout,
   onSubmitAnswer,
+  onSendMessage,
+  onMarkThreadAsRead,
 }) => {
-  // Tab state: 'atividades' | 'correcoes' | 'arquivos'
-  const [activeTab, setActiveTab] = useState<'atividades' | 'correcoes' | 'arquivos'>('atividades');
+  // Tab state: 'atividades' | 'correcoes' | 'mensagens' | 'arquivos'
+  const [activeTab, setActiveTab] = useState<'atividades' | 'correcoes' | 'mensagens' | 'arquivos'>('atividades');
+
+  // List filter state for students: 'todas' | 'a_fazer' | 'a_corrigir' | 'corrigidas'
+  const [studentFilter, setStudentFilter] = useState<'todas' | 'a_fazer' | 'a_corrigir' | 'corrigidas'>('todas');
+  // Selected Activity for detail/execution view (null = show list view)
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
+
 
   // Interactive student answers per activity
   // essayInputs[activityId] -> string
   const [essayInputs, setEssayInputs] = useState<{ [activityId: string]: string }>({});
   // objectiveInputs[activityId][questionId] -> optionIndex (0, 1, 2, 3)
   const [objectiveInputs, setObjectiveInputs] = useState<{ [activityId: string]: { [questionId: string]: number } }>({});
+  
+  // Group selection state for group activities
+  const [groupSelections, setGroupSelections] = useState<{ [activityId: string]: string[] }>({});
+  const [customMemberInput, setCustomMemberInput] = useState<{ [activityId: string]: string }>({});
+
+  // Filter classmates in the same turma for group selection
+  const classmates = useMemo(() => {
+    return students.filter(
+      (s) => s.turma === student.turma && s.id !== student.id
+    );
+  }, [students, student.turma, student.id]);
 
   // Toast / Submission feedback
   const [submissionSuccessMsg, setSubmissionSuccessMsg] = useState<string | null>(null);
@@ -77,24 +130,165 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   };
 
   // Filter activities authorized for this student
-  const authorizedActivities = activities.filter((a) =>
-    canStudentAccessActivity(a.turma, student.turma)
-  );
+  const authorizedActivities = useMemo(() => {
+    return activities.filter((a) => canStudentAccessActivity(a.turma, student.turma));
+  }, [activities, student.turma]);
 
   // Split into "A Fazer" and "Entregues/Corrigidas"
-  const pendingActivities = authorizedActivities.filter((act) => {
-    const sub = act.submissions.find(
-      (s) => s.studentId === student.id || s.studentName === student.fullName
-    );
-    return !sub || sub.status === 'returned' || sub.status === 'draft';
-  });
+  const pendingActivities = useMemo(() => {
+    return authorizedActivities.filter((act) => {
+      const sub = act.submissions.find(
+        (s) => s.studentId === student.id || s.studentName === student.fullName
+      );
+      return !sub || sub.status === 'returned' || sub.status === 'draft';
+    });
+  }, [authorizedActivities, student.id, student.fullName]);
 
-  const submittedActivities = authorizedActivities.filter((act) => {
-    const sub = act.submissions.find(
+  const submittedActivities = useMemo(() => {
+    return authorizedActivities.filter((act) => {
+      const sub = act.submissions.find(
+        (s) => s.studentId === student.id || s.studentName === student.fullName
+      );
+      return sub && sub.status !== 'returned' && sub.status !== 'draft';
+    });
+  }, [authorizedActivities, student.id, student.fullName]);
+
+  const toCorrectActivities = useMemo(() => {
+    return authorizedActivities.filter((act) => {
+      const sub = act.submissions.find(
+        (s) => s.studentId === student.id || s.studentName === student.fullName
+      );
+      return sub && sub.status === 'pending';
+    });
+  }, [authorizedActivities, student.id, student.fullName]);
+
+  const gradedActivities = useMemo(() => {
+    return authorizedActivities.filter((act) => {
+      const sub = act.submissions.find(
+        (s) => s.studentId === student.id || s.studentName === student.fullName
+      );
+      return sub && sub.status === 'graded';
+    });
+  }, [authorizedActivities, student.id, student.fullName]);
+
+  // Filtered activities list for Student Portal based on current filter
+  const filteredStudentActivities = useMemo(() => {
+    return authorizedActivities.filter((act) => {
+      const sub = act.submissions.find(
+        (s) => s.studentId === student.id || s.studentName === student.fullName
+      );
+      if (studentFilter === 'a_fazer') {
+        return !sub || sub.status === 'returned' || sub.status === 'draft';
+      }
+      if (studentFilter === 'a_corrigir') {
+        return sub && sub.status === 'pending';
+      }
+      if (studentFilter === 'corrigidas') {
+        return sub && sub.status === 'graded';
+      }
+      return true; // 'todas'
+    });
+  }, [authorizedActivities, student.id, student.fullName, studentFilter]);
+
+  // Filter library files for this student's turma
+  const studentLibraryFiles = useMemo(() => {
+    return libraryFiles.filter((file) =>
+      !file.turma || file.turma === 'branco' || file.turma === 'Todas' || canStudentAccessActivity(file.turma, student.turma)
+    );
+  }, [libraryFiles, student.turma]);
+
+  const handleSelectOption = (activityId: string, questionId: string, optionIndex: number) => {
+    setObjectiveInputs((prev) => ({
+      ...prev,
+      [activityId]: {
+        ...(prev[activityId] || {}),
+        [questionId]: optionIndex,
+      },
+    }));
+  };
+
+  const handleSubmit = (act: Activity, isAutoSubmit: boolean = false) => {
+    const distribution = getActivityGradeDistribution(act);
+    const questions = act.questions || [];
+    const objectiveQuestions = questions.filter((q) => q.type === 'multiple_choice') as (ActivityQuestion & MultipleChoiceQuestion)[];
+    const essayQuestions = questions.filter((q) => q.type === 'essay') as (ActivityQuestion & EssayQuestion)[];
+
+    const existingSub = act.submissions.find(
       (s) => s.studentId === student.id || s.studentName === student.fullName
     );
-    return sub && sub.status !== 'returned' && sub.status !== 'draft';
-  });
+    const essayText = essayInputs[act.id] !== undefined
+      ? essayInputs[act.id]
+      : (existingSub?.essayAnswer || '');
+
+    // If there are essay questions, require text (unless it's an auto-submission by Anti-Cola focus lock)
+    if (!isAutoSubmit && essayQuestions.length > 0 && !essayText.trim()) {
+      alert('Por favor, escreva sua resposta dissertativa antes de enviar a atividade.');
+      return;
+    }
+
+    // Calculate objective score immediately (sai na hora)
+    let correctCount = 0;
+    const studentChoices = objectiveInputs[act.id] || {};
+
+    objectiveQuestions.forEach((q) => {
+      const chosen = studentChoices[q.id];
+      if (chosen !== undefined && chosen === q.correctOptionIndex) {
+        correctCount += 1;
+      }
+    });
+
+    let calculatedObjectiveScore = 0;
+    if (objectiveQuestions.length > 0) {
+      calculatedObjectiveScore = (correctCount / objectiveQuestions.length) * distribution.maxObjectiveGrade;
+    } else if (distribution.hasObjective) {
+      calculatedObjectiveScore = distribution.maxObjectiveGrade;
+    }
+
+    // Compute group members if allowGroupWork is true
+    let groupMembersStr: string | undefined = undefined;
+    if (act.allowGroupWork) {
+      const selected = groupSelections[act.id] || [];
+      const customText = (customMemberInput[act.id] || '').trim();
+      const allMembers = [...selected];
+      if (customText) {
+        customText.split(',').forEach((n) => {
+          const trimmed = n.trim();
+          if (trimmed && !allMembers.includes(trimmed)) {
+            allMembers.push(trimmed);
+          }
+        });
+      }
+      if (allMembers.length > 0) {
+        groupMembersStr = allMembers.join(', ');
+      }
+    }
+
+    // Submit to parent
+    onSubmitAnswer(
+      act.id,
+      student.id,
+      essayText,
+      Number(calculatedObjectiveScore.toFixed(1)),
+      Number(distribution.maxObjectiveGrade.toFixed(1)),
+      Number(distribution.maxEssayGrade.toFixed(1)),
+      studentChoices,
+      groupMembersStr
+    );
+
+    const msg = isAutoSubmit
+      ? `🚨 PROVA ENTREGUE AUTOMATICAMENTE! Atingido o limite de 4 avisos de desvio de foco.`
+      : objectiveQuestions.length > 0
+      ? `Atividade enviada! Nota objetiva calculada na hora: ${calculatedObjectiveScore.toFixed(1)} / ${distribution.maxObjectiveGrade.toFixed(1)} pts. A parte dissertativa foi enviada para correção.`
+      : `Atividade enviada com sucesso! Acompanhe a correção na aba "Correções".`;
+
+    setSubmissionSuccessMsg(msg);
+    setTimeout(() => setSubmissionSuccessMsg(null), 6000);
+
+    // Close detail view and switch to "A Corrigir" list filter
+    setSelectedActivityId(null);
+    setStudentFilter('a_corrigir');
+    setActiveTab('atividades');
+  };
 
   // Effect: Trava de Foco (Avisos de mudança de tela e auto-entrega no 4º aviso)
   useEffect(() => {
@@ -158,81 +352,6 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     };
   }, [pendingActivities, activeTab, student.id, student.fullName]);
 
-  // Filter library files for this student's turma
-  const studentLibraryFiles = libraryFiles.filter((file) =>
-    !file.turma || file.turma === 'branco' || file.turma === 'Todas' || canStudentAccessActivity(file.turma, student.turma)
-  );
-
-  const handleSelectOption = (activityId: string, questionId: string, optionIndex: number) => {
-    setObjectiveInputs((prev) => ({
-      ...prev,
-      [activityId]: {
-        ...(prev[activityId] || {}),
-        [questionId]: optionIndex,
-      },
-    }));
-  };
-
-  const handleSubmit = (act: Activity, isAutoSubmit: boolean = false) => {
-    const distribution = getActivityGradeDistribution(act);
-    const questions = act.questions || [];
-    const objectiveQuestions = questions.filter((q) => q.type === 'multiple_choice') as (ActivityQuestion & MultipleChoiceQuestion)[];
-    const essayQuestions = questions.filter((q) => q.type === 'essay') as (ActivityQuestion & EssayQuestion)[];
-
-    const existingSub = act.submissions.find(
-      (s) => s.studentId === student.id || s.studentName === student.fullName
-    );
-    const essayText = essayInputs[act.id] !== undefined
-      ? essayInputs[act.id]
-      : (existingSub?.essayAnswer || '');
-
-    // If there are essay questions, require text (unless it's an auto-submission by Anti-Cola focus lock)
-    if (!isAutoSubmit && essayQuestions.length > 0 && !essayText.trim()) {
-      alert('Por favor, escreva sua resposta dissertativa antes de enviar a atividade.');
-      return;
-    }
-
-    // Calculate objective score immediately (sai na hora)
-    let correctCount = 0;
-    const studentChoices = objectiveInputs[act.id] || {};
-
-    objectiveQuestions.forEach((q) => {
-      const chosen = studentChoices[q.id];
-      if (chosen !== undefined && chosen === q.correctOptionIndex) {
-        correctCount += 1;
-      }
-    });
-
-    let calculatedObjectiveScore = 0;
-    if (objectiveQuestions.length > 0) {
-      calculatedObjectiveScore = (correctCount / objectiveQuestions.length) * distribution.maxObjectiveGrade;
-    } else if (distribution.hasObjective) {
-      calculatedObjectiveScore = distribution.maxObjectiveGrade;
-    }
-
-    // Submit to parent
-    onSubmitAnswer(
-      act.id,
-      student.id,
-      essayText,
-      Number(calculatedObjectiveScore.toFixed(1)),
-      Number(distribution.maxObjectiveGrade.toFixed(1)),
-      Number(distribution.maxEssayGrade.toFixed(1)),
-      studentChoices
-    );
-
-    const msg = isAutoSubmit
-      ? `🚨 PROVA ENTREGUE AUTOMATICAMENTE! Atingido o limite de 4 avisos de desvio de foco.`
-      : objectiveQuestions.length > 0
-      ? `Atividade enviada! Nota objetiva calculada na hora: ${calculatedObjectiveScore.toFixed(1)} / ${distribution.maxObjectiveGrade.toFixed(1)} pts. A parte dissertativa foi enviada para correção.`
-      : `Atividade enviada com sucesso! Acompanhe a correção na aba "Correções".`;
-
-    setSubmissionSuccessMsg(msg);
-    setTimeout(() => setSubmissionSuccessMsg(null), 6000);
-
-    // Switch to Correções tab automatically
-    setActiveTab('correcoes');
-  };
 
   return (
     <div className="min-h-screen bg-[#0b1326] text-[#dae2fd] p-4 sm:p-8 max-w-5xl mx-auto space-y-8 animate-fadeIn">
@@ -285,50 +404,80 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         </div>
       )}
 
-      {/* Main 3 Abas Navigation */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-[#131b2e] p-1.5 rounded-2xl border border-white/10">
+      {/* Main 4 Abas Navigation */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 bg-[#131b2e] p-1.5 rounded-2xl border border-white/10">
         <button
-          onClick={() => setActiveTab('atividades')}
+          onClick={() => {
+            setActiveTab('atividades');
+            setSelectedActivityId(null);
+            setStudentFilter('todas');
+          }}
           className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] ${
-            activeTab === 'atividades'
+            activeTab === 'atividades' && studentFilter !== 'corrigidas'
               ? 'bg-[#4ade80] text-[#003919] shadow-md'
               : 'text-[#bccabb] hover:text-white hover:bg-white/5'
           }`}
         >
           <FileText className="w-4 h-4 shrink-0" />
-          <span>Atividades a Fazer</span>
-          {pendingActivities.length > 0 && (
+          <span>Atividades e Missões</span>
+          {authorizedActivities.length > 0 && (
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 ${
-                activeTab === 'atividades'
+                activeTab === 'atividades' && studentFilter !== 'corrigidas'
                   ? 'bg-[#003919] text-[#4ade80]'
                   : 'bg-[#4ade80] text-[#003919]'
               }`}
             >
-              {pendingActivities.length}
+              {authorizedActivities.length}
             </span>
           )}
         </button>
 
         <button
-          onClick={() => setActiveTab('correcoes')}
+          onClick={() => {
+            setActiveTab('correcoes');
+            setSelectedActivityId(null);
+            setStudentFilter('corrigidas');
+          }}
           className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] ${
-            activeTab === 'correcoes'
+            activeTab === 'correcoes' || (activeTab === 'atividades' && studentFilter === 'corrigidas')
               ? 'bg-[#4ade80] text-[#003919] shadow-md'
               : 'text-[#bccabb] hover:text-white hover:bg-white/5'
           }`}
         >
           <Award className="w-4 h-4 shrink-0" />
           <span>Correções e Notas</span>
-          {submittedActivities.length > 0 && (
+          {gradedActivities.length > 0 && (
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 ${
-                activeTab === 'correcoes'
+                activeTab === 'correcoes' || (activeTab === 'atividades' && studentFilter === 'corrigidas')
                   ? 'bg-[#003919] text-[#4ade80]'
                   : 'bg-[#171f33] text-white border border-white/10'
               }`}
             >
-              {submittedActivities.length}
+              {gradedActivities.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('mensagens');
+            if (onMarkThreadAsRead) {
+              onMarkThreadAsRead(student.id, 'student');
+            }
+          }}
+          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] ${
+            activeTab === 'mensagens'
+              ? 'bg-[#4ade80] text-[#003919] shadow-md'
+              : 'text-[#bccabb] hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4 shrink-0" />
+          <span>Mensagens com Professora</span>
+          {messages.filter(m => (m.threadId === student.id || m.recipientId === student.id) && m.senderRole === 'teacher' && !m.read).length > 0 && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 bg-[#4ade80] text-[#003919]">
+              {messages.filter(m => (m.threadId === student.id || m.recipientId === student.id) && m.senderRole === 'teacher' && !m.read).length}
             </span>
           )}
         </button>
@@ -357,60 +506,268 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         </button>
       </div>
 
-      {/* TAB 1: ATIVIDADES A FAZER */}
-      {activeTab === 'atividades' && (
+      {/* TAB: ATIVIDADES E CORREÇÕES (LIST & FILTER SYSTEM) */}
+      {(activeTab === 'atividades' || activeTab === 'correcoes') && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-[#4ade80]" />
-              <span>Atividades Disponíveis</span>
-            </h2>
-            <span className="text-xs text-[#bccabb]">
-              Total pendente: <strong>{pendingActivities.length}</strong>
-            </span>
+          {/* Sub-filter bar for Student Activities */}
+          <div className="flex flex-wrap items-center gap-2 p-1.5 bg-[#131b2e] rounded-2xl border border-white/10">
+            <button
+              onClick={() => {
+                setStudentFilter('todas');
+                setSelectedActivityId(null);
+              }}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                studentFilter === 'todas'
+                  ? 'bg-[#4ade80] text-[#003919] shadow-md'
+                  : 'text-[#bccabb] hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <BookOpen className="w-4 h-4 shrink-0" />
+              <span>Todas as Missões</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${studentFilter === 'todas' ? 'bg-[#003919] text-[#4ade80]' : 'bg-black/30 text-white'}`}>
+                {authorizedActivities.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setStudentFilter('a_fazer');
+                setSelectedActivityId(null);
+              }}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                studentFilter === 'a_fazer'
+                  ? 'bg-[#4ade80] text-[#003919] shadow-md'
+                  : 'text-[#bccabb] hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <FileQuestion className="w-4 h-4 shrink-0" />
+              <span>A Fazer / Pendentes</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${studentFilter === 'a_fazer' ? 'bg-[#003919] text-[#4ade80]' : 'bg-black/30 text-white'}`}>
+                {pendingActivities.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setStudentFilter('a_corrigir');
+                setSelectedActivityId(null);
+              }}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                studentFilter === 'a_corrigir'
+                  ? 'bg-[#4ade80] text-[#003919] shadow-md'
+                  : 'text-[#bccabb] hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Clock className="w-4 h-4 shrink-0" />
+              <span>A Corrigir pelo Sensei</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${studentFilter === 'a_corrigir' ? 'bg-[#003919] text-[#4ade80]' : 'bg-black/30 text-white'}`}>
+                {toCorrectActivities.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setStudentFilter('corrigidas');
+                setSelectedActivityId(null);
+              }}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                studentFilter === 'corrigidas'
+                  ? 'bg-[#4ade80] text-[#003919] shadow-md'
+                  : 'text-[#bccabb] hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Award className="w-4 h-4 shrink-0" />
+              <span>Corrigidas e Notas</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${studentFilter === 'corrigidas' ? 'bg-[#003919] text-[#4ade80]' : 'bg-black/30 text-white'}`}>
+                {gradedActivities.length}
+              </span>
+            </button>
           </div>
 
-          {pendingActivities.length === 0 ? (
-            <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb] space-y-3 shadow-xl">
-              <div className="w-16 h-16 bg-[#4ade80]/10 border border-[#4ade80]/30 rounded-2xl flex items-center justify-center mx-auto text-[#4ade80] text-2xl font-black">
-                🍃
-              </div>
-              <p className="text-base font-extrabold text-white">Nenhuma Missão Pendente na Vila da Folha!</p>
-              <p className="text-xs text-[#bccabb] max-w-md mx-auto leading-relaxed">
-                Dattebayo! Você concluiu todos os pergaminhos e treinos de Sociologia para a turma <strong className="text-white">{student.turma}</strong>. Descanse no Ichiraku Lamen enquanto o Sensei prepara novas missões! 🍜
-              </p>
-              <p className="text-[11px] font-semibold text-[#4ade80] pt-2">
-                Confira o resultado dos seus jutsus e notas na aba &ldquo;Correções e Notas&rdquo;.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-8">
-              {pendingActivities.map((act) => {
-                const distribution = getActivityGradeDistribution(act);
-                const questions = act.questions || [];
-                const objectiveQuestions = questions.filter((q) => q.type === 'multiple_choice') as (ActivityQuestion & MultipleChoiceQuestion)[];
-                const essayQuestions = questions.filter((q) => q.type === 'essay') as (ActivityQuestion & EssayQuestion)[];
+          {/* LIST VIEW (when no activity is selected) */}
+          {selectedActivityId === null && (
+            <div className="space-y-4">
+              {filteredStudentActivities.length === 0 ? (
+                <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb] space-y-3 shadow-xl">
+                  <div className="w-16 h-16 bg-[#4ade80]/10 border border-[#4ade80]/30 rounded-2xl flex items-center justify-center mx-auto text-[#4ade80] text-2xl font-black">
+                    🍃
+                  </div>
+                  <p className="text-base font-extrabold text-white">Nenhuma Missão Encontrada neste Filtro!</p>
+                  <p className="text-xs text-[#bccabb] max-w-md mx-auto leading-relaxed">
+                    Você não possui atividades nesta categoria no momento. Alterne os filtros acima para visualizar suas missões pendentes, enviadas ou corrigidas.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4">
+                  {filteredStudentActivities.map((act) => {
+                    const sub = act.submissions.find(
+                      (s) => s.studentId === student.id || s.studentName === student.fullName
+                    );
+                    const isPending = !sub || sub.status === 'returned' || sub.status === 'draft';
+                    const isToCorrect = sub && sub.status === 'pending';
+                    const isGraded = sub && sub.status === 'graded';
+                    const totalScore = sub && isGraded ? (sub.objectiveScore || 0) + (sub.essayScore || 0) : null;
 
-                const existingSub = act.submissions.find(
+                    return (
+                      <div
+                        key={act.id}
+                        className="glass-panel p-6 rounded-2xl border border-white/10 hover:border-[#4ade80]/40 transition-all space-y-4 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                      >
+                        <div className="space-y-2 max-w-2xl">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[11px] font-bold bg-[#4ade80]/20 text-[#4ade80] px-3 py-0.5 rounded-full border border-[#4ade80]/30">
+                              {act.type === 'Simulado'
+                                ? 'Treinamento Tático'
+                                : act.type === 'Redação'
+                                ? 'Pergaminho de Redação'
+                                : act.type === 'Dinâmica'
+                                ? 'Treino em Equipe'
+                                : 'Exame Ninja'}
+                            </span>
+
+                            <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5 bg-[#131b2e] px-3 py-0.5 rounded-full border border-amber-500/30">
+                              <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                              <span>Prazo: {act.deadline || 'Sem data'}</span>
+                            </span>
+
+                            {isPending && (
+                              <span className="text-[11px] font-extrabold bg-amber-500/20 text-amber-300 px-3 py-0.5 rounded-full border border-amber-500/40">
+                                📜 Pendente (A Fazer)
+                              </span>
+                            )}
+                            {isToCorrect && (
+                              <span className="text-[11px] font-extrabold bg-sky-500/20 text-sky-300 px-3 py-0.5 rounded-full border border-sky-500/40">
+                                ⏳ A Corrigir pelo Sensei
+                              </span>
+                            )}
+                            {isGraded && (
+                              <span className="text-[11px] font-extrabold bg-emerald-500/20 text-emerald-300 px-3 py-0.5 rounded-full border border-emerald-500/40">
+                                ✅ Corrigida (Nota: {totalScore !== null ? totalScore.toFixed(1) : 0}/10)
+                              </span>
+                            )}
+                          </div>
+
+                          <h3 className="text-lg font-bold text-white tracking-tight">{act.title}</h3>
+                          {act.description && (
+                            <p className="text-xs text-[#bccabb] line-clamp-2">{act.description}</p>
+                          )}
+
+                          <div className="flex items-center gap-4 text-[11px] text-[#bccabb] font-medium pt-1">
+                            <span>Turma: <strong className="text-white">{act.turma}</strong></span>
+                            <span>•</span>
+                            <span>Perguntas: <strong className="text-white">{act.questions?.length || 0}</strong></span>
+                            <span>•</span>
+                            <span>Valor: <strong className="text-white">{getActivityGradeDistribution(act).maxGrade || 10} pts</strong></span>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 pt-2 sm:pt-0">
+                          <button
+                            onClick={() => setSelectedActivityId(act.id)}
+                            className="w-full sm:w-auto py-3 px-6 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-[#4ade80]/20"
+                          >
+                            {isPending ? (
+                              <>
+                                <PenTool className="w-4 h-4" />
+                                <span>Resolver Atividade</span>
+                              </>
+                            ) : (
+                              <>
+                                <Eye className="w-4 h-4" />
+                                <span>Ver Resposta / Nota</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* DETAIL VIEW (when an activity is selected) */}
+          {selectedActivityId !== null && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between p-4 bg-[#131b2e] rounded-2xl border border-white/10">
+                <button
+                  onClick={() => setSelectedActivityId(null)}
+                  className="py-2.5 px-5 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-all cursor-pointer border border-white/10"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Voltar para Lista de Atividades</span>
+                </button>
+                <div className="text-right">
+                  <span className="text-xs text-[#bccabb] font-semibold block">
+                    Atividade Selecionada
+                  </span>
+                  <span className="text-sm font-bold text-white">
+                    {authorizedActivities.find((a) => a.id === selectedActivityId)?.title}
+                  </span>
+                </div>
+              </div>
+
+              {(() => {
+                const act = authorizedActivities.find((a) => a.id === selectedActivityId);
+                if (!act) return null;
+
+                const sub = act.submissions.find(
                   (s) => s.studentId === student.id || s.studentName === student.fullName
                 );
 
-                return (
-                  <div
-                    key={act.id}
-                    className="glass-panel p-6 sm:p-8 rounded-3xl border border-white/10 space-y-6 shadow-xl relative overflow-hidden"
-                  >
+                const isPendingOrReturned = !sub || sub.status === 'returned' || sub.status === 'draft';
+
+                if (isPendingOrReturned) {
+                  const distribution = getActivityGradeDistribution(act);
+                  const questions = act.questions || [];
+                  const objectiveQuestions = questions.filter((q) => q.type === 'multiple_choice') as (ActivityQuestion & MultipleChoiceQuestion)[];
+                  const essayQuestions = questions.filter((q) => q.type === 'essay') as (ActivityQuestion & EssayQuestion)[];
+
+                  return (
+                    <div
+                      key={act.id}
+                      className={`glass-panel p-6 sm:p-8 rounded-3xl border border-white/10 space-y-6 shadow-xl relative overflow-hidden ${
+                        act.securityBlockCopyStatement ? 'select-none' : ''
+                      }`}
+                      onCopy={(e) => {
+                        if (act.securityBlockCopyStatement) {
+                          e.preventDefault();
+                          showSecurityToast('❌ Cópia e seleção de texto bloqueadas para esta atividade pelo professor.');
+                        }
+                      }}
+                      onCut={(e) => {
+                        if (act.securityBlockCopyStatement) {
+                          e.preventDefault();
+                          showSecurityToast('❌ Recortar texto bloqueado nesta atividade.');
+                        }
+                      }}
+                      onContextMenu={(e) => {
+                        if (act.securityBlockCopyStatement) {
+                          e.preventDefault();
+                          showSecurityToast('❌ Menu de contexto (botão direito) desabilitado por trava de segurança.');
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (act.securityBlockCopyStatement) {
+                          if ((e.ctrlKey || e.metaKey) && ['c', 'C', 'x', 'X', 'a', 'A', 'u', 'U'].includes(e.key)) {
+                            e.preventDefault();
+                            showSecurityToast('❌ Atalho de cópia/seleção bloqueado para esta atividade.');
+                          }
+                        }
+                      }}
+                    >
                     {/* Banner if activity was returned for re-do */}
-                    {existingSub && existingSub.status === 'returned' && (
+                    {sub && sub.status === 'returned' && (
                       <div className="bg-amber-500/20 border border-amber-500/40 p-4 rounded-2xl text-xs text-amber-200 flex items-start gap-3 shadow-lg">
                         <RotateCcw className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                         <div className="space-y-1">
                           <p className="font-extrabold text-amber-300 text-sm">
                             ⚠️ Atividade Devolvida pelo Professor para Refazer!
                           </p>
-                          {existingSub.teacherFeedback ? (
+                          {sub.teacherFeedback ? (
                             <p className="text-white">
-                              <strong>Orientações / Observações do Sensei:</strong> &ldquo;{existingSub.teacherFeedback}&rdquo;
+                              <strong>Orientações / Observações do Sensei:</strong> &ldquo;{sub.teacherFeedback}&rdquo;
                             </p>
                           ) : (
                             <p className="text-[#bccabb]">
@@ -426,12 +783,42 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       <div>
                         <div className="flex flex-wrap items-center gap-2 mb-2">
                           <span className="text-[11px] font-extrabold bg-[#4ade80]/20 text-[#4ade80] px-3 py-1 rounded-full border border-[#4ade80]/30 uppercase tracking-wide">
-                            {act.type}
+                            {act.type === 'Simulado'
+                              ? 'Treinamento Tático (Simulado)'
+                              : act.type === 'Redação'
+                              ? 'Pergaminho de Redação'
+                              : act.type === 'Dinâmica'
+                              ? 'Treino em Equipe (Dinâmica)'
+                              : 'Exame Ninja (Avaliação)'}
                           </span>
-                          <span className="text-[11px] font-semibold text-[#bccabb] flex items-center gap-1 bg-[#171f33] px-3 py-1 rounded-full border border-white/10">
-                            <Clock className="w-3.5 h-3.5 text-amber-400" />
-                            <span>Prazo: {act.deadline}</span>
+
+                          {/* Subtle Highlighted Deadline Badge */}
+                          <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5 bg-[#131b2e] px-3.5 py-1 rounded-full border border-amber-500/30 shadow-sm">
+                            <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <span>Prazo Limite: {act.deadline || 'Sem data'}</span>
                           </span>
+
+                          {/* Subtle Status Badge */}
+                          {sub && sub.status === 'returned' ? (
+                            <span
+                              className={`text-[11px] font-bold px-3 py-1 rounded-full border ${
+                                sub.returnCount === 3
+                                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                  : sub.returnCount === 2
+                                  ? 'bg-orange-600/20 text-orange-200 border-orange-500/40'
+                                  : 'bg-orange-500/20 text-orange-300 border-orange-500/30'
+                              }`}
+                            >
+                              {sub.returnCount
+                                ? `↩️ Devolvida ${sub.returnCount}x`
+                                : '↩️ Devolvida 1x'}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-bold text-amber-300 bg-amber-500/15 px-3 py-1 rounded-full border border-amber-500/30">
+                              📜 Pendente (A Fazer)
+                            </span>
+                          )}
+
                           <span className="text-[11px] font-bold text-white bg-[#171f33] px-3 py-1 rounded-full border border-white/10">
                             Nota Máxima: {distribution.maxGrade.toFixed(1)} pts
                           </span>
@@ -636,7 +1023,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                           </div>
                           <textarea
                             rows={5}
-                            value={essayInputs[act.id] !== undefined ? essayInputs[act.id] : (existingSub?.essayAnswer || '')}
+                            value={essayInputs[act.id] !== undefined ? essayInputs[act.id] : (sub?.essayAnswer || '')}
                             onChange={(e) =>
                               setEssayInputs({ ...essayInputs, [act.id]: e.target.value })
                             }
@@ -652,6 +1039,14 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                                 showSecurityToast('❌ Arrastar textos bloqueado para respostas dissertativas.');
                               }
                             }}
+                            onKeyDown={(e) => {
+                              if (act.securityBlockPasteEssay) {
+                                if ((e.ctrlKey || e.metaKey) && ['v', 'V'].includes(e.key)) {
+                                  e.preventDefault();
+                                  showSecurityToast('❌ Atalho de colar (Ctrl+V) bloqueado para respostas dissertativas.');
+                                }
+                              }
+                            }}
                             placeholder={
                               act.securityBlockPasteEssay
                                 ? "Escreva aqui sua resposta (digitação manual obrigatória; colar texto desabilitado pelo professor)..."
@@ -659,6 +1054,96 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                             }
                             className="w-full bg-[#131b2e] border border-white/10 rounded-2xl p-4 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80] leading-relaxed"
                           />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* TRABALHO EM GRUPO - SELEÇÃO DE INTEGRANTES */}
+                    {act.allowGroupWork && (
+                      <div className="bg-[#131b2e] p-5 rounded-2xl border border-purple-500/30 space-y-3.5 shadow-lg">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-bold text-purple-300 uppercase tracking-wider flex items-center gap-2">
+                            <Users className="w-4 h-4 text-purple-400" />
+                            <span>Trabalho em Grupo — Selecione os Colegas da sua Equipe:</span>
+                          </h4>
+                          <span className="text-[11px] font-bold text-purple-300 bg-purple-500/10 border border-purple-500/20 px-2.5 py-0.5 rounded-full">
+                            Turma {student.turma}
+                          </span>
+                        </div>
+
+                        {/* Lista interativa de colegas da turma */}
+                        {classmates.length > 0 ? (
+                          <div className="space-y-2">
+                            <p className="text-[11px] text-[#bccabb]">
+                              Marque os colegas de classe que fizeram o trabalho com você:
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1">
+                              {classmates.map((cls) => {
+                                const isSelected = (groupSelections[act.id] || []).includes(cls.fullName);
+                                return (
+                                  <button
+                                    key={cls.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setGroupSelections((prev) => {
+                                        const current = prev[act.id] || [];
+                                        if (current.includes(cls.fullName)) {
+                                          return { ...prev, [act.id]: current.filter((n) => n !== cls.fullName) };
+                                        } else {
+                                          return { ...prev, [act.id]: [...current, cls.fullName] };
+                                        }
+                                      });
+                                    }}
+                                    className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all cursor-pointer border ${
+                                      isSelected
+                                        ? 'bg-purple-600/30 border-purple-400 text-purple-200 shadow-md'
+                                        : 'bg-[#0b1326] border-white/10 text-[#bccabb] hover:text-white hover:border-white/20'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2 truncate">
+                                      <div className={`w-2 h-2 rounded-full shrink-0 ${isSelected ? 'bg-purple-400' : 'bg-white/20'}`} />
+                                      <span className="truncate">{cls.fullName}</span>
+                                    </div>
+                                    {isSelected ? (
+                                      <Check className="w-4 h-4 text-purple-300 shrink-0" />
+                                    ) : (
+                                      <span className="text-[10px] text-white/40">+ Adicionar</span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-[#bccabb] italic">
+                            Nenhum outro aluno cadastrado na turma {student.turma}. Digite os nomes dos integrantes abaixo:
+                          </p>
+                        )}
+
+                        {/* Input para nomes manuais/complementares */}
+                        <div>
+                          <label className="block text-[11px] font-semibold text-[#bccabb] mb-1">
+                            Outros integrantes (se não constarem na lista acima, separe por vírgula):
+                          </label>
+                          <input
+                            type="text"
+                            value={customMemberInput[act.id] || ''}
+                            onChange={(e) =>
+                              setCustomMemberInput((prev) => ({ ...prev, [act.id]: e.target.value }))
+                            }
+                            placeholder="Ex: João Pedro, Camila Santos"
+                            className="w-full bg-[#0b1326] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-purple-400"
+                          />
+                        </div>
+
+                        {/* Resumo da Equipe Confirmada */}
+                        <div className="bg-purple-500/10 p-3 rounded-xl border border-purple-500/20 text-xs text-purple-200 flex items-center gap-2">
+                          <Users className="w-4 h-4 text-purple-400 shrink-0" />
+                          <span>
+                            <strong>Integrantes da Entrega:</strong> {student.fullName} (Você)
+                            {(groupSelections[act.id] || []).length > 0 && `, ${(groupSelections[act.id] || []).join(', ')}`}
+                            {(customMemberInput[act.id] || '').trim() && `, ${customMemberInput[act.id].trim()}`}
+                          </span>
                         </div>
                       </div>
                     )}
@@ -675,43 +1160,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                     </div>
                   </div>
                 );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* TAB 2: CORREÇÕES E NOTAS */}
-      {activeTab === 'correcoes' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-              <Award className="w-5 h-5 text-[#4ade80]" />
-              <span>Suas Entregas e Notas</span>
-            </h2>
-            <span className="text-xs text-[#bccabb]">
-              Entregas realizadas: <strong>{submittedActivities.length}</strong>
-            </span>
-          </div>
-
-          {submittedActivities.length === 0 ? (
-            <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb] space-y-3 shadow-xl">
-              <div className="w-16 h-16 bg-[#c0c1ff]/10 border border-[#c0c1ff]/30 rounded-2xl flex items-center justify-center mx-auto text-[#c0c1ff] text-2xl font-black">
-                📜
-              </div>
-              <p className="text-base font-extrabold text-white">Nenhum Pergaminho de Treino Entregue Ainda!</p>
-              <p className="text-xs text-[#bccabb] max-w-md mx-auto leading-relaxed">
-                Você ainda não entregou nenhum pergaminho para avaliação do Sensei. Acesse a aba <strong>&ldquo;Atividades a Fazer&rdquo;</strong>, concentre seu chakra e envie suas respostas! ⚡
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {submittedActivities.map((act) => {
-                const sub = act.submissions.find(
-                  (s) => s.studentId === student.id || s.studentName === student.fullName
-                );
-                if (!sub) return null;
-
+              } else {
                 const distribution = getActivityGradeDistribution(act);
                 const isGraded = sub.status === 'graded';
                 const totalScore = (sub.objectiveScore || 0) + (sub.essayScore || 0);
@@ -724,13 +1173,37 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                     {/* Header */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
                       <div>
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
                           <span className="text-[11px] font-bold bg-[#4ade80]/20 text-[#4ade80] px-3 py-0.5 rounded-full border border-[#4ade80]/30">
-                            {act.type}
+                            {act.type === 'Simulado'
+                              ? 'Treinamento Tático'
+                              : act.type === 'Redação'
+                              ? 'Pergaminho de Redação'
+                              : act.type === 'Dinâmica'
+                              ? 'Treino em Equipe'
+                              : 'Exame Ninja'}
                           </span>
-                          <span className="text-[11px] text-[#bccabb]">
-                            Prazo: {act.deadline}
+
+                          {/* Subtle Highlighted Deadline Badge */}
+                          <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5 bg-[#131b2e] px-3 py-0.5 rounded-full border border-amber-500/30">
+                            <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <span>Prazo Limite: {act.deadline || 'Sem data'}</span>
                           </span>
+
+                          {/* Status Badge */}
+                          {sub.status === 'graded' ? (
+                            <span className="text-[11px] font-bold text-emerald-300 bg-emerald-500/20 px-3 py-0.5 rounded-full border border-emerald-500/40">
+                              ✅ Corrigida pelo Sensei
+                            </span>
+                          ) : sub.status === 'pending' ? (
+                            <span className="text-[11px] font-bold text-sky-300 bg-sky-500/20 px-3 py-0.5 rounded-full border border-sky-500/40">
+                              ⏳ A Corrigir pelo Sensei
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-bold text-orange-300 bg-orange-500/20 px-3 py-0.5 rounded-full border border-orange-500/40">
+                              ↩️ Devolvida {sub.returnCount ? `${sub.returnCount}x` : '1x'}
+                            </span>
+                          )}
                         </div>
                         <h3 className="text-2xl font-bold text-white">{act.title}</h3>
                       </div>
@@ -788,6 +1261,16 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       </div>
                     </div>
 
+                    {/* Group Members display */}
+                    {sub.groupMembers && (
+                      <div className="bg-purple-500/10 p-3.5 rounded-2xl border border-purple-500/30 text-xs text-purple-200 flex items-center gap-2">
+                        <Users className="w-4 h-4 text-purple-400 shrink-0" />
+                        <span>
+                          <strong>Membros do Grupo:</strong> {sub.groupMembers}
+                        </span>
+                      </div>
+                    )}
+
                     {/* Student Essay Response display */}
                     {sub.essayAnswer && (
                       <div className="bg-[#171f33] p-4 rounded-2xl border border-white/5 space-y-1">
@@ -818,14 +1301,34 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                     )}
                   </div>
                 );
-              })}
-            </div>
-          )}
-        </div>
+              }
+            })()}
+          </div>
+        )}
+      </div>
+    )}
+
+      {/* TAB: MENSAGENS COM A PROFESSORA */}
+      {activeTab === 'mensagens' && (
+        <MessagesView
+          currentUserRole="student"
+          teacher={teacher}
+          student={student}
+          students={students}
+          activities={activities}
+          messages={messages}
+          onSendMessage={(msg) => {
+            if (onSendMessage) {
+              onSendMessage(msg);
+            }
+          }}
+          onMarkThreadAsRead={onMarkThreadAsRead}
+        />
       )}
 
       {/* TAB 3: ARQUIVOS */}
       {activeTab === 'arquivos' && (
+
         <div className="space-y-6">
           <div>
             <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">

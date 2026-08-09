@@ -1,4 +1,4 @@
-import { Activity, StudentUser, TeacherUser, ScheduleItem, LibraryFile } from './types';
+import { Activity, StudentUser, TeacherUser, ScheduleItem, LibraryFile, ChatMessage } from './types';
 
 export const initialTeacher: TeacherUser = {
   id: '',
@@ -43,4 +43,46 @@ export const initialLibrary: LibraryFile[] = [
     driveUrl: 'https://drive.google.com/drive/my-drive',
   },
 ];
+
+export const initialChatMessages: ChatMessage[] = [
+  {
+    id: 'msg-1',
+    threadId: 'std-1',
+    senderId: 'std-1',
+    senderName: 'Ana Silva',
+    senderRole: 'student',
+    senderAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200',
+    recipientId: 'teacher-1',
+    recipientName: 'Professora',
+    content: 'Professora, boa tarde! Gostaria de tirar uma dúvida sobre o conceito de Fato Social em Durkheim para a redação.',
+    createdAt: '09/08/2026 09:15',
+    read: true,
+  },
+  {
+    id: 'msg-2',
+    threadId: 'std-1',
+    senderId: 'teacher-1',
+    senderName: 'Professora',
+    senderRole: 'teacher',
+    recipientId: 'std-1',
+    recipientName: 'Ana Silva',
+    content: 'Olá Ana! Lembre-se das três características fundamentais: exterioridade, coercitividade e generalidade. Você pode usar a solidariedade orgânica como repertório no ENEM.',
+    createdAt: '09/08/2026 09:22',
+    read: true,
+  },
+  {
+    id: 'msg-3',
+    threadId: 'std-1',
+    senderId: 'std-1',
+    senderName: 'Ana Silva',
+    senderRole: 'student',
+    senderAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200',
+    recipientId: 'teacher-1',
+    recipientName: 'Professora',
+    content: 'Excelente, professora! Muito obrigada pela explicação, ficou claríssimo!',
+    createdAt: '09/08/2026 09:30',
+    read: false,
+  },
+];
+
 

@@ -9,7 +9,8 @@ import {
   LogOut,
   FileCheck,
   X,
-  BookOpen
+  BookOpen,
+  MessageSquare
 } from 'lucide-react';
 import { TeacherUser } from '@/lib/types';
 import { formatAvatarUrl } from '@/lib/utils';
@@ -22,6 +23,7 @@ interface SidebarProps {
   onLogout?: () => void;
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
+  unreadMessagesCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -31,13 +33,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   isMobileOpen = false,
   onCloseMobile,
+  unreadMessagesCount = 0,
 }) => {
   const navItems = [
     { id: 'painel', label: 'Studio', icon: LayoutDashboard },
     { id: 'atividades', label: 'Correções', icon: FileCheck },
+    { id: 'mensagens', label: 'Mensagens', icon: MessageSquare, badge: unreadMessagesCount },
     { id: 'alunos', label: 'Alunos', icon: Users },
     { id: 'arquivos', label: 'Arquivos', icon: FolderOpen },
   ];
+
 
   const handleTabClick = (tabId: string) => {
     setCurrentTab(tabId);
@@ -120,18 +125,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 key={item.id}
                 onClick={() => handleTabClick(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-200 cursor-pointer min-h-[44px] ${
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-200 cursor-pointer min-h-[44px] ${
                   isActive
                     ? 'bg-[#4ade80] text-[#003919] shadow-md'
                     : 'text-[#dae2fd] hover:bg-[#171f33] hover:text-white'
                 }`}
               >
-                <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#003919]' : 'text-[#bccabb]'}`} />
-                <span>{item.label}</span>
+                <div className="flex items-center gap-3">
+                  <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-[#003919]' : 'text-[#bccabb]'}`} />
+                  <span>{item.label}</span>
+                </div>
+                {item.badge && item.badge > 0 ? (
+                  <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
+                    isActive ? 'bg-[#003919] text-[#4ade80]' : 'bg-[#4ade80] text-[#003919]'
+                  }`}>
+                    {item.badge}
+                  </span>
+                ) : null}
               </button>
             );
           })}
         </nav>
+
       </div>
     </div>
   );

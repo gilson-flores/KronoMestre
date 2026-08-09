@@ -22,7 +22,9 @@ import {
   Lock,
   X,
   CopyX,
-  ClipboardX
+  ClipboardX,
+  Clock,
+  RotateCcw
 } from 'lucide-react';
 import { Activity } from '@/lib/types';
 
@@ -56,6 +58,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   isCorrecoesTab,
 }) => {
   const isCorrecoes = isCorrecoesTab || title === 'Correções';
+  const [activityFilter, setActivityFilter] = useState<'todas' | 'a_fazer' | 'a_corrigir' | 'corrigidas'>('todas');
+
+  const filteredActivities = activities.filter((act) => {
+    if (activityFilter === 'a_fazer') {
+      return act.status === 'Ativo' || (act.totalStudents - act.totalSubmissions) > 0;
+    }
+    if (activityFilter === 'a_corrigir') {
+      return act.pendingCorrection > 0;
+    }
+    if (activityFilter === 'corrigidas') {
+      return act.pendingCorrection === 0 && act.totalSubmissions > 0;
+    }
+    return true;
+  });
   const [activityToDelete, setActivityToDelete] = useState<Activity | null>(null);
   const [securityModalActivity, setSecurityModalActivity] = useState<Activity | null>(null);
 
@@ -240,23 +256,84 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Atividades Recentes List */}
       <div className="space-y-4 pt-2">
-        <h2 className="text-xl font-bold text-white tracking-tight">Atividades Recentes</h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+            <span>Missões & Atividades</span>
+            <span className="text-xs font-normal text-[#bccabb]">
+              ({filteredActivities.length} {filteredActivities.length === 1 ? 'item' : 'itens'})
+            </span>
+          </h2>
 
-        <div className="space-y-4">
-          {activities.length === 0 ? (
-            <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb]">
-              Nenhuma atividade cadastrada no momento. Clique em &quot;+ Nova Atividade&quot; para começar.
+          {/* List Filter Tabs */}
+          <div className="flex items-center gap-1 bg-[#131b2e] p-1 rounded-xl border border-white/10 text-xs overflow-x-auto">
+            <button
+              onClick={() => setActivityFilter('todas')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activityFilter === 'todas'
+                  ? 'bg-[#4ade80] text-[#003919]'
+                  : 'text-[#bccabb] hover:text-white'
+              }`}
+            >
+              Todas
+            </button>
+            <button
+              onClick={() => setActivityFilter('a_fazer')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activityFilter === 'a_fazer'
+                  ? 'bg-[#4ade80] text-[#003919]'
+                  : 'text-[#bccabb] hover:text-white'
+              }`}
+            >
+              📜 A Fazer
+            </button>
+            <button
+              onClick={() => setActivityFilter('a_corrigir')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activityFilter === 'a_corrigir'
+                  ? 'bg-[#4ade80] text-[#003919]'
+                  : 'text-[#bccabb] hover:text-white'
+              }`}
+            >
+              ⏳ A Corrigir ({activities.reduce((acc, a) => acc + a.pendingCorrection, 0)})
+            </button>
+            <button
+              onClick={() => setActivityFilter('corrigidas')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activityFilter === 'corrigidas'
+                  ? 'bg-[#4ade80] text-[#003919]'
+                  : 'text-[#bccabb] hover:text-white'
+              }`}
+            >
+              ✅ Corrigidas
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {filteredActivities.length === 0 ? (
+            <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb] space-y-2">
+              <p className="font-bold text-white text-base">Nenhuma missão encontrada para este filtro.</p>
+              <p className="text-xs text-[#bccabb]">Clique em &quot;+ Nova Atividade&quot; para criar novos pergaminhos ou troque o filtro acima.</p>
             </div>
           ) : (
-            activities.map((act) => {
+            filteredActivities.map((act) => {
               let Icon = FileText;
               if (act.type === 'Simulado') Icon = FileQuestion;
               if (act.type === 'Dinâmica') Icon = Users2;
 
+              // Calculate submission return breakdowns
+              const ret1x = act.submissions.filter((s) => s.status === 'returned' && (s.returnCount === 1 || !s.returnCount)).length;
+              const ret2x = act.submissions.filter((s) => s.status === 'returned' && s.returnCount === 2).length;
+              const ret3x = act.submissions.filter((s) => s.status === 'returned' && s.returnCount === 3).length;
+              const gradedCount = act.submissions.filter((s) => s.status === 'graded').length;
+
               return (
                 <div
                   key={act.id}
-                  className={`glass-panel p-5 md:p-6 rounded-3xl transition-all duration-200 border border-white/10 ${
+                  onClick={() => {
+                    if (onViewActivity) onViewActivity(act);
+                  }}
+                  className={`glass-panel p-5 md:p-6 rounded-3xl transition-all duration-200 border border-white/10 hover:border-[#4ade80]/40 cursor-pointer ${
                     act.pendingCorrection > 0 ? 'ring-1 ring-[#4ade80]/30' : ''
                   }`}
                 >
@@ -267,7 +344,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         <Icon className="w-6 h-6" />
                       </div>
 
-                      <div className="space-y-1.5">
+                      <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="text-base md:text-lg font-bold text-white leading-snug">
                             {act.title}
@@ -288,7 +365,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                           {/* Turma Badge */}
                           <span className="text-[11px] font-semibold bg-[#171f33] text-[#bccabb] px-3 py-0.5 rounded-full border border-white/5">
-                            {act.turma}
+                            Turma: {act.turma}
                           </span>
 
                           {/* Anti-Cola Badges */}
@@ -312,49 +389,80 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           )}
                         </div>
 
-                        {/* Sub-details */}
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#bccabb]">
-                          {act.totalSubmissions > 0 && (
-                            <span>👥 {act.totalSubmissions}/{act.totalStudents} Entregas</span>
+                        {/* Subtle Deadline & Status Breakdown Row */}
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          {/* Subtle Highlighted Deadline Badge */}
+                          <span className="px-3 py-1 rounded-xl text-xs font-bold bg-[#131b2e] text-amber-300 border border-amber-500/30 flex items-center gap-1.5 shadow-sm">
+                            <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <span>Prazo Limite: {act.deadline || 'Sem data'}</span>
+                          </span>
+
+                          {/* Submission Status Badges */}
+                          {act.totalSubmissions > 0 ? (
+                            <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-[#131b2e] text-white border border-white/10 flex items-center gap-1.5">
+                              👥 {act.totalSubmissions}/{act.totalStudents} Entregas
+                            </span>
+                          ) : (
+                            <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-[#131b2e] text-[#bccabb] border border-white/5">
+                              📜 0 Entregas (Pendente)
+                            </span>
                           )}
-                          {act.deadline && <span>⏱ Prazo: {act.deadline}</span>}
+
                           {act.pendingCorrection > 0 && (
-                            <span className="text-amber-300 font-semibold">
-                              📋 {act.pendingCorrection} Pendentes de Correção
+                            <span className="px-3 py-1 rounded-xl text-xs font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1.5">
+                              ⏳ {act.pendingCorrection} A Corrigir pelo Sensei
                             </span>
                           )}
-                          {act.averageGrade !== undefined && (
-                            <span className="text-[#4ade80] font-semibold">
-                              📊 Média: {act.averageGrade}
+
+                          {gradedCount > 0 && (
+                            <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+                              ✅ {gradedCount} Corrigidas
                             </span>
                           )}
-                          {act.completedDate && <span>📅 Concluído em {act.completedDate}</span>}
+
+                          {/* Returned Badges */}
+                          {ret1x > 0 && (
+                            <span className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-orange-500/15 text-orange-300 border border-orange-500/30">
+                              ↩️ {ret1x} Devolvida 1x
+                            </span>
+                          )}
+                          {ret2x > 0 && (
+                            <span className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-orange-600/20 text-orange-200 border border-orange-500/40">
+                              ↩️ {ret2x} Devolvida 2x
+                            </span>
+                          )}
+                          {ret3x > 0 && (
+                            <span className="px-2.5 py-1 rounded-xl text-xs font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                              🚨 {ret3x} Devolvida 3x
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
 
                     {/* Right Actions */}
-                    <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto pt-2 lg:pt-0 border-t lg:border-t-0 border-white/5">
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex flex-wrap items-center gap-2 w-full lg:w-auto pt-2 lg:pt-0 border-t lg:border-t-0 border-white/5"
+                    >
                       {onViewActivity && (
                         <button
                           onClick={() => onViewActivity(act)}
                           className="flex-1 sm:flex-none px-4 py-2.5 bg-[#1d273d] hover:bg-[#283654] text-[#dae2fd] hover:text-white rounded-full text-xs font-bold border border-white/10 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
-                          title="Ver detalhes da atividade criada"
+                          title="Ver detalhes e formulário da atividade"
                         >
                           <Eye className="w-4 h-4 text-sky-400 shrink-0" />
-                          <span>Ver Atividade</span>
+                          <span>Abrir Atividade</span>
                         </button>
                       )}
 
-                      {isCorrecoes && (
-                        <button
-                          onClick={() => onSelectActivityForGrading(act)}
-                          className="flex-1 sm:flex-none px-4 py-2.5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-[#4ade80]/10 cursor-pointer min-h-[44px]"
-                        >
-                          <CheckCheck className="w-4 h-4 stroke-[2.5] shrink-0" />
-                          <span>{act.pendingCorrection > 0 ? `Corrigir (${act.pendingCorrection})` : 'Acessar Correções'}</span>
-                        </button>
-                      )}
+                      <button
+                        onClick={() => onSelectActivityForGrading(act)}
+                        className="flex-1 sm:flex-none px-4 py-2.5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-[#4ade80]/10 cursor-pointer min-h-[44px]"
+                      >
+                        <CheckCheck className="w-4 h-4 stroke-[2.5] shrink-0" />
+                        <span>{act.pendingCorrection > 0 ? `Corrigir (${act.pendingCorrection})` : 'Acessar Correções'}</span>
+                      </button>
 
                       {!isCorrecoes && (
                         <>

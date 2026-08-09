@@ -29,6 +29,9 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   const [deadline, setDeadline] = useState('');
   const [maxGrade, setMaxGrade] = useState<number>(10);
   const [allowGroupWork, setAllowGroupWork] = useState<boolean>(false);
+  const [securityFocusLock, setSecurityFocusLock] = useState<boolean>(false);
+  const [securityBlockCopyStatement, setSecurityBlockCopyStatement] = useState<boolean>(false);
+  const [securityBlockPasteEssay, setSecurityBlockPasteEssay] = useState<boolean>(false);
   const [questions, setQuestions] = useState<ActivityQuestion[]>([]);
 
   if (activity && activity.id !== prevActivityId) {
@@ -43,6 +46,9 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
     setDeadline(activity.deadline || '');
     setMaxGrade(activity.maxGrade ?? 10);
     setAllowGroupWork(!!activity.allowGroupWork);
+    setSecurityFocusLock(!!activity.securityFocusLock);
+    setSecurityBlockCopyStatement(!!activity.securityBlockCopyStatement);
+    setSecurityBlockPasteEssay(!!activity.securityBlockPasteEssay);
     setQuestions(activity.questions ? JSON.parse(JSON.stringify(activity.questions)) : []);
   }
 
@@ -124,6 +130,9 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       deadline: deadline.trim() || 'Amanhã, 23:59',
       maxGrade,
       allowGroupWork,
+      securityFocusLock,
+      securityBlockCopyStatement,
+      securityBlockPasteEssay,
       questions,
     };
 
@@ -247,6 +256,80 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
               placeholder="Ex: 15/08/2026 às 23:59"
               className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#4ade80]"
             />
+          </div>
+
+          {/* Group Work Option */}
+          <div className="bg-[#131b2e]/60 p-4 rounded-2xl border border-white/5">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={allowGroupWork}
+                onChange={(e) => setAllowGroupWork(e.target.checked)}
+                className="w-5 h-5 rounded border-white/20 bg-[#131b2e] text-[#4ade80] focus:ring-[#4ade80] focus:ring-offset-0 cursor-pointer"
+              />
+              <div>
+                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-[#4ade80]" />
+                  Permitir Atividade em Grupo?
+                </span>
+                <p className="text-[10px] text-[#bccabb]">
+                  Quando ativo, os alunos podem escolher os membros da equipe no envio.
+                </p>
+              </div>
+            </label>
+          </div>
+
+          {/* Travas de Segurança Anti-Cola */}
+          <div className="bg-[#131b2e] p-4 rounded-2xl border border-amber-500/30 space-y-3">
+            <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-2">
+              <span>🛡️ Travas de Segurança Anti-Cola</span>
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              <label className="flex items-start gap-2.5 cursor-pointer bg-[#0b1326] p-3 rounded-xl border border-white/10 hover:border-amber-500/40 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={securityFocusLock}
+                  onChange={(e) => setSecurityFocusLock(e.target.checked)}
+                  className="w-4 h-4 rounded border-white/20 bg-[#131b2e] text-[#4ade80] focus:ring-[#4ade80] mt-0.5"
+                />
+                <div>
+                  <span className="text-xs font-bold text-white block">Trava de Foco</span>
+                  <span className="text-[10px] text-[#bccabb] block leading-tight mt-0.5">
+                    Gera avisos ao sair da tela e auto-entrega no 4º aviso.
+                  </span>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-2.5 cursor-pointer bg-[#0b1326] p-3 rounded-xl border border-white/10 hover:border-amber-500/40 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={securityBlockCopyStatement}
+                  onChange={(e) => setSecurityBlockCopyStatement(e.target.checked)}
+                  className="w-4 h-4 rounded border-white/20 bg-[#131b2e] text-[#4ade80] focus:ring-[#4ade80] mt-0.5"
+                />
+                <div>
+                  <span className="text-xs font-bold text-white block">Bloquear Cópia</span>
+                  <span className="text-[10px] text-[#bccabb] block leading-tight mt-0.5">
+                    Impede copiar enunciados com Ctrl+C e botão direito.
+                  </span>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-2.5 cursor-pointer bg-[#0b1326] p-3 rounded-xl border border-white/10 hover:border-amber-500/40 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={securityBlockPasteEssay}
+                  onChange={(e) => setSecurityBlockPasteEssay(e.target.checked)}
+                  className="w-4 h-4 rounded border-white/20 bg-[#131b2e] text-[#4ade80] focus:ring-[#4ade80] mt-0.5"
+                />
+                <div>
+                  <span className="text-xs font-bold text-white block">Bloquear Cola</span>
+                  <span className="text-[10px] text-[#bccabb] block leading-tight mt-0.5">
+                    Bloqueia colar texto (Ctrl+V) na resposta dissertativa.
+                  </span>
+                </div>
+              </label>
+            </div>
           </div>
 
           {/* Description */}

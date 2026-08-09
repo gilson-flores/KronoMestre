@@ -1,14 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   initialTeacher,
   initialStudents,
   initialActivities,
   initialSchedule,
   initialLibrary,
+  initialChatMessages,
 } from '@/lib/initialData';
-import { UserRole, TeacherUser, StudentUser, Activity } from '@/lib/types';
+import { UserRole, TeacherUser, StudentUser, Activity, ChatMessage } from '@/lib/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { AuthView } from '@/components/AuthView';
 import { Sidebar } from '@/components/Sidebar';
@@ -18,12 +19,14 @@ import { GradingView } from '@/components/views/GradingView';
 import { StudentsView } from '@/components/views/StudentsView';
 import { LibraryView } from '@/components/views/LibraryView';
 import { StudentPortalView } from '@/components/views/StudentPortalView';
+import { MessagesView } from '@/components/views/MessagesView';
 
 import { NewActivityModal } from '@/components/modals/NewActivityModal';
 import { EditActivityModal } from '@/components/modals/EditActivityModal';
 import { ViewActivityModal } from '@/components/modals/ViewActivityModal';
 import { NewStudentModal } from '@/components/modals/NewStudentModal';
 import { EditStudentModal } from '@/components/modals/EditStudentModal';
+import { StudentSupervisionModal } from '@/components/modals/StudentSupervisionModal';
 import { CheckCircle2, AlertTriangle } from 'lucide-react';
 
 export default function Home() {
@@ -37,9 +40,11 @@ export default function Home() {
   const [activities, setActivities] = useState<Activity[]>(initialActivities);
   const [schedule] = useState(initialSchedule);
   const [library] = useState(initialLibrary);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
 
-  // Active view tab: 'painel' | 'atividades' | 'alunos' | 'horarios' | 'arquivos' | 'grading' | 'configuracoes'
+  // Active view tab: 'painel' | 'atividades' | 'alunos' | 'horarios' | 'arquivos' | 'grading' | 'mensagens' | 'configuracoes'
   const [currentTab, setCurrentTab] = useState('painel');
+
   const [selectedActivityForGrading, setSelectedActivityForGrading] = useState<Activity | null>(null);
 
   // Global search input
@@ -52,6 +57,7 @@ export default function Home() {
   const [isNewActivityModalOpen, setIsNewActivityModalOpen] = useState(false);
   const [isNewStudentModalOpen, setIsNewStudentModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<StudentUser | null>(null);
+  const [supervisingStudent, setSupervisingStudent] = useState<StudentUser | null>(null);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [isEditActivityModalOpen, setIsEditActivityModalOpen] = useState(false);
   const [viewingActivity, setViewingActivity] = useState<Activity | null>(null);
@@ -225,6 +231,9 @@ export default function Home() {
         deadline: newAct.deadline || '',
         max_grade: newAct.maxGrade || 10,
         allow_group_work: newAct.allowGroupWork || false,
+        security_focus_lock: newAct.securityFocusLock || false,
+        security_block_copy_statement: newAct.securityBlockCopyStatement || false,
+        security_block_paste_essay: newAct.securityBlockPasteEssay || false,
         questions: newAct.questions || [],
         total_submissions: newAct.totalSubmissions || 0,
         total_students: newAct.totalStudents || 0,
@@ -349,11 +358,23 @@ export default function Home() {
     }
 
     try {
+      const targetActivity = activities.find((a) => a.id === activityId);
+      const currentSub = targetActivity?.submissions.find((s) => s.studentId === studentId);
+      const currentReturnCount = currentSub?.returnCount || 0;
+
+      if (status === 'returned' && currentReturnCount >= 3) {
+        showGlobalStatus('error', '🚨 Bloqueio Ninja: Esta atividade já foi devolvida 3 vezes. A 4ª devolução está bloqueada! Atribua a nota final e conclua a avaliação.');
+        return;
+      }
+
+      const newReturnCount = status === 'returned' ? currentReturnCount + 1 : currentReturnCount;
+
       const updatePayload: any = {
         essay_score: essayScore,
         teacher_feedback: feedback,
         status: status,
       };
+      if (status === 'returned') updatePayload.return_count = newReturnCount;
       if (extraPoints !== undefined) updatePayload.extra_points = extraPoints;
       if (registeredInStateSystem !== undefined) updatePayload.registered_in_state_system = registeredInStateSystem;
 
@@ -364,9 +385,19 @@ export default function Home() {
         .eq('student_id', studentId);
 
       if (error) {
-        console.error('Erro ao atualizar nota no Supabase:', error);
-        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Falha ao atualizar nota no Supabase (${error.code || 'BD'}): ${error.message}`);
-        return;
+        // If return_count column is missing in Supabase, retry without return_count
+        if (error.message?.includes('return_count') || error.code === 'PGRST204') {
+          delete updatePayload.return_count;
+          await supabase
+            .from('submissions')
+            .update(updatePayload)
+            .eq('activity_id', activityId)
+            .eq('student_id', studentId);
+        } else {
+          console.error('Erro ao atualizar nota no Supabase:', error);
+          showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Falha ao atualizar nota no Supabase (${error.code || 'BD'}): ${error.message}`);
+          return;
+        }
       }
 
       setActivities((prev) =>
@@ -380,6 +411,7 @@ export default function Home() {
                 essayScore,
                 teacherFeedback: feedback,
                 status,
+                returnCount: status === 'returned' ? (sub.returnCount || 0) + 1 : sub.returnCount,
                 extraPoints: extraPoints !== undefined ? extraPoints : sub.extraPoints,
                 registeredInStateSystem:
                   registeredInStateSystem !== undefined ? registeredInStateSystem : sub.registeredInStateSystem,
@@ -410,6 +442,7 @@ export default function Home() {
                     essayScore,
                     teacherFeedback: feedback,
                     status,
+                    returnCount: status === 'returned' ? (sub.returnCount || 0) + 1 : sub.returnCount,
                     extraPoints: extraPoints !== undefined ? extraPoints : sub.extraPoints,
                     registeredInStateSystem:
                       registeredInStateSystem !== undefined ? registeredInStateSystem : sub.registeredInStateSystem,
@@ -434,7 +467,8 @@ export default function Home() {
     objectiveScore: number = 0,
     maxObjectiveScore: number = 5.0,
     maxEssayScore: number = 5.0,
-    selectedObjectiveAnswers?: { [questionId: string]: number }
+    selectedObjectiveAnswers?: { [questionId: string]: number },
+    groupMembers?: string
   ) => {
     if (!currentStudent) return;
 
@@ -468,6 +502,7 @@ export default function Home() {
             max_objective_score: maxObjectiveScore,
             max_essay_score: maxEssayScore,
             selected_objective_answers: selectedObjectiveAnswers || {},
+            group_members: groupMembers || null,
             status: 'pending',
           })
           .eq('id', existingSub.id);
@@ -486,6 +521,7 @@ export default function Home() {
           max_objective_score: maxObjectiveScore,
           max_essay_score: maxEssayScore,
           selected_objective_answers: selectedObjectiveAnswers || {},
+          group_members: groupMembers || null,
         });
         saveErr = error;
       }
@@ -513,6 +549,7 @@ export default function Home() {
                     maxObjectiveScore,
                     maxEssayScore,
                     selectedObjectiveAnswers,
+                    groupMembers: groupMembers !== undefined ? groupMembers : s.groupMembers,
                     status: 'pending' as const,
                   }
                 : s
@@ -531,6 +568,7 @@ export default function Home() {
               status: 'pending',
               essayAnswer,
               selectedObjectiveAnswers,
+              groupMembers: groupMembers || undefined,
               teacherFeedback: '',
             });
           }
@@ -670,12 +708,90 @@ export default function Home() {
   };
 
   const handleSuperviseStudent = (student: StudentUser) => {
-    alert(`Supervisionando desempenho do aluno: ${student.fullName} (Matrícula: ${student.matricula})`);
+    setSupervisingStudent(student);
   };
 
   const handleGenerateDossier = (act: Activity) => {
     alert(`Dossiê em PDF/Planilha gerado com sucesso para a atividade: ${act.title}`);
   };
+
+  // Messaging Handlers
+  const handleSendMessage = (msgData: {
+    threadId: string;
+    senderId: string;
+    senderName: string;
+    senderRole: 'teacher' | 'student';
+    senderAvatar?: string;
+    recipientId: string;
+    recipientName: string;
+    content: string;
+    activityId?: string;
+    activityTitle?: string;
+  }) => {
+    const now = new Date();
+    const formattedDate = `${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    const newMsg: ChatMessage = {
+      id: `msg-${Date.now()}`,
+      threadId: msgData.threadId,
+      senderId: msgData.senderId,
+      senderName: msgData.senderName,
+      senderRole: msgData.senderRole,
+      senderAvatar: msgData.senderAvatar,
+      recipientId: msgData.recipientId,
+      recipientName: msgData.recipientName,
+      content: msgData.content,
+      createdAt: formattedDate,
+      read: false,
+      activityId: msgData.activityId,
+      activityTitle: msgData.activityTitle,
+    };
+
+    setChatMessages((prev) => [...prev, newMsg]);
+
+    if (isSupabaseConfigured && supabase) {
+      supabase.from('chat_messages').insert({
+        thread_id: msgData.threadId,
+        sender_id: msgData.senderId,
+        sender_name: msgData.senderName,
+        sender_role: msgData.senderRole,
+        sender_avatar: msgData.senderAvatar,
+        recipient_id: msgData.recipientId,
+        recipient_name: msgData.recipientName,
+        content: msgData.content,
+        created_at: now.toISOString(),
+        read: false,
+        activity_id: msgData.activityId,
+        activity_title: msgData.activityTitle,
+      }).then(({ error }) => {
+        if (error) console.log('Tabela chat_messages no Supabase (opcional):', error.message);
+      });
+    }
+  };
+
+  const handleMarkThreadAsRead = useCallback((threadId: string, currentRole: 'teacher' | 'student') => {
+    setChatMessages((prev) => {
+      const hasUnread = prev.some(
+        (m) => (m.threadId === threadId || m.recipientId === threadId || m.senderId === threadId) &&
+               m.senderRole !== currentRole &&
+               !m.read
+      );
+      if (!hasUnread) return prev;
+      return prev.map((m) => {
+        if (
+          (m.threadId === threadId || m.recipientId === threadId || m.senderId === threadId) &&
+          m.senderRole !== currentRole &&
+          !m.read
+        ) {
+          return { ...m, read: true };
+        }
+        return m;
+      });
+    });
+  }, []);
+
+  const teacherUnreadMessagesCount = chatMessages.filter(
+    (m) => m.senderRole === 'student' && !m.read
+  ).length;
 
   // 1. Unauthenticated state -> Show Login Screen
   if (!role) {
@@ -694,10 +810,15 @@ export default function Home() {
     return (
       <StudentPortalView
         student={currentStudent}
+        teacher={teacher}
         activities={activities}
         libraryFiles={library}
+        messages={chatMessages}
+        students={students}
         onLogout={handleLogout}
         onSubmitAnswer={handleStudentSubmitAnswer}
+        onSendMessage={handleSendMessage}
+        onMarkThreadAsRead={handleMarkThreadAsRead}
       />
     );
   }
@@ -717,7 +838,9 @@ export default function Home() {
         onLogout={handleLogout}
         isMobileOpen={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
+        unreadMessagesCount={teacherUnreadMessagesCount}
       />
+
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 max-w-full">
@@ -814,7 +937,20 @@ export default function Home() {
             )
           )}
 
+          {currentTab === 'mensagens' && (
+            <MessagesView
+              currentUserRole="teacher"
+              teacher={teacher}
+              students={students}
+              activities={activities}
+              messages={chatMessages}
+              onSendMessage={handleSendMessage}
+              onMarkThreadAsRead={handleMarkThreadAsRead}
+            />
+          )}
+
           {currentTab === 'alunos' && (
+
             <StudentsView
               students={students}
               onOpenNewStudentModal={() => setIsNewStudentModalOpen(true)}
@@ -1033,6 +1169,17 @@ export default function Home() {
         student={editingStudent}
         onClose={() => setEditingStudent(null)}
         onSaveStudent={handleSaveStudent}
+      />
+
+      <StudentSupervisionModal
+        isOpen={Boolean(supervisingStudent)}
+        student={supervisingStudent}
+        activities={activities}
+        onClose={() => setSupervisingStudent(null)}
+        onSendMessage={(st) => {
+          setSupervisingStudent(null);
+          setCurrentTab('mensagens');
+        }}
       />
     </div>
   );

@@ -38,6 +38,7 @@ export interface ActivitySubmission {
   teacherFeedback?: string;
   registeredInStateSystem?: boolean; // Atividade já registrada no sistema do estado (RCO/SED)
   groupMembers?: string; // Nomes dos alunos do grupo
+  returnCount?: number; // Contador de devoluções pelo professor (1x, 2x, 3x; 4ª bloqueada)
 }
 
 export interface MultipleChoiceQuestion {
@@ -100,3 +101,33 @@ export interface LibraryFile {
   updatedAt: string;
   driveUrl?: string;
 }
+
+export interface ChatMessage {
+  id: string;
+  threadId: string; // ID da conversa (ex: studentId)
+  senderId: string;
+  senderName: string;
+  senderRole: 'teacher' | 'student';
+  senderAvatar?: string;
+  recipientId: string;
+  recipientName: string;
+  content: string;
+  createdAt: string; // ISO string ou HH:mm
+  read?: boolean;
+  activityId?: string; // Opcional: vinculado a uma atividade
+  activityTitle?: string;
+}
+
+export interface ChatThread {
+  id: string; // id do aluno
+  studentId: string;
+  studentName: string;
+  studentTurma: string;
+  studentAvatar: string;
+  lastMessage?: string;
+  lastMessageAt?: string;
+  unreadCountTeacher?: number;
+  unreadCountStudent?: number;
+}
+
+

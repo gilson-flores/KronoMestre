@@ -621,6 +621,21 @@ export const GradingView: React.FC<GradingViewProps> = ({
           </div>
 
           <div className="flex flex-col items-end gap-1.5">
+            {/* Return Count Badge */}
+            {sub.returnCount && sub.returnCount > 0 ? (
+              <span
+                className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${
+                  sub.returnCount === 3
+                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                    : sub.returnCount === 2
+                    ? 'bg-orange-600/20 text-orange-200 border-orange-500/40'
+                    : 'bg-orange-500/20 text-orange-300 border-orange-500/30'
+                }`}
+              >
+                ↩️ Devolvida {sub.returnCount}x {sub.returnCount >= 3 ? '(4ª Bloqueada)' : ''}
+              </span>
+            ) : null}
+
             {sub.tag && (
               <span
                 className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
@@ -856,13 +871,29 @@ export const GradingView: React.FC<GradingViewProps> = ({
             <span>{sub.status === 'graded' ? 'Salvar Nota' : 'Salvar e Finalizar'}</span>
           </button>
 
-          <button
-            onClick={() => handleSave(sub.studentId, 'returned')}
-            className="py-3 px-4 bg-transparent hover:bg-white/5 text-[#dae2fd] font-bold rounded-full text-xs border border-white/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
-          >
-            <RotateCcw className="w-4 h-4" />
-            <span>Devolver para Refazer</span>
-          </button>
+          {(sub.returnCount || 0) >= 3 ? (
+            <button
+              type="button"
+              onClick={() => {
+                alert('🚨 Bloqueio Ninja: Esta atividade já foi devolvida 3 vezes ao aluno. A 4ª devolução está BLOQUEADA! Por favor, atribua a nota final e clique em Salvar e Finalizar.');
+              }}
+              className="py-3 px-4 bg-rose-500/10 text-rose-300 font-bold rounded-full text-xs border border-rose-500/30 flex items-center justify-center gap-2 transition-all cursor-not-allowed opacity-90"
+              title="A 4ª devolução está bloqueada pelo sistema. Atribua a nota final."
+            >
+              <RotateCcw className="w-4 h-4 text-rose-400" />
+              <span>Devolvida 3x (4ª Bloqueada)</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => handleSave(sub.studentId, 'returned')}
+              className="py-3 px-4 bg-transparent hover:bg-white/5 text-[#dae2fd] font-bold rounded-full text-xs border border-white/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>
+                {sub.returnCount ? `Devolver para Refazer (${sub.returnCount}x)` : 'Devolver para Refazer'}
+              </span>
+            </button>
+          )}
         </div>
       </div>
     );
