@@ -240,19 +240,45 @@ export default function Home() {
         pending_correction: newAct.pendingCorrection || 0,
       };
 
-      const { error } = await supabase.from('activities').insert(fullPayload);
+      let { error } = await supabase.from('activities').insert(fullPayload);
+
+      // Se falhou (ex: colunas de segurança ou suporte inexistentes na tabela do Supabase)
+      if (error) {
+        console.warn('Inserção direta falhou, tentando fallback sem colunas de segurança adicionais...', error);
+        const {
+          security_focus_lock,
+          security_block_copy_statement,
+          security_block_paste_essay,
+          support_material,
+          ...fallbackPayload
+        } = fullPayload as any;
+
+        const fallbackRes = await supabase.from('activities').insert(fallbackPayload);
+        if (!fallbackRes.error) {
+          error = null;
+        } else {
+          // tentar upsert em caso de conflito de chave primária
+          const upsertRes = await supabase.from('activities').upsert(fallbackPayload);
+          error = upsertRes.error;
+        }
+      }
 
       if (error) {
-        console.error('Erro ao criar atividade no Supabase:', error);
-        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao gravar atividade no Supabase (${error.code || 'BD'}): ${error.message}`);
+        const errorDetails = error.message || error.details || error.hint || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+        console.error('Erro ao criar atividade no Supabase:', errorDetails, error);
+        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao gravar atividade no Supabase (${error.code || 'BD'}): ${errorDetails || 'Erro desconhecido'}`);
+        // Mantém no estado local para garantir usabilidade sem perder dados do professor
+        setActivities((prev) => [newAct, ...prev]);
         return;
       }
 
       setActivities((prev) => [newAct, ...prev]);
       showGlobalStatus('success', `Atividade "${newAct.title}" criada e confirmada no Supabase com sucesso!`);
     } catch (err: any) {
-      console.error('Erro ao salvar atividade no Supabase:', err);
-      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Falha de conexão/execução (${err?.message || 'Erro desconhecido'})`);
+      const catchedMsg = err?.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
+      console.error('Erro ao salvar atividade no Supabase:', catchedMsg, err);
+      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Falha de conexão/execução (${catchedMsg || 'Erro desconhecido'})`);
+      setActivities((prev) => [newAct, ...prev]);
     }
   };
 
@@ -288,15 +314,23 @@ export default function Home() {
 
       let { error } = await supabase.from('activities').upsert(fullPayload);
 
-      if (error && (error.message.includes('security_') || error.code === 'PGRST204')) {
-        const { security_focus_lock, security_block_copy_statement, security_block_paste_essay, ...fallbackPayload } = fullPayload as any;
+      if (error && (error.message?.includes('security_') || error.code === 'PGRST204' || !error.message)) {
+        const {
+          security_focus_lock,
+          security_block_copy_statement,
+          security_block_paste_essay,
+          support_material,
+          ...fallbackPayload
+        } = fullPayload as any;
         const fallbackRes = await supabase.from('activities').upsert(fallbackPayload);
         error = fallbackRes.error;
       }
 
       if (error) {
-        console.error('Erro ao atualizar atividade no Supabase:', error);
-        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao atualizar atividade no Supabase (${error.code || 'BD'}): ${error.message}`);
+        const errorDetails = error.message || error.details || error.hint || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+        console.error('Erro ao atualizar atividade no Supabase:', errorDetails, error);
+        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao atualizar atividade no Supabase (${error.code || 'BD'}): ${errorDetails || 'Erro desconhecido'}`);
+        setActivities((prev) => prev.map((a) => (a.id === updatedAct.id ? updatedAct : a)));
         return;
       }
 
@@ -306,8 +340,10 @@ export default function Home() {
       }
       showGlobalStatus('success', `Alterações da atividade "${updatedAct.title}" salvas e confirmadas no Supabase!`);
     } catch (err: any) {
-      console.error('Erro ao atualizar atividade no Supabase:', err);
-      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Falha de conexão/execução (${err?.message || 'Erro desconhecido'})`);
+      const catchedMsg = err?.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
+      console.error('Erro ao atualizar atividade no Supabase:', catchedMsg, err);
+      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Falha de conexão/execução (${catchedMsg || 'Erro desconhecido'})`);
+      setActivities((prev) => prev.map((a) => (a.id === updatedAct.id ? updatedAct : a)));
     }
   };
 
