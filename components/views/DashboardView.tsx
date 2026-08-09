@@ -16,7 +16,13 @@ import {
   TrendingUp,
   Layers,
   Award,
-  Eye
+  Eye,
+  ShieldAlert,
+  ShieldCheck,
+  Lock,
+  X,
+  CopyX,
+  ClipboardX
 } from 'lucide-react';
 import { Activity } from '@/lib/types';
 
@@ -28,6 +34,7 @@ interface DashboardViewProps {
   onViewActivity?: (act: Activity) => void;
   onGenerateDossier: (act: Activity) => void;
   onDeleteActivity?: (act: Activity) => void;
+  onSaveActivity?: (act: Activity) => void;
   title?: string;
   subtitle?: string;
   showStats?: boolean;
@@ -42,6 +49,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onViewActivity,
   onGenerateDossier,
   onDeleteActivity,
+  onSaveActivity,
   title = 'Studio',
   subtitle = 'Gerencie avaliações, redações e dinâmicas das suas turmas.',
   showStats = true,
@@ -49,6 +57,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const isCorrecoes = isCorrecoesTab || title === 'Correções';
   const [activityToDelete, setActivityToDelete] = useState<Activity | null>(null);
+  const [securityModalActivity, setSecurityModalActivity] = useState<Activity | null>(null);
+
+  // Local state inside security modal
+  const [secFocusLock, setSecFocusLock] = useState(false);
+  const [secCopyStatement, setSecCopyStatement] = useState(false);
+  const [secPasteEssay, setSecPasteEssay] = useState(false);
+
+  const handleOpenSecurityModal = (act: Activity) => {
+    setSecurityModalActivity(act);
+    setSecFocusLock(Boolean(act.securityFocusLock));
+    setSecCopyStatement(Boolean(act.securityBlockCopyStatement));
+    setSecPasteEssay(Boolean(act.securityBlockPasteEssay));
+  };
+
+  const handleSaveSecuritySettings = () => {
+    if (!securityModalActivity) return;
+    const updated: Activity = {
+      ...securityModalActivity,
+      securityFocusLock: secFocusLock,
+      securityBlockCopyStatement: secCopyStatement,
+      securityBlockPasteEssay: secPasteEssay,
+    };
+    if (onSaveActivity) {
+      onSaveActivity(updated);
+    }
+    setSecurityModalActivity(null);
+  };
 
   // Calculate top KPI stats from real state
   const totalActivities = activities.length;
@@ -255,6 +290,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           <span className="text-[11px] font-semibold bg-[#171f33] text-[#bccabb] px-3 py-0.5 rounded-full border border-white/5">
                             {act.turma}
                           </span>
+
+                          {/* Anti-Cola Badges */}
+                          {act.securityFocusLock && (
+                            <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1" title="Trava de Foco: Avisos ao mudar de tela (auto-entrega no 4º desvio)">
+                              <ShieldAlert className="w-3 h-3 text-amber-400" />
+                              <span>Trava de Foco</span>
+                            </span>
+                          )}
+                          {act.securityBlockCopyStatement && (
+                            <span className="text-[10px] font-bold bg-rose-500/20 text-rose-300 px-2.5 py-0.5 rounded-full border border-rose-500/30 flex items-center gap-1" title="Cópia dos enunciados bloqueada">
+                              <CopyX className="w-3 h-3 text-rose-400" />
+                              <span>Sem Cópia</span>
+                            </span>
+                          )}
+                          {act.securityBlockPasteEssay && (
+                            <span className="text-[10px] font-bold bg-purple-500/20 text-purple-300 px-2.5 py-0.5 rounded-full border border-purple-500/30 flex items-center gap-1" title="Colar em respostas dissertativas bloqueado">
+                              <ClipboardX className="w-3 h-3 text-purple-400" />
+                              <span>Sem Cola</span>
+                            </span>
+                          )}
                         </div>
 
                         {/* Sub-details */}
@@ -279,14 +334,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     </div>
 
                     {/* Right Actions */}
-                    <div className="flex flex-wrap items-center gap-2.5 self-end lg:self-center">
+                    <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto pt-2 lg:pt-0 border-t lg:border-t-0 border-white/5">
                       {onViewActivity && (
                         <button
                           onClick={() => onViewActivity(act)}
-                          className="px-4 py-2 bg-[#1d273d] hover:bg-[#283654] text-[#dae2fd] hover:text-white rounded-full text-xs font-bold border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+                          className="flex-1 sm:flex-none px-4 py-2.5 bg-[#1d273d] hover:bg-[#283654] text-[#dae2fd] hover:text-white rounded-full text-xs font-bold border border-white/10 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
                           title="Ver detalhes da atividade criada"
                         >
-                          <Eye className="w-3.5 h-3.5 text-sky-400" />
+                          <Eye className="w-4 h-4 text-sky-400 shrink-0" />
                           <span>Ver Atividade</span>
                         </button>
                       )}
@@ -294,29 +349,43 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       {isCorrecoes && (
                         <button
                           onClick={() => onSelectActivityForGrading(act)}
-                          className="px-4 py-2 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full text-xs flex items-center gap-1.5 transition-all shadow-md shadow-[#4ade80]/10 cursor-pointer"
+                          className="flex-1 sm:flex-none px-4 py-2.5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-[#4ade80]/10 cursor-pointer min-h-[44px]"
                         >
-                          <CheckCheck className="w-4 h-4 stroke-[2.5]" />
+                          <CheckCheck className="w-4 h-4 stroke-[2.5] shrink-0" />
                           <span>{act.pendingCorrection > 0 ? `Corrigir (${act.pendingCorrection})` : 'Acessar Correções'}</span>
                         </button>
                       )}
 
                       {!isCorrecoes && (
-                        <button
-                          onClick={() => onEditActivity(act)}
-                          className="px-4 py-2 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] hover:text-white rounded-full text-xs font-bold border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer"
-                        >
-                          <Pencil className="w-3.5 h-3.5 text-[#4ade80]" />
-                          <span>Editar</span>
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleOpenSecurityModal(act)}
+                            className="flex-1 sm:flex-none px-4 py-2.5 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] hover:text-white rounded-full text-xs font-bold border border-white/10 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
+                            title="Configurar Trava de Foco, Cópia de Enunciado e Cola de Redação"
+                          >
+                            <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <span>Anti-Cola</span>
+                            {(act.securityFocusLock || act.securityBlockCopyStatement || act.securityBlockPasteEssay) && (
+                              <span className="w-2 h-2 rounded-full bg-[#4ade80]" />
+                            )}
+                          </button>
+
+                          <button
+                            onClick={() => onEditActivity(act)}
+                            className="flex-1 sm:flex-none px-4 py-2.5 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] hover:text-white rounded-full text-xs font-bold border border-white/10 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-[#4ade80] shrink-0" />
+                            <span>Editar</span>
+                          </button>
+                        </>
                       )}
 
                       {act.status === 'Prazo Encerrado' && (
                         <button
                           onClick={() => onGenerateDossier(act)}
-                          className="px-4 py-2 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] rounded-full text-xs font-bold border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer"
+                          className="flex-1 sm:flex-none px-4 py-2.5 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] rounded-full text-xs font-bold border border-white/10 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
                         >
-                          <FileSpreadsheet className="w-3.5 h-3.5 text-[#c0c1ff]" />
+                          <FileSpreadsheet className="w-3.5 h-3.5 text-[#c0c1ff] shrink-0" />
                           <span>Gerar Dossiê</span>
                         </button>
                       )}
@@ -324,11 +393,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       {!isCorrecoes && onDeleteActivity && (
                         <button
                           onClick={() => setActivityToDelete(act)}
-                          className="px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 rounded-full text-xs font-bold border border-rose-500/20 flex items-center gap-1.5 transition-colors cursor-pointer"
+                          className="px-3.5 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 rounded-full text-xs font-bold border border-rose-500/20 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
                           title="Excluir Atividade"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">Excluir</span>
+                          <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                          <span>Excluir</span>
                         </button>
                       )}
                     </div>
@@ -379,6 +448,155 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 Sim, Excluir Atividade
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Anti-Cola Security Configuration Modal */}
+      {securityModalActivity && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn overflow-y-auto">
+          <div className="bg-[#0e172a] border border-white/15 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-6 relative my-auto">
+            
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-white/10 pb-4 pr-8">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-amber-500/10 text-amber-400 rounded-2xl border border-amber-500/20 shrink-0">
+                  <ShieldAlert className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-extrabold text-white">Seguranças Anti-Cola (Studio)</h3>
+                  <p className="text-xs text-[#bccabb]">
+                    Atividade: <span className="text-white font-semibold">{securityModalActivity.title}</span> ({securityModalActivity.turma})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSecurityModalActivity(null)}
+                className="p-2 text-[#bccabb] hover:text-white rounded-full hover:bg-white/5 transition-colors cursor-pointer absolute top-4 right-4 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                aria-label="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Toggles */}
+            <div className="space-y-4">
+              
+              {/* Trava 1: Trava de Foco */}
+              <div className="bg-[#131b2e] p-4 rounded-2xl border border-white/10 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      <ShieldAlert className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white">1. Trava de Foco (Desvio de Tela)</h4>
+                      <p className="text-[11px] text-amber-300 font-semibold">
+                        Aviso ao sair da tela • Máx 4 avisos • Auto-entrega
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSecFocusLock(!secFocusLock)}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer min-h-[38px] ${
+                      secFocusLock
+                        ? 'bg-[#4ade80] text-[#003919] shadow-md shadow-[#4ade80]/10'
+                        : 'bg-[#171f33] text-[#bccabb] border border-white/10'
+                    }`}
+                  >
+                    {secFocusLock ? 'ATIVADA' : 'DESATIVADA'}
+                  </button>
+                </div>
+                <p className="text-[11px] text-[#bccabb] leading-relaxed pl-1 pt-1 border-t border-white/5">
+                  Se o aluno mudar de aba, janela ou aplicativo durante a prova, recebe um alerta. No 4º aviso, a atividade é finalizada e entregue automaticamente do jeito que está.
+                </p>
+              </div>
+
+              {/* Trava 2: Trava de Cópia dos Enunciados */}
+              <div className="bg-[#131b2e] p-4 rounded-2xl border border-white/10 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                      <CopyX className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white">2. Trava de Cópia dos Enunciados</h4>
+                      <p className="text-[11px] text-rose-300 font-semibold">
+                        Bloqueia seleção e Ctrl+C nos enunciados
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSecCopyStatement(!secCopyStatement)}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer min-h-[38px] ${
+                      secCopyStatement
+                        ? 'bg-[#4ade80] text-[#003919] shadow-md shadow-[#4ade80]/10'
+                        : 'bg-[#171f33] text-[#bccabb] border border-white/10'
+                    }`}
+                  >
+                    {secCopyStatement ? 'ATIVADA' : 'DESATIVADA'}
+                  </button>
+                </div>
+                <p className="text-[11px] text-[#bccabb] leading-relaxed pl-1 pt-1 border-t border-white/5">
+                  Cancela a seleção de texto, atalho de cópia (Ctrl+C) e o menu de contexto do botão direito nos textos e questões da atividade.
+                </p>
+              </div>
+
+              {/* Trava 3: Trava de Copia e Cola nas Respostas Dissertativas */}
+              <div className="bg-[#131b2e] p-4 rounded-2xl border border-white/10 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                      <ClipboardX className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white">3. Trava de Colar nas Respostas Dissertativas</h4>
+                      <p className="text-[11px] text-purple-300 font-semibold">
+                        Bloqueia Ctrl+V nas caixas de resposta
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSecPasteEssay(!secPasteEssay)}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer min-h-[38px] ${
+                      secPasteEssay
+                        ? 'bg-[#4ade80] text-[#003919] shadow-md shadow-[#4ade80]/10'
+                        : 'bg-[#171f33] text-[#bccabb] border border-white/10'
+                    }`}
+                  >
+                    {secPasteEssay ? 'ATIVADA' : 'DESATIVADA'}
+                  </button>
+                </div>
+                <p className="text-[11px] text-[#bccabb] leading-relaxed pl-1 pt-1 border-t border-white/5">
+                  Cancela a ação de colar textos (Ctrl+V) ou arrastar arquivos para dentro dos campos de resposta dissertativa / redação.
+                </p>
+              </div>
+
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setSecurityModalActivity(null)}
+                className="px-5 py-2.5 bg-white/10 hover:bg-white/15 text-white rounded-full text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveSecuritySettings}
+                className="px-6 py-2.5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-extrabold rounded-full text-xs transition-all shadow-md cursor-pointer flex items-center gap-2"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>Salvar Seguranças</span>
+              </button>
+            </div>
+
           </div>
         </div>
       )}

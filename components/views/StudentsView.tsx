@@ -131,27 +131,29 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                 </span>
               </div>
 
-              {/* Right Action buttons (Matching Image 3) */}
-              <div className="flex items-center gap-3">
+              {/* Right Action buttons */}
+              <div className="flex flex-wrap items-center gap-2.5 pt-3 md:pt-0 border-t md:border-t-0 border-white/5 w-full md:w-auto">
                 <button
                   onClick={() => onSuperviseStudent(student)}
-                  className="py-2.5 px-6 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full text-xs transition-all shadow-md cursor-pointer uppercase tracking-wider"
+                  className="flex-1 md:flex-none py-2.5 px-5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full text-xs transition-all shadow-md cursor-pointer uppercase tracking-wider min-h-[44px] flex items-center justify-center"
                 >
                   Supervisionar
                 </button>
 
                 <button
                   onClick={() => onEditStudent(student)}
-                  className="p-2.5 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] hover:text-white rounded-full border border-white/10 transition-colors cursor-pointer"
+                  className="p-2.5 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] hover:text-white rounded-full border border-white/10 transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
                   title="Editar Aluno"
+                  aria-label="Editar Aluno"
                 >
                   <Pencil className="w-4 h-4" />
                 </button>
 
                 <button
                   onClick={() => onDeleteStudent(student.id)}
-                  className="p-2.5 bg-[#171f33] hover:bg-rose-500/20 text-[#dae2fd] hover:text-rose-300 rounded-full border border-white/10 transition-colors cursor-pointer"
+                  className="p-2.5 bg-[#171f33] hover:bg-rose-500/20 text-[#dae2fd] hover:text-rose-300 rounded-full border border-white/10 transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
                   title="Excluir Aluno"
+                  aria-label="Excluir Aluno"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>

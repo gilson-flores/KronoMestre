@@ -420,53 +420,53 @@ export const GradingView: React.FC<GradingViewProps> = ({
       </div>
 
       {/* Correction Sub-Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-1">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 border-b border-white/10 pb-2">
         <button
           onClick={() => setActiveTab('fila')}
-          className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-4 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
             activeTab === 'fila'
               ? 'bg-[#4ade80] text-[#003919] shadow-md'
               : 'bg-[#131b2e] text-[#bccabb] hover:text-white hover:bg-[#1c263f]'
           }`}
         >
-          <Clock className="w-4 h-4" />
-          <span>Fila de Correção ({pendingQueue.length})</span>
+          <Clock className="w-4 h-4 shrink-0" />
+          <span>Fila ({pendingQueue.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('corrigidas')}
-          className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-4 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
             activeTab === 'corrigidas'
               ? 'bg-[#4ade80] text-[#003919] shadow-md'
               : 'bg-[#131b2e] text-[#bccabb] hover:text-white hover:bg-[#1c263f]'
           }`}
         >
-          <CheckCircle2 className="w-4 h-4" />
-          <span>Já Corrigidas ({gradedQueue.length})</span>
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>Corrigidas ({gradedQueue.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('devolvidas')}
-          className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-4 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
             activeTab === 'devolvidas'
               ? 'bg-sky-500 text-white shadow-md'
               : 'bg-[#131b2e] text-[#bccabb] hover:text-white hover:bg-[#1c263f]'
           }`}
         >
-          <RotateCcw className="w-4 h-4" />
+          <RotateCcw className="w-4 h-4 shrink-0" />
           <span>Devolvidas ({returnedQueue.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('nao_fizeram')}
-          className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-4 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
             activeTab === 'nao_fizeram'
               ? 'bg-rose-500 text-white shadow-md'
               : 'bg-[#131b2e] text-[#bccabb] hover:text-white hover:bg-[#1c263f]'
           }`}
         >
-          <UserX className="w-4 h-4" />
-          <span>Não Fizeram ({missingStudents.length})</span>
+          <UserX className="w-4 h-4 shrink-0" />
+          <span>Pendentes ({missingStudents.length})</span>
         </button>
       </div>
 

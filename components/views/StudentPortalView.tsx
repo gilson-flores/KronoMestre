@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StudentUser, Activity, LibraryFile, ActivityQuestion, MultipleChoiceQuestion, EssayQuestion } from '@/lib/types';
 import { canStudentAccessActivity, getActivityGradeDistribution } from '@/lib/studentUtils';
 import {
@@ -21,7 +21,10 @@ import {
   Sparkles,
   Check,
   X,
-  RotateCcw
+  RotateCcw,
+  ShieldAlert,
+  CopyX,
+  ClipboardX
 } from 'lucide-react';
 
 interface StudentPortalViewProps {
@@ -59,6 +62,20 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   // Toast / Submission feedback
   const [submissionSuccessMsg, setSubmissionSuccessMsg] = useState<string | null>(null);
 
+  // Anti-Cola Focus Lock Warning State per activity: { [activityId: string]: number }
+  const [focusWarnings, setFocusWarnings] = useState<{ [activityId: string]: number }>({});
+  // Security Modal Notification State: { activityTitle: string; warningCount: number; isAutoSubmitted?: boolean } | null
+  const [securityNotice, setSecurityNotice] = useState<{ activityTitle: string; warningCount: number; isAutoSubmitted?: boolean } | null>(null);
+  // Security Toast Message for blocked Copy/Paste actions
+  const [securityToast, setSecurityToast] = useState<string | null>(null);
+
+  const showSecurityToast = (msg: string) => {
+    setSecurityToast(msg);
+    setTimeout(() => {
+      setSecurityToast((current) => (current === msg ? null : current));
+    }, 4000);
+  };
+
   // Filter activities authorized for this student
   const authorizedActivities = activities.filter((a) =>
     canStudentAccessActivity(a.turma, student.turma)
@@ -79,6 +96,68 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     return sub && sub.status !== 'returned' && sub.status !== 'draft';
   });
 
+  // Effect: Trava de Foco (Avisos de mudança de tela e auto-entrega no 4º aviso)
+  useEffect(() => {
+    const focusLockedActs = pendingActivities.filter((a) => a.securityFocusLock);
+    if (focusLockedActs.length === 0 || activeTab !== 'atividades') return;
+
+    let isTriggeredInTurn = false;
+
+    const handleFocusLoss = () => {
+      if (isTriggeredInTurn) return;
+      isTriggeredInTurn = true;
+      setTimeout(() => { isTriggeredInTurn = false; }, 1000);
+
+      focusLockedActs.forEach((act) => {
+        const sub = act.submissions.find((s) => s.studentId === student.id || s.studentName === student.fullName);
+        if (sub && sub.status !== 'returned' && sub.status !== 'draft') return;
+
+        setFocusWarnings((prev) => {
+          const currentCount = prev[act.id] || 0;
+          const nextCount = currentCount + 1;
+
+          if (nextCount >= 4) {
+            // Auto-entrega no 4º aviso!
+            setTimeout(() => {
+              handleSubmit(act, true);
+            }, 100);
+            setSecurityNotice({
+              activityTitle: act.title,
+              warningCount: 4,
+              isAutoSubmitted: true,
+            });
+          } else {
+            setSecurityNotice({
+              activityTitle: act.title,
+              warningCount: nextCount,
+              isAutoSubmitted: false,
+            });
+          }
+
+          return { ...prev, [act.id]: nextCount };
+        });
+      });
+    };
+
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        handleFocusLoss();
+      }
+    };
+
+    const onWindowBlur = () => {
+      handleFocusLoss();
+    };
+
+    window.addEventListener('blur', onWindowBlur);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      window.removeEventListener('blur', onWindowBlur);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [pendingActivities, activeTab, student.id, student.fullName]);
+
   // Filter library files for this student's turma
   const studentLibraryFiles = libraryFiles.filter((file) =>
     !file.turma || file.turma === 'branco' || file.turma === 'Todas' || canStudentAccessActivity(file.turma, student.turma)
@@ -94,7 +173,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     }));
   };
 
-  const handleSubmit = (act: Activity) => {
+  const handleSubmit = (act: Activity, isAutoSubmit: boolean = false) => {
     const distribution = getActivityGradeDistribution(act);
     const questions = act.questions || [];
     const objectiveQuestions = questions.filter((q) => q.type === 'multiple_choice') as (ActivityQuestion & MultipleChoiceQuestion)[];
@@ -107,8 +186,8 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       ? essayInputs[act.id]
       : (existingSub?.essayAnswer || '');
 
-    // If there are essay questions, require text
-    if (essayQuestions.length > 0 && !essayText.trim()) {
+    // If there are essay questions, require text (unless it's an auto-submission by Anti-Cola focus lock)
+    if (!isAutoSubmit && essayQuestions.length > 0 && !essayText.trim()) {
       alert('Por favor, escreva sua resposta dissertativa antes de enviar a atividade.');
       return;
     }
@@ -128,7 +207,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     if (objectiveQuestions.length > 0) {
       calculatedObjectiveScore = (correctCount / objectiveQuestions.length) * distribution.maxObjectiveGrade;
     } else if (distribution.hasObjective) {
-      calculatedObjectiveScore = distribution.maxObjectiveGrade; // Fallback if no questions array defined
+      calculatedObjectiveScore = distribution.maxObjectiveGrade;
     }
 
     // Submit to parent
@@ -142,12 +221,14 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       studentChoices
     );
 
-    const msg = objectiveQuestions.length > 0
+    const msg = isAutoSubmit
+      ? `🚨 PROVA ENTREGUE AUTOMATICAMENTE! Atingido o limite de 4 avisos de desvio de foco.`
+      : objectiveQuestions.length > 0
       ? `Atividade enviada! Nota objetiva calculada na hora: ${calculatedObjectiveScore.toFixed(1)} / ${distribution.maxObjectiveGrade.toFixed(1)} pts. A parte dissertativa foi enviada para correção.`
       : `Atividade enviada com sucesso! Acompanhe a correção na aba "Correções".`;
 
     setSubmissionSuccessMsg(msg);
-    setTimeout(() => setSubmissionSuccessMsg(null), 5000);
+    setTimeout(() => setSubmissionSuccessMsg(null), 6000);
 
     // Switch to Correções tab automatically
     setActiveTab('correcoes');
@@ -205,20 +286,20 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       )}
 
       {/* Main 3 Abas Navigation */}
-      <div className="flex items-center gap-2 bg-[#131b2e] p-1.5 rounded-2xl border border-white/10">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-[#131b2e] p-1.5 rounded-2xl border border-white/10">
         <button
           onClick={() => setActiveTab('atividades')}
-          className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] ${
             activeTab === 'atividades'
               ? 'bg-[#4ade80] text-[#003919] shadow-md'
               : 'text-[#bccabb] hover:text-white hover:bg-white/5'
           }`}
         >
-          <FileText className="w-4 h-4" />
+          <FileText className="w-4 h-4 shrink-0" />
           <span>Atividades a Fazer</span>
           {pendingActivities.length > 0 && (
             <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 ${
                 activeTab === 'atividades'
                   ? 'bg-[#003919] text-[#4ade80]'
                   : 'bg-[#4ade80] text-[#003919]'
@@ -231,17 +312,17 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
         <button
           onClick={() => setActiveTab('correcoes')}
-          className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] ${
             activeTab === 'correcoes'
               ? 'bg-[#4ade80] text-[#003919] shadow-md'
               : 'text-[#bccabb] hover:text-white hover:bg-white/5'
           }`}
         >
-          <Award className="w-4 h-4" />
+          <Award className="w-4 h-4 shrink-0" />
           <span>Correções e Notas</span>
           {submittedActivities.length > 0 && (
             <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 ${
                 activeTab === 'correcoes'
                   ? 'bg-[#003919] text-[#4ade80]'
                   : 'bg-[#171f33] text-white border border-white/10'
@@ -254,17 +335,17 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
         <button
           onClick={() => setActiveTab('arquivos')}
-          className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] ${
             activeTab === 'arquivos'
               ? 'bg-[#4ade80] text-[#003919] shadow-md'
               : 'text-[#bccabb] hover:text-white hover:bg-white/5'
           }`}
         >
-          <FolderDown className="w-4 h-4" />
-          <span>Arquivos (Google Drive)</span>
+          <FolderDown className="w-4 h-4 shrink-0" />
+          <span>Arquivos (Drive)</span>
           {studentLibraryFiles.length > 0 && (
             <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 ${
                 activeTab === 'arquivos'
                   ? 'bg-[#003919] text-[#4ade80]'
                   : 'bg-[#171f33] text-[#bccabb]'
@@ -359,6 +440,31 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       </div>
                     </div>
 
+                    {/* Security Active Banner */}
+                    {(act.securityFocusLock || act.securityBlockCopyStatement || act.securityBlockPasteEssay) && (
+                      <div className="bg-[#171f33] p-3.5 rounded-2xl border border-amber-500/30 flex flex-wrap items-center gap-2.5 text-xs text-amber-200 shadow-md">
+                        <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span className="font-bold text-white">Seguranças Anti-Cola Ativas:</span>
+                        {act.securityFocusLock && (
+                          <span className="bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30 font-semibold text-[11px] flex items-center gap-1">
+                            🛡️ Trava de Foco (Avisos: {focusWarnings[act.id] || 0}/4)
+                          </span>
+                        )}
+                        {act.securityBlockCopyStatement && (
+                          <span className="bg-rose-500/20 text-rose-300 px-2.5 py-0.5 rounded-full border border-rose-500/30 font-semibold text-[11px] flex items-center gap-1">
+                            <CopyX className="w-3 h-3 text-rose-400" />
+                            <span>Sem Cópia</span>
+                          </span>
+                        )}
+                        {act.securityBlockPasteEssay && (
+                          <span className="bg-purple-500/20 text-purple-300 px-2.5 py-0.5 rounded-full border border-purple-500/30 font-semibold text-[11px] flex items-center gap-1">
+                            <ClipboardX className="w-3 h-3 text-purple-400" />
+                            <span>Sem Cola</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     {/* Grade Distribution Rule Banner (REGRA 50% / 50%) */}
                     <div className="bg-[#131b2e] p-4 rounded-2xl border border-[#4ade80]/30 flex items-start gap-3 text-xs text-[#dae2fd]">
                       <Sparkles className="w-5 h-5 text-[#4ade80] shrink-0 mt-0.5" />
@@ -376,7 +482,27 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                     </div>
 
                     {/* Description / Statement / Support Material */}
-                    <div className="space-y-4">
+                    <div
+                      className={`space-y-4 ${act.securityBlockCopyStatement ? 'select-none' : ''}`}
+                      onCopy={(e) => {
+                        if (act.securityBlockCopyStatement) {
+                          e.preventDefault();
+                          showSecurityToast('❌ Cópia de enunciados e textos bloqueada para esta atividade.');
+                        }
+                      }}
+                      onCut={(e) => {
+                        if (act.securityBlockCopyStatement) {
+                          e.preventDefault();
+                          showSecurityToast('❌ Ação de recortar bloqueada nesta atividade.');
+                        }
+                      }}
+                      onContextMenu={(e) => {
+                        if (act.securityBlockCopyStatement) {
+                          e.preventDefault();
+                          showSecurityToast('❌ Menu de contexto (botão direito) bloqueado nesta atividade.');
+                        }
+                      }}
+                    >
                       <div>
                         <h4 className="text-xs font-bold text-[#bccabb] uppercase tracking-wider mb-1">
                           Orientações do Professor:
@@ -477,7 +603,16 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                         </div>
 
                         {essayQuestions.map((eq, eqIdx) => (
-                          <div key={eq.id || eqIdx} className="bg-[#131b2e] p-4 rounded-2xl border border-white/10 space-y-2">
+                          <div
+                            key={eq.id || eqIdx}
+                            className={`bg-[#131b2e] p-4 rounded-2xl border border-white/10 space-y-2 ${act.securityBlockCopyStatement ? 'select-none' : ''}`}
+                            onCopy={(e) => {
+                              if (act.securityBlockCopyStatement) {
+                                e.preventDefault();
+                                showSecurityToast('❌ Cópia de enunciados bloqueada nesta atividade.');
+                              }
+                            }}
+                          >
                             <p className="text-xs font-semibold text-white">{eq.statement}</p>
                             {eq.keywords && (
                               <p className="text-[11px] text-[#bccabb]">
@@ -488,16 +623,40 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                         ))}
 
                         <div className="space-y-2">
-                          <label className="block text-xs font-bold text-[#dae2fd]">
-                            Sua Resposta Dissertativa:
-                          </label>
+                          <div className="flex items-center justify-between">
+                            <label className="block text-xs font-bold text-[#dae2fd]">
+                              Sua Resposta Dissertativa:
+                            </label>
+                            {act.securityBlockPasteEssay && (
+                              <span className="text-[10px] text-purple-300 font-bold bg-purple-500/10 px-2.5 py-0.5 rounded-full border border-purple-500/20 flex items-center gap-1">
+                                <ClipboardX className="w-3 h-3 text-purple-400" />
+                                <span>Cola (Ctrl+V) Bloqueada</span>
+                              </span>
+                            )}
+                          </div>
                           <textarea
                             rows={5}
                             value={essayInputs[act.id] !== undefined ? essayInputs[act.id] : (existingSub?.essayAnswer || '')}
                             onChange={(e) =>
                               setEssayInputs({ ...essayInputs, [act.id]: e.target.value })
                             }
-                            placeholder="Escreva aqui sua resposta com argumentação fundamentada nos conceitos da disciplina..."
+                            onPaste={(e) => {
+                              if (act.securityBlockPasteEssay) {
+                                e.preventDefault();
+                                showSecurityToast('❌ Ação de colar (Ctrl+V) bloqueada para respostas dissertativas.');
+                              }
+                            }}
+                            onDrop={(e) => {
+                              if (act.securityBlockPasteEssay) {
+                                e.preventDefault();
+                                showSecurityToast('❌ Arrastar textos bloqueado para respostas dissertativas.');
+                              }
+                            }}
+                            placeholder={
+                              act.securityBlockPasteEssay
+                                ? "Escreva aqui sua resposta (digitação manual obrigatória; colar texto desabilitado pelo professor)..."
+                                : "Escreva aqui sua resposta com argumentação fundamentada nos conceitos da disciplina..."
+                            }
                             className="w-full bg-[#131b2e] border border-white/10 rounded-2xl p-4 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80] leading-relaxed"
                           />
                         </div>
@@ -717,6 +876,81 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Security Toast Notification */}
+      {securityToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-rose-950/90 text-rose-100 border border-rose-500/50 p-4 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 animate-fadeIn max-w-md">
+          <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0" />
+          <p className="text-xs font-semibold">{securityToast}</p>
+          <button
+            onClick={() => setSecurityToast(null)}
+            className="ml-auto text-rose-300 hover:text-white p-1"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Anti-Cola Focus Lock Warning / Auto-Submit Modal */}
+      {securityNotice && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-[#0e172a] border border-amber-500/40 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5 text-center relative">
+            <div className={`w-16 h-16 rounded-2xl mx-auto flex items-center justify-center border shadow-lg ${
+              securityNotice.isAutoSubmitted
+                ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                : 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+            }`}>
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className={`text-xl font-extrabold ${
+                securityNotice.isAutoSubmitted ? 'text-rose-400' : 'text-amber-400'
+              }`}>
+                {securityNotice.isAutoSubmitted
+                  ? '🚨 PROVA ENTREGUE AUTOMATICAMENTE'
+                  : `⚠️ AVISO DE TRAVA DE FOCO (${securityNotice.warningCount}/4)`}
+              </h3>
+              <p className="text-xs text-white font-medium">
+                Atividade: <span className="font-bold text-[#4ade80]">{securityNotice.activityTitle}</span>
+              </p>
+            </div>
+
+            <div className="bg-[#131b2e] p-4 rounded-2xl border border-white/10 text-xs text-[#bccabb] text-left leading-relaxed space-y-2">
+              {securityNotice.isAutoSubmitted ? (
+                <>
+                  <p className="text-rose-300 font-bold">
+                    Você atingiu o limite de 4 avisos por sair da tela / mudar de aba durante a realização da atividade.
+                  </p>
+                  <p>
+                    A prova foi finalizada e enviada para o professor com o progresso preenchido até o momento.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-amber-300 font-bold">
+                    Aviso {securityNotice.warningCount} de 4: O sistema detectou que você mudou de aba, janela ou aplicativo!
+                  </p>
+                  <p>
+                    Para garantir a integridade da avaliação, permaneça nesta página. No <strong className="text-white">4º aviso</strong>, sua atividade será entregue automaticamente do jeito que está!
+                  </p>
+                </>
+              )}
+            </div>
+
+            <button
+              onClick={() => setSecurityNotice(null)}
+              className={`w-full py-3 px-6 font-extrabold rounded-full text-xs transition-all shadow-md cursor-pointer ${
+                securityNotice.isAutoSubmitted
+                  ? 'bg-rose-500 hover:bg-rose-600 text-white'
+                  : 'bg-amber-400 hover:bg-amber-300 text-slate-950'
+              }`}
+            >
+              {securityNotice.isAutoSubmitted ? 'Entendido (Ver Correções)' : 'Entendido, Voltar para a Prova'}
+            </button>
+          </div>
         </div>
       )}
     </div>

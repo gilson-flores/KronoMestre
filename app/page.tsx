@@ -45,6 +45,9 @@ export default function Home() {
   // Global search input
   const [globalSearch, setGlobalSearch] = useState('');
 
+  // Mobile menu drawer state
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   // Modals state
   const [isNewActivityModalOpen, setIsNewActivityModalOpen] = useState(false);
   const [isNewStudentModalOpen, setIsNewStudentModalOpen] = useState(false);
@@ -163,6 +166,9 @@ export default function Home() {
               deadline: act.deadline || '',
               maxGrade: act.max_grade ? Number(act.max_grade) : (act.maxGrade || 10),
               allowGroupWork: act.allow_group_work !== undefined ? Boolean(act.allow_group_work) : Boolean(act.allowGroupWork),
+              securityFocusLock: act.security_focus_lock !== undefined ? Boolean(act.security_focus_lock) : Boolean(act.securityFocusLock),
+              securityBlockCopyStatement: act.security_block_copy_statement !== undefined ? Boolean(act.security_block_copy_statement) : Boolean(act.securityBlockCopyStatement),
+              securityBlockPasteEssay: act.security_block_paste_essay !== undefined ? Boolean(act.security_block_paste_essay) : Boolean(act.securityBlockPasteEssay),
               questions: parsedQuestions,
               totalSubmissions: act.total_submissions || subs.length,
               totalStudents: act.total_students || 0,
@@ -260,6 +266,9 @@ export default function Home() {
         deadline: updatedAct.deadline || '',
         max_grade: updatedAct.maxGrade || 10,
         allow_group_work: updatedAct.allowGroupWork || false,
+        security_focus_lock: updatedAct.securityFocusLock || false,
+        security_block_copy_statement: updatedAct.securityBlockCopyStatement || false,
+        security_block_paste_essay: updatedAct.securityBlockPasteEssay || false,
         questions: updatedAct.questions || [],
         total_submissions: updatedAct.totalSubmissions,
         total_students: updatedAct.totalStudents,
@@ -268,7 +277,13 @@ export default function Home() {
         completed_date: updatedAct.completedDate,
       };
 
-      const { error } = await supabase.from('activities').upsert(fullPayload);
+      let { error } = await supabase.from('activities').upsert(fullPayload);
+
+      if (error && (error.message.includes('security_') || error.code === 'PGRST204')) {
+        const { security_focus_lock, security_block_copy_statement, security_block_paste_essay, ...fallbackPayload } = fullPayload as any;
+        const fallbackRes = await supabase.from('activities').upsert(fallbackPayload);
+        error = fallbackRes.error;
+      }
 
       if (error) {
         console.error('Erro ao atualizar atividade no Supabase:', error);
@@ -689,7 +704,7 @@ export default function Home() {
 
   // 3. Teacher Dashboard Layout
   return (
-    <div className="flex min-h-screen bg-[#0b1326] text-[#dae2fd]">
+    <div className="flex min-h-screen bg-[#0b1326] text-[#dae2fd] overflow-x-hidden">
       {/* Sidebar Navigation */}
       <Sidebar
         currentTab={currentTab}
@@ -700,20 +715,23 @@ export default function Home() {
         teacher={teacher}
         onOpenNewContentModal={() => setIsNewActivityModalOpen(true)}
         onLogout={handleLogout}
+        isMobileOpen={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 max-w-full">
         <NavbarTop
           role={role}
           user={teacher}
           onOpenSettings={() => setCurrentTab('configuracoes')}
           globalSearch={globalSearch}
           setGlobalSearch={setGlobalSearch}
+          onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         />
 
         {globalDbStatus && (
-          <div className="max-w-7xl w-full mx-auto px-6 pt-4">
+          <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 pt-4">
             <div
               className={`p-4 rounded-2xl text-xs font-bold flex items-center justify-between shadow-lg transition-all animate-fadeIn ${
                 globalDbStatus.type === 'success'
@@ -727,11 +745,11 @@ export default function Home() {
                 ) : (
                   <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
                 )}
-                <span>{globalDbStatus.message}</span>
+                <span className="break-words">{globalDbStatus.message}</span>
               </div>
               <button
                 onClick={() => setGlobalDbStatus(null)}
-                className="text-white hover:opacity-80 ml-3 text-sm cursor-pointer"
+                className="text-white hover:opacity-80 ml-3 text-sm cursor-pointer p-1 min-h-[36px] min-w-[36px] flex items-center justify-center"
               >
                 ✕
               </button>
@@ -739,7 +757,7 @@ export default function Home() {
           </div>
         )}
 
-        <main className="flex-1 p-6 md:p-8 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-3 sm:p-6 md:p-8 max-w-7xl w-full mx-auto">
           {currentTab === 'painel' && (
             <DashboardView
               activities={activities}
@@ -755,6 +773,7 @@ export default function Home() {
               onViewActivity={(act) => setViewingActivity(act)}
               onGenerateDossier={handleGenerateDossier}
               onDeleteActivity={handleDeleteActivity}
+              onSaveActivity={handleSaveActivity}
             />
           )}
 
@@ -774,6 +793,7 @@ export default function Home() {
               onViewActivity={(act) => setViewingActivity(act)}
               onGenerateDossier={handleGenerateDossier}
               onDeleteActivity={handleDeleteActivity}
+              onSaveActivity={handleSaveActivity}
             />
           )}
 

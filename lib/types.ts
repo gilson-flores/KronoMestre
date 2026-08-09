@@ -70,6 +70,9 @@ export interface Activity {
   deadline: string;
   maxGrade?: number;
   allowGroupWork?: boolean;
+  securityFocusLock?: boolean; // Trava 1: Trava de foco (Aviso ao sair da tela, limite de 4 avisos -> auto entrega)
+  securityBlockCopyStatement?: boolean; // Trava 2: Trava de cópia dos enunciados
+  securityBlockPasteEssay?: boolean; // Trava 3: Trava de copia e cola nas respostas dissertativas
   questions?: ActivityQuestion[];
   totalSubmissions: number;
   totalStudents: number;

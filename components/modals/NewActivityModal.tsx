@@ -161,20 +161,21 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
       <div className="w-full max-w-2xl bg-[#0b1326] rounded-3xl border border-white/10 p-5 sm:p-8 space-y-6 shadow-2xl relative my-auto max-h-[90vh] overflow-y-auto custom-scrollbar animate-fadeIn">
         
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-white/10 pb-4 pr-8">
+        <div className="flex items-start justify-between border-b border-white/10 pb-4 pr-10 relative">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-[#4ade80]/10 text-[#4ade80] rounded-2xl border border-[#4ade80]/20">
+            <div className="p-3 bg-[#4ade80]/10 text-[#4ade80] rounded-2xl border border-[#4ade80]/20 shrink-0">
               <BookOpen className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">Criar Atividade no Studio</h2>
+              <h2 className="text-lg sm:text-xl font-bold text-white leading-snug">Criar Atividade no Studio</h2>
               <p className="text-xs text-[#bccabb]">Cadastre avaliações, redações ou exercícios interativos</p>
             </div>
           </div>
           <button
             onClick={onClose}
             type="button"
-            className="p-2 text-[#bccabb] hover:text-white rounded-full hover:bg-white/5 transition-colors cursor-pointer"
+            className="p-2.5 text-[#bccabb] hover:text-white rounded-full hover:bg-white/5 transition-colors cursor-pointer absolute top-0 right-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label="Fechar Modal"
           >
             <X className="w-5 h-5" />
           </button>

@@ -169,19 +169,19 @@ export const AuthView: React.FC<AuthViewProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-[#0b1326] text-[#dae2fd] flex flex-col justify-center items-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-[#0b1326] text-[#dae2fd] flex flex-col justify-center items-center p-3 sm:p-6 relative overflow-hidden">
       {/* Background glow effects */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-[#4ade80]/10 rounded-full blur-3xl pointer-events-none"></div>
-      <div className="absolute bottom-1/4 left-1/3 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 sm:w-96 h-72 sm:h-96 bg-[#4ade80]/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute bottom-1/4 left-1/3 w-64 sm:w-80 h-64 sm:h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
-      <div className="w-full max-w-md glass-panel rounded-3xl p-8 border border-white/10 relative z-10 shadow-2xl">
+      <div className="w-full max-w-md glass-panel rounded-3xl p-5 sm:p-8 border border-white/10 relative z-10 shadow-2xl">
         {/* Header Logo */}
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-[#171f33] border-2 border-[#4ade80] rounded-2xl flex items-center justify-center mx-auto mb-4 text-[#4ade80] shadow-lg shadow-[#4ade80]/10">
-            <BookOpen className="w-8 h-8" />
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-[#171f33] border-2 border-[#4ade80] rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4 text-[#4ade80] shadow-lg shadow-[#4ade80]/10">
+            <BookOpen className="w-7 h-7 sm:w-8 sm:h-8" />
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Sociologia On-line</h1>
-          <p className="text-sm text-[#bccabb] mt-1">Acesso ao portal escolar</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Sociologia On-line</h1>
+          <p className="text-xs sm:text-sm text-[#bccabb] mt-1">Acesso ao portal escolar</p>
         </div>
 
         {/* Tab Selection */}
@@ -191,13 +191,13 @@ export const AuthView: React.FC<AuthViewProps> = ({
               setActiveTab('teacher');
               setTeacherError('');
             }}
-            className={`py-2.5 px-4 rounded-full text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer ${
+            className={`py-3 px-3 sm:px-4 rounded-full text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
               activeTab === 'teacher'
                 ? 'bg-[#4ade80] text-[#003919] shadow'
                 : 'text-[#bccabb] hover:text-white'
             }`}
           >
-            <User className="w-4 h-4" />
+            <User className="w-4 h-4 shrink-0" />
             <span>Professor</span>
           </button>
 
@@ -206,13 +206,13 @@ export const AuthView: React.FC<AuthViewProps> = ({
               setActiveTab('student');
               setStudentError('');
             }}
-            className={`py-2.5 px-4 rounded-full text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer ${
+            className={`py-3 px-3 sm:px-4 rounded-full text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
               activeTab === 'student'
                 ? 'bg-[#4ade80] text-[#003919] shadow'
                 : 'text-[#bccabb] hover:text-white'
             }`}
           >
-            <GraduationCap className="w-4 h-4" />
+            <GraduationCap className="w-4 h-4 shrink-0" />
             <span>Aluno</span>
           </button>
         </div>
