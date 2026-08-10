@@ -18,6 +18,7 @@ export interface StudentUser {
   tag?: 'REGULAR' | 'PNE' | 'RAD';
   passwordHash: string; // default "1234"
   avatarUrl: string;
+  pedagogicalNotes?: string;
 }
 
 export interface ActivitySubmission {

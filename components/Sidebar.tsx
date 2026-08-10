@@ -79,7 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               alt={teacher.name || 'Professor'}
               className="w-20 h-20 rounded-full object-cover border-2 border-[#4ade80]/40 shadow-lg"
               onError={(e) => {
-                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250';
+                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250';
               }}
             />
             <span className="absolute bottom-0 right-1 w-4 h-4 bg-[#4ade80] border-2 border-[#0b1326] rounded-full"></span>

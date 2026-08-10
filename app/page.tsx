@@ -98,7 +98,7 @@ export default function Home() {
               name: teacherRow.name,
               subject: teacherRow.subject || 'Sociologia',
               email: teacherRow.email,
-              avatarUrl: teacherRow.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
+              avatarUrl: teacherRow.avatar_url || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
               phone: teacherRow.phone || '',
               school: teacherRow.school || '',
             });
@@ -118,6 +118,7 @@ export default function Home() {
             avatarUrl:
               s.avatar_url ||
               'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+            pedagogicalNotes: s.pedagogical_notes || '',
           }));
           setStudents(mappedStudents);
         }
@@ -172,10 +173,10 @@ export default function Home() {
               status: act.status || 'Ativo',
               deadline: act.deadline || '',
               maxGrade: act.max_grade ? Number(act.max_grade) : (act.maxGrade || 10),
-              allowGroupWork: act.allow_group_work !== undefined ? Boolean(act.allow_group_work) : Boolean(act.allowGroupWork),
-              securityFocusLock: act.security_focus_lock !== undefined ? Boolean(act.security_focus_lock) : Boolean(act.securityFocusLock),
-              securityBlockCopyStatement: act.security_block_copy_statement !== undefined ? Boolean(act.security_block_copy_statement) : Boolean(act.securityBlockCopyStatement),
-              securityBlockPasteEssay: act.security_block_paste_essay !== undefined ? Boolean(act.security_block_paste_essay) : Boolean(act.securityBlockPasteEssay),
+              allowGroupWork: act.allow_group_work !== undefined && act.allow_group_work !== null ? Boolean(act.allow_group_work) : Boolean(act.allowGroupWork),
+              securityFocusLock: act.security_focus_lock !== undefined && act.security_focus_lock !== null ? Boolean(act.security_focus_lock) : Boolean(act.securityFocusLock),
+              securityBlockCopyStatement: act.security_block_copy_statement !== undefined && act.security_block_copy_statement !== null ? Boolean(act.security_block_copy_statement) : Boolean(act.securityBlockCopyStatement),
+              securityBlockPasteEssay: act.security_block_paste_essay !== undefined && act.security_block_paste_essay !== null ? Boolean(act.security_block_paste_essay) : Boolean(act.securityBlockPasteEssay),
               questions: parsedQuestions,
               totalSubmissions: act.total_submissions || subs.length,
               totalStudents: act.total_students || 0,
@@ -186,6 +187,27 @@ export default function Home() {
             };
           });
           setActivities(mappedActivities);
+        }
+
+        // 3. Carregar Mensagens do Supabase
+        const { data: dbMessages } = await client.from('chat_messages').select('*').order('created_at', { ascending: true });
+        if (dbMessages && dbMessages.length > 0) {
+          const mappedMessages: ChatMessage[] = dbMessages.map((m) => ({
+            id: m.id || `msg-${m.created_at}`,
+            threadId: m.thread_id,
+            senderId: m.sender_id,
+            senderName: m.sender_name,
+            senderRole: m.sender_role,
+            senderAvatar: m.sender_avatar,
+            recipientId: m.recipient_id,
+            recipientName: m.recipient_name,
+            content: m.content,
+            createdAt: m.created_at ? new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
+            read: Boolean(m.read),
+            activityId: m.activity_id,
+            activityTitle: m.activity_title,
+          }));
+          setChatMessages(mappedMessages);
         }
       } catch (err) {
         console.error('Erro ao carregar dados do Supabase:', err);
@@ -269,17 +291,12 @@ export default function Home() {
           }
         }
 
-        // Tentativa 2: remover colunas adicionais de segurança/suporte + tipo seguro
+        // Tentativa 2: enviar payload com tipo saneado sem remover travas de segurança
         if (error) {
-          const {
-            security_focus_lock,
-            security_block_copy_statement,
-            security_block_paste_essay,
-            support_material,
-            ...fallbackPayload
-          } = fullPayload as any;
-
-          fallbackPayload.type = sanitizeTypeForDb(fullPayload.type);
+          const fallbackPayload = {
+            ...fullPayload,
+            type: sanitizeTypeForDb(fullPayload.type),
+          };
 
           const fallbackRes = await supabase.from('activities').insert(fallbackPayload);
           if (!fallbackRes.error) {
@@ -360,15 +377,10 @@ export default function Home() {
         }
 
         if (error) {
-          const {
-            security_focus_lock,
-            security_block_copy_statement,
-            security_block_paste_essay,
-            support_material,
-            ...fallbackPayload
-          } = fullPayload as any;
-
-          fallbackPayload.type = sanitizeTypeForDb(fullPayload.type);
+          const fallbackPayload = {
+            ...fullPayload,
+            type: sanitizeTypeForDb(fullPayload.type),
+          };
 
           const fallbackRes = await supabase.from('activities').upsert(fallbackPayload);
           error = fallbackRes.error;
@@ -903,6 +915,25 @@ export default function Home() {
     }
   };
 
+  const handleSavePedagogicalNotes = async (studentId: string, notes: string) => {
+    setStudents((prev) =>
+      prev.map((s) => (s.id === studentId ? { ...s, pedagogicalNotes: notes } : s))
+    );
+    if (supervisingStudent && supervisingStudent.id === studentId) {
+      setSupervisingStudent((prev) => (prev ? { ...prev, pedagogicalNotes: notes } : null));
+    }
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase
+          .from('students')
+          .update({ pedagogical_notes: notes })
+          .eq('id', studentId);
+      } catch (err) {
+        console.error('Erro ao salvar anotações pedagógicas no Supabase:', err);
+      }
+    }
+  };
+
   const handleDeleteStudent = async (studentId: string) => {
     if (!isSupabaseConfigured || !supabase) {
       showGlobalStatus('error', 'ARMADILHA DE BUG DISPARADA: Supabase não configurado. Aluno NÃO excluído.');
@@ -1395,6 +1426,7 @@ export default function Home() {
         student={supervisingStudent}
         activities={activities}
         onClose={() => setSupervisingStudent(null)}
+        onSaveNotes={handleSavePedagogicalNotes}
         onSendMessage={(st) => {
           setSupervisingStudent(null);
           setCurrentTab('mensagens');

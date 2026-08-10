@@ -91,7 +91,7 @@ export const NavbarTop: React.FC<NavbarTopProps> = ({
               alt={'name' in user ? user.name : user.fullName}
               className="w-8 h-8 rounded-full object-cover border border-[#4ade80]/30 shrink-0"
               onError={(e) => {
-                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150';
+                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=150';
               }}
             />
             <div className="hidden sm:block text-left max-w-[120px] md:max-w-[180px]">

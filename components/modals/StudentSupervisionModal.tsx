@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   ShieldCheck,
@@ -36,6 +36,7 @@ interface StudentSupervisionModalProps {
   student: StudentUser | null;
   activities: Activity[];
   onSendMessage?: (student: StudentUser) => void;
+  onSaveNotes?: (studentId: string, notes: string) => void;
 }
 
 export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = ({
@@ -44,10 +45,17 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
   student,
   activities,
   onSendMessage,
+  onSaveNotes,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'relatorio' | 'atividades' | 'anotacoes'>('relatorio');
   const [teacherNotes, setTeacherNotes] = useState('');
   const [isSavedNotes, setIsSavedNotes] = useState(false);
+
+  useEffect(() => {
+    if (student) {
+      setTeacherNotes(student.pedagogicalNotes || '');
+    }
+  }, [student]);
 
   // Dossier Proof Copy modal state
   const [selectedActivityForDossier, setSelectedActivityForDossier] = useState<Activity | null>(null);
@@ -107,6 +115,9 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
     : 0;
 
   const handleSaveNotes = () => {
+    if (student && onSaveNotes) {
+      onSaveNotes(student.id, teacherNotes);
+    }
     setIsSavedNotes(true);
     setTimeout(() => setIsSavedNotes(false), 3000);
   };
@@ -636,41 +647,41 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
           </div>
 
           {/* Navigation Sub-Tabs */}
-          <div className="flex items-center gap-2 p-1.5 bg-[#131b2e] rounded-2xl border border-white/10 shadow-inner">
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2 p-1.5 bg-[#131b2e] rounded-2xl border border-white/10 shadow-inner">
             <button
               onClick={() => setActiveSubTab('relatorio')}
-              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 ${
+              className={`py-2 sm:py-2.5 px-1.5 sm:px-3 rounded-xl text-[10px] sm:text-xs font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 cursor-pointer active:scale-95 text-center leading-tight ${
                 activeSubTab === 'relatorio'
                   ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-[#003919] shadow-lg shadow-[#4ade80]/20 font-extrabold'
                   : 'text-[#bccabb] hover:text-white hover:bg-white/5'
               }`}
             >
               <BarChart2 className="w-4 h-4 shrink-0" />
-              <span>Visão Geral & Métricas</span>
+              <span className="text-center sm:text-left">Visão Geral & Métricas</span>
             </button>
 
             <button
               onClick={() => setActiveSubTab('atividades')}
-              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 ${
+              className={`py-2 sm:py-2.5 px-1.5 sm:px-3 rounded-xl text-[10px] sm:text-xs font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 cursor-pointer active:scale-95 text-center leading-tight ${
                 activeSubTab === 'atividades'
                   ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-[#003919] shadow-lg shadow-[#4ade80]/20 font-extrabold'
                   : 'text-[#bccabb] hover:text-white hover:bg-white/5'
               }`}
             >
               <BookOpen className="w-4 h-4 shrink-0" />
-              <span>Histórico de Atividades & Dossiês ({studentActivities.length})</span>
+              <span className="text-center sm:text-left">Histórico & Dossiês ({studentActivities.length})</span>
             </button>
 
             <button
               onClick={() => setActiveSubTab('anotacoes')}
-              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 ${
+              className={`py-2 sm:py-2.5 px-1.5 sm:px-3 rounded-xl text-[10px] sm:text-xs font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 cursor-pointer active:scale-95 text-center leading-tight ${
                 activeSubTab === 'anotacoes'
                   ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-[#003919] shadow-lg shadow-[#4ade80]/20 font-extrabold'
                   : 'text-[#bccabb] hover:text-white hover:bg-white/5'
               }`}
             >
               <FileText className="w-4 h-4 shrink-0" />
-              <span>Anotações Pedagógicas</span>
+              <span className="text-center sm:text-left">Anotações Pedagógicas</span>
             </button>
           </div>
 

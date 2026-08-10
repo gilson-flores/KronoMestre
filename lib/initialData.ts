@@ -1,11 +1,12 @@
 import { Activity, StudentUser, TeacherUser, ScheduleItem, LibraryFile, ChatMessage } from './types';
 
 export const initialTeacher: TeacherUser = {
-  id: '',
-  name: '',
-  subject: '',
-  email: '',
-  avatarUrl: '',
+  id: 'teacher-1',
+  name: 'Gilson Flores',
+  subject: 'Sociologia',
+  email: 'gilson.flores@escola.edu.br',
+  avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
+  school: "EEB Prof. Jandira D'Ávila",
 };
 
 export const initialStudents: StudentUser[] = [];
@@ -53,8 +54,8 @@ export const initialChatMessages: ChatMessage[] = [
     senderRole: 'student',
     senderAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200',
     recipientId: 'teacher-1',
-    recipientName: 'Professora',
-    content: 'Professora, boa tarde! Gostaria de tirar uma dúvida sobre o conceito de Fato Social em Durkheim para a redação.',
+    recipientName: 'Prof. Gilson Flores',
+    content: 'Professor, boa tarde! Gostaria de tirar uma dúvida sobre o conceito de Fato Social em Durkheim para a redação.',
     createdAt: '09/08/2026 09:15',
     read: true,
   },
@@ -62,8 +63,9 @@ export const initialChatMessages: ChatMessage[] = [
     id: 'msg-2',
     threadId: 'std-1',
     senderId: 'teacher-1',
-    senderName: 'Professora',
+    senderName: 'Prof. Gilson Flores',
     senderRole: 'teacher',
+    senderAvatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
     recipientId: 'std-1',
     recipientName: 'Ana Silva',
     content: 'Olá Ana! Lembre-se das três características fundamentais: exterioridade, coercitividade e generalidade. Você pode usar a solidariedade orgânica como repertório no ENEM.',
@@ -78,8 +80,8 @@ export const initialChatMessages: ChatMessage[] = [
     senderRole: 'student',
     senderAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200',
     recipientId: 'teacher-1',
-    recipientName: 'Professora',
-    content: 'Excelente, professora! Muito obrigada pela explicação, ficou claríssimo!',
+    recipientName: 'Prof. Gilson Flores',
+    content: 'Excelente, professor! Muito obrigada pela explicação, ficou claríssimo!',
     createdAt: '09/08/2026 09:30',
     read: false,
   },

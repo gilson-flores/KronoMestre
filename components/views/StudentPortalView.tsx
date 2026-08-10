@@ -71,11 +71,11 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   student,
   teacher = {
     id: 'teacher-1',
-    name: 'Dra. Helena Vance',
+    name: 'Gilson Flores',
     subject: 'Sociologia',
-    email: 'helena.vance@escola.edu.br',
-    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
-    school: 'Colégio Estadual de Alta Performance',
+    email: 'gilson.flores@escola.edu.br',
+    avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
+    school: "EEB Prof. Jandira D'Ávila",
   },
   activities,
   libraryFiles = [],
@@ -446,7 +446,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           }`}
         >
           <MessageSquare className="w-4 h-4 shrink-0" />
-          <span>Mensagens com Professora</span>
+          <span>Mensagens com o Professor</span>
           {messages.filter(m => (m.threadId === student.id || m.recipientId === student.id) && m.senderRole === 'teacher' && !m.read).length > 0 && (
             <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 bg-[#4ade80] text-[#003919]">
               {messages.filter(m => (m.threadId === student.id || m.recipientId === student.id) && m.senderRole === 'teacher' && !m.read).length}

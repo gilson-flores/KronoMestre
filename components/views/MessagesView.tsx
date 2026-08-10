@@ -19,6 +19,7 @@ import {
   X
 } from 'lucide-react';
 import { ChatMessage, StudentUser, TeacherUser, Activity } from '@/lib/types';
+import { formatAvatarUrl } from '@/lib/utils';
 
 interface MessagesViewProps {
   currentUserRole: 'teacher' | 'student';
@@ -130,7 +131,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
 
     if (currentUserRole === 'teacher') {
       sndId = teacher.id || 'teacher-1';
-      sndName = teacher.name || 'Professora';
+      sndName = teacher.name || 'Professor';
       sndAvatar = teacher.avatarUrl;
       recId = activeStudent?.id || 'std-1';
       recName = activeStudent?.fullName || 'Aluno';
@@ -139,7 +140,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
       sndName = student?.fullName || 'Aluno';
       sndAvatar = student?.avatarUrl;
       recId = teacher.id || 'teacher-1';
-      recName = teacher.name || 'Professora';
+      recName = teacher.name || 'Professor';
     }
 
     const selectedActObj = activities.find((a) => a.id === attachedActivityId);
@@ -170,7 +171,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
   ];
 
   const studentPrompts = [
-    'Professora, boa tarde! Tenho uma dúvida sobre a última atividade.',
+    'Professor, boa tarde! Tenho uma dúvida sobre a última atividade.',
     'Gostaria de saber se a minha redação já foi corrigida.',
     'Poderia me enviar o material complementar de apoio?',
   ];
@@ -193,12 +194,12 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               <span className="text-xs font-semibold text-[#bccabb]">Divisão de inteligência de Konoha</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-extrabold text-white mt-1">
-              {currentUserRole === 'teacher' ? 'Mensagens e Suporte com Alunos' : 'Mensagens com a Professora'}
+              {currentUserRole === 'teacher' ? 'Mensagens e Suporte com Alunos' : 'Mensagens com o Professor'}
             </h1>
             <p className="text-xs text-[#bccabb] mt-0.5">
               {currentUserRole === 'teacher'
                 ? 'Tire dúvidas, envie feedbacks individuais e acompanhe o engajamento de cada estudante.'
-                : 'Tire suas dúvidas diretamente com sua professora e receba orientações pedagógicas exclusivas.'}
+                : 'Tire suas dúvidas diretamente com seu professor e receba orientações pedagógicas exclusivas.'}
             </p>
           </div>
         </div>
@@ -357,17 +358,22 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
             </>
           ) : (
             /* Student Sidebar Header: Teacher Profile Card */
-            <div className="p-5 space-y-4 bg-[#0e172a]/80">
-              <div className="text-center p-4 bg-[#131b2e] rounded-2xl border border-white/10 space-y-3">
+            <div className="p-4 sm:p-5 space-y-4 bg-[#0e172a]/80">
+              <div className="text-center p-3.5 sm:p-4 bg-[#131b2e] rounded-2xl border border-white/10 space-y-2.5">
                 <img
-                  src={teacher.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250'}
-                  alt={teacher.name}
-                  className="w-16 h-16 rounded-full object-cover mx-auto border-2 border-[#4ade80] shadow-md"
+                  src={formatAvatarUrl(teacher.avatarUrl)}
+                  alt={teacher.name || 'Professor'}
+                  className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover mx-auto border-2 border-[#4ade80] shadow-md"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250';
+                  }}
                 />
-                <div>
-                  <h3 className="text-sm font-extrabold text-white">{teacher.name || 'Dra. Helena Vance'}</h3>
-                  <p className="text-xs text-[#4ade80] font-semibold">{teacher.subject || 'Professora de Sociologia'}</p>
-                  <p className="text-[11px] text-[#bccabb] mt-1">{teacher.school || 'Colégio Estadual de Alta Performance'}</p>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-extrabold text-white truncate">{teacher.name || 'Professor'}</h3>
+                  <p className="text-xs text-[#4ade80] font-semibold truncate">{teacher.subject || 'Sociologia'}</p>
+                  {teacher.school && (
+                    <p className="text-[11px] text-[#bccabb] mt-0.5 truncate">{teacher.school}</p>
+                  )}
                 </div>
                 <div className="pt-2 border-t border-white/10 flex items-center justify-center gap-2 text-[11px] text-[#4ade80]">
                   <span className="w-2 h-2 rounded-full bg-[#4ade80] animate-pulse" />
@@ -375,13 +381,13 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                 </div>
               </div>
 
-              <div className="bg-[#131b2e] p-3.5 rounded-2xl border border-white/10 space-y-2 text-xs text-[#bccabb]">
+              <div className="bg-[#131b2e] p-3 rounded-2xl border border-white/10 space-y-1.5 text-xs text-[#bccabb]">
                 <div className="flex items-center gap-2 text-white font-bold">
-                  <Clock className="w-4 h-4 text-[#4ade80]" />
+                  <Clock className="w-3.5 h-3.5 text-[#4ade80]" />
                   <span>Horários de Atendimento</span>
                 </div>
                 <p className="text-[11px] leading-relaxed">
-                  Segunda a Sexta, das 08h às 17h. Dúvidas enviadas fora do horário serão respondidas no próximo turno escolar.
+                  Segunda a Sexta, das 08h às 17h. Dúvidas fora do horário serão respondidas no próximo turno escolar.
                 </p>
               </div>
             </div>
@@ -390,18 +396,18 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
 
         {/* RIGHT PANEL: Active Conversation Window */}
         <div
-          className={`flex-1 bg-[#09101f] flex flex-col transition-all duration-300 ${
+          className={`flex-1 bg-[#09101f] flex flex-col transition-all duration-300 min-w-0 ${
             !isMobileChatOpen && currentUserRole === 'teacher' ? 'hidden md:flex' : 'flex'
           }`}
         >
           {/* Chat Window Header */}
-          <div className="p-4 bg-[#0e172a] border-b border-white/10 flex items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-3">
+          <div className="p-3.5 sm:p-4 bg-[#0e172a] border-b border-white/10 flex items-center justify-between gap-3 shrink-0 min-w-0">
+            <div className="flex items-center gap-3 min-w-0">
               {/* Back button for mobile view */}
               {currentUserRole === 'teacher' && (
                 <button
                   onClick={() => setIsMobileChatOpen(false)}
-                  className="md:hidden p-2 text-[#bccabb] hover:text-white rounded-full hover:bg-white/5 transition-colors"
+                  className="md:hidden p-2 text-[#bccabb] hover:text-white rounded-full hover:bg-white/5 transition-colors shrink-0"
                   aria-label="Voltar para lista de alunos"
                 >
                   <ArrowLeft className="w-5 h-5" />
@@ -410,20 +416,23 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
 
               {currentUserRole === 'teacher' ? (
                 activeStudent ? (
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <img
-                      src={activeStudent.avatarUrl}
+                      src={formatAvatarUrl(activeStudent.avatarUrl)}
                       alt={activeStudent.fullName}
-                      className="w-10 h-10 rounded-full object-cover border border-[#4ade80]"
+                      className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-[#4ade80] shrink-0"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200';
+                      }}
                     />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-bold text-white">{activeStudent.fullName}</h3>
-                        <span className="text-[10px] bg-[#171f33] text-[#4ade80] font-bold px-2 py-0.5 rounded border border-white/10">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-xs sm:text-sm font-bold text-white truncate">{activeStudent.fullName}</h3>
+                        <span className="text-[10px] bg-[#171f33] text-[#4ade80] font-bold px-2 py-0.5 rounded border border-white/10 shrink-0">
                           {activeStudent.turma}
                         </span>
                       </div>
-                      <p className="text-[11px] text-[#bccabb]">
+                      <p className="text-[11px] text-[#bccabb] truncate">
                         Matrícula: <span className="font-mono text-white">{activeStudent.matricula}</span>
                       </p>
                     </div>
@@ -432,21 +441,21 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                   <span className="text-xs text-[#bccabb]">Selecione um aluno</span>
                 )
               ) : (
-                <div className="flex items-center gap-3">
-                  <img
-                    src={teacher.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250'}
-                    alt={teacher.name}
-                    className="w-10 h-10 rounded-full object-cover border border-[#4ade80]"
-                  />
-                  <div>
-                    <h3 className="text-sm font-bold text-white">{teacher.name || 'Professora'}</h3>
-                    <p className="text-[11px] text-[#4ade80] font-semibold">{teacher.subject || 'Sociologia'}</p>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <MessageSquare className="w-5 h-5 text-[#4ade80] shrink-0" />
+                  <div className="min-w-0">
+                    <h3 className="text-xs sm:text-sm font-extrabold text-white truncate">
+                      Canal de Comunicação com o Professor
+                    </h3>
+                    <p className="text-[11px] text-[#bccabb] truncate">
+                      Atendimento direto com {teacher.name || 'Prof. Gilson Flores'}
+                    </p>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="flex items-center gap-2 text-xs text-[#bccabb]">
+            <div className="flex items-center gap-2 text-xs text-[#bccabb] shrink-0">
               <span className="w-2 h-2 rounded-full bg-[#4ade80]" />
               <span className="hidden sm:inline font-semibold">Canal Ativo</span>
             </div>
@@ -463,7 +472,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                 <p className="text-xs text-[#bccabb] max-w-sm">
                   {currentUserRole === 'teacher'
                     ? `Envie uma mensagem para ${activeStudent?.fullName || 'o aluno'} orientando sobre trabalhos, prazos ou feedbacks.`
-                    : 'Escreva sua dúvida abaixo para enviar diretamente à sua professora.'}
+                    : 'Escreva sua dúvida abaixo para enviar diretamente ao seu professor.'}
                 </p>
               </div>
             ) : (
@@ -482,13 +491,19 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                     {!isMine && (
                       <img
                         src={
-                          msg.senderAvatar ||
+                          formatAvatarUrl(msg.senderAvatar) ||
                           (msg.senderRole === 'teacher'
-                            ? teacher.avatarUrl
-                            : activeStudent?.avatarUrl)
+                            ? formatAvatarUrl(teacher.avatarUrl)
+                            : formatAvatarUrl(activeStudent?.avatarUrl))
                         }
                         alt={msg.senderName}
                         className="w-7 h-7 rounded-full object-cover border border-white/20 shrink-0 mb-1"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            msg.senderRole === 'teacher'
+                              ? 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250'
+                              : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200';
+                        }}
                       />
                     )}
 
@@ -582,12 +597,31 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
           {/* Chat Message Input Bar */}
           <form
             onSubmit={handleSend}
-            className="p-3 sm:p-4 bg-[#0e172a] border-t border-white/10 flex items-center gap-2 shrink-0"
+            className="p-3 sm:p-4 bg-[#0e172a] border-t border-white/10 flex items-center gap-2.5 shrink-0"
           >
+            {/* Fixed Sender Avatar outside input box */}
+            <div className="flex items-center gap-2 shrink-0">
+              <img
+                src={
+                  currentUserRole === 'teacher'
+                    ? formatAvatarUrl(teacher.avatarUrl)
+                    : formatAvatarUrl(student?.avatarUrl)
+                }
+                alt={currentUserRole === 'teacher' ? (teacher.name || 'Professor') : (student?.fullName || 'Aluno')}
+                className="w-9 h-9 rounded-full object-cover border border-[#4ade80]/40 shrink-0 shadow-sm"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src =
+                    currentUserRole === 'teacher'
+                      ? 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250'
+                      : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200';
+                }}
+              />
+            </div>
+
             <button
               type="button"
               onClick={() => setIsAttachingActivity(!isAttachingActivity)}
-              className={`p-2.5 rounded-2xl border transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center ${
+              className={`p-2.5 rounded-2xl border transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0 ${
                 attachedActivityId
                   ? 'bg-[#4ade80]/20 text-[#4ade80] border-[#4ade80]/40'
                   : 'bg-[#131b2e] hover:bg-[#1a253e] text-[#bccabb] border-white/10'
@@ -604,7 +638,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               placeholder={
                 currentUserRole === 'teacher'
                   ? `Escrever mensagem para ${activeStudent?.fullName || 'o aluno'}...`
-                  : 'Escrever dúvida para a professora...'
+                  : 'Escrever dúvida para o professor...'
               }
               className="flex-1 bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80] leading-relaxed min-h-[44px]"
             />
@@ -612,7 +646,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
             <button
               type="submit"
               disabled={!newMessageText.trim()}
-              className="px-5 py-3 bg-[#4ade80] hover:bg-[#6bfb9a] disabled:opacity-40 disabled:hover:bg-[#4ade80] text-[#003919] font-extrabold rounded-2xl text-xs transition-all shadow-md cursor-pointer flex items-center justify-center gap-2 min-h-[44px]"
+              className="px-5 py-3 bg-[#4ade80] hover:bg-[#6bfb9a] disabled:opacity-40 disabled:hover:bg-[#4ade80] text-[#003919] font-extrabold rounded-2xl text-xs transition-all shadow-md cursor-pointer flex items-center justify-center gap-2 min-h-[44px] shrink-0"
             >
               <Send className="w-4 h-4" />
               <span className="hidden sm:inline">Enviar</span>

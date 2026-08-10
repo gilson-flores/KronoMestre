@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatAvatarUrl(url: string | undefined | null): string {
   if (!url || !url.trim()) {
-    return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250';
+    return 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250';
   }
   const trimmed = url.trim();
   if (trimmed.includes('drive.google.com/file/d/')) {

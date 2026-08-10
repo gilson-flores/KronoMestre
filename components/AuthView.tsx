@@ -71,7 +71,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           name: dbTeacher?.name || authData.user.user_metadata?.full_name || teacherEmail.split('@')[0],
           subject: dbTeacher?.subject || 'Sociologia',
           email: authData.user.email || teacherEmail,
-          avatarUrl: dbTeacher?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
+          avatarUrl: dbTeacher?.avatar_url || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
           phone: dbTeacher?.phone || '',
           school: dbTeacher?.school || '',
         };
@@ -114,7 +114,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           name: dbTeacher.name,
           subject: dbTeacher.subject || 'Sociologia',
           email: dbTeacher.email,
-          avatarUrl: dbTeacher.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
+          avatarUrl: dbTeacher.avatar_url || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
           phone: dbTeacher.phone || '',
           school: dbTeacher.school || '',
         });
