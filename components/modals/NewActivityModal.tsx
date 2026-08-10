@@ -21,7 +21,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   const [supportMaterial, setSupportMaterial] = useState('');
   const [turmaOption, setTurmaOption] = useState<'branco' | '1' | '2' | '3' | 'custom'>('custom');
   const [customTurma, setCustomTurma] = useState('301');
-  const [type, setType] = useState<'Simulado' | 'Redação' | 'Dinâmica' | 'Avaliação'>('Avaliação');
+  const [type, setType] = useState<'Simulado' | 'Redação' | 'Dinâmica' | 'Avaliação' | 'Trabalho em grupo' | 'Projeto de pesquisa'>('Avaliação');
   
   // Default deadline: tomorrow at 23:59
   const getTomorrowString = () => {
@@ -267,13 +267,21 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
               </label>
               <select
                 value={type}
-                onChange={(e) => setType(e.target.value as any)}
+                onChange={(e) => {
+                  const selectedType = e.target.value as any;
+                  setType(selectedType);
+                  if (selectedType === 'Trabalho em grupo') {
+                    setAllowGroupWork(true);
+                  }
+                }}
                 className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-3 py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
               >
                 <option value="Avaliação" className="bg-[#0b1326]">Avaliação</option>
                 <option value="Simulado" className="bg-[#0b1326]">Simulado</option>
                 <option value="Redação" className="bg-[#0b1326]">Redação</option>
                 <option value="Dinâmica" className="bg-[#0b1326]">Dinâmica</option>
+                <option value="Trabalho em grupo" className="bg-[#0b1326]">Trabalho em grupo</option>
+                <option value="Projeto de pesquisa" className="bg-[#0b1326]">Projeto de pesquisa</option>
               </select>
             </div>
           </div>

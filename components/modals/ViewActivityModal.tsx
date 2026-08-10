@@ -39,7 +39,8 @@ export const ViewActivityModal: React.FC<ViewActivityModalProps> = ({
 
   let Icon = FileText;
   if (activity.type === 'Simulado') Icon = FileQuestion;
-  if (activity.type === 'Dinâmica') Icon = Users2;
+  if (activity.type === 'Dinâmica' || activity.type === 'Trabalho em grupo') Icon = Users2;
+  if (activity.type === 'Projeto de pesquisa') Icon = BookOpen;
 
   const questions = activity.questions || [];
   const optionLabels = ['A', 'B', 'C', 'D'];

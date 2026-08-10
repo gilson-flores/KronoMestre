@@ -84,7 +84,7 @@ export function getActivityGradeDistribution(activity: {
 
   // If questions array is not populated yet, infer from activity type
   if (questions.length === 0) {
-    if (activity.type === 'Redação') {
+    if (activity.type === 'Redação' || activity.type === 'Projeto de pesquisa') {
       hasObjective = false;
       hasEssay = true;
     } else if (activity.type === 'Simulado') {

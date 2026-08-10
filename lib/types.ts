@@ -66,7 +66,7 @@ export interface Activity {
   description: string;
   supportMaterial?: string;
   turma: string;
-  type: 'Simulado' | 'Redação' | 'Dinâmica' | 'Avaliação';
+  type: 'Simulado' | 'Redação' | 'Dinâmica' | 'Avaliação' | 'Trabalho em grupo' | 'Projeto de pesquisa';
   status: 'Ativo' | 'Prazo Encerrado' | 'Inativo';
   deadline: string;
   maxGrade?: number;

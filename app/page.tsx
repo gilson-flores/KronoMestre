@@ -21,6 +21,7 @@ import { LibraryView } from '@/components/views/LibraryView';
 import { StudentPortalView } from '@/components/views/StudentPortalView';
 import { MessagesView } from '@/components/views/MessagesView';
 
+import { normalizeStudentName } from '@/lib/studentUtils';
 import { NewActivityModal } from '@/components/modals/NewActivityModal';
 import { EditActivityModal } from '@/components/modals/EditActivityModal';
 import { ViewActivityModal } from '@/components/modals/ViewActivityModal';
@@ -212,6 +213,13 @@ export default function Home() {
   };
 
   // Activity Handlers
+  const sanitizeTypeForDb = (rawType: string): string => {
+    if (rawType === 'Trabalho em grupo') return 'Dinâmica';
+    if (rawType === 'Projeto de pesquisa') return 'Avaliação';
+    const valid = ['Simulado', 'Redação', 'Dinâmica', 'Avaliação'];
+    return valid.includes(rawType) ? rawType : 'Avaliação';
+  };
+
   const handleCreateActivity = async (newAct: Activity) => {
     if (!isSupabaseConfigured || !supabase) {
       showGlobalStatus('error', 'ARMADILHA DE BUG DISPARADA: Supabase não está configurado no ambiente. A atividade NÃO foi salva.');
@@ -242,24 +250,44 @@ export default function Home() {
 
       let { error } = await supabase.from('activities').insert(fullPayload);
 
-      // Se falhou (ex: colunas de segurança ou suporte inexistentes na tabela do Supabase)
+      // Se falhou (ex: restrição check constraint do tipo ou colunas inexistentes no Supabase)
       if (error) {
-        console.warn('Inserção direta falhou, tentando fallback sem colunas de segurança adicionais...', error);
-        const {
-          security_focus_lock,
-          security_block_copy_statement,
-          security_block_paste_essay,
-          support_material,
-          ...fallbackPayload
-        } = fullPayload as any;
+        console.warn('Inserção direta de atividade falhou, executando estratégias de fallback...', error);
+        const isConstraintErr =
+          error.message?.includes('check constraint') ||
+          error.message?.includes('type_check') ||
+          error.details?.includes('type_check');
 
-        const fallbackRes = await supabase.from('activities').insert(fallbackPayload);
-        if (!fallbackRes.error) {
-          error = null;
-        } else {
-          // tentar upsert em caso de conflito de chave primária
-          const upsertRes = await supabase.from('activities').upsert(fallbackPayload);
-          error = upsertRes.error;
+        // Tentativa 1: mesmo payload com tipo seguro para o banco
+        if (isConstraintErr) {
+          const safeTypePayload = { ...fullPayload, type: sanitizeTypeForDb(fullPayload.type) };
+          const safeTypeRes = await supabase.from('activities').insert(safeTypePayload);
+          if (!safeTypeRes.error) {
+            error = null;
+          } else {
+            error = safeTypeRes.error;
+          }
+        }
+
+        // Tentativa 2: remover colunas adicionais de segurança/suporte + tipo seguro
+        if (error) {
+          const {
+            security_focus_lock,
+            security_block_copy_statement,
+            security_block_paste_essay,
+            support_material,
+            ...fallbackPayload
+          } = fullPayload as any;
+
+          fallbackPayload.type = sanitizeTypeForDb(fullPayload.type);
+
+          const fallbackRes = await supabase.from('activities').insert(fallbackPayload);
+          if (!fallbackRes.error) {
+            error = null;
+          } else {
+            const upsertRes = await supabase.from('activities').upsert(fallbackPayload);
+            error = upsertRes.error;
+          }
         }
       }
 
@@ -314,16 +342,37 @@ export default function Home() {
 
       let { error } = await supabase.from('activities').upsert(fullPayload);
 
-      if (error && (error.message?.includes('security_') || error.code === 'PGRST204' || !error.message)) {
-        const {
-          security_focus_lock,
-          security_block_copy_statement,
-          security_block_paste_essay,
-          support_material,
-          ...fallbackPayload
-        } = fullPayload as any;
-        const fallbackRes = await supabase.from('activities').upsert(fallbackPayload);
-        error = fallbackRes.error;
+      if (error) {
+        console.warn('Upsert de atividade falhou, executando estratégias de fallback...', error);
+        const isConstraintErr =
+          error.message?.includes('check constraint') ||
+          error.message?.includes('type_check') ||
+          error.details?.includes('type_check');
+
+        if (isConstraintErr) {
+          const safeTypePayload = { ...fullPayload, type: sanitizeTypeForDb(fullPayload.type) };
+          const safeTypeRes = await supabase.from('activities').upsert(safeTypePayload);
+          if (!safeTypeRes.error) {
+            error = null;
+          } else {
+            error = safeTypeRes.error;
+          }
+        }
+
+        if (error) {
+          const {
+            security_focus_lock,
+            security_block_copy_statement,
+            security_block_paste_essay,
+            support_material,
+            ...fallbackPayload
+          } = fullPayload as any;
+
+          fallbackPayload.type = sanitizeTypeForDb(fullPayload.type);
+
+          const fallbackRes = await supabase.from('activities').upsert(fallbackPayload);
+          error = fallbackRes.error;
+        }
       }
 
       if (error) {
@@ -405,34 +454,99 @@ export default function Home() {
 
       const newReturnCount = status === 'returned' ? currentReturnCount + 1 : currentReturnCount;
 
-      const updatePayload: any = {
-        essay_score: essayScore,
-        teacher_feedback: feedback,
-        status: status,
-      };
-      if (status === 'returned') updatePayload.return_count = newReturnCount;
-      if (extraPoints !== undefined) updatePayload.extra_points = extraPoints;
-      if (registeredInStateSystem !== undefined) updatePayload.registered_in_state_system = registeredInStateSystem;
+      // Identify group members if this is a group submission being corrected from pending queue
+      const isInitialGroupGrading = currentSub?.status === 'pending' && Boolean(currentSub?.groupMembers);
 
-      const { error } = await supabase
-        .from('submissions')
-        .update(updatePayload)
-        .eq('activity_id', activityId)
-        .eq('student_id', studentId);
+      const targetGroupStudentIds = new Set<string>([studentId]);
+      const missingGroupMembers: StudentUser[] = [];
 
-      if (error) {
-        // If return_count column is missing in Supabase, retry without return_count
-        if (error.message?.includes('return_count') || error.code === 'PGRST204') {
-          delete updatePayload.return_count;
-          await supabase
-            .from('submissions')
-            .update(updatePayload)
-            .eq('activity_id', activityId)
-            .eq('student_id', studentId);
-        } else {
-          console.error('Erro ao atualizar nota no Supabase:', error);
-          showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Falha ao atualizar nota no Supabase (${error.code || 'BD'}): ${error.message}`);
-          return;
+      if (currentSub?.groupMembers) {
+        const memberNames = currentSub.groupMembers
+          .split(',')
+          .map((n) => n.trim())
+          .filter(Boolean);
+
+        memberNames.forEach((memberCandidate) => {
+          const normCandidate = normalizeStudentName(memberCandidate);
+          const matchedSt = students.find(
+            (st) =>
+              normalizeStudentName(st.fullName) === normCandidate ||
+              st.fullName.toLowerCase() === memberCandidate.toLowerCase()
+          );
+          if (matchedSt) {
+            targetGroupStudentIds.add(matchedSt.id);
+            const existsInActivity = targetActivity?.submissions.some((s) => s.studentId === matchedSt.id);
+            if (!existsInActivity) {
+              missingGroupMembers.push(matchedSt);
+            }
+          }
+        });
+
+        if (targetActivity) {
+          targetActivity.submissions.forEach((s) => {
+            if (
+              s.groupMembers === currentSub.groupMembers ||
+              memberNames.some((m) => normalizeStudentName(m) === normalizeStudentName(s.studentName))
+            ) {
+              targetGroupStudentIds.add(s.studentId);
+            }
+          });
+        }
+      }
+
+      // If missing members exist, insert initial submission for them first in Supabase
+      if (isInitialGroupGrading && missingGroupMembers.length > 0) {
+        for (const memberSt of missingGroupMembers) {
+          await supabase.from('submissions').insert({
+            activity_id: activityId,
+            student_id: memberSt.id,
+            student_name: memberSt.fullName,
+            matricula: memberSt.matricula,
+            tag: memberSt.tag,
+            avatar_url: memberSt.avatarUrl,
+            essay_answer: currentSub?.essayAnswer || '',
+            status: status,
+            essay_score: essayScore,
+            teacher_feedback: feedback,
+            objective_score: currentSub?.objectiveScore || 0,
+            max_objective_score: currentSub?.maxObjectiveScore || 0,
+            max_essay_score: currentSub?.maxEssayScore || 0,
+            selected_objective_answers: currentSub?.selectedObjectiveAnswers || {},
+            group_members: currentSub?.groupMembers || null,
+            extra_points: extraPoints || 0,
+          });
+        }
+      }
+
+      const idsToUpdate = isInitialGroupGrading ? Array.from(targetGroupStudentIds) : [studentId];
+
+      for (const tid of idsToUpdate) {
+        const updatePayload: any = {
+          essay_score: essayScore,
+          teacher_feedback: feedback,
+          status: status,
+        };
+        if (status === 'returned') updatePayload.return_count = newReturnCount;
+        if (extraPoints !== undefined) updatePayload.extra_points = extraPoints;
+        if (registeredInStateSystem !== undefined) updatePayload.registered_in_state_system = registeredInStateSystem;
+
+        const { error } = await supabase
+          .from('submissions')
+          .update(updatePayload)
+          .eq('activity_id', activityId)
+          .eq('student_id', tid);
+
+        if (error) {
+          if (error.message?.includes('return_count') || error.code === 'PGRST204') {
+            delete updatePayload.return_count;
+            await supabase
+              .from('submissions')
+              .update(updatePayload)
+              .eq('activity_id', activityId)
+              .eq('student_id', tid);
+          } else {
+            console.error(`Erro ao atualizar nota no Supabase para ${tid}:`, error);
+          }
         }
       }
 
@@ -440,8 +554,36 @@ export default function Home() {
         prev.map((act) => {
           if (act.id !== activityId) return act;
 
-          const updatedSubmissions = act.submissions.map((sub) => {
-            if (sub.studentId === studentId) {
+          let updatedSubmissions = [...act.submissions];
+
+          if (isInitialGroupGrading && missingGroupMembers.length > 0) {
+            missingGroupMembers.forEach((memberSt) => {
+              if (!updatedSubmissions.some((s) => s.studentId === memberSt.id)) {
+                updatedSubmissions.push({
+                  studentId: memberSt.id,
+                  studentName: memberSt.fullName,
+                  matricula: memberSt.matricula,
+                  tag: memberSt.tag,
+                  avatarUrl: memberSt.avatarUrl,
+                  submittedAt: currentSub?.submittedAt || new Date().toLocaleDateString('pt-BR'),
+                  objectiveScore: currentSub?.objectiveScore || 0,
+                  maxObjectiveScore: currentSub?.maxObjectiveScore || 0,
+                  maxEssayScore: currentSub?.maxEssayScore || 0,
+                  status: status,
+                  essayAnswer: currentSub?.essayAnswer || '',
+                  selectedObjectiveAnswers: currentSub?.selectedObjectiveAnswers || {},
+                  groupMembers: currentSub?.groupMembers || undefined,
+                  teacherFeedback: feedback,
+                  essayScore: essayScore,
+                  extraPoints: extraPoints || 0,
+                  registeredInStateSystem: registeredInStateSystem || false,
+                });
+              }
+            });
+          }
+
+          updatedSubmissions = updatedSubmissions.map((sub) => {
+            if (idsToUpdate.includes(sub.studentId)) {
               return {
                 ...sub,
                 essayScore,
@@ -469,10 +611,38 @@ export default function Home() {
       if (selectedActivityForGrading && selectedActivityForGrading.id === activityId) {
         setSelectedActivityForGrading((prev) => {
           if (!prev) return null;
+          let updatedSubmissions = [...prev.submissions];
+
+          if (isInitialGroupGrading && missingGroupMembers.length > 0) {
+            missingGroupMembers.forEach((memberSt) => {
+              if (!updatedSubmissions.some((s) => s.studentId === memberSt.id)) {
+                updatedSubmissions.push({
+                  studentId: memberSt.id,
+                  studentName: memberSt.fullName,
+                  matricula: memberSt.matricula,
+                  tag: memberSt.tag,
+                  avatarUrl: memberSt.avatarUrl,
+                  submittedAt: currentSub?.submittedAt || new Date().toLocaleDateString('pt-BR'),
+                  objectiveScore: currentSub?.objectiveScore || 0,
+                  maxObjectiveScore: currentSub?.maxObjectiveScore || 0,
+                  maxEssayScore: currentSub?.maxEssayScore || 0,
+                  status: status,
+                  essayAnswer: currentSub?.essayAnswer || '',
+                  selectedObjectiveAnswers: currentSub?.selectedObjectiveAnswers || {},
+                  groupMembers: currentSub?.groupMembers || undefined,
+                  teacherFeedback: feedback,
+                  essayScore: essayScore,
+                  extraPoints: extraPoints || 0,
+                  registeredInStateSystem: registeredInStateSystem || false,
+                });
+              }
+            });
+          }
+
           return {
             ...prev,
-            submissions: prev.submissions.map((sub) =>
-              sub.studentId === studentId
+            submissions: updatedSubmissions.map((sub) =>
+              idsToUpdate.includes(sub.studentId)
                 ? {
                     ...sub,
                     essayScore,
@@ -514,100 +684,113 @@ export default function Home() {
     }
 
     try {
-      const { data: existingSub, error: checkErr } = await supabase
-        .from('submissions')
-        .select('id')
-        .eq('activity_id', activityId)
-        .eq('student_id', studentId)
-        .maybeSingle();
+      // Identify all target students involved in the submission (current student + group members)
+      const targetStudents: StudentUser[] = [currentStudent];
+      if (groupMembers) {
+        const memberNames = groupMembers
+          .split(',')
+          .map((n) => n.trim())
+          .filter(Boolean);
 
-      if (checkErr) {
-        console.error('Erro ao verificar entrega existente:', checkErr);
-        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao buscar dados da entrega: ${checkErr.message}`);
-        return;
+        memberNames.forEach((memberCandidate) => {
+          const normCandidate = normalizeStudentName(memberCandidate);
+          const matched = students.find(
+            (st) =>
+              normalizeStudentName(st.fullName) === normCandidate ||
+              st.fullName.toLowerCase() === memberCandidate.toLowerCase()
+          );
+          if (matched && !targetStudents.some((t) => t.id === matched.id)) {
+            targetStudents.push(matched);
+          }
+        });
       }
 
-      let saveErr = null;
-
-      if (existingSub) {
-        const { error } = await supabase
+      // Save submission in Supabase for each target student
+      for (const targetSt of targetStudents) {
+        const { data: existingSub, error: checkErr } = await supabase
           .from('submissions')
-          .update({
+          .select('id')
+          .eq('activity_id', activityId)
+          .eq('student_id', targetSt.id)
+          .maybeSingle();
+
+        if (checkErr) {
+          console.error(`Erro ao verificar entrega existente para ${targetSt.fullName}:`, checkErr);
+          continue;
+        }
+
+        if (existingSub) {
+          await supabase
+            .from('submissions')
+            .update({
+              essay_answer: essayAnswer,
+              objective_score: objectiveScore,
+              max_objective_score: maxObjectiveScore,
+              max_essay_score: maxEssayScore,
+              selected_objective_answers: selectedObjectiveAnswers || {},
+              group_members: groupMembers || null,
+              status: 'pending',
+            })
+            .eq('id', existingSub.id);
+        } else {
+          await supabase.from('submissions').insert({
+            activity_id: activityId,
+            student_id: targetSt.id,
+            student_name: targetSt.fullName,
+            matricula: targetSt.matricula,
+            tag: targetSt.tag,
+            avatar_url: targetSt.avatarUrl,
             essay_answer: essayAnswer,
+            status: 'pending',
             objective_score: objectiveScore,
             max_objective_score: maxObjectiveScore,
             max_essay_score: maxEssayScore,
             selected_objective_answers: selectedObjectiveAnswers || {},
             group_members: groupMembers || null,
-            status: 'pending',
-          })
-          .eq('id', existingSub.id);
-        saveErr = error;
-      } else {
-        const { error } = await supabase.from('submissions').insert({
-          activity_id: activityId,
-          student_id: studentId,
-          student_name: currentStudent.fullName,
-          matricula: currentStudent.matricula,
-          tag: currentStudent.tag,
-          avatar_url: currentStudent.avatarUrl,
-          essay_answer: essayAnswer,
-          status: 'pending',
-          objective_score: objectiveScore,
-          max_objective_score: maxObjectiveScore,
-          max_essay_score: maxEssayScore,
-          selected_objective_answers: selectedObjectiveAnswers || {},
-          group_members: groupMembers || null,
-        });
-        saveErr = error;
+          });
+        }
       }
 
-      if (saveErr) {
-        console.error('Erro ao gravar resposta do aluno no Supabase:', saveErr);
-        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao gravar resposta no Supabase (${saveErr.code || 'BD'}): ${saveErr.message}`);
-        return;
-      }
-
+      // Update local state for all target students
       setActivities((prev) =>
         prev.map((act) => {
           if (act.id !== activityId) return act;
 
-          const existing = act.submissions.find((s) => s.studentId === studentId);
           let updatedSubmissions = [...act.submissions];
 
-          if (existing) {
-            updatedSubmissions = updatedSubmissions.map((s) =>
-              s.studentId === studentId
-                ? {
-                    ...s,
-                    essayAnswer,
-                    objectiveScore,
-                    maxObjectiveScore,
-                    maxEssayScore,
-                    selectedObjectiveAnswers,
-                    groupMembers: groupMembers !== undefined ? groupMembers : s.groupMembers,
-                    status: 'pending' as const,
-                  }
-                : s
-            );
-          } else {
-            updatedSubmissions.push({
-              studentId,
-              studentName: currentStudent.fullName,
-              matricula: currentStudent.matricula,
-              tag: currentStudent.tag,
-              avatarUrl: currentStudent.avatarUrl,
-              submittedAt: new Date().toLocaleDateString('pt-BR'),
-              objectiveScore,
-              maxObjectiveScore,
-              maxEssayScore,
-              status: 'pending',
-              essayAnswer,
-              selectedObjectiveAnswers,
-              groupMembers: groupMembers || undefined,
-              teacherFeedback: '',
-            });
-          }
+          targetStudents.forEach((targetSt) => {
+            const existingIndex = updatedSubmissions.findIndex((s) => s.studentId === targetSt.id);
+
+            if (existingIndex >= 0) {
+              updatedSubmissions[existingIndex] = {
+                ...updatedSubmissions[existingIndex],
+                essayAnswer,
+                objectiveScore,
+                maxObjectiveScore,
+                maxEssayScore,
+                selectedObjectiveAnswers,
+                groupMembers: groupMembers !== undefined ? groupMembers : updatedSubmissions[existingIndex].groupMembers,
+                status: 'pending' as const,
+              };
+            } else {
+              updatedSubmissions.push({
+                studentId: targetSt.id,
+                studentName: targetSt.fullName,
+                matricula: targetSt.matricula,
+                tag: targetSt.tag,
+                avatarUrl: targetSt.avatarUrl,
+                submittedAt: new Date().toLocaleDateString('pt-BR'),
+                objectiveScore,
+                maxObjectiveScore,
+                maxEssayScore,
+                status: 'pending',
+                essayAnswer,
+                selectedObjectiveAnswers,
+                groupMembers: groupMembers || undefined,
+                teacherFeedback: '',
+              });
+            }
+          });
 
           const pendingCorrection = updatedSubmissions.filter((s) => s.status === 'pending').length;
 

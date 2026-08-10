@@ -21,7 +21,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { Activity, ActivitySubmission, StudentUser, EssayQuestion } from '@/lib/types';
-import { canStudentAccessActivity } from '@/lib/studentUtils';
+import { canStudentAccessActivity, normalizeStudentName } from '@/lib/studentUtils';
 
 interface GradingViewProps {
   activity: Activity;
@@ -119,11 +119,32 @@ export const GradingView: React.FC<GradingViewProps> = ({
   // Handle Score, Feedback, Extra Points, State Registration changes
   const handleScoreChange = (studentId: string, scoreVal: string) => {
     const val = parseFloat(scoreVal);
-    setSubmissions((prev) =>
-      prev.map((sub) =>
-        sub.studentId === studentId ? { ...sub, essayScore: isNaN(val) ? 0 : val } : sub
-      )
-    );
+    const num = isNaN(val) ? 0 : val;
+
+    setSubmissions((prev) => {
+      const targetSub = prev.find((s) => s.studentId === studentId);
+      if (targetSub?.groupMembers && targetSub.status === 'pending') {
+        const groupNames = targetSub.groupMembers
+          .split(',')
+          .map((n) => normalizeStudentName(n.trim()))
+          .filter(Boolean);
+
+        return prev.map((sub) => {
+          if (
+            sub.studentId === studentId ||
+            (sub.groupMembers && sub.groupMembers === targetSub.groupMembers) ||
+            groupNames.includes(normalizeStudentName(sub.studentName))
+          ) {
+            return { ...sub, essayScore: num };
+          }
+          return sub;
+        });
+      }
+
+      return prev.map((sub) =>
+        sub.studentId === studentId ? { ...sub, essayScore: num } : sub
+      );
+    });
   };
 
   const handleExtraPointsChange = (studentId: string, valStr: string) => {
@@ -138,9 +159,29 @@ export const GradingView: React.FC<GradingViewProps> = ({
   const handleFeedbackChange = (studentId: string, text: string) => {
     // Limit feedback to 400 characters
     const trimmed = text.slice(0, 400);
-    setSubmissions((prev) =>
-      prev.map((sub) => (sub.studentId === studentId ? { ...sub, teacherFeedback: trimmed } : sub))
-    );
+
+    setSubmissions((prev) => {
+      const targetSub = prev.find((s) => s.studentId === studentId);
+      if (targetSub?.groupMembers && targetSub.status === 'pending') {
+        const groupNames = targetSub.groupMembers
+          .split(',')
+          .map((n) => normalizeStudentName(n.trim()))
+          .filter(Boolean);
+
+        return prev.map((sub) => {
+          if (
+            sub.studentId === studentId ||
+            (sub.groupMembers && sub.groupMembers === targetSub.groupMembers) ||
+            groupNames.includes(normalizeStudentName(sub.studentName))
+          ) {
+            return { ...sub, teacherFeedback: trimmed };
+          }
+          return sub;
+        });
+      }
+
+      return prev.map((sub) => (sub.studentId === studentId ? { ...sub, teacherFeedback: trimmed } : sub));
+    });
   };
 
   const handleToggleStateSystem = (studentId: string) => {
@@ -157,10 +198,39 @@ export const GradingView: React.FC<GradingViewProps> = ({
     const sub = submissions.find((s) => s.studentId === studentId);
     if (!sub) return;
 
-    // Immediately update local submission status so UI moves card to correct tab
-    setSubmissions((prev) =>
-      prev.map((s) => (s.studentId === studentId ? { ...s, status } : s))
-    );
+    const isInitialGroupGrading = sub.status === 'pending' && Boolean(sub.groupMembers);
+
+    if (isInitialGroupGrading) {
+      const groupNames = (sub.groupMembers || '')
+        .split(',')
+        .map((n) => normalizeStudentName(n.trim()))
+        .filter(Boolean);
+
+      // Immediately update local submission status and scores for all group members so UI moves all group cards to correct tab
+      setSubmissions((prev) =>
+        prev.map((s) => {
+          const isMember =
+            s.studentId === studentId ||
+            (s.groupMembers && s.groupMembers === sub.groupMembers) ||
+            groupNames.includes(normalizeStudentName(s.studentName));
+
+          if (isMember) {
+            return {
+              ...s,
+              essayScore: sub.essayScore,
+              teacherFeedback: sub.teacherFeedback,
+              status,
+            };
+          }
+          return s;
+        })
+      );
+    } else {
+      // Individual edit in corrigidas/devolvidas
+      setSubmissions((prev) =>
+        prev.map((s) => (s.studentId === studentId ? { ...s, status } : s))
+      );
+    }
 
     onUpdateSubmission(
       activity.id,

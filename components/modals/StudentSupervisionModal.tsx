@@ -150,6 +150,94 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
   };
 
   const handlePrintWindow = () => {
+    try {
+      const printContent = document.querySelector('.dossier-printable-area');
+      if (printContent) {
+        const printIframe = document.createElement('iframe');
+        printIframe.style.position = 'fixed';
+        printIframe.style.right = '0';
+        printIframe.style.bottom = '0';
+        printIframe.style.width = '0';
+        printIframe.style.height = '0';
+        printIframe.style.border = '0';
+        printIframe.style.visibility = 'hidden';
+        document.body.appendChild(printIframe);
+
+        const doc = printIframe.contentWindow?.document;
+        if (doc) {
+          const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+            .map((s) => s.outerHTML)
+            .join('\n');
+
+          const clone = printContent.cloneNode(true) as HTMLElement;
+          clone.querySelectorAll('.no-print').forEach((el) => el.remove());
+
+          doc.open();
+          doc.write(`
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Dossiê Oficial - ${student.fullName}</title>
+                ${styles}
+                <style>
+                  @page {
+                    size: A4 portrait;
+                    margin: 10mm;
+                  }
+                  body {
+                    background: white !important;
+                    color: black !important;
+                    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+                    padding: 0 !important;
+                    margin: 0 !important;
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                  }
+                  .dossier-printable-area {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    box-shadow: none !important;
+                    border: none !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                  }
+                  .no-print {
+                    display: none !important;
+                  }
+                </style>
+              </head>
+              <body>
+                ${clone.outerHTML}
+              </body>
+            </html>
+          `);
+          doc.close();
+
+          setTimeout(() => {
+            try {
+              printIframe.contentWindow?.focus();
+              printIframe.contentWindow?.print();
+            } catch (err) {
+              console.error('Iframe print error, falling back:', err);
+              window.focus();
+              window.print();
+            }
+            setTimeout(() => {
+              if (document.body.contains(printIframe)) {
+                document.body.removeChild(printIframe);
+              }
+            }, 2000);
+          }, 350);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('Print error:', err);
+    }
+
+    window.focus();
     window.print();
   };
 
@@ -161,13 +249,13 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
     : null;
 
   return (
-    <div className="fixed inset-[#0] z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-2 sm:p-4 md:p-6 bg-black/80 backdrop-blur-md animate-fadeIn overflow-y-auto">
       {/* ----------------- DOSSIER PRINT / EXAM PROOF MODAL ----------------- */}
       {selectedActivityForDossier && activeDossierRecord && (
-        <div className="fixed inset-[#0] z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-lg overflow-y-auto animate-fadeIn">
-          <div className="dossier-printable-area w-full max-w-3xl bg-white text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col my-6 border border-slate-300">
+        <div className="fixed inset-0 z-[100] flex items-start justify-center p-2 sm:p-4 md:p-6 bg-black/90 backdrop-blur-lg overflow-y-auto animate-fadeIn">
+          <div className="dossier-printable-area w-full max-w-3xl bg-white text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col my-2 sm:my-auto border border-slate-300">
             {/* Header Controls (Hidden on Print) */}
-            <div className="no-print p-3 sm:p-4 bg-slate-950 text-white flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-slate-800 shadow-lg">
+            <div className="no-print sticky top-0 z-20 p-3 sm:p-4 bg-slate-950 text-white flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-slate-800 shadow-md">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30 shrink-0">
                   <FileCheck2 className="w-4 h-4" />
@@ -453,7 +541,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
 
       {/* ----------------- ALERT MODAL: EMISSION LIMIT REACHED ----------------- */}
       {limitAlert && (
-        <div className="fixed inset-[#0] z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
           <div className="bg-[#131b2e] border-2 border-rose-500/50 rounded-3xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl">
             <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto border border-rose-500/40">
               <Lock className="w-6 h-6" />

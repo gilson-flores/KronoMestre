@@ -10,6 +10,7 @@ import {
   FileQuestion,
   FileText,
   Users2,
+  BookOpen,
   Pencil,
   FileSpreadsheet,
   Trash2,
@@ -119,6 +120,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     Simulado: activities.filter((a) => a.type === 'Simulado'),
     Redação: activities.filter((a) => a.type === 'Redação'),
     Dinâmica: activities.filter((a) => a.type === 'Dinâmica'),
+    'Trabalho em grupo': activities.filter((a) => a.type === 'Trabalho em grupo'),
+    'Projeto de pesquisa': activities.filter((a) => a.type === 'Projeto de pesquisa'),
   };
 
   return (
@@ -319,7 +322,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             filteredActivities.map((act) => {
               let Icon = FileText;
               if (act.type === 'Simulado') Icon = FileQuestion;
-              if (act.type === 'Dinâmica') Icon = Users2;
+              if (act.type === 'Dinâmica' || act.type === 'Trabalho em grupo') Icon = Users2;
+              if (act.type === 'Projeto de pesquisa') Icon = BookOpen;
 
               // Calculate submission return breakdowns
               const ret1x = act.submissions.filter((s) => s.status === 'returned' && (s.returnCount === 1 || !s.returnCount)).length;

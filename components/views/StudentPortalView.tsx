@@ -594,6 +594,10 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                                 ? 'Pergaminho de Redação'
                                 : act.type === 'Dinâmica'
                                 ? 'Treino em Equipe'
+                                : act.type === 'Trabalho em grupo'
+                                ? 'Trabalho em Grupo'
+                                : act.type === 'Projeto de pesquisa'
+                                ? 'Projeto de Pesquisa'
                                 : 'Exame Ninja'}
                             </span>
 
@@ -761,6 +765,10 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                               ? 'Pergaminho de Redação'
                               : act.type === 'Dinâmica'
                               ? 'Treino em Equipe (Dinâmica)'
+                              : act.type === 'Trabalho em grupo'
+                              ? 'Trabalho em Grupo'
+                              : act.type === 'Projeto de pesquisa'
+                              ? 'Projeto de Pesquisa'
                               : 'Exame Ninja (Avaliação)'}
                           </span>
 
@@ -973,11 +981,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                             }}
                           >
                             <p className="text-xs font-semibold text-white">{eq.statement}</p>
-                            {eq.keywords && (
-                              <p className="text-[11px] text-[#bccabb]">
-                                Palavras-chave sugeridas: <span className="text-[#4ade80] font-bold">{eq.keywords}</span>
-                              </p>
-                            )}
+
                           </div>
                         ))}
 
@@ -1153,6 +1157,10 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                               ? 'Pergaminho de Redação'
                               : act.type === 'Dinâmica'
                               ? 'Treino em Equipe'
+                              : act.type === 'Trabalho em grupo'
+                              ? 'Trabalho em Grupo'
+                              : act.type === 'Projeto de pesquisa'
+                              ? 'Projeto de Pesquisa'
                               : 'Exame Ninja'}
                           </span>
 
@@ -1191,24 +1199,32 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                     </div>
 
                     {/* Grade Detailed Breakdown */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* Objective Score (Saiu na Hora) */}
-                      <div className="bg-[#131b2e] p-4 rounded-2xl border border-white/10 space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-[#4ade80] flex items-center gap-1.5">
-                            <CheckCircle2 className="w-4 h-4" />
-                            <span>Parte Objetiva (Automática):</span>
-                          </span>
-                          <span className="text-sm font-black text-white">
-                            {sub.objectiveScore.toFixed(1)} / {sub.maxObjectiveScore.toFixed(1)} pts
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-[#bccabb]">
-                          ⚡ Nota calculada instantaneamente no momento do envio.
-                        </p>
-                      </div>
+                    {(() => {
+                      const hasObjectiveQuestions = (act.questions || []).some((q) => q.type === 'multiple_choice');
+                      const isRedacao = (act.type as string).toLowerCase() === 'redacao';
+                      const showObjectiveSection = hasObjectiveQuestions && !isRedacao && distribution.hasObjective && sub.maxObjectiveScore > 0;
 
-                      {/* Essay Score (Aguardando ou Corrigida) */}
+                      return (
+                        <div className={`grid grid-cols-1 ${showObjectiveSection ? 'sm:grid-cols-2' : ''} gap-4`}>
+                          {/* Objective Score (Saiu na Hora) */}
+                          {showObjectiveSection && (
+                            <div className="bg-[#131b2e] p-4 rounded-2xl border border-white/10 space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-[#4ade80] flex items-center gap-1.5">
+                                  <CheckCircle2 className="w-4 h-4" />
+                                  <span>Parte Objetiva (Automática):</span>
+                                </span>
+                                <span className="text-sm font-black text-white">
+                                  {sub.objectiveScore.toFixed(1)} / {sub.maxObjectiveScore.toFixed(1)} pts
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-[#bccabb]">
+                                ⚡ Nota calculada instantaneamente no momento do envio.
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Essay Score (Aguardando ou Corrigida) */}
                       <div className="bg-[#131b2e] p-4 rounded-2xl border border-white/10 space-y-1">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-[#c0c1ff] flex items-center gap-1.5">
@@ -1232,6 +1248,8 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                         </p>
                       </div>
                     </div>
+                      );
+                    })()}
 
                     {/* Group Members display */}
                     {sub.groupMembers && (
