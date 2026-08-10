@@ -133,35 +133,86 @@ export const AuthView: React.FC<AuthViewProps> = ({
     }
   };
 
-  const handleStudentSubmit = (e: React.FormEvent) => {
+  const handleStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStudentError('');
 
-    const normalizedInputName = normalizeStudentName(studentFullName);
+    const rawInput = studentFullName.trim();
+    const normalizedInputName = normalizeStudentName(rawInput);
+    const passwordToTest = studentPassword.trim() || '1234';
 
-    if (!normalizedInputName || !studentTurma || !studentPassword) {
-      setStudentError('Por favor, preencha o Nome Completo (MAIÚSCULAS SEM ACENTOS), selecione a Turma e a Senha.');
+    if (!rawInput && !normalizedInputName) {
+      setStudentError('Por favor, informe o seu Nome Completo ou Matrícula.');
       return;
     }
 
-    // Match student by normalized name & turma code
-    const matched = students.find(
-      (s) =>
-        normalizeStudentName(s.fullName) === normalizedInputName &&
-        s.turma === studentTurma
-    );
+    // 1. Procurar no estado local de alunos
+    let matched = students.find((s) => {
+      const matchName = normalizeStudentName(s.fullName) === normalizedInputName;
+      const matchMatricula = s.matricula && s.matricula.trim().toLowerCase() === rawInput.toLowerCase();
+      const matchTurma = !studentTurma || s.turma === studentTurma;
+      return (matchName || matchMatricula) && matchTurma;
+    });
+
+    // Se não encontrou restrito à turma selecionada, tentar procurar por nome/matrícula independentemente de turma
+    if (!matched) {
+      matched = students.find((s) => {
+        const matchName = normalizeStudentName(s.fullName) === normalizedInputName;
+        const matchMatricula = s.matricula && s.matricula.trim().toLowerCase() === rawInput.toLowerCase();
+        return matchName || matchMatricula;
+      });
+    }
+
+    // Se ainda não encontrou, tentar busca por primeiro/último nome contido
+    if (!matched && normalizedInputName.length >= 4) {
+      matched = students.find((s) => {
+        const studentNorm = normalizeStudentName(s.fullName);
+        return studentNorm.includes(normalizedInputName) || normalizedInputName.includes(studentNorm);
+      });
+    }
+
+    // 2. Se ainda não encontrou e Supabase estiver configurado, buscar no Supabase
+    if (!matched && isSupabaseConfigured && supabase) {
+      try {
+        const { data: dbStudents } = await supabase
+          .from('students')
+          .select('*');
+
+        if (dbStudents && dbStudents.length > 0) {
+          const dbMatched = dbStudents.find((s) => {
+            const matchName = normalizeStudentName(s.full_name) === normalizedInputName;
+            const matchMatricula = s.matricula && s.matricula.trim().toLowerCase() === rawInput.toLowerCase();
+            return matchName || matchMatricula;
+          });
+
+          if (dbMatched) {
+            matched = {
+              id: dbMatched.id,
+              fullName: dbMatched.full_name,
+              turma: dbMatched.turma,
+              matricula: dbMatched.matricula,
+              tag: dbMatched.tag,
+              passwordHash: dbMatched.password_hash || '1234',
+              avatarUrl: dbMatched.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+              pedagogicalNotes: dbMatched.pedagogical_notes || '',
+            };
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao buscar aluno no Supabase:', err);
+      }
+    }
 
     if (!matched) {
       setStudentError(
-        'Aluno não encontrado para a turma ' +
-          studentTurma +
-          '. Certifique-se de que o nome está correto e cadastrado em MAIÚSCULAS sem acentos.'
+        `Aluno não encontrado para "${rawInput}". Verifique se o nome ou a matrícula estão digitados corretamente.`
       );
       return;
     }
 
-    // Check password (default 1234 or matched hash)
-    if (studentPassword === '1234' || studentPassword === matched.passwordHash) {
+    // Verificar senha (padrão 1234 ou matched hash)
+    const expectedPassword = matched.passwordHash || '1234';
+    if (passwordToTest === '1234' || passwordToTest === expectedPassword) {
       onLoginStudent(matched);
     } else {
       setStudentError('Senha incorreta. A senha padrão cadastrada para alunos é 1234.');
@@ -271,7 +322,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           <form onSubmit={handleStudentSubmit} className="space-y-4">
             <div className="flex items-center gap-2 text-xs text-[#c0c1ff] bg-indigo-500/10 p-3 rounded-2xl border border-indigo-500/20 mb-2">
               <CheckCircle2 className="w-4 h-4 shrink-0 text-[#4ade80]" />
-              <span>Login do Aluno: Nome Completo, Turma e Senha (padrão 1234).</span>
+              <span>Acesso rápido: Informe seu Nome Completo ou Matrícula (Senha padrão: 1234).</span>
             </div>
 
             {studentError && (
@@ -282,50 +333,52 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">
-                Nome Completo do Aluno (MAIÚSCULAS SEM ACENTOS)
+                Nome Completo do Aluno ou Matrícula
               </label>
               <input
                 type="text"
                 required
                 value={studentFullName}
-                onChange={(e) => setStudentFullName(normalizeStudentName(e.target.value))}
+                onChange={(e) => setStudentFullName(e.target.value)}
                 className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80] uppercase tracking-wide"
-                placeholder="Ex: LUCAS GABRIEL MARTINS"
+                placeholder="Ex: AMANDHA LETTICIA SILVA PACHECO"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">Turma</label>
+              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">
+                Turma (Opcional)
+              </label>
               <select
-                required
                 value={studentTurma}
                 onChange={(e) => setStudentTurma(e.target.value)}
                 className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#4ade80]"
               >
-                <option value="">Selecione a sua turma...</option>
+                <option value="">Todas / Identificar automaticamente</option>
                 {availableTurmas.map((t) => (
                   <option key={t} value={t} className="bg-[#0b1326] text-white">
-                    {getTurmaLabel(t)}
+                    Turma {getTurmaLabel(t)}
                   </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">Senha</label>
+              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">
+                Senha (Padrão: 1234)
+              </label>
               <div className="relative">
                 <input
                   type="password"
-                  required
                   value={studentPassword}
                   onChange={(e) => setStudentPassword(e.target.value)}
                   className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
-                  placeholder="Sua senha (padrão 1234)"
+                  placeholder="Deixe em branco ou digite 1234"
                 />
                 <Lock className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-[#869486]" />
               </div>
               <p className="text-[11px] text-[#bccabb] mt-1 ml-1">
-                A senha padrão para todos os alunos é <span className="font-bold text-white">1234</span>
+                A senha padrão cadastrada para todos os alunos é <span className="font-bold text-white">1234</span>
               </p>
             </div>
 

@@ -213,186 +213,151 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
       {/* Main Messaging Interface Container */}
       <div className="glass-panel rounded-3xl border border-white/10 shadow-2xl overflow-hidden min-h-[580px] h-[calc(100vh-250px)] max-h-[750px] flex flex-col md:flex-row relative">
         
-        {/* LEFT PANEL: Student Thread List (Teacher View) or Teacher Card (Student View) */}
-        <div
-          className={`w-full md:w-80 lg:w-96 bg-[#0c1424] border-r border-white/10 flex flex-col transition-all duration-300 ${
-            isMobileChatOpen ? 'hidden md:flex' : 'flex'
-          }`}
-        >
-          {currentUserRole === 'teacher' ? (
-            <>
-              {/* Teacher Sidebar Header */}
-              <div className="p-4 border-b border-white/10 space-y-3 bg-[#0e172a]/60">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                    <User className="w-4 h-4 text-[#4ade80]" />
-                    <span>Conversas ({students.length})</span>
-                  </h3>
-                  <span className="text-[10px] bg-[#4ade80]/20 text-[#4ade80] px-2 py-0.5 rounded-full font-bold">
-                    Ativas
-                  </span>
+        {/* LEFT PANEL: Student Thread List (Teacher View) */}
+        {currentUserRole === 'teacher' && (
+          <div
+            className={`w-full md:w-80 lg:w-96 bg-[#0c1424] border-r border-white/10 flex flex-col transition-all duration-300 ${
+              isMobileChatOpen ? 'hidden md:flex' : 'flex'
+            }`}
+          >
+            {/* Teacher Sidebar Header */}
+            <div className="p-4 border-b border-white/10 space-y-3 bg-[#0e172a]/60">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <User className="w-4 h-4 text-[#4ade80]" />
+                  <span>Conversas ({students.length})</span>
+                </h3>
+                <span className="text-[10px] bg-[#4ade80]/20 text-[#4ade80] px-2 py-0.5 rounded-full font-bold">
+                  Ativas
+                </span>
+              </div>
+
+              {/* Filtros: Aluno e Turma */}
+              <div className="space-y-2.5">
+                {/* 1. Filtro por Aluno */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-[#869486] uppercase tracking-wider flex items-center gap-1.5">
+                    <User className="w-3 h-3 text-[#4ade80]" />
+                    <span>Filtro Aluno</span>
+                  </label>
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-[#bccabb] absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Nome ou matrícula do aluno..."
+                      className="w-full bg-[#131b2e] border border-white/10 rounded-xl pl-8 pr-7 py-2 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-2.5 top-2.5 text-[#bccabb] hover:text-white"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                {/* Search Input */}
-                <div className="relative">
-                  <Search className="w-4 h-4 text-[#bccabb] absolute left-3 top-2.5" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Buscar aluno ou matrícula..."
-                    className="w-full bg-[#131b2e] border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-3 top-2.5 text-[#bccabb] hover:text-white"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Turma Filter Pills */}
-                {availableTurmas.length > 0 && (
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-                    <button
-                      onClick={() => setSelectedTurmaFilter('Todas')}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer ${
-                        selectedTurmaFilter === 'Todas'
-                          ? 'bg-[#4ade80] text-[#003919]'
-                          : 'bg-[#131b2e] text-[#bccabb] hover:text-white border border-white/5'
-                      }`}
-                    >
-                      Todas
-                    </button>
+                {/* 2. Filtro por Turma */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-[#869486] uppercase tracking-wider flex items-center gap-1.5">
+                    <Filter className="w-3 h-3 text-[#4ade80]" />
+                    <span>Filtro Turma</span>
+                  </label>
+                  <select
+                    value={selectedTurmaFilter}
+                    onChange={(e) => setSelectedTurmaFilter(e.target.value)}
+                    className="w-full bg-[#131b2e] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#4ade80] cursor-pointer"
+                  >
+                    <option value="Todas" className="bg-[#0e172a] text-white">
+                      Todas as Turmas
+                    </option>
                     {availableTurmas.map((t) => (
-                      <button
-                        key={t}
-                        onClick={() => setSelectedTurmaFilter(t)}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer ${
-                          selectedTurmaFilter === t
-                            ? 'bg-[#4ade80] text-[#003919]'
-                            : 'bg-[#131b2e] text-[#bccabb] hover:text-white border border-white/5'
-                        }`}
-                      >
-                        {t}
-                      </button>
+                      <option key={t} value={t} className="bg-[#0e172a] text-white">
+                        Turma {t}
+                      </option>
                     ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Student Thread Scroll Area */}
-              <div className="flex-1 overflow-y-auto divide-y divide-white/5">
-                {filteredStudents.length === 0 ? (
-                  <div className="p-8 text-center text-xs text-[#bccabb]">
-                    Nenhum aluno encontrado.
-                  </div>
-                ) : (
-                  filteredStudents.map((st) => {
-                    const isSelected = st.id === selectedStudentId;
-                    const stMessages = messages.filter(
-                      (m) => m.threadId === st.id || m.senderId === st.id || m.recipientId === st.id
-                    );
-                    const lastMsg = stMessages[stMessages.length - 1];
-                    const unreadCount = stMessages.filter((m) => m.senderRole === 'student' && !m.read).length;
-
-                    return (
-                      <button
-                        key={st.id}
-                        onClick={() => handleSelectStudent(st.id)}
-                        className={`w-full p-4 text-left flex items-start gap-3 transition-colors cursor-pointer relative ${
-                          isSelected
-                            ? 'bg-[#17233b] border-l-4 border-l-[#4ade80]'
-                            : 'hover:bg-white/5'
-                        }`}
-                      >
-                        <div className="relative shrink-0">
-                          <img
-                            src={st.avatarUrl}
-                            alt={st.fullName}
-                            className="w-10 h-10 rounded-full object-cover border border-white/20"
-                          />
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#4ade80] absolute bottom-0 right-0 border-2 border-[#0c1424]" />
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-1">
-                            <h4 className="text-xs font-bold text-white truncate">
-                              {st.fullName}
-                            </h4>
-                            {lastMsg && (
-                              <span className="text-[10px] text-[#869486] shrink-0">
-                                {lastMsg.createdAt.split(' ')[1] || lastMsg.createdAt}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[10px] bg-[#131b2e] text-[#bccabb] px-2 py-0.2 rounded border border-white/10 font-semibold">
-                              {st.turma}
-                            </span>
-                            {st.tag && (
-                              <span className="text-[9px] bg-[#4ade80]/20 text-[#4ade80] px-1.5 py-0.2 rounded font-bold">
-                                {st.tag}
-                              </span>
-                            )}
-                          </div>
-
-                          <p className="text-[11px] text-[#bccabb] truncate mt-1">
-                            {lastMsg ? lastMsg.content : 'Iniciar conversa...'}
-                          </p>
-                        </div>
-
-                        {unreadCount > 0 && (
-                          <span className="bg-[#4ade80] text-[#003919] text-[10px] font-extrabold w-5 h-5 rounded-full flex items-center justify-center shrink-0 shadow-sm self-center">
-                            {unreadCount}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-            </>
-          ) : (
-            /* Student Sidebar Header: Teacher Profile Card */
-            <div className="p-4 sm:p-5 space-y-4 bg-[#0e172a]/80">
-              <div className="text-center p-3.5 sm:p-4 bg-[#131b2e] rounded-2xl border border-white/10 space-y-2.5">
-                <img
-                  src={formatAvatarUrl(teacher.avatarUrl)}
-                  alt={teacher.name || 'Professor'}
-                  className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover mx-auto border-2 border-[#4ade80] shadow-md"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250';
-                  }}
-                />
-                <div className="min-w-0">
-                  <h3 className="text-sm font-extrabold text-white truncate">{teacher.name || 'Professor'}</h3>
-                  <p className="text-xs text-[#4ade80] font-semibold truncate">{teacher.subject || 'Sociologia'}</p>
-                  {teacher.school && (
-                    <p className="text-[11px] text-[#bccabb] mt-0.5 truncate">{teacher.school}</p>
-                  )}
+                  </select>
                 </div>
-                <div className="pt-2 border-t border-white/10 flex items-center justify-center gap-2 text-[11px] text-[#4ade80]">
-                  <span className="w-2 h-2 rounded-full bg-[#4ade80] animate-pulse" />
-                  <span className="font-bold">Online no Studio</span>
-                </div>
-              </div>
-
-              <div className="bg-[#131b2e] p-3 rounded-2xl border border-white/10 space-y-1.5 text-xs text-[#bccabb]">
-                <div className="flex items-center gap-2 text-white font-bold">
-                  <Clock className="w-3.5 h-3.5 text-[#4ade80]" />
-                  <span>Horários de Atendimento</span>
-                </div>
-                <p className="text-[11px] leading-relaxed">
-                  Segunda a Sexta, das 08h às 17h. Dúvidas fora do horário serão respondidas no próximo turno escolar.
-                </p>
               </div>
             </div>
-          )}
-        </div>
+
+            {/* Student Thread Scroll Area */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-white/5">
+              {filteredStudents.length === 0 ? (
+                <div className="p-8 text-center text-xs text-[#bccabb]">
+                  Nenhum aluno encontrado.
+                </div>
+              ) : (
+                filteredStudents.map((st) => {
+                  const isSelected = st.id === selectedStudentId;
+                  const stMessages = messages.filter(
+                    (m) => m.threadId === st.id || m.senderId === st.id || m.recipientId === st.id
+                  );
+                  const lastMsg = stMessages[stMessages.length - 1];
+                  const unreadCount = stMessages.filter((m) => m.senderRole === 'student' && !m.read).length;
+
+                  return (
+                    <button
+                      key={st.id}
+                      onClick={() => handleSelectStudent(st.id)}
+                      className={`w-full p-4 text-left flex items-start gap-3 transition-colors cursor-pointer relative ${
+                        isSelected
+                          ? 'bg-[#17233b] border-l-4 border-l-[#4ade80]'
+                          : 'hover:bg-white/5'
+                      }`}
+                    >
+                      <div className="relative shrink-0">
+                        <img
+                          src={st.avatarUrl}
+                          alt={st.fullName}
+                          className="w-10 h-10 rounded-full object-cover border border-white/20"
+                        />
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#4ade80] absolute bottom-0 right-0 border-2 border-[#0c1424]" />
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1">
+                          <h4 className="text-xs font-bold text-white truncate">
+                            {st.fullName}
+                          </h4>
+                          {lastMsg && (
+                            <span className="text-[10px] text-[#869486] shrink-0">
+                              {lastMsg.createdAt.split(' ')[1] || lastMsg.createdAt}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[10px] bg-[#131b2e] text-[#bccabb] px-2 py-0.2 rounded border border-white/10 font-semibold">
+                            {st.turma}
+                          </span>
+                          {st.tag && (
+                            <span className="text-[9px] bg-[#4ade80]/20 text-[#4ade80] px-1.5 py-0.2 rounded font-bold">
+                              {st.tag}
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-[11px] text-[#bccabb] truncate mt-1">
+                          {lastMsg ? lastMsg.content : 'Iniciar conversa...'}
+                        </p>
+                      </div>
+
+                      {unreadCount > 0 && (
+                        <span className="bg-[#4ade80] text-[#003919] text-[10px] font-extrabold w-5 h-5 rounded-full flex items-center justify-center shrink-0 shadow-sm self-center">
+                          {unreadCount}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
 
         {/* RIGHT PANEL: Active Conversation Window */}
         <div
@@ -448,7 +413,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                       Canal de Comunicação com o Professor
                     </h3>
                     <p className="text-[11px] text-[#bccabb] truncate">
-                      Atendimento direto com {teacher.name || 'Prof. Gilson Flores'}
+                      Suporte pedagógico e tira-dúvidas de Sociologia
                     </p>
                   </div>
                 </div>
@@ -462,7 +427,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
           </div>
 
           {/* Messages Stream Area */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-4">
             {activeThreadMessages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-3">
                 <div className="p-4 rounded-full bg-[#131b2e] text-[#4ade80] border border-white/10">
