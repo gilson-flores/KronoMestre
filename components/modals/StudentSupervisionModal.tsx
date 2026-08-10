@@ -167,34 +167,34 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
         <div className="fixed inset-[#0] z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-lg overflow-y-auto animate-fadeIn">
           <div className="dossier-printable-area w-full max-w-3xl bg-white text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col my-6 border border-slate-300">
             {/* Header Controls (Hidden on Print) */}
-            <div className="no-print p-4 bg-slate-950 text-white flex items-center justify-between border-b border-slate-800 shadow-lg">
+            <div className="no-print p-3 sm:p-4 bg-slate-950 text-white flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-slate-800 shadow-lg">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30 shrink-0">
                   <FileCheck2 className="w-4 h-4" />
                 </div>
                 <div>
-                  <span className="font-extrabold text-sm block leading-tight text-white">
+                  <span className="font-extrabold text-xs sm:text-sm block leading-tight text-white">
                     Cópia Impressa da Prova (Dossiê Comprovante)
                   </span>
-                  <span className="text-[11px] text-emerald-400 font-mono font-medium">
+                  <span className="text-[10px] sm:text-[11px] text-emerald-400 font-mono font-medium">
                     Emissão Oficial • Via {activeDossierRecord.issueNumber} de 3
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 justify-end">
                 <button
                   onClick={handlePrintWindow}
-                  className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-2 transition-all shadow-md hover:shadow-emerald-500/20 active:scale-95 cursor-pointer"
+                  className="flex-1 sm:flex-none px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-emerald-500/20 active:scale-95 cursor-pointer"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>Imprimir / Salvar PDF</span>
+                  <span>Imprimir Dossiê / Salvar PDF</span>
                 </button>
                 <button
                   onClick={() => {
                     setSelectedActivityForDossier(null);
                     setActiveDossierRecord(null);
                   }}
-                  className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all active:scale-95 cursor-pointer"
+                  className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all active:scale-95 cursor-pointer shrink-0"
                   title="Fechar Cópia"
                 >
                   <X className="w-4 h-4" />
@@ -203,9 +203,9 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
             </div>
 
             {/* Printable Document Body */}
-            <div className="p-8 space-y-6 text-slate-900 bg-white relative">
+            <div className="p-4 sm:p-6 md:p-8 space-y-5 sm:space-y-6 text-slate-900 bg-white relative overflow-x-hidden">
               {/* Institutional Watermark Badge */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-[0.03] pointer-events-none select-none text-center">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-[0.03] pointer-events-none select-none text-center hidden sm:block">
                 <ShieldCheck className="w-96 h-96 mx-auto text-slate-900" />
                 <span className="text-4xl font-black tracking-widest text-slate-900 uppercase block mt-2">
                   DOCUMENTO OFICIAL
@@ -213,40 +213,40 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
               </div>
 
               {/* Document Header */}
-              <div className="border-b-2 border-slate-900 pb-4 text-center space-y-1.5 relative">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-full text-[10px] font-black uppercase text-slate-700 tracking-widest mb-1 border border-slate-300">
-                  <ShieldCheck className="w-3.5 h-3.5 text-slate-900" />
+              <div className="border-b-2 border-slate-900 pb-3 sm:pb-4 text-center space-y-1.5 relative">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 rounded-full text-[9px] sm:text-[10px] font-black uppercase text-slate-700 tracking-widest mb-1 border border-slate-300">
+                  <ShieldCheck className="w-3.5 h-3.5 text-slate-900 shrink-0" />
                   <span>Sistema Escolar da Vila da Folha</span>
                 </div>
-                <h1 className="text-2xl font-black uppercase tracking-wider text-slate-900">
-                  ESCOLA NINJA DE FORMÇÃO ACADÊMICA
+                <h1 className="text-lg sm:text-2xl font-black uppercase tracking-wider text-slate-900 leading-tight">
+                  ESCOLA NINJA DE FORMAÇÃO ACADÊMICA
                 </h1>
-                <h2 className="text-xs font-extrabold uppercase text-slate-700 tracking-widest">
+                <h2 className="text-[10px] sm:text-xs font-extrabold uppercase text-slate-700 tracking-widest leading-normal">
                   COMPROVANTE PEDAGÓGICO DE PROVA & NOTA FINAL (DOSSIÊ OFICIAL)
                 </h2>
 
-                <div className="grid grid-cols-3 gap-2 text-[10px] text-slate-700 font-mono mt-3 pt-2.5 border-t border-slate-300 bg-slate-50/80 p-2 rounded-lg">
-                  <div className="text-left">
-                    <span className="text-slate-500 block">REGISTRO DO DOSSIÊ:</span>
-                    <strong className="text-slate-900 font-bold">{activeDossierRecord.id}</strong>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px] text-slate-700 font-mono mt-3 pt-2.5 border-t border-slate-300 bg-slate-50/80 p-2.5 rounded-lg text-center sm:text-left">
+                  <div>
+                    <span className="text-slate-500 block text-[9px]">REGISTRO DO DOSSIÊ:</span>
+                    <strong className="text-slate-900 font-bold break-all">{activeDossierRecord.id}</strong>
                   </div>
-                  <div className="text-center">
-                    <span className="text-slate-500 block">STATUS DE EMISSÃO:</span>
+                  <div className="sm:text-center">
+                    <span className="text-slate-500 block text-[9px]">STATUS DE EMISSÃO:</span>
                     <strong className="text-slate-900 font-bold">VIA {activeDossierRecord.issueNumber} DE 3 (MÁXIMO)</strong>
                   </div>
-                  <div className="text-right">
-                    <span className="text-slate-500 block">DATA E HORA:</span>
+                  <div className="sm:text-right">
+                    <span className="text-slate-500 block text-[9px]">DATA E HORA:</span>
                     <strong className="text-slate-900 font-bold">{new Date(activeDossierRecord.issuedAt).toLocaleString('pt-BR')}</strong>
                   </div>
                 </div>
               </div>
 
               {/* Student & Activity Metadata */}
-              <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-300 text-xs shadow-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 p-3.5 sm:p-4 bg-slate-50 rounded-xl border border-slate-300 text-xs shadow-sm">
                 <div className="space-y-1.5">
                   <p className="border-b border-slate-200 pb-1">
                     <span className="text-slate-500 font-semibold uppercase text-[10px] block">Nome do Aluno(a):</span>
-                    <strong className="text-slate-900 text-sm">{student.fullName}</strong>
+                    <strong className="text-slate-900 text-xs sm:text-sm break-words">{student.fullName}</strong>
                   </p>
                   <div className="grid grid-cols-2 gap-2 pt-1">
                     <p>
@@ -263,7 +263,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                 <div className="space-y-1.5">
                   <p className="border-b border-slate-200 pb-1">
                     <span className="text-slate-500 font-semibold uppercase text-[10px] block">Atividade / Avaliação:</span>
-                    <strong className="text-slate-900 text-sm">{selectedActivityForDossier.title}</strong>
+                    <strong className="text-slate-900 text-xs sm:text-sm break-words">{selectedActivityForDossier.title}</strong>
                   </p>
                   <div className="grid grid-cols-2 gap-2 pt-1">
                     <p>
@@ -279,13 +279,13 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
               </div>
 
               {/* Grade Verification Summary Box */}
-              <div className="p-4 bg-emerald-50/80 border-2 border-emerald-600/40 rounded-xl flex items-center justify-between text-xs shadow-sm">
+              <div className="p-3.5 sm:p-4 bg-emerald-50/80 border-2 border-emerald-600/40 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-sm">
                 <div className="space-y-0.5">
                   <span className="font-black text-emerald-950 uppercase text-[10px] tracking-wider block">
                     SITUAÇÃO REGISTRADA DA NOTA
                   </span>
-                  <span className="text-emerald-900 font-extrabold text-sm flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                  <span className="text-emerald-900 font-extrabold text-xs sm:text-sm flex items-center gap-1.5 flex-wrap">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
                     <span>
                       {currentDossierSubmission?.status === 'graded'
                         ? 'NOTA OFICIAL LANÇADA E VALIDADA PELO SENSEI'
@@ -295,9 +295,9 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                     </span>
                   </span>
                 </div>
-                <div className="text-right bg-white px-4 py-2 rounded-lg border border-emerald-300 shadow-inner">
+                <div className="w-full sm:w-auto text-left sm:text-right bg-white px-4 py-2 rounded-lg border border-emerald-300 shadow-inner shrink-0">
                   <span className="text-[10px] text-emerald-800 uppercase block font-bold">Nota Final Concedida</span>
-                  <span className="text-2xl font-black text-emerald-950">
+                  <span className="text-xl sm:text-2xl font-black text-emerald-950">
                     {currentDossierSubmission?.status === 'graded'
                       ? `${(
                           (currentDossierSubmission.objectiveScore || 0) +
@@ -311,7 +311,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
 
               {/* Exam Content & Questions Breakdown (Proof Copy) */}
               <div className="space-y-4">
-                <h3 className="text-xs font-black border-b-2 border-slate-900 pb-1 text-slate-900 uppercase tracking-wider flex items-center justify-between">
+                <h3 className="text-xs font-black border-b-2 border-slate-900 pb-1 text-slate-900 uppercase tracking-wider flex items-center justify-between flex-wrap gap-1">
                   <span>RESPOSTAS E CONTEÚDO REGISTRADO NA PROVA</span>
                   <span className="text-[10px] font-normal text-slate-500 font-mono">
                     {selectedActivityForDossier.questions?.length || 0} QUESTÕES
@@ -326,7 +326,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
 
                       return (
                         <div key={q.id || idx} className="p-3 bg-slate-50 rounded-lg border border-slate-300 text-xs space-y-2">
-                          <div className="flex justify-between font-bold text-slate-800 border-b border-slate-200 pb-1">
+                          <div className="flex justify-between font-bold text-slate-800 border-b border-slate-200 pb-1 flex-wrap gap-1">
                             <span>Questão {idx + 1} (Múltipla Escolha)</span>
                             {selectedOpt !== undefined && (
                               <span className={isCorrect ? 'text-emerald-700 font-extrabold' : 'text-rose-700 font-extrabold'}>
@@ -334,8 +334,8 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                               </span>
                             )}
                           </div>
-                          <p className="text-slate-900 font-semibold">{q.statement}</p>
-                          <div className="grid grid-cols-2 gap-2 mt-2">
+                          <p className="text-slate-900 font-semibold leading-snug">{q.statement}</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
                             {q.options.map((opt, oIdx) => {
                               const wasChosen = selectedOpt === oIdx;
                               const isAnswerKey = q.correctOptionIndex === oIdx;
@@ -368,8 +368,8 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                           <div className="font-bold text-slate-800 border-b border-slate-200 pb-1">
                             <span>Questão {idx + 1} (Discursiva / Redação)</span>
                           </div>
-                          <p className="text-slate-900 font-semibold">{q.statement}</p>
-                          <div className="p-3 bg-white border border-slate-300 rounded-lg text-slate-900 italic font-mono text-[11px] whitespace-pre-wrap leading-relaxed shadow-inner">
+                          <p className="text-slate-900 font-semibold leading-snug">{q.statement}</p>
+                          <div className="p-3 bg-white border border-slate-300 rounded-lg text-slate-900 italic font-mono text-[11px] whitespace-pre-wrap leading-relaxed shadow-inner break-words">
                             {currentDossierSubmission?.essayAnswer || 'Sem resposta dissertativa registrada.'}
                           </div>
                         </div>
@@ -379,7 +379,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                 ) : (
                   <div className="p-3 bg-slate-50 rounded-lg border border-slate-300 text-xs text-slate-700 space-y-1">
                     <p className="font-bold text-slate-900">Resposta do Aluno:</p>
-                    <p className="italic font-mono text-slate-900 bg-white p-3 rounded border border-slate-200">
+                    <p className="italic font-mono text-slate-900 bg-white p-3 rounded border border-slate-200 break-words">
                       {currentDossierSubmission?.essayAnswer || 'Resposta registrada na plataforma.'}
                     </p>
                   </div>
@@ -395,12 +395,12 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
               </div>
 
               {/* Signatures & Official Certification Section */}
-              <div className="pt-8 border-t-2 border-slate-900 space-y-6">
-                <p className="text-[10px] text-slate-700 text-center font-extrabold uppercase tracking-widest bg-slate-100 py-1.5 rounded-lg border border-slate-200">
+              <div className="pt-6 sm:pt-8 border-t-2 border-slate-900 space-y-5 sm:space-y-6">
+                <p className="text-[9px] sm:text-[10px] text-slate-700 text-center font-extrabold uppercase tracking-wider sm:tracking-widest bg-slate-100 py-1.5 px-2 rounded-lg border border-slate-200">
                   DECLARAÇÃO DE CONFERÊNCIA E ASSINATURA DE COMPROVAÇÃO DE NOTA
                 </p>
 
-                <div className="grid grid-cols-2 gap-12 pt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-12 pt-2 sm:pt-4">
                   <div className="text-center space-y-1">
                     <div className="border-b-2 border-slate-900 w-full mb-2"></div>
                     <p className="text-xs font-black text-slate-900 uppercase">{student.fullName}</p>
@@ -414,10 +414,36 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-slate-200 flex items-center justify-between text-[9px] text-slate-500 font-mono">
+                <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-[9px] text-slate-500 font-mono gap-1 text-center sm:text-left">
                   <span>Documento emitido via Sistema Ninja de Gestão Escolar</span>
-                  <span>ID Autenticador: {activeDossierRecord.id}</span>
+                  <span className="font-bold text-slate-700">ID Autenticador: {activeDossierRecord.id}</span>
                   <span>Válido como comprovante físico assinado</span>
+                </div>
+              </div>
+
+              {/* Bottom Print Action Bar (Hidden on Print) */}
+              <div className="no-print pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 p-3 sm:p-4 rounded-2xl border border-slate-300">
+                <div className="flex items-center gap-2 text-xs text-slate-600 font-medium text-center sm:text-left">
+                  <Printer className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Pronto para impressão em formato A4/PDF em dispositivos móveis e desktop.</span>
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    onClick={handlePrintWindow}
+                    className="flex-1 sm:flex-none px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>Imprimir Dossiê</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedActivityForDossier(null);
+                      setActiveDossierRecord(null);
+                    }}
+                    className="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs rounded-xl transition-all active:scale-95 cursor-pointer"
+                  >
+                    Fechar
+                  </button>
                 </div>
               </div>
             </div>

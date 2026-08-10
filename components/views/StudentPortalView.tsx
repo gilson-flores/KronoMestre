@@ -404,17 +404,16 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         </div>
       )}
 
-      {/* Main 4 Abas Navigation */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 bg-[#131b2e] p-1.5 rounded-2xl border border-white/10">
+      {/* Main Abas Navigation */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-[#131b2e] p-1.5 rounded-2xl border border-white/10 shadow-inner">
         <button
           onClick={() => {
             setActiveTab('atividades');
             setSelectedActivityId(null);
-            setStudentFilter('todas');
           }}
-          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] ${
-            activeTab === 'atividades' && studentFilter !== 'corrigidas'
-              ? 'bg-[#4ade80] text-[#003919] shadow-md'
+          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] active:scale-95 ${
+            activeTab === 'atividades'
+              ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-[#003919] shadow-md font-extrabold'
               : 'text-[#bccabb] hover:text-white hover:bg-white/5'
           }`}
         >
@@ -423,39 +422,12 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           {authorizedActivities.length > 0 && (
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 ${
-                activeTab === 'atividades' && studentFilter !== 'corrigidas'
-                  ? 'bg-[#003919] text-[#4ade80]'
-                  : 'bg-[#4ade80] text-[#003919]'
-              }`}
-            >
-              {authorizedActivities.length}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveTab('correcoes');
-            setSelectedActivityId(null);
-            setStudentFilter('corrigidas');
-          }}
-          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] ${
-            activeTab === 'correcoes' || (activeTab === 'atividades' && studentFilter === 'corrigidas')
-              ? 'bg-[#4ade80] text-[#003919] shadow-md'
-              : 'text-[#bccabb] hover:text-white hover:bg-white/5'
-          }`}
-        >
-          <Award className="w-4 h-4 shrink-0" />
-          <span>Correções e Notas</span>
-          {gradedActivities.length > 0 && (
-            <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 ${
-                activeTab === 'correcoes' || (activeTab === 'atividades' && studentFilter === 'corrigidas')
+                activeTab === 'atividades'
                   ? 'bg-[#003919] text-[#4ade80]'
                   : 'bg-[#171f33] text-white border border-white/10'
               }`}
             >
-              {gradedActivities.length}
+              {authorizedActivities.length}
             </span>
           )}
         </button>
@@ -467,9 +439,9 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               onMarkThreadAsRead(student.id, 'student');
             }
           }}
-          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] ${
+          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] active:scale-95 ${
             activeTab === 'mensagens'
-              ? 'bg-[#4ade80] text-[#003919] shadow-md'
+              ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-[#003919] shadow-md font-extrabold'
               : 'text-[#bccabb] hover:text-white hover:bg-white/5'
           }`}
         >
@@ -484,9 +456,9 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
         <button
           onClick={() => setActiveTab('arquivos')}
-          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] ${
+          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] active:scale-95 ${
             activeTab === 'arquivos'
-              ? 'bg-[#4ade80] text-[#003919] shadow-md'
+              ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-[#003919] shadow-md font-extrabold'
               : 'text-[#bccabb] hover:text-white hover:bg-white/5'
           }`}
         >
@@ -507,24 +479,24 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       </div>
 
       {/* TAB: ATIVIDADES E CORREÇÕES (LIST & FILTER SYSTEM) */}
-      {(activeTab === 'atividades' || activeTab === 'correcoes') && (
+      {activeTab === 'atividades' && (
         <div className="space-y-6">
           {/* Sub-filter bar for Student Activities */}
-          <div className="flex flex-wrap items-center gap-2 p-1.5 bg-[#131b2e] rounded-2xl border border-white/10">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-1.5 bg-[#131b2e] rounded-2xl border border-white/10 shadow-inner">
             <button
               onClick={() => {
                 setStudentFilter('todas');
                 setSelectedActivityId(null);
               }}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
                 studentFilter === 'todas'
-                  ? 'bg-[#4ade80] text-[#003919] shadow-md'
+                  ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-[#003919] shadow-md font-extrabold'
                   : 'text-[#bccabb] hover:text-white hover:bg-white/5'
               }`}
             >
-              <BookOpen className="w-4 h-4 shrink-0" />
-              <span>Todas as Missões</span>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${studentFilter === 'todas' ? 'bg-[#003919] text-[#4ade80]' : 'bg-black/30 text-white'}`}>
+              <BookOpen className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Todas</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${studentFilter === 'todas' ? 'bg-[#003919] text-[#4ade80]' : 'bg-black/30 text-white'}`}>
                 {authorizedActivities.length}
               </span>
             </button>
@@ -534,15 +506,15 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 setStudentFilter('a_fazer');
                 setSelectedActivityId(null);
               }}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
                 studentFilter === 'a_fazer'
-                  ? 'bg-[#4ade80] text-[#003919] shadow-md'
+                  ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-[#003919] shadow-md font-extrabold'
                   : 'text-[#bccabb] hover:text-white hover:bg-white/5'
               }`}
             >
-              <FileQuestion className="w-4 h-4 shrink-0" />
-              <span>A Fazer / Pendentes</span>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${studentFilter === 'a_fazer' ? 'bg-[#003919] text-[#4ade80]' : 'bg-black/30 text-white'}`}>
+              <FileQuestion className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">A Fazer</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${studentFilter === 'a_fazer' ? 'bg-[#003919] text-[#4ade80]' : 'bg-black/30 text-white'}`}>
                 {pendingActivities.length}
               </span>
             </button>
@@ -552,15 +524,15 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 setStudentFilter('a_corrigir');
                 setSelectedActivityId(null);
               }}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
                 studentFilter === 'a_corrigir'
-                  ? 'bg-[#4ade80] text-[#003919] shadow-md'
+                  ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-[#003919] shadow-md font-extrabold'
                   : 'text-[#bccabb] hover:text-white hover:bg-white/5'
               }`}
             >
-              <Clock className="w-4 h-4 shrink-0" />
-              <span>A Corrigir pelo Sensei</span>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${studentFilter === 'a_corrigir' ? 'bg-[#003919] text-[#4ade80]' : 'bg-black/30 text-white'}`}>
+              <Clock className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">A Corrigir</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${studentFilter === 'a_corrigir' ? 'bg-[#003919] text-[#4ade80]' : 'bg-black/30 text-white'}`}>
                 {toCorrectActivities.length}
               </span>
             </button>
@@ -570,15 +542,15 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 setStudentFilter('corrigidas');
                 setSelectedActivityId(null);
               }}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
                 studentFilter === 'corrigidas'
-                  ? 'bg-[#4ade80] text-[#003919] shadow-md'
+                  ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-[#003919] shadow-md font-extrabold'
                   : 'text-[#bccabb] hover:text-white hover:bg-white/5'
               }`}
             >
-              <Award className="w-4 h-4 shrink-0" />
-              <span>Corrigidas e Notas</span>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${studentFilter === 'corrigidas' ? 'bg-[#003919] text-[#4ade80]' : 'bg-black/30 text-white'}`}>
+              <Award className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Corrigidas</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${studentFilter === 'corrigidas' ? 'bg-[#003919] text-[#4ade80]' : 'bg-black/30 text-white'}`}>
                 {gradedActivities.length}
               </span>
             </button>
@@ -690,19 +662,19 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           {/* DETAIL VIEW (when an activity is selected) */}
           {selectedActivityId !== null && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between p-4 bg-[#131b2e] rounded-2xl border border-white/10">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-[#131b2e] rounded-2xl border border-white/10 shadow-md">
                 <button
                   onClick={() => setSelectedActivityId(null)}
-                  className="py-2.5 px-5 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-all cursor-pointer border border-white/10"
+                  className="py-2.5 px-4 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition-all cursor-pointer border border-white/10 active:scale-95 shrink-0 w-fit"
                 >
                   <ArrowLeft className="w-4 h-4" />
-                  <span>Voltar para Lista de Atividades</span>
+                  <span>Voltar para Lista</span>
                 </button>
-                <div className="text-right">
-                  <span className="text-xs text-[#bccabb] font-semibold block">
+                <div className="text-left sm:text-right min-w-0">
+                  <span className="text-[10px] uppercase tracking-wider text-[#bccabb] font-semibold block">
                     Atividade Selecionada
                   </span>
-                  <span className="text-sm font-bold text-white">
+                  <span className="text-sm font-bold text-white truncate block">
                     {authorizedActivities.find((a) => a.id === selectedActivityId)?.title}
                   </span>
                 </div>
