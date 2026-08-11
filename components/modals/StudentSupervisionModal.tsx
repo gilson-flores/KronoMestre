@@ -48,14 +48,14 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
   onSaveNotes,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'relatorio' | 'atividades' | 'anotacoes'>('relatorio');
+  const [prevStudentId, setPrevStudentId] = useState<string | null>(null);
   const [teacherNotes, setTeacherNotes] = useState('');
   const [isSavedNotes, setIsSavedNotes] = useState(false);
 
-  useEffect(() => {
-    if (student) {
-      setTeacherNotes(student.pedagogicalNotes || '');
-    }
-  }, [student]);
+  if (student && student.id !== prevStudentId) {
+    setPrevStudentId(student.id);
+    setTeacherNotes(student.pedagogicalNotes || '');
+  }
 
   // Dossier Proof Copy modal state
   const [selectedActivityForDossier, setSelectedActivityForDossier] = useState<Activity | null>(null);

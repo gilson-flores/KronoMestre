@@ -9,7 +9,7 @@ import {
   initialLibrary,
   initialChatMessages,
 } from '@/lib/initialData';
-import { UserRole, TeacherUser, StudentUser, Activity, ChatMessage } from '@/lib/types';
+import { UserRole, TeacherUser, StudentUser, Activity, ChatMessage, LibraryFile } from '@/lib/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { AuthView } from '@/components/AuthView';
 import { Sidebar } from '@/components/Sidebar';
@@ -32,15 +32,50 @@ import { CheckCircle2, AlertTriangle } from 'lucide-react';
 
 export default function Home() {
   // Auth state
-  const [role, setRole] = useState<UserRole>(null); // 'teacher' | 'student' | null
+  const [role, setRole] = useState<UserRole>(null);
   const [teacher, setTeacher] = useState<TeacherUser>(initialTeacher);
   const [currentStudent, setCurrentStudent] = useState<StudentUser | null>(null);
+  const [inactivityTimeoutEnabled, setInactivityTimeoutEnabled] = useState<boolean>(true);
+
+  // Restaurar sessão e preferências no carregamento do cliente
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const timer = setTimeout(() => {
+      const savedDriveUrl = localStorage.getItem('teacher_drive_folder_url');
+      if (savedDriveUrl) {
+        setTeacher((prev) => ({ ...prev, driveFolderUrl: savedDriveUrl }));
+      }
+
+      const savedTimeout = localStorage.getItem('inactivity_timeout_enabled');
+      if (savedTimeout !== null) {
+        setInactivityTimeoutEnabled(savedTimeout === 'true');
+      }
+
+      const sessionStr = sessionStorage.getItem('active_session');
+      if (sessionStr) {
+        try {
+          const session = JSON.parse(sessionStr);
+          if (session.role === 'teacher') {
+            setRole('teacher');
+          } else if (session.role === 'student' && session.studentData) {
+            setCurrentStudent(session.studentData);
+            setRole('student');
+          }
+        } catch (e) {
+          console.warn('Erro ao ler sessão armazenada:', e);
+        }
+      }
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   // App datasets
   const [students, setStudents] = useState<StudentUser[]>(initialStudents);
   const [activities, setActivities] = useState<Activity[]>(initialActivities);
   const [schedule] = useState(initialSchedule);
-  const [library] = useState(initialLibrary);
+  const [library, setLibrary] = useState<LibraryFile[]>(initialLibrary);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
 
   // Active view tab: 'painel' | 'atividades' | 'alunos' | 'horarios' | 'arquivos' | 'grading' | 'mensagens' | 'configuracoes'
@@ -72,6 +107,87 @@ export default function Home() {
     }, 6000);
   };
 
+  const handleSaveDriveFolderUrl = async (url: string) => {
+    setTeacher((prev) => ({ ...prev, driveFolderUrl: url }));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('teacher_drive_folder_url', url);
+    }
+    if (isSupabaseConfigured && supabase && teacher.id) {
+      try {
+        await supabase
+          .from('teachers')
+          .update({ drive_folder_url: url })
+          .eq('id', teacher.id);
+      } catch (err) {
+        console.warn('Persistência no Supabase para drive_folder_url:', err);
+      }
+    }
+    showGlobalStatus('success', 'Link da pasta do Google Drive salvo com sucesso!');
+  };
+
+  const sanitizeLibraryForStorage = (files: LibraryFile[]) => {
+    return files.map((item) => {
+      if (item.driveUrl && item.driveUrl.startsWith('data:') && item.driveUrl.length > 50000) {
+        return { ...item, driveUrl: '' };
+      }
+      return item;
+    });
+  };
+
+  const handleAddLibraryFile = async (newFile: LibraryFile) => {
+    setLibrary((prev) => [newFile, ...prev]);
+    if (typeof window !== 'undefined') {
+      try {
+        const updated = sanitizeLibraryForStorage([newFile, ...library]);
+        localStorage.setItem('library_files_data', JSON.stringify(updated));
+      } catch (err) {
+        console.warn('Não foi possível salvar os arquivos no localStorage (cota excedida):', err);
+      }
+    }
+    if (isSupabaseConfigured && supabase) {
+      try {
+        // Se a Data URL for muito grande para a coluna text do Supabase, salvar string vazia para evitar estouro
+        const safeDriveUrl =
+          newFile.driveUrl && newFile.driveUrl.startsWith('data:') && newFile.driveUrl.length > 500000
+            ? ''
+            : newFile.driveUrl || '';
+
+        await supabase.from('library_files').insert({
+          id: newFile.id,
+          title: newFile.title,
+          category: newFile.category,
+          turma: newFile.turma,
+          file_size: newFile.fileSize,
+          updated_at: newFile.updatedAt,
+          drive_url: safeDriveUrl,
+        });
+      } catch (err) {
+        console.warn('Erro ao salvar arquivo no Supabase:', err);
+      }
+    }
+    showGlobalStatus('success', 'Arquivo cadastrado com sucesso!');
+  };
+
+  const handleDeleteLibraryFile = async (fileId: string) => {
+    setLibrary((prev) => prev.filter((f) => f.id !== fileId));
+    if (typeof window !== 'undefined') {
+      try {
+        const updated = sanitizeLibraryForStorage(library.filter((f) => f.id !== fileId));
+        localStorage.setItem('library_files_data', JSON.stringify(updated));
+      } catch (err) {
+        console.warn('Erro ao atualizar localStorage após deleção:', err);
+      }
+    }
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('library_files').delete().eq('id', fileId);
+      } catch (err) {
+        console.warn('Erro ao deletar arquivo no Supabase:', err);
+      }
+    }
+    showGlobalStatus('success', 'Arquivo removido da biblioteca.');
+  };
+
   // Carregar dados iniciais do Supabase se configurado
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
@@ -93,7 +209,7 @@ export default function Home() {
           if (teacherErr) {
             console.error('Erro ao buscar professor no Supabase:', teacherErr.message);
           } else if (teacherRow) {
-            setTeacher({
+            setTeacher((prev) => ({
               id: teacherRow.id,
               name: teacherRow.name,
               subject: teacherRow.subject || 'Sociologia',
@@ -101,7 +217,8 @@ export default function Home() {
               avatarUrl: teacherRow.avatar_url || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
               phone: teacherRow.phone || '',
               school: teacherRow.school || '',
-            });
+              driveFolderUrl: teacherRow.drive_folder_url || prev.driveFolderUrl || '',
+            }));
           }
         }
 
@@ -209,6 +326,30 @@ export default function Home() {
           }));
           setChatMessages(mappedMessages);
         }
+
+        // 4. Carregar Arquivos da Biblioteca do Supabase
+        const { data: dbLibrary } = await client.from('library_files').select('*');
+        if (dbLibrary && dbLibrary.length > 0) {
+          const mappedLibrary: LibraryFile[] = dbLibrary.map((item) => ({
+            id: item.id,
+            title: item.title,
+            category: item.category || 'Geral',
+            turma: item.turma || 'Todas',
+            fileSize: item.file_size || '1 MB',
+            updatedAt: item.updated_at || new Date().toLocaleDateString('pt-BR'),
+            driveUrl: item.drive_url || item.file_url || '',
+          }));
+          setLibrary(mappedLibrary);
+        } else if (typeof window !== 'undefined') {
+          const savedLib = localStorage.getItem('library_files_data');
+          if (savedLib) {
+            try {
+              setLibrary(JSON.parse(savedLib));
+            } catch (e) {
+              console.warn(e);
+            }
+          }
+        }
       } catch (err) {
         console.error('Erro ao carregar dados do Supabase:', err);
       }
@@ -222,17 +363,63 @@ export default function Home() {
     setTeacher(loggedTeacher);
     setRole('teacher');
     setCurrentTab('painel');
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('active_session', JSON.stringify({ role: 'teacher' }));
+      window.location.reload();
+    }
   };
 
   const handleLoginStudent = (loggedStudent: StudentUser) => {
     setCurrentStudent(loggedStudent);
     setRole('student');
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(
+        'active_session',
+        JSON.stringify({
+          role: 'student',
+          studentId: loggedStudent.id,
+          studentData: loggedStudent,
+        })
+      );
+      window.location.reload();
+    }
   };
 
-  const handleLogout = () => {
+  const handleLogout = (reason?: string) => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('active_session');
+    }
     setRole(null);
     setCurrentStudent(null);
+    if (reason && typeof reason === 'string') {
+      showGlobalStatus('error', reason);
+    }
   };
+
+  // Temporizador de Desconexão por Inatividade (8 minutos)
+  useEffect(() => {
+    if (!role || !inactivityTimeoutEnabled) return;
+
+    const INACTIVITY_LIMIT_MS = 8 * 60 * 1000; // 8 minutos = 480.000 ms
+    let timeoutId: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        handleLogout('Sessão encerrada por inatividade (8 minutos sem interação).');
+      }, INACTIVITY_LIMIT_MS);
+    };
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+    events.forEach((evt) => window.addEventListener(evt, resetTimer, { passive: true }));
+
+    resetTimer();
+
+    return () => {
+      clearTimeout(timeoutId);
+      events.forEach((evt) => window.removeEventListener(evt, resetTimer));
+    };
+  }, [role, inactivityTimeoutEnabled]);
 
   // Activity Handlers
   const sanitizeTypeForDb = (rawType: string): string => {
@@ -815,6 +1002,51 @@ export default function Home() {
         })
       );
 
+      if (selectedActivityForGrading && selectedActivityForGrading.id === activityId) {
+        setSelectedActivityForGrading((prev) => {
+          if (!prev) return null;
+          let updatedSubmissions = [...prev.submissions];
+          targetStudents.forEach((targetSt) => {
+            const existingIndex = updatedSubmissions.findIndex((s) => s.studentId === targetSt.id);
+            if (existingIndex >= 0) {
+              updatedSubmissions[existingIndex] = {
+                ...updatedSubmissions[existingIndex],
+                essayAnswer,
+                objectiveScore,
+                maxObjectiveScore,
+                maxEssayScore,
+                selectedObjectiveAnswers,
+                groupMembers: groupMembers !== undefined ? groupMembers : updatedSubmissions[existingIndex].groupMembers,
+                status: 'pending' as const,
+              };
+            } else {
+              updatedSubmissions.push({
+                studentId: targetSt.id,
+                studentName: targetSt.fullName,
+                matricula: targetSt.matricula,
+                tag: targetSt.tag,
+                avatarUrl: targetSt.avatarUrl,
+                submittedAt: new Date().toLocaleDateString('pt-BR'),
+                objectiveScore,
+                maxObjectiveScore,
+                maxEssayScore,
+                status: 'pending',
+                essayAnswer,
+                selectedObjectiveAnswers,
+                groupMembers: groupMembers || undefined,
+                teacherFeedback: '',
+              });
+            }
+          });
+          return {
+            ...prev,
+            totalSubmissions: updatedSubmissions.length,
+            pendingCorrection: updatedSubmissions.filter((s) => s.status === 'pending').length,
+            submissions: updatedSubmissions,
+          };
+        });
+      }
+
       showGlobalStatus('success', 'Resposta do aluno gravada com sucesso no Supabase!');
     } catch (err: any) {
       console.error('Erro ao enviar resposta:', err);
@@ -1211,7 +1443,15 @@ export default function Home() {
             />
           )}
 
-          {currentTab === 'arquivos' && <LibraryView files={library} />}
+          {currentTab === 'arquivos' && (
+            <LibraryView
+              files={library}
+              driveFolderUrl={teacher.driveFolderUrl}
+              onSaveDriveFolderUrl={handleSaveDriveFolderUrl}
+              onAddFile={handleAddLibraryFile}
+              onDeleteFile={handleDeleteLibraryFile}
+            />
+          )}
 
           {currentTab === 'configuracoes' && (
             <div className="glass-panel p-8 rounded-3xl border border-white/10 max-w-2xl space-y-6">
@@ -1291,6 +1531,33 @@ export default function Home() {
                     onChange={(e) => setTeacher({ ...teacher, school: e.target.value })}
                     className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-[#4ade80]"
                   />
+                </div>
+
+                <div className="pt-4 border-t border-white/10 space-y-2">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>Segurança da Sessão</span>
+                  </h3>
+                  <div className="flex items-center justify-between p-4 bg-[#131b2e] rounded-2xl border border-white/10">
+                    <div>
+                      <p className="text-xs font-bold text-white">Deslogar por 8 minutos de inatividade</p>
+                      <p className="text-[11px] text-[#bccabb] mt-0.5">Sua sessão será encerrada automaticamente após 8 minutos sem cliques ou movimentação.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
+                      <input
+                        type="checkbox"
+                        checked={inactivityTimeoutEnabled}
+                        onChange={(e) => {
+                          const val = e.target.checked;
+                          setInactivityTimeoutEnabled(val);
+                          if (typeof window !== 'undefined') {
+                            localStorage.setItem('inactivity_timeout_enabled', String(val));
+                          }
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#4ade80]"></div>
+                    </label>
+                  </div>
                 </div>
                 <button
                   onClick={async () => {

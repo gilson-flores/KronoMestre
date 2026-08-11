@@ -59,6 +59,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
 }) => {
   // Sync state with selected activity
   const [prevActivityId, setPrevActivityId] = useState(activity.id);
+  const [prevSubmissions, setPrevSubmissions] = useState(activity.submissions);
   const [submissions, setSubmissions] = useState<ActivitySubmission[]>(activity.submissions || []);
 
   const [savedSuccessId, setSavedSuccessId] = useState<string | null>(null);
@@ -113,6 +114,10 @@ export const GradingView: React.FC<GradingViewProps> = ({
 
   if (activity.id !== prevActivityId) {
     setPrevActivityId(activity.id);
+    setPrevSubmissions(activity.submissions);
+    setSubmissions(activity.submissions || []);
+  } else if (activity.submissions !== prevSubmissions) {
+    setPrevSubmissions(activity.submissions);
     setSubmissions(activity.submissions || []);
   }
 
@@ -249,11 +254,12 @@ export const GradingView: React.FC<GradingViewProps> = ({
   // Action 1: Refresh Deliveries (Atualizar Entregas)
   const handleRefreshDeliveries = () => {
     setIsRefreshing(true);
+    setSubmissions(activity.submissions || []);
     setTimeout(() => {
       setIsRefreshing(false);
       setRefreshToast(true);
       setTimeout(() => setRefreshToast(false), 3000);
-    }, 800);
+    }, 400);
   };
 
   // Action 2: Gemini AI Correction for Essay Response

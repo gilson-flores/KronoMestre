@@ -8,6 +8,7 @@ export interface TeacherUser {
   avatarUrl: string;
   phone?: string;
   school?: string;
+  driveFolderUrl?: string;
 }
 
 export interface StudentUser {

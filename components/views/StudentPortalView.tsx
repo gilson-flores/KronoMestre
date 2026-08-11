@@ -284,52 +284,69 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     setSubmissionSuccessMsg(msg);
     setTimeout(() => setSubmissionSuccessMsg(null), 6000);
 
+    // Reset focus warnings for this activity on submit
+    setFocusWarnings((prev) => ({ ...prev, [act.id]: 0 }));
+
     // Close detail view and switch to "A Corrigir" list filter
     setSelectedActivityId(null);
     setStudentFilter('a_corrigir');
     setActiveTab('atividades');
   };
 
+  const handleOpenActivity = (actId: string) => {
+    setSelectedActivityId(actId);
+    // Reset focus warnings for this activity when starting/resuming it
+    setFocusWarnings((prev) => ({ ...prev, [actId]: 0 }));
+  };
+
   // Effect: Trava de Foco (Avisos de mudança de tela e auto-entrega no 4º aviso)
   useEffect(() => {
-    const focusLockedActs = pendingActivities.filter((a) => a.securityFocusLock);
-    if (focusLockedActs.length === 0 || activeTab !== 'atividades') return;
+    // Only monitor focus lock if student has actively opened a specific activity in detail view
+    if (!selectedActivityId || activeTab !== 'atividades') return;
+
+    const currentAct = activities.find((a) => a.id === selectedActivityId);
+    if (!currentAct || !currentAct.securityFocusLock) return;
+
+    // Check if student already submitted and it's not returned
+    const sub = currentAct.submissions?.find(
+      (s) => s.studentId === student.id || s.studentName === student.fullName
+    );
+    if (sub && sub.status !== 'returned' && sub.status !== 'draft') return;
 
     let isTriggeredInTurn = false;
 
     const handleFocusLoss = () => {
       if (isTriggeredInTurn) return;
       isTriggeredInTurn = true;
-      setTimeout(() => { isTriggeredInTurn = false; }, 1000);
+      setTimeout(() => {
+        isTriggeredInTurn = false;
+      }, 1000);
 
-      focusLockedActs.forEach((act) => {
-        const sub = act.submissions.find((s) => s.studentId === student.id || s.studentName === student.fullName);
-        if (sub && sub.status !== 'returned' && sub.status !== 'draft') return;
+      setFocusWarnings((prev) => {
+        const currentCount = prev[currentAct.id] || 0;
+        if (currentCount >= 4) return prev; // Already auto-submitted, avoid re-triggering
 
-        setFocusWarnings((prev) => {
-          const currentCount = prev[act.id] || 0;
-          const nextCount = currentCount + 1;
+        const nextCount = currentCount + 1;
 
-          if (nextCount >= 4) {
-            // Auto-entrega no 4º aviso!
-            setTimeout(() => {
-              handleSubmit(act, true);
-            }, 100);
-            setSecurityNotice({
-              activityTitle: act.title,
-              warningCount: 4,
-              isAutoSubmitted: true,
-            });
-          } else {
-            setSecurityNotice({
-              activityTitle: act.title,
-              warningCount: nextCount,
-              isAutoSubmitted: false,
-            });
-          }
+        if (nextCount >= 4) {
+          // Auto-entrega no 4º aviso!
+          setTimeout(() => {
+            handleSubmit(currentAct, true);
+          }, 100);
+          setSecurityNotice({
+            activityTitle: currentAct.title,
+            warningCount: 4,
+            isAutoSubmitted: true,
+          });
+        } else {
+          setSecurityNotice({
+            activityTitle: currentAct.title,
+            warningCount: nextCount,
+            isAutoSubmitted: false,
+          });
+        }
 
-          return { ...prev, [act.id]: nextCount };
-        });
+        return { ...prev, [currentAct.id]: nextCount };
       });
     };
 
@@ -350,7 +367,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       window.removeEventListener('blur', onWindowBlur);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [pendingActivities, activeTab, student.id, student.fullName]);
+  }, [selectedActivityId, activities, activeTab, student.id, student.fullName]);
 
 
   return (
@@ -639,7 +656,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
                         <div className="shrink-0 pt-2 sm:pt-0">
                           <button
-                            onClick={() => setSelectedActivityId(act.id)}
+                            onClick={() => handleOpenActivity(act.id)}
                             className="w-full sm:w-auto py-3 px-6 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-[#4ade80]/20"
                           >
                             {isPending ? (
@@ -1318,29 +1335,65 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
       {/* TAB 3: ARQUIVOS */}
       {activeTab === 'arquivos' && (
-
         <div className="space-y-6">
           <div>
             <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
               <FolderDown className="w-5 h-5 text-[#4ade80]" />
               <span>Arquivos e Materiais Didáticos</span>
             </h2>
+            <p className="text-xs text-[#bccabb] mt-0.5">
+              Baixe as apostilas, apresentações e documentos disponibilizados pelo professor no Google Drive
+            </p>
           </div>
 
-          {studentLibraryFiles.length === 0 ? (
+          {/* CARD DA PASTA PRINCIPAL DO GOOGLE DRIVE */}
+          {teacher?.driveFolderUrl?.trim() && (
+            <div className="glass-panel p-6 rounded-3xl border border-[#4ade80]/40 bg-gradient-to-br from-[#131b2e] via-[#0f172a] to-[#0a1120] space-y-4 shadow-xl relative overflow-hidden">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-[#4ade80]/15 border border-[#4ade80]/30 text-[#4ade80] flex items-center justify-center shrink-0 shadow-lg shadow-[#4ade80]/10">
+                    <HardDrive className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white leading-snug">Pasta de Arquivos no Google Drive</h3>
+                    <p className="text-xs text-[#bccabb] mt-0.5">
+                      Acesse a pasta oficial do Google Drive com todos os materiais e documentos da disciplina
+                    </p>
+                  </div>
+                </div>
+
+                <a
+                  href={teacher.driveFolderUrl.trim()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-3.5 px-6 bg-gradient-to-r from-[#4ade80] to-[#22c55e] hover:from-[#6bfb9a] hover:to-[#4ade80] text-[#003919] font-black rounded-2xl text-xs sm:text-sm transition-all shadow-lg shadow-[#4ade80]/20 flex items-center justify-center gap-2.5 shrink-0 cursor-pointer min-h-[48px] w-full sm:w-auto active:scale-95"
+                  title="Abrir Pasta do Google Drive"
+                >
+                  <ExternalLink className="w-4 h-4 stroke-[2.5]" />
+                  <span>Acessar Pasta do Drive</span>
+                </a>
+              </div>
+            </div>
+          )}
+
+          {studentLibraryFiles.length === 0 && !teacher?.driveFolderUrl?.trim() ? (
             <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb] space-y-3 shadow-xl">
               <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center mx-auto text-amber-400 text-2xl font-black">
                 🌀
               </div>
-              <p className="text-base font-extrabold text-white">Biblioteca do Clã sem Arquivos!</p>
+              <p className="text-base font-extrabold text-white">Biblioteca sem Arquivos!</p>
               <p className="text-xs text-[#bccabb] max-w-md mx-auto leading-relaxed">
-                Nenhum pergaminho ou documento foi liberado para sua turma ainda. Fique atento aos novos lançamentos do Sensei!
+                Nenhum documento ou pasta do Google Drive foi disponibilizado para sua turma ainda. Fique atento aos novos lançamentos do professor!
               </p>
             </div>
-          ) : (
+          ) : studentLibraryFiles.length > 0 ? (
             <div className="space-y-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2 pt-2">
+                <FileText className="w-4 h-4 text-[#4ade80]" />
+                <span>Documentos e Apostilas Específicas</span>
+              </h3>
               {studentLibraryFiles.map((file) => {
-                const driveUrl = file.driveUrl || 'https://drive.google.com/';
+                const driveUrl = file.driveUrl || teacher?.driveFolderUrl?.trim();
 
                 return (
                   <div
@@ -1351,24 +1404,35 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       <div className="w-10 h-10 rounded-2xl bg-[#171f33] border border-white/10 text-[#4ade80] flex items-center justify-center shrink-0">
                         <FileText className="w-5 h-5" />
                       </div>
-                      <h3 className="text-base font-bold text-white">{file.title}</h3>
+                      <div>
+                        <h3 className="text-base font-bold text-white">{file.title}</h3>
+                        {file.category && (
+                          <span className="text-[11px] font-semibold text-[#bccabb] block mt-0.5">
+                            {file.category}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
-                    <a
-                      href={driveUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="py-2.5 px-6 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-extrabold rounded-full text-xs transition-all shadow-md flex items-center gap-2 shrink-0 cursor-pointer"
-                      title="Baixar arquivo"
-                    >
-                      <Download className="w-4 h-4 stroke-[2.5]" />
-                      <span>Baixar</span>
-                    </a>
+                    {driveUrl ? (
+                      <a
+                        href={driveUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="py-2.5 px-6 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-extrabold rounded-full text-xs transition-all shadow-md flex items-center gap-2 shrink-0 cursor-pointer"
+                        title="Baixar arquivo"
+                      >
+                        <Download className="w-4 h-4 stroke-[2.5]" />
+                        <span>Baixar</span>
+                      </a>
+                    ) : (
+                      <span className="text-xs text-[#869486]">Sem link</span>
+                    )}
                   </div>
                 );
               })}
             </div>
-          )}
+          ) : null}
         </div>
       )}
 
