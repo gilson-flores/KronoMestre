@@ -112,12 +112,20 @@ export default function Home() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('teacher_drive_folder_url', url);
     }
-    if (isSupabaseConfigured && supabase && teacher.id) {
+    if (isSupabaseConfigured && supabase) {
       try {
-        await supabase
-          .from('teachers')
-          .update({ drive_folder_url: url })
-          .eq('id', teacher.id);
+        const isValidUUID = (id?: string | null) => !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+        if (teacher.id && isValidUUID(teacher.id)) {
+          await supabase
+            .from('teachers')
+            .update({ drive_folder_url: url })
+            .eq('id', teacher.id);
+        } else if (teacher.email) {
+          await supabase
+            .from('teachers')
+            .update({ drive_folder_url: url })
+            .eq('email', teacher.email);
+        }
       } catch (err) {
         console.warn('Persistência no Supabase para drive_folder_url:', err);
       }
@@ -1570,7 +1578,34 @@ export default function Home() {
                         return;
                       }
 
-                      const payload: any = {
+                      const isValidUUID = (id?: string | null) => !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+                      // 1. Verificar se já existe registro do professor por e-mail ou por ID
+                      let existingId: string | null = null;
+
+                      if (teacher.email) {
+                        const { data: rowByEmail } = await supabase
+                          .from('teachers')
+                          .select('id')
+                          .eq('email', teacher.email)
+                          .maybeSingle();
+                        if (rowByEmail?.id) {
+                          existingId = rowByEmail.id;
+                        }
+                      }
+
+                      if (!existingId && teacher.id && isValidUUID(teacher.id)) {
+                        const { data: rowById } = await supabase
+                          .from('teachers')
+                          .select('id')
+                          .eq('id', teacher.id)
+                          .maybeSingle();
+                        if (rowById?.id) {
+                          existingId = rowById.id;
+                        }
+                      }
+
+                      const updateFields = {
                         email: teacher.email,
                         name: teacher.name,
                         subject: teacher.subject,
@@ -1579,23 +1614,31 @@ export default function Home() {
                         school: teacher.school || null,
                       };
 
-                      if (teacher.id) {
-                        payload.id = teacher.id;
-                      }
+                      let updatedData = null;
+                      let error = null;
 
-                      if (teacher.email) {
-                        try {
-                          await supabase.auth.updateUser({ email: teacher.email });
-                        } catch (e) {
-                          console.log('Sincronização de e-mail de auth opcional:', e);
+                      if (existingId) {
+                        const res = await supabase
+                          .from('teachers')
+                          .update(updateFields)
+                          .eq('id', existingId)
+                          .select('*')
+                          .maybeSingle();
+                        updatedData = res.data;
+                        error = res.error;
+                      } else {
+                        const insertPayload: any = { ...updateFields };
+                        if (teacher.id && isValidUUID(teacher.id)) {
+                          insertPayload.id = teacher.id;
                         }
+                        const res = await supabase
+                          .from('teachers')
+                          .insert(insertPayload)
+                          .select('*')
+                          .maybeSingle();
+                        updatedData = res.data;
+                        error = res.error;
                       }
-
-                      const { data: updatedData, error } = await supabase
-                        .from('teachers')
-                        .upsert(payload, { onConflict: teacher.id ? 'id' : 'email' })
-                        .select('*')
-                        .maybeSingle();
 
                       if (error) {
                         console.error('Erro ao salvar professor no Supabase:', error);

@@ -76,20 +76,39 @@ export const AuthView: React.FC<AuthViewProps> = ({
           school: dbTeacher?.school || '',
         };
 
-        // Upsert na tabela 'teachers' para garantir sincronização com Supabase
-        const { data: upsertedTeacher, error: upsertError } = await supabase
-          .from('teachers')
-          .upsert({
-            id: teacherProfile.id,
-            email: teacherProfile.email,
-            name: teacherProfile.name,
-            subject: teacherProfile.subject,
-            avatar_url: teacherProfile.avatarUrl,
-            phone: teacherProfile.phone || null,
-            school: teacherProfile.school || null,
-          }, { onConflict: 'email' })
-          .select('*')
-          .maybeSingle();
+        const isValidUUID = (id?: string | null) => !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+        const updateFields = {
+          email: teacherProfile.email,
+          name: teacherProfile.name,
+          subject: teacherProfile.subject,
+          avatar_url: teacherProfile.avatarUrl,
+          phone: teacherProfile.phone || null,
+          school: teacherProfile.school || null,
+        };
+
+        let upsertedTeacher = null;
+
+        if (dbTeacher?.id) {
+          const { data } = await supabase
+            .from('teachers')
+            .update(updateFields)
+            .eq('id', dbTeacher.id)
+            .select('*')
+            .maybeSingle();
+          upsertedTeacher = data;
+        } else {
+          const insertPayload: any = { ...updateFields };
+          if (teacherProfile.id && isValidUUID(teacherProfile.id)) {
+            insertPayload.id = teacherProfile.id;
+          }
+          const { data } = await supabase
+            .from('teachers')
+            .insert(insertPayload)
+            .select('*')
+            .maybeSingle();
+          upsertedTeacher = data;
+        }
 
         if (upsertedTeacher) {
           teacherProfile = {
