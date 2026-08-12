@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, Plus, UserPlus, Pencil, Trash2, Eye, ShieldCheck, Upload } from 'lucide-react';
+import { Search, Plus, UserPlus, Pencil, Trash2, Eye, ShieldCheck, Upload, Heart, AlertCircle } from 'lucide-react';
 import { StudentUser } from '@/lib/types';
 import { ImportCsvModal } from '@/components/modals/ImportCsvModal';
 import { getTurmaLabel } from '@/lib/studentUtils';
@@ -25,6 +25,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTurmaFilter, setSelectedTurmaFilter] = useState('all');
+  const [selectedTagFilter, setSelectedTagFilter] = useState<'all' | 'PNE' | 'RAD' | 'REGULAR'>('all');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   // Only include turmas from registered students (no unlinked deduced classes)
@@ -36,7 +37,10 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
       s.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.matricula.includes(searchTerm);
     const matchesTurma = selectedTurmaFilter === 'all' || s.turma === selectedTurmaFilter;
-    return matchesName && matchesTurma;
+    const matchesTag =
+      selectedTagFilter === 'all' ||
+      (s.tag && s.tag.toUpperCase() === selectedTagFilter);
+    return matchesName && matchesTurma && matchesTag;
   });
 
   return (
@@ -72,30 +76,83 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
       </div>
 
       {/* Filter and Search Container */}
-      <div className="glass-panel p-4 rounded-3xl border border-white/10 flex flex-col sm:flex-row items-center gap-4">
-        <div className="relative flex-1 w-full">
-          <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-[#869486]" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por nome ou matrícula..."
-            className="w-full bg-[#131b2e] border border-white/10 rounded-full pl-11 pr-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
-          />
+      <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-white/10 space-y-4">
+        {/* Category Pills (Todos, PNE, RAD, Regular) */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-[#bccabb] mr-1">Categoria / Atendimento:</span>
+
+          <button
+            onClick={() => setSelectedTagFilter('all')}
+            className={`py-2 px-4 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer ${
+              selectedTagFilter === 'all'
+                ? 'bg-[#4ade80] text-[#003919] shadow-md'
+                : 'bg-[#131b2e] text-[#bccabb] hover:text-white border border-white/10'
+            }`}
+          >
+            Todos ({students.length})
+          </button>
+
+          <button
+            onClick={() => setSelectedTagFilter('PNE')}
+            className={`py-2 px-4 rounded-full text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer ${
+              selectedTagFilter === 'PNE'
+                ? 'bg-[#4ade80] text-[#003919] shadow-md'
+                : 'bg-[#131b2e] text-[#bccabb] hover:text-white border border-white/10'
+            }`}
+          >
+            <Heart className="w-3.5 h-3.5 text-rose-400" />
+            <span>PNE ({students.filter((s) => s.tag?.toUpperCase() === 'PNE').length})</span>
+          </button>
+
+          <button
+            onClick={() => setSelectedTagFilter('RAD')}
+            className={`py-2 px-4 rounded-full text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer ${
+              selectedTagFilter === 'RAD'
+                ? 'bg-[#4ade80] text-[#003919] shadow-md'
+                : 'bg-[#131b2e] text-[#bccabb] hover:text-white border border-white/10'
+            }`}
+          >
+            <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+            <span>RAD ({students.filter((s) => s.tag?.toUpperCase() === 'RAD').length})</span>
+          </button>
+
+          <button
+            onClick={() => setSelectedTagFilter('REGULAR')}
+            className={`py-2 px-4 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer ${
+              selectedTagFilter === 'REGULAR'
+                ? 'bg-[#4ade80] text-[#003919] shadow-md'
+                : 'bg-[#131b2e] text-[#bccabb] hover:text-white border border-white/10'
+            }`}
+          >
+            Regular ({students.filter((s) => !s.tag || s.tag.toUpperCase() === 'REGULAR').length})
+          </button>
         </div>
 
-        <select
-          value={selectedTurmaFilter}
-          onChange={(e) => setSelectedTurmaFilter(e.target.value)}
-          className="w-full sm:w-64 bg-[#131b2e] border border-white/10 rounded-full px-5 py-3 text-sm text-white focus:outline-none focus:border-[#4ade80]"
-        >
-          <option value="all">Todas as Turmas</option>
-          {turmasList.map((t) => (
-            <option key={t} value={t} className="bg-[#0b1326] text-white">
-              {getTurmaLabel(t)}
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-col sm:flex-row items-center gap-4 pt-2 border-t border-white/5">
+          <div className="relative flex-1 w-full">
+            <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-[#869486]" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por nome ou matrícula..."
+              className="w-full bg-[#131b2e] border border-white/10 rounded-full pl-11 pr-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
+            />
+          </div>
+
+          <select
+            value={selectedTurmaFilter}
+            onChange={(e) => setSelectedTurmaFilter(e.target.value)}
+            className="w-full sm:w-64 bg-[#131b2e] border border-white/10 rounded-full px-5 py-3 text-sm text-white focus:outline-none focus:border-[#4ade80]"
+          >
+            <option value="all">Todas as Turmas</option>
+            {turmasList.map((t) => (
+              <option key={t} value={t} className="bg-[#0b1326] text-white">
+                {getTurmaLabel(t)}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Students List */}

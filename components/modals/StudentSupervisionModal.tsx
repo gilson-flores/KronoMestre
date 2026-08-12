@@ -22,7 +22,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { StudentUser, Activity, ActivitySubmission } from '@/lib/types';
-import { getTurmaLabel } from '@/lib/studentUtils';
+import { canStudentAccessActivity, getTurmaLabel } from '@/lib/studentUtils';
 import {
   canEmitDossier,
   emitNewDossier,
@@ -65,8 +65,8 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
   if (!isOpen || !student) return null;
 
   // Filter activities assigned to this student's turma
-  const studentActivities = activities.filter(
-    (act) => !act.turma || act.turma === student.turma || act.turma === 'Todas'
+  const studentActivities = activities.filter((act) =>
+    canStudentAccessActivity(act.turma, student.turma)
   );
 
   // Submissions breakdown

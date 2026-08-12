@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { StudentUser, TeacherUser, UserRole } from '@/lib/types';
-import { BookOpen, User, GraduationCap, Lock, ArrowRight, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { BookOpen, User, GraduationCap, Lock, ArrowRight, ShieldCheck, CheckCircle2, HeartHandshake } from 'lucide-react';
 import { DEFAULT_TURMAS, getTurmaLabel, normalizeStudentName } from '@/lib/studentUtils';
 
 interface AuthViewProps {
@@ -11,6 +11,7 @@ interface AuthViewProps {
   teacher: TeacherUser;
   onLoginTeacher: (teacher: TeacherUser) => void;
   onLoginStudent: (student: StudentUser) => void;
+  onLoginSecondTeacher?: (teacher: TeacherUser) => void;
 }
 
 export const AuthView: React.FC<AuthViewProps> = ({
@@ -18,14 +19,21 @@ export const AuthView: React.FC<AuthViewProps> = ({
   teacher,
   onLoginTeacher,
   onLoginStudent,
+  onLoginSecondTeacher,
 }) => {
-  const [activeTab, setActiveTab] = useState<'teacher' | 'student'>('teacher');
+  const [activeTab, setActiveTab] = useState<'teacher' | 'student' | 'second_teacher'>('teacher');
 
   // Teacher Supabase Login state
   const [teacherEmail, setTeacherEmail] = useState(teacher.email);
   const [teacherPassword, setTeacherPassword] = useState('');
   const [teacherLoading, setTeacherLoading] = useState(false);
   const [teacherError, setTeacherError] = useState('');
+
+  // 2º Professor Login state
+  const [secondTeacherEmail, setSecondTeacherEmail] = useState('');
+  const [secondTeacherPassword, setSecondTeacherPassword] = useState('');
+  const [secondTeacherLoading, setSecondTeacherLoading] = useState(false);
+  const [secondTeacherError, setSecondTeacherError] = useState('');
 
   // Student Login state
   const [studentFullName, setStudentFullName] = useState('');
@@ -152,6 +160,69 @@ export const AuthView: React.FC<AuthViewProps> = ({
     }
   };
 
+  const handleSecondTeacherSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSecondTeacherError('');
+    setSecondTeacherLoading(true);
+
+    try {
+      if (!isSupabaseConfigured || !supabase) {
+        const secondTeacherProfile: TeacherUser = {
+          id: 'second-teacher-demo',
+          name: 'Professor(a) de Inclusão',
+          subject: 'AEE / Inclusão Escolar',
+          email: secondTeacherEmail || 'segundoprofessor@escola.edu.br',
+          avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250',
+          school: teacher.school || 'Escola Estadual',
+        };
+        if (onLoginSecondTeacher) onLoginSecondTeacher(secondTeacherProfile);
+        else onLoginTeacher(secondTeacherProfile);
+        setSecondTeacherLoading(false);
+        return;
+      }
+
+      // 1. Tentar autenticação via Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: secondTeacherEmail,
+        password: secondTeacherPassword,
+      });
+
+      // Buscar perfil na tabela 'teachers'
+      const { data: dbTeacher, error: dbError } = await supabase
+        .from('teachers')
+        .select('*')
+        .eq('email', secondTeacherEmail)
+        .maybeSingle();
+
+      if (authData?.user || dbTeacher) {
+        const secondTeacherProfile: TeacherUser = {
+          id: dbTeacher?.id || authData?.user?.id || '2nd-teacher-id',
+          name: dbTeacher?.name || authData?.user?.user_metadata?.full_name || '2º Professor (AEE)',
+          subject: dbTeacher?.subject || 'AEE / Inclusão Escolar',
+          email: dbTeacher?.email || authData?.user?.email || secondTeacherEmail,
+          avatarUrl: dbTeacher?.avatar_url || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250',
+          phone: dbTeacher?.phone || '',
+          school: dbTeacher?.school || teacher.school || '',
+        };
+
+        if (onLoginSecondTeacher) {
+          onLoginSecondTeacher(secondTeacherProfile);
+        } else {
+          onLoginTeacher(secondTeacherProfile);
+        }
+        return;
+      }
+
+      setSecondTeacherError(
+        'Acesso negado: E-mail ou senha do 2º Professor não cadastrados no sistema.'
+      );
+    } catch (err: any) {
+      setSecondTeacherError('Erro de conexão com o Supabase: ' + (err.message || 'Verifique sua rede.'));
+    } finally {
+      setSecondTeacherLoading(false);
+    }
+  };
+
   const handleStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStudentError('');
@@ -255,19 +326,19 @@ export const AuthView: React.FC<AuthViewProps> = ({
         </div>
 
         {/* Tab Selection */}
-        <div className="grid grid-cols-2 gap-2 bg-[#131b2e] p-1.5 rounded-full mb-6 border border-white/5">
+        <div className="grid grid-cols-3 gap-1 bg-[#131b2e] p-1.5 rounded-full mb-6 border border-white/5">
           <button
             onClick={() => {
               setActiveTab('teacher');
               setTeacherError('');
             }}
-            className={`py-3 px-3 sm:px-4 rounded-full text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
+            className={`py-2.5 px-2 text-[11px] font-bold rounded-full transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer min-h-[42px] ${
               activeTab === 'teacher'
                 ? 'bg-[#4ade80] text-[#003919] shadow'
                 : 'text-[#bccabb] hover:text-white'
             }`}
           >
-            <User className="w-4 h-4 shrink-0" />
+            <User className="w-3.5 h-3.5 shrink-0" />
             <span>Professor</span>
           </button>
 
@@ -276,14 +347,29 @@ export const AuthView: React.FC<AuthViewProps> = ({
               setActiveTab('student');
               setStudentError('');
             }}
-            className={`py-3 px-3 sm:px-4 rounded-full text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
+            className={`py-2.5 px-2 text-[11px] font-bold rounded-full transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer min-h-[42px] ${
               activeTab === 'student'
                 ? 'bg-[#4ade80] text-[#003919] shadow'
                 : 'text-[#bccabb] hover:text-white'
             }`}
           >
-            <GraduationCap className="w-4 h-4 shrink-0" />
+            <GraduationCap className="w-3.5 h-3.5 shrink-0" />
             <span>Aluno</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('second_teacher');
+              setSecondTeacherError('');
+            }}
+            className={`py-2.5 px-2 text-[11px] font-bold rounded-full transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer min-h-[42px] ${
+              activeTab === 'second_teacher'
+                ? 'bg-[#4ade80] text-[#003919] shadow'
+                : 'text-[#bccabb] hover:text-white'
+            }`}
+          >
+            <HeartHandshake className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+            <span>2º Professor</span>
           </button>
         </div>
 
@@ -406,6 +492,59 @@ export const AuthView: React.FC<AuthViewProps> = ({
               className="w-full py-3.5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-[#4ade80]/20 cursor-pointer mt-6"
             >
               <span>Acessar Atividades e Notas</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </form>
+        )}
+
+        {/* 2º Professor Login Form */}
+        {activeTab === 'second_teacher' && (
+          <form onSubmit={handleSecondTeacherSubmit} className="space-y-4">
+            <div className="flex items-center gap-2 text-xs text-amber-300 bg-amber-500/10 p-3 rounded-2xl border border-amber-500/20 mb-2">
+              <HeartHandshake className="w-4 h-4 shrink-0 text-amber-400" />
+              <span>Acesso para Professor de Inclusão / AEE (Atendimento Educacional Especializado).</span>
+            </div>
+
+            {secondTeacherError && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-2xl text-xs font-medium">
+                {secondTeacherError}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">E-mail do 2º Professor</label>
+              <input
+                type="email"
+                required
+                value={secondTeacherEmail}
+                onChange={(e) => setSecondTeacherEmail(e.target.value)}
+                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
+                placeholder="inclusao@escola.edu.br"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">Senha</label>
+              <div className="relative">
+                <input
+                  type="password"
+                  required
+                  value={secondTeacherPassword}
+                  onChange={(e) => setSecondTeacherPassword(e.target.value)}
+                  className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
+                  placeholder="Sua senha de acesso"
+                />
+                <Lock className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-[#869486]" />
+              </div>
+              <p className="text-[11px] text-[#bccabb] mt-1 ml-1">Autenticação cadastrada pelo Professor ADM</p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={secondTeacherLoading}
+              className="w-full py-3.5 bg-amber-400 hover:bg-amber-300 text-black font-bold rounded-full transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-amber-400/20 cursor-pointer mt-6"
+            >
+              <span>{secondTeacherLoading ? 'Autenticando...' : 'Entrar no Painel do 2º Professor'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>

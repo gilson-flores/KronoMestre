@@ -10,7 +10,8 @@ import {
   FileCheck,
   X,
   BookOpen,
-  MessageSquare
+  MessageSquare,
+  HeartHandshake
 } from 'lucide-react';
 import { TeacherUser } from '@/lib/types';
 import { formatAvatarUrl } from '@/lib/utils';

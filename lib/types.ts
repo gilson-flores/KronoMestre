@@ -1,4 +1,4 @@
-export type UserRole = 'teacher' | 'student' | null;
+export type UserRole = 'teacher' | 'student' | 'second_teacher' | null;
 
 export interface TeacherUser {
   id: string;
@@ -131,5 +131,26 @@ export interface ChatThread {
   unreadCountTeacher?: number;
   unreadCountStudent?: number;
 }
+
+export interface InclusionEvaluation {
+  id: string;
+  date: string;
+  teacherName?: string;
+  category: 'Acompanhamento' | 'Evolução' | 'Adaptação' | 'Ocorrência' | 'Reunião Família';
+  content: string;
+}
+
+export interface InclusionRecord {
+  id?: string;
+  studentId: string;
+  studentName: string;
+  turma?: string;
+  diagnosisNotes: string; // Diagnóstico/Laudo e Necessidades Específicas
+  peiGoals: string; // Objetivos do PEI
+  adaptedResources: string; // Recursos Adaptados & Metodologia Assistiva
+  evaluationsHistory: InclusionEvaluation[]; // Histórico de pareceres de acompanhamento
+  updatedAt?: string;
+}
+
 
 

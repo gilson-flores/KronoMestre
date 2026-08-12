@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Save, Pencil, Plus, Trash2, HelpCircle, FileText, Users, CheckCircle2 } from 'lucide-react';
+import { X, Save, Pencil, Plus, Trash2, HelpCircle, FileText, Users, CheckCircle2, Link2 } from 'lucide-react';
 import { Activity, ActivityQuestion } from '@/lib/types';
 import { DEFAULT_TURMAS, getTurmaLabel } from '@/lib/studentUtils';
+import { TurmaMultiSelect } from '@/components/TurmaMultiSelect';
 
 interface EditActivityModalProps {
   isOpen: boolean;
@@ -23,7 +24,8 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   const [subject, setSubject] = useState('Sociologia');
   const [description, setDescription] = useState('');
   const [supportMaterial, setSupportMaterial] = useState('');
-  const [turma, setTurma] = useState('301');
+  const [supportLinkInput, setSupportLinkInput] = useState('');
+  const [selectedTurmas, setSelectedTurmas] = useState<string[]>(['101']);
   const [type, setType] = useState<'Simulado' | 'Redação' | 'Dinâmica' | 'Avaliação' | 'Trabalho em grupo' | 'Projeto de pesquisa'>('Avaliação');
   const [status, setStatus] = useState<'Ativo' | 'Prazo Encerrado' | 'Inativo'>('Ativo');
   const [deadline, setDeadline] = useState('');
@@ -40,7 +42,10 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
     setSubject(activity.subject || 'Sociologia');
     setDescription(activity.description || '');
     setSupportMaterial(activity.supportMaterial || '');
-    setTurma(activity.turma || '301');
+    const parsedTurmas = activity.turma
+      ? activity.turma.split(/[,;]+/).map((t) => t.trim()).filter(Boolean)
+      : ['101'];
+    setSelectedTurmas(parsedTurmas.length > 0 ? parsedTurmas : ['101']);
     setType(activity.type || 'Avaliação');
     setStatus(activity.status || 'Ativo');
     setDeadline(activity.deadline || '');
@@ -118,13 +123,23 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
     e.preventDefault();
     if (!title.trim()) return;
 
+    let finalSupport = supportMaterial.trim();
+    if (supportLinkInput.trim()) {
+      let url = supportLinkInput.trim();
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = `https://${url}`;
+      }
+      const linkString = `🔗 Link de Apoio: ${url}`;
+      finalSupport = finalSupport ? `${finalSupport}\n\n${linkString}` : linkString;
+    }
+
     const updatedActivity: Activity = {
       ...activity,
       title: title.trim(),
       subject: subject.trim(),
       description: description.trim(),
-      supportMaterial: supportMaterial.trim(),
-      turma: turma.trim(),
+      supportMaterial: finalSupport,
+      turma: selectedTurmas.length > 0 ? selectedTurmas.join(', ') : '101',
       type,
       status,
       deadline: deadline.trim() || 'Amanhã, 23:59',
@@ -217,13 +232,10 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">Turma</label>
-              <input
-                type="text"
-                value={turma}
-                onChange={(e) => setTurma(e.target.value)}
-                placeholder="Ex: 301 ou 3ºs Anos"
-                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-3 py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
+              <label className="block text-xs font-semibold text-[#bccabb] mb-1">Turmas *</label>
+              <TurmaMultiSelect
+                selectedTurmas={selectedTurmas}
+                onChange={setSelectedTurmas}
               />
             </div>
 
@@ -340,17 +352,55 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
             </div>
           </div>
 
-          {/* Description */}
-          <div>
-            <label className="block text-xs font-semibold text-[#bccabb] mb-1">Instruções / Orientação</label>
+          {/* Material de Apoio / Texto Base & Links */}
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-[#bccabb] mb-1">
+              Material de Apoio / Texto Base
+            </label>
             <textarea
               rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Descreva as orientações para os alunos..."
-              className="w-full bg-[#131b2e] border border-white/10 rounded-2xl p-4 text-xs text-white focus:outline-none focus:border-[#4ade80] resize-none"
+              value={supportMaterial}
+              onChange={(e) => setSupportMaterial(e.target.value)}
+              placeholder="Insira aqui o texto base para leitura, citações, referências bibliográficas..."
+              className="w-full bg-[#131b2e] border border-white/10 rounded-2xl p-3.5 text-xs text-white focus:outline-none focus:border-[#4ade80] resize-y"
             />
+
+            {/* Injetor / Adicionador de Links */}
+            <div className="bg-[#0b1326] p-3 rounded-2xl border border-white/10 space-y-2">
+              <label className="block text-[11px] font-bold text-sky-300 flex items-center gap-1.5">
+                <Link2 className="w-3.5 h-3.5 text-sky-400" />
+                <span>Adicionar Link ao Material de Apoio (Google Drive, YouTube, Artigo, PDF)</span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={supportLinkInput}
+                  onChange={(e) => setSupportLinkInput(e.target.value)}
+                  placeholder="https://drive.google.com/file/... ou https://youtube.com/..."
+                  className="flex-1 bg-[#131b2e] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-sky-400 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!supportLinkInput.trim()) return;
+                    let url = supportLinkInput.trim();
+                    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                      url = `https://${url}`;
+                    }
+                    const linkString = `🔗 Link de Apoio: ${url}`;
+                    setSupportMaterial((prev) => (prev ? `${prev}\n\n${linkString}` : linkString));
+                    setSupportLinkInput('');
+                  }}
+                  className="px-3.5 py-2 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 font-bold rounded-xl text-xs border border-sky-400/40 transition-all flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Adicionar Link</span>
+                </button>
+              </div>
+            </div>
           </div>
+
+
 
           {/* Questions Section */}
           <div className="space-y-4 pt-2">

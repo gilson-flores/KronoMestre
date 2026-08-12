@@ -294,22 +294,33 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
       )}
 
-      {/* CARD CONFIGURAÇÃO DA PASTA DO GOOGLE DRIVE */}
-      <div className="glass-panel p-6 rounded-3xl border border-[#4ade80]/30 bg-gradient-to-br from-[#131b2e] to-[#0d1527] space-y-4 shadow-xl relative overflow-hidden">
+      {/* CARD CONFIGURAÇÃO DO REPOSITÓRIO DO GOOGLE DRIVE */}
+      <div className="glass-panel p-6 rounded-3xl border border-[#4ade80]/40 bg-gradient-to-br from-[#131b2e] via-[#0f172a] to-[#0d1527] space-y-4 shadow-xl relative overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#4ade80]/10 border border-[#4ade80]/30 text-[#4ade80] flex items-center justify-center shrink-0">
-              <HardDrive className="w-5 h-5" />
+            <div className="w-12 h-12 rounded-2xl bg-[#4ade80]/15 border border-[#4ade80]/30 text-[#4ade80] flex items-center justify-center shrink-0 shadow-lg shadow-[#4ade80]/10">
+              <HardDrive className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white leading-tight">Link da Pasta do Google Drive</h2>
-              <p className="text-xs text-[#bccabb]">
-                Cole o link público da sua pasta no Drive onde ficam os arquivos gerais para download dos alunos
+              <h2 className="text-lg font-bold text-white leading-tight flex items-center gap-2">
+                <span>Repositório do Google Drive</span>
+                {folderInput.trim() ? (
+                  <span className="text-[10px] font-extrabold bg-[#4ade80]/20 text-[#4ade80] border border-[#4ade80]/40 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                    Conectado
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                    Não Configurado
+                  </span>
+                )}
+              </h2>
+              <p className="text-xs text-[#bccabb] mt-0.5">
+                Defina o repositório público ou pasta do Google Drive com apostilas, livros e materiais de Sociologia
               </p>
             </div>
           </div>
           <span className="px-3 py-1 bg-[#4ade80]/20 text-[#4ade80] border border-[#4ade80]/40 rounded-full text-[11px] font-bold tracking-wide uppercase shrink-0 w-fit">
-            Aba dos Alunos
+            Acesso dos Alunos
           </span>
         </div>
 
@@ -317,13 +328,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-[#dae2fd] uppercase tracking-wider flex items-center gap-1.5">
               <Link2 className="w-3.5 h-3.5 text-[#4ade80]" />
-              <span>URL da Pasta Geral no Google Drive</span>
+              <span>Link do Repositório do Google Drive (Pasta ou Drive Compartilhado)</span>
             </label>
             <input
               type="url"
               value={folderInput}
               onChange={(e) => setFolderInput(e.target.value)}
-              placeholder="https://drive.google.com/drive/folders/seu-codigo-de-pasta"
+              placeholder="https://drive.google.com/drive/folders/sua-pasta-no-drive"
               className="w-full bg-[#0b1326] border border-white/15 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80] transition-all font-mono"
             />
           </div>
@@ -335,7 +346,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 className="py-3 px-6 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-black rounded-xl text-xs transition-all shadow-lg shadow-[#4ade80]/20 flex items-center gap-2 cursor-pointer active:scale-95"
               >
                 <Save className="w-4 h-4" />
-                <span>Salvar Link do Drive</span>
+                <span>Salvar Repositório do Drive</span>
               </button>
 
               {folderInput.trim() && (
@@ -344,10 +355,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   target="_blank"
                   rel="noopener noreferrer"
                   className="py-3 px-5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-xs transition-all border border-white/10 flex items-center gap-2 cursor-pointer active:scale-95"
-                  title="Testar e abrir pasta em nova aba"
+                  title="Abrir Repositório no Google Drive"
                 >
                   <ExternalLink className="w-4 h-4 text-[#4ade80]" />
-                  <span>Testar Link</span>
+                  <span>Acessar Repositório</span>
                 </a>
               )}
             </div>
@@ -355,7 +366,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             {savedSuccess && (
               <div className="flex items-center gap-2 text-[#4ade80] text-xs font-bold animate-fadeIn">
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Link salvo com sucesso! Os alunos já têm acesso a esta pasta.</span>
+                <span>Repositório do Google Drive salvo com sucesso!</span>
               </div>
             )}
           </div>

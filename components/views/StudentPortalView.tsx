@@ -16,6 +16,7 @@ import {
   FolderDown,
   Download,
   ExternalLink,
+  Link2,
   HardDrive,
   HelpCircle,
   AlertCircle,
@@ -902,9 +903,37 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                             <BookOpen className="w-4 h-4 text-[#4ade80]" />
                             <span>Texto de Apoio / Leitura Obrigatória:</span>
                           </h5>
-                          <p className="text-xs text-[#bccabb] leading-relaxed italic whitespace-pre-wrap">
-                            {act.supportMaterial}
-                          </p>
+                          <div className="text-xs text-[#bccabb] leading-relaxed space-y-1.5">
+                            {act.supportMaterial.split('\n').map((line, i) => {
+                              const urlMatch = line.match(/(https?:\/\/[^\s]+)/g);
+                              if (urlMatch) {
+                                const parts = line.split(/(https?:\/\/[^\s]+)/g);
+                                return (
+                                  <p key={i} className="whitespace-pre-wrap flex flex-wrap items-center gap-1.5 my-1">
+                                    {parts.map((part, pIdx) => {
+                                      if (part.match(/^https?:\/\//i)) {
+                                        return (
+                                          <a
+                                            key={pIdx}
+                                            href={part}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#4ade80]/20 hover:bg-[#4ade80]/30 border border-[#4ade80]/40 text-[#4ade80] font-bold rounded-xl text-xs transition-all underline cursor-pointer shadow-sm active:scale-95 my-0.5"
+                                          >
+                                            <Link2 className="w-3.5 h-3.5 shrink-0" />
+                                            <span className="truncate max-w-xs">{part}</span>
+                                            <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                                          </a>
+                                        );
+                                      }
+                                      return <span key={pIdx}>{part}</span>;
+                                    })}
+                                  </p>
+                                );
+                              }
+                              return <p key={i} className="whitespace-pre-wrap">{line}</p>;
+                            })}
+                          </div>
                         </div>
                       )}
                     </div>

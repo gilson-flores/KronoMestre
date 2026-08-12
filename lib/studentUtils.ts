@@ -6,17 +6,13 @@
 export const DEFAULT_TURMAS = [
   '101',
   '102',
-  '103',
+  '104',
   '201',
-  '202',
-  '203',
-  '301',
-  '302',
-  '303',
-  '1001',
   '2001',
+  '202',
+  '301',
   '3001',
-  '3002',
+  '302',
 ];
 
 /**
@@ -49,22 +45,19 @@ export function canStudentAccessActivity(activityTurma: string | undefined, stud
   if (!studentTurma) return false;
   if (!activityTurma) return true; // em branco = todos os alunos podem acessar
 
-  const actTrim = activityTurma.trim().toLowerCase();
   const studentTrim = studentTurma.trim().toLowerCase();
+  const list = activityTurma.split(/[,;]+/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+  if (list.length === 0) return true;
 
-  // Em branco ou "branco" ou "todas"
-  if (actTrim === '' || actTrim === 'branco' || actTrim === 'todas') {
-    return true;
-  }
-
-  // Se estiver somente 1 dígito (ex: "1", "2", "3")
-  if (/^[1-9]$/.test(actTrim)) {
-    // Todos os alunos de turmas que começam com esse dígito (ex: "3" -> "301", "302", "3001")
-    return studentTrim.startsWith(actTrim);
-  }
-
-  // Se for código específico (ex: "301", "1001", "3001", "101")
-  return actTrim === studentTrim;
+  return list.some((actTrim) => {
+    if (actTrim === '' || actTrim === 'branco' || actTrim === 'todas') {
+      return true;
+    }
+    if (/^[1-9]$/.test(actTrim)) {
+      return studentTrim.startsWith(actTrim);
+    }
+    return actTrim === studentTrim;
+  });
 }
 
 /**

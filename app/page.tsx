@@ -20,6 +20,7 @@ import { StudentsView } from '@/components/views/StudentsView';
 import { LibraryView } from '@/components/views/LibraryView';
 import { StudentPortalView } from '@/components/views/StudentPortalView';
 import { MessagesView } from '@/components/views/MessagesView';
+import { SecondTeacherInclusionView } from '@/components/views/SecondTeacherInclusionView';
 
 import { normalizeStudentName } from '@/lib/studentUtils';
 import { NewActivityModal } from '@/components/modals/NewActivityModal';
@@ -28,7 +29,8 @@ import { ViewActivityModal } from '@/components/modals/ViewActivityModal';
 import { NewStudentModal } from '@/components/modals/NewStudentModal';
 import { EditStudentModal } from '@/components/modals/EditStudentModal';
 import { StudentSupervisionModal } from '@/components/modals/StudentSupervisionModal';
-import { CheckCircle2, AlertTriangle } from 'lucide-react';
+import { NewSecondTeacherModal } from '@/components/modals/NewSecondTeacherModal';
+import { CheckCircle2, AlertTriangle, HeartHandshake, UserPlus } from 'lucide-react';
 
 export default function Home() {
   // Auth state
@@ -58,6 +60,11 @@ export default function Home() {
           const session = JSON.parse(sessionStr);
           if (session.role === 'teacher') {
             setRole('teacher');
+            if (session.teacherData) setTeacher(session.teacherData);
+          } else if (session.role === 'second_teacher') {
+            setRole('second_teacher');
+            if (session.teacherData) setTeacher(session.teacherData);
+            setCurrentTab('segundo_professor');
           } else if (session.role === 'student' && session.studentData) {
             setCurrentStudent(session.studentData);
             setRole('student');
@@ -92,6 +99,7 @@ export default function Home() {
   // Modals state
   const [isNewActivityModalOpen, setIsNewActivityModalOpen] = useState(false);
   const [isNewStudentModalOpen, setIsNewStudentModalOpen] = useState(false);
+  const [isNewSecondTeacherModalOpen, setIsNewSecondTeacherModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<StudentUser | null>(null);
   const [supervisingStudent, setSupervisingStudent] = useState<StudentUser | null>(null);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
@@ -373,7 +381,17 @@ export default function Home() {
     setRole('teacher');
     setCurrentTab('painel');
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('active_session', JSON.stringify({ role: 'teacher' }));
+      sessionStorage.setItem('active_session', JSON.stringify({ role: 'teacher', teacherData: loggedTeacher }));
+      window.location.reload();
+    }
+  };
+
+  const handleLoginSecondTeacher = (loggedTeacher: TeacherUser) => {
+    setTeacher(loggedTeacher);
+    setRole('second_teacher');
+    setCurrentTab('segundo_professor');
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('active_session', JSON.stringify({ role: 'second_teacher', teacherData: loggedTeacher }));
       window.location.reload();
     }
   };
@@ -1292,6 +1310,7 @@ export default function Home() {
         teacher={teacher}
         onLoginTeacher={handleLoginTeacher}
         onLoginStudent={handleLoginStudent}
+        onLoginSecondTeacher={handleLoginSecondTeacher}
       />
     );
   }
@@ -1551,6 +1570,28 @@ export default function Home() {
                     placeholder="Deixe em branco para não alterar"
                   />
                   <p className="text-[10px] text-[#bccabb] mt-1 ml-1">Preencha apenas se desejar alterar a senha de acesso (Supabase Auth).</p>
+                </div>
+
+                {/* 2º Professor / Educação Inclusiva */}
+                <div className="pt-4 border-t border-white/10 space-y-2">
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <HeartHandshake className="w-4 h-4 text-amber-400" />
+                    <span>2º Professor (AEE / Inclusão Escolar)</span>
+                  </h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-[#131b2e] rounded-2xl border border-white/10 gap-3">
+                    <div>
+                      <p className="text-xs font-bold text-white">Cadastrar 2º Professor</p>
+                      <p className="text-[11px] text-[#bccabb] mt-0.5">Cadastre o e-mail e senha de acesso do Professor de Apoio Pedagógico / AEE.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsNewSecondTeacherModalOpen(true)}
+                      className="px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-black font-bold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer shrink-0"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      <span>Cadastrar 2º Professor</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="pt-4 border-t border-white/10 space-y-2">
@@ -1815,6 +1856,15 @@ export default function Home() {
         onSendMessage={(st) => {
           setSupervisingStudent(null);
           setCurrentTab('mensagens');
+        }}
+      />
+
+      <NewSecondTeacherModal
+        isOpen={isNewSecondTeacherModalOpen}
+        onClose={() => setIsNewSecondTeacherModalOpen(false)}
+        defaultSchool={teacher.school}
+        onCreateSecondTeacher={(newTeacher) => {
+          showGlobalStatus('success', `2º Professor "${newTeacher.name}" cadastrado com sucesso!`);
         }}
       />
     </div>

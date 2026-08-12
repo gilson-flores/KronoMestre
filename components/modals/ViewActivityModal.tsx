@@ -16,7 +16,9 @@ import {
   CheckCheck,
   AlignLeft,
   Sparkles,
-  Key
+  Key,
+  ExternalLink,
+  Link2
 } from 'lucide-react';
 import { Activity, MultipleChoiceQuestion, EssayQuestion } from '@/lib/types';
 
@@ -149,8 +151,36 @@ export const ViewActivityModal: React.FC<ViewActivityModalProps> = ({
                 <BookOpen className="w-4 h-4 text-sky-400" />
                 Material de Apoio / Leituras Recomendadas
               </h3>
-              <div className="bg-[#131b2e] p-4 rounded-2xl border border-sky-500/20 text-sky-200 whitespace-pre-line leading-relaxed">
-                {activity.supportMaterial}
+              <div className="bg-[#131b2e] p-4 rounded-2xl border border-sky-500/20 text-sky-200 leading-relaxed space-y-2">
+                {activity.supportMaterial.split('\n').map((line, i) => {
+                  const urlMatch = line.match(/(https?:\/\/[^\s]+)/g);
+                  if (urlMatch) {
+                    const parts = line.split(/(https?:\/\/[^\s]+)/g);
+                    return (
+                      <p key={i} className="whitespace-pre-wrap flex flex-wrap items-center gap-1.5 my-1">
+                        {parts.map((part, pIdx) => {
+                          if (part.match(/^https?:\/\//i)) {
+                            return (
+                              <a
+                                key={pIdx}
+                                href={part}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1 bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/40 text-sky-300 font-bold rounded-xl text-xs transition-all underline cursor-pointer shadow-sm active:scale-95 my-0.5"
+                              >
+                                <Link2 className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                                <span className="truncate max-w-xs">{part}</span>
+                                <ExternalLink className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                              </a>
+                            );
+                          }
+                          return <span key={pIdx}>{part}</span>;
+                        })}
+                      </p>
+                    );
+                  }
+                  return <p key={i} className="whitespace-pre-wrap">{line}</p>;
+                })}
               </div>
             </div>
           )}
