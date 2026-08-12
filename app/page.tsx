@@ -99,6 +99,7 @@ export default function Home() {
   const [viewingActivity, setViewingActivity] = useState<Activity | null>(null);
   const [teacherSaveStatus, setTeacherSaveStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [globalDbStatus, setGlobalDbStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [newTeacherPassword, setNewTeacherPassword] = useState('');
 
   const showGlobalStatus = (type: 'success' | 'error', message: string) => {
     setGlobalDbStatus({ type, message });
@@ -1540,6 +1541,17 @@ export default function Home() {
                     className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-[#4ade80]"
                   />
                 </div>
+                <div>
+                  <label className="block text-[#bccabb] font-semibold mb-1">Nova Senha de Acesso</label>
+                  <input
+                    type="password"
+                    value={newTeacherPassword}
+                    onChange={(e) => setNewTeacherPassword(e.target.value)}
+                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-[#4ade80]"
+                    placeholder="Deixe em branco para não alterar"
+                  />
+                  <p className="text-[10px] text-[#bccabb] mt-1 ml-1">Preencha apenas se desejar alterar a senha de acesso (Supabase Auth).</p>
+                </div>
 
                 <div className="pt-4 border-t border-white/10 space-y-2">
                   <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -1580,64 +1592,117 @@ export default function Home() {
 
                       const isValidUUID = (id?: string | null) => !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
-                      // 1. Verificar se já existe registro do professor por e-mail ou por ID
-                      let existingId: string | null = null;
+                      let authNotice = '';
 
-                      if (teacher.email) {
-                        const { data: rowByEmail } = await supabase
-                          .from('teachers')
-                          .select('id')
-                          .eq('email', teacher.email)
-                          .maybeSingle();
-                        if (rowByEmail?.id) {
-                          existingId = rowByEmail.id;
+                      // Atualizar Auth do Supabase PRIMEIRO
+                      if (teacher.email || newTeacherPassword) {
+                        try {
+                          const { data: sessionData } = await supabase.auth.getSession();
+                          const currentUser = sessionData?.session?.user;
+
+                          const authUpdates: any = {};
+                          if (teacher.email && currentUser && teacher.email !== currentUser.email) {
+                            authUpdates.email = teacher.email;
+                          }
+                          if (newTeacherPassword) {
+                            authUpdates.password = newTeacherPassword;
+                          }
+
+                          if (Object.keys(authUpdates).length > 0) {
+                            const { error: authError } = await supabase.auth.updateUser(authUpdates);
+                            if (authError) {
+                              console.error('Erro/Aviso ao atualizar autenticação:', authError);
+                              const isRateLimit =
+                                authError.message?.toLowerCase().includes('security purposes') ||
+                                authError.message?.toLowerCase().includes('after') ||
+                                authError.message?.toLowerCase().includes('rate limit');
+                              if (isRateLimit) {
+                                authNotice = 'Nota de segurança: Aguarde 1 minuto para alterar e-mail/senha novamente no Supabase Auth.';
+                              } else {
+                                authNotice = `Aviso Auth: ${authError.message}`;
+                              }
+                            } else {
+                              setNewTeacherPassword(''); // Limpa o campo de senha após alteração bem-sucedida
+                            }
+                          }
+                        } catch (e) {
+                          console.error('Falha de sistema ao atualizar auth:', e);
                         }
                       }
 
-                      if (!existingId && teacher.id && isValidUUID(teacher.id)) {
-                        const { data: rowById } = await supabase
-                          .from('teachers')
-                          .select('id')
-                          .eq('id', teacher.id)
-                          .maybeSingle();
-                        if (rowById?.id) {
-                          existingId = rowById.id;
-                        }
-                      }
-
-                      const updateFields = {
+                      const updateFields: any = {
                         email: teacher.email,
                         name: teacher.name,
                         subject: teacher.subject,
                         avatar_url: teacher.avatarUrl,
                         phone: teacher.phone || null,
                         school: teacher.school || null,
+                        drive_folder_url: teacher.driveFolderUrl || '',
                       };
 
-                      let updatedData = null;
-                      let error = null;
+                      if (teacher.id && isValidUUID(teacher.id)) {
+                        updateFields.id = teacher.id;
+                      }
 
-                      if (existingId) {
-                        const res = await supabase
-                          .from('teachers')
-                          .update(updateFields)
-                          .eq('id', existingId)
-                          .select('*')
-                          .maybeSingle();
-                        updatedData = res.data;
-                        error = res.error;
-                      } else {
-                        const insertPayload: any = { ...updateFields };
-                        if (teacher.id && isValidUUID(teacher.id)) {
-                          insertPayload.id = teacher.id;
+                      let savedRow: any = null;
+                      let error: any = null;
+
+                      // 1. Tentar upsert por e-mail no Supabase
+                      const upsertRes = await supabase
+                        .from('teachers')
+                        .upsert(updateFields, { onConflict: 'email' })
+                        .select('*')
+                        .maybeSingle();
+
+                      savedRow = upsertRes.data;
+                      error = upsertRes.error;
+
+                      // 2. Se o upsert direto falhou (ex: falha de constraint UNIQUE em DB antigo), buscar por e-mail/ID e fazer update ou insert
+                      if (error || !savedRow) {
+                        let existingId: string | null = null;
+
+                        if (teacher.email) {
+                          const { data: rowByEmail } = await supabase
+                            .from('teachers')
+                            .select('id')
+                            .eq('email', teacher.email)
+                            .maybeSingle();
+                          if (rowByEmail?.id) {
+                            existingId = rowByEmail.id;
+                          }
                         }
-                        const res = await supabase
-                          .from('teachers')
-                          .insert(insertPayload)
-                          .select('*')
-                          .maybeSingle();
-                        updatedData = res.data;
-                        error = res.error;
+
+                        if (!existingId && teacher.id && isValidUUID(teacher.id)) {
+                          const { data: rowById } = await supabase
+                            .from('teachers')
+                            .select('id')
+                            .eq('id', teacher.id)
+                            .maybeSingle();
+                          if (rowById?.id) {
+                            existingId = rowById.id;
+                          }
+                        }
+
+                        if (existingId) {
+                          const updatePayload = { ...updateFields };
+                          delete updatePayload.id;
+                          const res = await supabase
+                            .from('teachers')
+                            .update(updatePayload)
+                            .eq('id', existingId)
+                            .select('*')
+                            .maybeSingle();
+                          savedRow = res.data;
+                          error = res.error;
+                        } else {
+                          const res = await supabase
+                            .from('teachers')
+                            .insert(updateFields)
+                            .select('*')
+                            .maybeSingle();
+                          savedRow = res.data;
+                          error = res.error;
+                        }
                       }
 
                       if (error) {
@@ -1649,24 +1714,34 @@ export default function Home() {
                         return;
                       }
 
-                      if (updatedData) {
-                        const updatedTeacher = {
-                          id: updatedData.id,
-                          name: updatedData.name,
-                          subject: updatedData.subject || 'Sociologia',
-                          email: updatedData.email,
-                          avatarUrl: updatedData.avatar_url || teacher.avatarUrl,
-                          phone: updatedData.phone || '',
-                          school: updatedData.school || '',
-                        };
-                        setTeacher(updatedTeacher);
-                      } else {
-                        setTeacher(teacher);
+                      if (!savedRow) {
+                        console.error('Nenhum registro de professor retornado pelo Supabase.');
+                        setTeacherSaveStatus({
+                          type: 'error',
+                          message: 'ARMADILHA DE BUG DISPARADA: O Supabase não confirmou a gravação do registro. Verifique a conexão e permissões.',
+                        });
+                        return;
                       }
+
+                      const updatedTeacher: TeacherUser = {
+                        id: savedRow.id,
+                        name: savedRow.name,
+                        subject: savedRow.subject || 'Sociologia',
+                        email: savedRow.email,
+                        avatarUrl: savedRow.avatar_url || teacher.avatarUrl,
+                        phone: savedRow.phone || '',
+                        school: savedRow.school || '',
+                        driveFolderUrl: savedRow.drive_folder_url || teacher.driveFolderUrl || '',
+                      };
+                      setTeacher(updatedTeacher);
+
+                      const successMessage = authNotice
+                        ? `Perfil salvo no banco com sucesso! (${authNotice})`
+                        : `Informações salvas e confirmadas no Supabase! (ID do banco: ${savedRow.id})`;
 
                       setTeacherSaveStatus({
                         type: 'success',
-                        message: 'Informações do professor gravadas e confirmadas diretamente no Supabase!',
+                        message: successMessage,
                       });
 
                       setTimeout(() => {
