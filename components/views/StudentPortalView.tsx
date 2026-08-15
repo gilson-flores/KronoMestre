@@ -596,7 +596,10 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                     const isPending = !sub || sub.status === 'returned' || sub.status === 'draft';
                     const isToCorrect = sub && sub.status === 'pending';
                     const isGraded = sub && sub.status === 'graded';
-                    const totalScore = sub && isGraded ? (sub.objectiveScore || 0) + (sub.essayScore || 0) : null;
+                    const hasObj = act.questions && act.questions.length > 0
+                      ? act.questions.some(q => q.type === 'multiple_choice')
+                      : ((sub?.maxObjectiveScore || 0) > 0 && act.type !== 'Redação');
+                    const totalScore = sub && isGraded ? (hasObj ? (sub.objectiveScore || 0) : 0) + (sub.essayScore || 0) + (sub.extraPoints || 0) : null;
 
                     return (
                       <div
@@ -1185,7 +1188,10 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               } else {
                 const distribution = getActivityGradeDistribution(act);
                 const isGraded = sub.status === 'graded';
-                const totalScore = (sub.objectiveScore || 0) + (sub.essayScore || 0);
+                const hasObj = act.questions && act.questions.length > 0
+                  ? act.questions.some(q => q.type === 'multiple_choice')
+                  : ((sub?.maxObjectiveScore || 0) > 0 && act.type !== 'Redação');
+                const totalScore = (hasObj ? (sub.objectiveScore || 0) : 0) + (sub.essayScore || 0) + (sub.extraPoints || 0);
 
                 return (
                   <div

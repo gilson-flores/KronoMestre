@@ -166,45 +166,95 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
     }
   };
 
+  const saveUploadedFile = (slotId: string, fileName: string, fileData: string, rawSize: number) => {
+    const formattedSize =
+      rawSize > 1024 * 1024
+        ? `${(rawSize / (1024 * 1024)).toFixed(2)} MB`
+        : `${(rawSize / 1024).toFixed(1)} KB`;
+    const today = new Date().toLocaleDateString('pt-BR');
+
+    setGuidingDocs((prev) => {
+      const updated = prev.map((slot) => {
+        if (slot.id === slotId) {
+          return {
+            ...slot,
+            fileName,
+            fileSize: formattedSize,
+            uploadedAt: today,
+            fileData,
+          };
+        }
+        return slot;
+      });
+      if (typeof window !== 'undefined') {
+        try {
+          // Salva apenas os metadados no localStorage para evitar QuotaExceededError (cota ~5MB)
+          const metadataOnly = updated.map(({ fileData, ...rest }) => rest);
+          localStorage.setItem('sociologia_guiding_docs', JSON.stringify(metadataOnly));
+        } catch {
+          // Ignora silenciosamente se o localStorage estiver cheio ou indisponível
+        }
+      }
+      return updated;
+    });
+
+    const slotObj = DEFAULT_GUIDING_DOCS.find((s) => s.id === slotId);
+    showToast(`Documento "${fileName}" carregado com sucesso para ${slotObj?.categoryName || 'categoria'}.`);
+  };
+
   const handleFileUpload = (slotId: string, file: File) => {
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const fileData = e.target?.result as string;
-      const formattedSize =
-        file.size > 1024 * 1024
-          ? `${(file.size / (1024 * 1024)).toFixed(2)} MB`
-          : `${(file.size / 1024).toFixed(1)} KB`;
-      const today = new Date().toLocaleDateString('pt-BR');
+    const isImage =
+      file.type.startsWith('image/') ||
+      file.name.toLowerCase().endsWith('.png') ||
+      file.name.toLowerCase().endsWith('.jpg') ||
+      file.name.toLowerCase().endsWith('.jpeg');
 
-      setGuidingDocs((prev) => {
-        const updated = prev.map((slot) => {
-          if (slot.id === slotId) {
-            return {
-              ...slot,
-              fileName: file.name,
-              fileSize: formattedSize,
-              uploadedAt: today,
-              fileData: fileData,
-            };
+    if (isImage) {
+      const imgReader = new FileReader();
+      imgReader.onload = (e) => {
+        const rawResult = e.target?.result as string;
+        const img = document.createElement('img');
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 800; // Reduzido para manter o tamanho base64 compacto (<100KB)
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
           }
-          return slot;
-        });
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('sociologia_guiding_docs', JSON.stringify(updated));
-          } catch (err) {
-            console.warn('Erro ao salvar no localStorage:', err);
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.75);
+            saveUploadedFile(slotId, file.name, compressedBase64, compressedBase64.length);
+            return;
           }
-        }
-        return updated;
-      });
-
-      const slotObj = DEFAULT_GUIDING_DOCS.find((s) => s.id === slotId);
-      showToast(`Documento "${file.name}" carregado com sucesso para ${slotObj?.categoryName || 'categoria'}.`);
-    };
-    reader.readAsDataURL(file);
+          saveUploadedFile(slotId, file.name, rawResult, file.size);
+        };
+        img.onerror = () => {
+          saveUploadedFile(slotId, file.name, rawResult, file.size);
+        };
+        img.src = rawResult;
+      };
+      imgReader.readAsDataURL(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const fileData = e.target?.result as string;
+        saveUploadedFile(slotId, file.name, fileData, file.size);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleRemoveFile = (slotId: string) => {
@@ -220,9 +270,10 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
       });
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem('sociologia_guiding_docs', JSON.stringify(updated));
-        } catch (err) {
-          console.warn('Erro ao salvar no localStorage:', err);
+          const metadataOnly = updated.map(({ fileData, ...rest }) => rest);
+          localStorage.setItem('sociologia_guiding_docs', JSON.stringify(metadataOnly));
+        } catch {
+          // Ignora se indisponível
         }
       }
       return updated;
@@ -367,7 +418,48 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
   ) => {
     setAiLoading(true);
     try {
-      const historyToPass = currentHistory || aiHistory;
+      const rawHistory = currentHistory || aiHistory;
+      
+      // Otimização do histórico de chat para evitar payload excessivamente grande
+      const historyToPass = rawHistory.slice(-8).map((msg) => {
+        if (msg.role === 'assistant' && msg.content && msg.content.length > 6000) {
+          return {
+            role: msg.role,
+            content: msg.content.slice(0, 3000) + "\n\n[...conteúdo extenso do documento anterior ocultado para otimização...]\n\n" + msg.content.slice(-2000),
+          };
+        }
+        return msg;
+      });
+
+      // Envia somente documentos relevantes com conteúdo presente, limitando o tamanho base64 por arquivo
+      const MAX_SINGLE_DOC_BASE64_LENGTH = 600000;
+      const sanitizedGuidingDocs = guidingDocs
+        .filter((doc) => doc.fileData || doc.fileName)
+        .map((doc) => {
+          let finalData = doc.fileData;
+          if (finalData && finalData.length > MAX_SINGLE_DOC_BASE64_LENGTH) {
+            if (finalData.startsWith('data:')) {
+              const prefixEnd = finalData.indexOf(';base64,');
+              if (prefixEnd !== -1) {
+                const header = finalData.slice(0, prefixEnd + 8);
+                const body = finalData.slice(prefixEnd + 8, prefixEnd + 8 + MAX_SINGLE_DOC_BASE64_LENGTH);
+                finalData = header + body;
+              } else {
+                finalData = finalData.slice(0, MAX_SINGLE_DOC_BASE64_LENGTH);
+              }
+            } else {
+              finalData = finalData.slice(0, MAX_SINGLE_DOC_BASE64_LENGTH);
+            }
+          }
+          return {
+            id: doc.id,
+            categoryName: doc.categoryName,
+            fileName: doc.fileName,
+            fileSize: doc.fileSize,
+            fileData: finalData,
+          };
+        });
+
       const payload = {
         seqTitle: seqTitle.trim() || 'Nova Sequência Didática',
         seqSubject,
@@ -377,27 +469,41 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
         seqEndDate: seqEndDate ? formatDateToBR(seqEndDate) : '',
         selectedTurmasCodes,
         turmaSchedules,
-        guidingDocs,
+        guidingDocs: sanitizedGuidingDocs,
         userMessage: customMessage || '',
         history: historyToPass,
       };
 
+      const jsonPayload = JSON.stringify(payload);
+
+      if (jsonPayload.length > 1800000) {
+        throw new Error(
+          "O tamanho total dos arquivos anexados é muito grande para o servidor. Por favor, remova ou substitua alguns anexos por arquivos menores."
+        );
+      }
+
       const response = await fetch('/api/gemini/planning', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: jsonPayload,
       });
 
       let data;
       const textResponse = await response.text();
+
+      if (response.status === 413 || textResponse.includes("413") || textResponse.includes("Request Entity Too Large")) {
+        throw new Error(
+          "O tamanho dos arquivos anexados excede o limite do servidor (Erro 413 Request Entity Too Large). Remova arquivos pesados ou substitua por imagens/PDFs menores."
+        );
+      }
+
       try {
         data = JSON.parse(textResponse);
       } catch (e) {
-        console.error("Non-JSON response from server:", textResponse);
         throw new Error(
           response.ok 
             ? 'A resposta do servidor não é um JSON válido.' 
-            : `Erro do servidor (${response.status}): O servidor não retornou um JSON. Isso pode ocorrer se os anexos forem muito grandes ou se a requisição demorou demais.`
+            : `Erro do servidor (${response.status}): O servidor não retornou uma resposta válida.`
         );
       }
 
