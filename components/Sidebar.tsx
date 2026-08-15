@@ -42,6 +42,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'mensagens', label: 'Mensagens', icon: MessageSquare, badge: unreadMessagesCount },
     { id: 'alunos', label: 'Alunos', icon: Users },
     { id: 'arquivos', label: 'Arquivos', icon: FolderOpen },
+    { id: '2_professor', label: '2º Professor', icon: HeartHandshake },
   ];
 
 

@@ -20,7 +20,8 @@ import { StudentsView } from '@/components/views/StudentsView';
 import { LibraryView } from '@/components/views/LibraryView';
 import { StudentPortalView } from '@/components/views/StudentPortalView';
 import { MessagesView } from '@/components/views/MessagesView';
-import { SecondTeacherInclusionView } from '@/components/views/SecondTeacherInclusionView';
+import { SecondTeachersView } from '@/components/views/SecondTeachersView';
+
 
 import { normalizeStudentName } from '@/lib/studentUtils';
 import { NewActivityModal } from '@/components/modals/NewActivityModal';
@@ -64,7 +65,7 @@ export default function Home() {
           } else if (session.role === 'second_teacher') {
             setRole('second_teacher');
             if (session.teacherData) setTeacher(session.teacherData);
-            setCurrentTab('segundo_professor');
+            setCurrentTab('2_professor');
           } else if (session.role === 'student' && session.studentData) {
             setCurrentStudent(session.studentData);
             setRole('student');
@@ -389,7 +390,7 @@ export default function Home() {
   const handleLoginSecondTeacher = (loggedTeacher: TeacherUser) => {
     setTeacher(loggedTeacher);
     setRole('second_teacher');
-    setCurrentTab('segundo_professor');
+    setCurrentTab('2_professor');
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('active_session', JSON.stringify({ role: 'second_teacher', teacherData: loggedTeacher }));
       window.location.reload();
@@ -1471,6 +1472,12 @@ export default function Home() {
             />
           )}
 
+          {currentTab === '2_professor' && (
+            <SecondTeachersView
+              teacher={teacher}
+            />
+          )}
+
           {currentTab === 'arquivos' && (
             <LibraryView
               files={library}
@@ -1570,28 +1577,6 @@ export default function Home() {
                     placeholder="Deixe em branco para não alterar"
                   />
                   <p className="text-[10px] text-[#bccabb] mt-1 ml-1">Preencha apenas se desejar alterar a senha de acesso (Supabase Auth).</p>
-                </div>
-
-                {/* 2º Professor / Educação Inclusiva */}
-                <div className="pt-4 border-t border-white/10 space-y-2">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <HeartHandshake className="w-4 h-4 text-amber-400" />
-                    <span>2º Professor (AEE / Inclusão Escolar)</span>
-                  </h3>
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-[#131b2e] rounded-2xl border border-white/10 gap-3">
-                    <div>
-                      <p className="text-xs font-bold text-white">Cadastrar 2º Professor</p>
-                      <p className="text-[11px] text-[#bccabb] mt-0.5">Cadastre o e-mail e senha de acesso do Professor de Apoio Pedagógico / AEE.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsNewSecondTeacherModalOpen(true)}
-                      className="px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-black font-bold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer shrink-0"
-                    >
-                      <UserPlus className="w-4 h-4" />
-                      <span>Cadastrar 2º Professor</span>
-                    </button>
-                  </div>
                 </div>
 
                 <div className="pt-4 border-t border-white/10 space-y-2">
@@ -1856,15 +1841,6 @@ export default function Home() {
         onSendMessage={(st) => {
           setSupervisingStudent(null);
           setCurrentTab('mensagens');
-        }}
-      />
-
-      <NewSecondTeacherModal
-        isOpen={isNewSecondTeacherModalOpen}
-        onClose={() => setIsNewSecondTeacherModalOpen(false)}
-        defaultSchool={teacher.school}
-        onCreateSecondTeacher={(newTeacher) => {
-          showGlobalStatus('success', `2º Professor "${newTeacher.name}" cadastrado com sucesso!`);
         }}
       />
     </div>

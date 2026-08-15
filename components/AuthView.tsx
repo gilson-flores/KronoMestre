@@ -187,9 +187,9 @@ export const AuthView: React.FC<AuthViewProps> = ({
         password: secondTeacherPassword,
       });
 
-      // Buscar perfil na tabela 'teachers'
+      // Buscar perfil na tabela 'second_teachers'
       const { data: dbTeacher, error: dbError } = await supabase
-        .from('teachers')
+        .from('second_teachers')
         .select('*')
         .eq('email', secondTeacherEmail)
         .maybeSingle();

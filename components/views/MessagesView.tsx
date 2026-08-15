@@ -16,7 +16,8 @@ import {
   Clock,
   Shield,
   Smile,
-  X
+  X,
+  Users
 } from 'lucide-react';
 import { ChatMessage, StudentUser, TeacherUser, Activity } from '@/lib/types';
 import { formatAvatarUrl } from '@/lib/utils';
@@ -76,18 +77,19 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
   const [newMessageText, setNewMessageText] = useState('');
   const [attachedActivityId, setAttachedActivityId] = useState<string>('');
   const [isAttachingActivity, setIsAttachingActivity] = useState(false);
+  const [broadcastTurma, setBroadcastTurma] = useState<string>('Todas');
 
   // Ref for chat auto-scroll
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
   // Get active student object for the selected thread
-  const activeStudent = students.find((s) => s.id === selectedStudentId) ||
-    (currentUserRole === 'student' && student ? student : students[0]);
+  const activeStudent = selectedStudentId === 'broadcast' ? null : (students.find((s) => s.id === selectedStudentId) ||
+    (currentUserRole === 'student' && student ? student : students[0]));
 
   // Current Thread ID is student.id
-  const activeThreadId = currentUserRole === 'student'
+  const activeThreadId = selectedStudentId === 'broadcast' ? 'broadcast' : (currentUserRole === 'student'
     ? (student?.id || 'default-thread')
-    : (selectedStudentId || (students.length > 0 ? students[0].id : 'default-thread'));
+    : (selectedStudentId || (students.length > 0 ? students[0].id : 'default-thread')));
 
   // Filter messages for active thread
   const activeThreadMessages = messages.filter(
@@ -154,9 +156,34 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
     setIsMobileChatOpen(true);
   };
 
-  const handleSend = (e?: React.FormEvent) => {
+  const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!newMessageText.trim()) return;
+
+    const selectedActObj = activities.find((a) => a.id === attachedActivityId);
+
+    if (currentUserRole === 'teacher' && selectedStudentId === 'broadcast') {
+      const targetStudents = students.filter(s => broadcastTurma === 'Todas' || s.turma === broadcastTurma);
+      for (const st of targetStudents) {
+        onSendMessage({
+          threadId: st.id,
+          senderId: teacher.id || 'teacher-1',
+          senderName: teacher.name || 'Professor',
+          senderRole: 'teacher',
+          senderAvatar: teacher.avatarUrl,
+          recipientId: st.id,
+          recipientName: st.fullName || 'Aluno',
+          content: newMessageText.trim(),
+          activityId: selectedActObj?.id,
+          activityTitle: selectedActObj?.title,
+        });
+        await new Promise(r => setTimeout(r, 10)); // Ensure unique timestamp IDs
+      }
+      setNewMessageText('');
+      setAttachedActivityId('');
+      setIsAttachingActivity(false);
+      return;
+    }
 
     let recId = '';
     let recName = '';
@@ -183,8 +210,6 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
         recName = teacher.name || 'Prof. Regente';
       }
     }
-
-    const selectedActObj = activities.find((a) => a.id === attachedActivityId);
 
     onSendMessage({
       threadId: activeThreadId,
@@ -346,6 +371,31 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
 
             {/* Student Thread Scroll Area */}
             <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-white/5 min-h-0">
+              <button
+                onClick={() => handleSelectStudent('broadcast')}
+                className={`w-full p-3 sm:p-4 text-left flex items-center sm:items-start gap-3 transition-colors cursor-pointer relative ${
+                  selectedStudentId === 'broadcast'
+                    ? 'bg-[#17233b] border-l-4 border-l-[#4ade80]'
+                    : 'hover:bg-white/5'
+                }`}
+              >
+                <div className="relative shrink-0">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#4ade80]/20 flex items-center justify-center border border-[#4ade80]/30">
+                     <Users className="w-5 h-5 text-[#4ade80]" />
+                  </div>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex justify-between items-start gap-2">
+                    <h4 className={`text-xs font-bold truncate ${selectedStudentId === 'broadcast' ? 'text-white' : 'text-[#dae2fd]'}`}>
+                      Mensagem para Turma
+                    </h4>
+                  </div>
+                  <p className="text-[10px] sm:text-[11px] text-[#bccabb] mt-0.5 truncate">
+                    Enviar para múltiplos alunos
+                  </p>
+                </div>
+              </button>
+
               {filteredStudents.length === 0 ? (
                 <div className="p-6 text-center text-xs text-[#bccabb] space-y-2">
                   <p>Nenhuma mensagem ou conversa encontrada para os filtros selecionados.</p>
@@ -453,7 +503,33 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               )}
 
               {currentUserRole === 'teacher' ? (
-                activeStudent ? (
+                selectedStudentId === 'broadcast' ? (
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#4ade80]/20 flex items-center justify-center border border-[#4ade80]/40 shrink-0">
+                      <Users className="w-4 h-4 sm:w-5 sm:h-5 text-[#4ade80]" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                        <h3 className="text-xs sm:text-sm font-bold text-white truncate">Mensagem para Turma</h3>
+                        <span className="text-[10px] bg-[#171f33] text-[#4ade80] font-bold px-2 py-0.5 rounded border border-white/10 shrink-0">
+                          Múltiplos Alunos
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <select
+                          value={broadcastTurma}
+                          onChange={(e) => setBroadcastTurma(e.target.value)}
+                          className="bg-[#131b2e] border border-white/10 rounded-md px-1.5 py-0.5 text-[10px] text-[#bccabb] hover:text-white focus:outline-none focus:border-[#4ade80] cursor-pointer"
+                        >
+                          <option value="Todas">Todas as Turmas ({students.length})</option>
+                          {availableTurmas.map(t => (
+                            <option key={t} value={t}>{t} ({students.filter(s => s.turma === t).length} alunos)</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                ) : activeStudent ? (
                   <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                     <img
                       src={formatAvatarUrl(activeStudent.avatarUrl)}
@@ -532,11 +608,15 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
             {activeThreadMessages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-6 sm:p-8 space-y-3">
                 <div className="p-3.5 sm:p-4 rounded-full bg-[#131b2e] text-[#4ade80] border border-white/10">
-                  <MessageSquare className="w-7 h-7 sm:w-8 sm:h-8" />
+                  {selectedStudentId === 'broadcast' ? <Users className="w-7 h-7 sm:w-8 sm:h-8" /> : <MessageSquare className="w-7 h-7 sm:w-8 sm:h-8" />}
                 </div>
-                <h4 className="text-xs sm:text-sm font-bold text-white">Nenhuma mensagem nesta conversa</h4>
+                <h4 className="text-xs sm:text-sm font-bold text-white">
+                  {selectedStudentId === 'broadcast' ? 'Nova Mensagem em Massa' : 'Nenhuma mensagem nesta conversa'}
+                </h4>
                 <p className="text-[11px] sm:text-xs text-[#bccabb] max-w-sm">
-                  {currentUserRole === 'teacher'
+                  {selectedStudentId === 'broadcast'
+                    ? 'Escreva uma mensagem que será enviada individualmente para todos os alunos selecionados.'
+                    : currentUserRole === 'teacher'
                     ? `Envie uma mensagem para ${activeStudent?.fullName || 'o aluno'} orientando sobre trabalhos, prazos ou feedbacks.`
                     : 'Escreva sua dúvida abaixo para enviar diretamente ao seu professor.'}
                 </p>
@@ -718,7 +798,9 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               value={newMessageText}
               onChange={(e) => setNewMessageText(e.target.value)}
               placeholder={
-                currentUserRole === 'teacher'
+                selectedStudentId === 'broadcast'
+                  ? 'Escrever mensagem para a turma...'
+                  : currentUserRole === 'teacher'
                   ? `Escrever para ${activeStudent?.fullName ? activeStudent.fullName.split(' ')[0] : 'o aluno'}...`
                   : 'Escrever mensagem...'
               }

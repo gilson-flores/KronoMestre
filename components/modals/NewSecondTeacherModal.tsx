@@ -80,9 +80,9 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
           console.warn('Supabase Auth signUp opcional:', authErr);
         }
 
-        // 2. Inserir ou atualizar na tabela 'teachers'
+        // 2. Inserir ou atualizar na tabela 'second_teachers'
         const { data: dbTeacher, error: dbError } = await supabase
-          .from('teachers')
+          .from('second_teachers')
           .upsert(
             {
               name: newTeacher.name,
