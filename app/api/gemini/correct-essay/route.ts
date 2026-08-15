@@ -1,9 +1,6 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 
-export const maxDuration = 60;
-export const dynamic = 'force-dynamic';
-
 export async function POST(req: NextRequest) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -73,7 +70,7 @@ INSTRUÇÕES E PARÂMETROS OBRIGATÓRIOS DE CORREÇÃO:
 Retorne obrigatoriamente um objeto JSON conforme o schema.
 `;
 
-    const generateParams = {
+    const response = await ai.models.generateContent({
       model: 'gemini-3.7-flash',
       contents: prompt,
       config: {
@@ -109,18 +106,7 @@ Retorne obrigatoriamente um objeto JSON conforme o schema.
           required: ['suggestedScore', 'feedback', 'themeFidelity', 'keywordsCheck', 'structureCheck', 'grammarCheck'],
         },
       },
-    };
-
-    let response;
-    try {
-      response = await ai.models.generateContent(generateParams);
-    } catch (modelErr) {
-      console.warn('Tentando com gemini-flash-latest na correção de redação:', modelErr);
-      response = await ai.models.generateContent({
-        ...generateParams,
-        model: 'gemini-flash-latest',
-      });
-    }
+    });
 
     const jsonText = response.text || '{}';
     const parsedData = JSON.parse(jsonText);

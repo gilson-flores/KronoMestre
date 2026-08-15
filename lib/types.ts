@@ -172,6 +172,11 @@ export interface PlanningItem {
   fase2Content?: string;
   fase3Content?: string;
   currentPhase?: 1 | 2 | 3;
+  fase2DocUrl?: string;
+  fase2DocumentId?: string;
+  fase3DocUrl?: string;
+  fase3DocumentId?: string;
+  googleDocsUrl?: string;
   driveRepositoryUrl?: string;
   history?: Array<{ role: 'user' | 'assistant'; content: string }>;
 }

@@ -101,9 +101,18 @@ export const GradingView: React.FC<GradingViewProps> = ({
         }),
       });
 
-      const resText = await res.text();
-      let data: Record<string, any> = {};
-      try { data = JSON.parse(resText); } catch { /* ignore non-json feedback */ }
+      let data;
+      const textResponse = await res.text();
+      try {
+        data = JSON.parse(textResponse);
+      } catch (e) {
+        throw new Error(`A resposta do servidor não é válida (Status ${res.status}). Isso pode ocorrer devido a limite de requisição (timeout) ou resposta grande.`);
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro do servidor Gemini');
+      }
+
       if (data.feedback) {
         handleFeedbackChange(sub.studentId, data.feedback);
       }
@@ -292,12 +301,12 @@ export const GradingView: React.FC<GradingViewProps> = ({
         }),
       });
 
-      const responseText = await response.text();
-      let data: Record<string, any> = {};
+      let data;
+      const textResponse = await response.text();
       try {
-        data = JSON.parse(responseText);
-      } catch {
-        throw new Error(`A API de correção não retornou JSON válido (Status ${response.status}).`);
+        data = JSON.parse(textResponse);
+      } catch (e) {
+        throw new Error(`A resposta do servidor não é válida (Status ${response.status}). Isso pode ocorrer devido a limite de requisição (timeout) ou resposta grande.`);
       }
 
       if (!response.ok) {

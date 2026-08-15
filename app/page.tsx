@@ -9,8 +9,9 @@ import {
   initialLibrary,
   initialChatMessages,
 } from '@/lib/initialData';
-import { UserRole, TeacherUser, StudentUser, Activity, ChatMessage, LibraryFile } from '@/lib/types';
+import { UserRole, TeacherUser, StudentUser, Activity, ChatMessage, LibraryFile, PlanningItem } from '@/lib/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { fetchAllPlannings, persistPlanningToDatabase, removePlanningFromDatabase } from '@/lib/planningStorage';
 import { AuthView } from '@/components/AuthView';
 import { Sidebar } from '@/components/Sidebar';
 import { NavbarTop } from '@/components/NavbarTop';
@@ -87,6 +88,34 @@ export default function Home() {
   const [schedule] = useState(initialSchedule);
   const [library, setLibrary] = useState<LibraryFile[]>(initialLibrary);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
+  const [plannings, setPlannings] = useState<PlanningItem[]>([]);
+
+  // Carregar planejamentos da base de dados e storage
+  useEffect(() => {
+    const loadPlannings = async () => {
+      try {
+        const list = await fetchAllPlannings();
+        setPlannings(list);
+      } catch (err) {
+        console.warn('Erro ao carregar planejamentos:', err);
+      }
+    };
+    loadPlannings();
+  }, []);
+
+  const handleSavePlanning = (plan: PlanningItem) => {
+    setPlannings((prev) => {
+      const exists = prev.some((p) => p.id === plan.id);
+      if (exists) {
+        return prev.map((p) => (p.id === plan.id ? plan : p));
+      }
+      return [plan, ...prev];
+    });
+  };
+
+  const handleDeletePlanning = (planId: string) => {
+    setPlannings((prev) => prev.filter((p) => p.id !== planId));
+  };
 
   // Active view tab: 'painel' | 'planejamento' | 'atividades' | 'alunos' | 'horarios' | 'arquivos' | 'grading' | 'mensagens' | 'configuracoes'
 
@@ -1396,6 +1425,7 @@ export default function Home() {
           {currentTab === 'painel' && (
             <DashboardView
               activities={activities}
+              plannings={plannings}
               title="Studio"
               subtitle="Gerencie avaliações, redações e dinâmicas das suas turmas."
               showStats={false}
@@ -1409,12 +1439,15 @@ export default function Home() {
               onGenerateDossier={handleGenerateDossier}
               onDeleteActivity={handleDeleteActivity}
               onSaveActivity={handleSaveActivity}
+              onSavePlanning={handleSavePlanning}
+              onDeletePlanning={handleDeletePlanning}
             />
           )}
 
           {currentTab === 'atividades' && (
             <DashboardView
               activities={activities}
+              plannings={plannings}
               title="Correções"
               subtitle="Acompanhe o desempenho geral, estatísticas de entrega e pendências de correção."
               showStats={true}
@@ -1429,6 +1462,8 @@ export default function Home() {
               onGenerateDossier={handleGenerateDossier}
               onDeleteActivity={handleDeleteActivity}
               onSaveActivity={handleSaveActivity}
+              onSavePlanning={handleSavePlanning}
+              onDeletePlanning={handleDeletePlanning}
             />
           )}
 
@@ -1474,7 +1509,12 @@ export default function Home() {
           )}
 
           {currentTab === 'planejamento' && (
-            <PlanningView students={students} />
+            <PlanningView
+              students={students}
+              plannings={plannings}
+              onSavePlanning={handleSavePlanning}
+              onDeletePlanning={handleDeletePlanning}
+            />
           )}
 
           {currentTab === '2_professor' && (
