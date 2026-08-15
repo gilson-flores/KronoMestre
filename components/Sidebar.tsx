@@ -11,7 +11,8 @@ import {
   X,
   BookOpen,
   MessageSquare,
-  HeartHandshake
+  HeartHandshake,
+  Calendar
 } from 'lucide-react';
 import { TeacherUser } from '@/lib/types';
 import { formatAvatarUrl } from '@/lib/utils';
@@ -38,6 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const navItems = [
     { id: 'painel', label: 'Studio', icon: LayoutDashboard },
+    { id: 'planejamento', label: 'Planejamento', icon: Calendar },
     { id: 'atividades', label: 'Correções', icon: FileCheck },
     { id: 'mensagens', label: 'Mensagens', icon: MessageSquare, badge: unreadMessagesCount },
     { id: 'alunos', label: 'Alunos', icon: Users },

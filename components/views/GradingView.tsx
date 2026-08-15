@@ -101,7 +101,9 @@ export const GradingView: React.FC<GradingViewProps> = ({
         }),
       });
 
-      const data = await res.json();
+      const resText = await res.text();
+      let data: Record<string, any> = {};
+      try { data = JSON.parse(resText); } catch { /* ignore non-json feedback */ }
       if (data.feedback) {
         handleFeedbackChange(sub.studentId, data.feedback);
       }
@@ -290,7 +292,13 @@ export const GradingView: React.FC<GradingViewProps> = ({
         }),
       });
 
-      const data = await response.json();
+      const responseText = await response.text();
+      let data: Record<string, any> = {};
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(`A API de correção não retornou JSON válido (Status ${response.status}).`);
+      }
 
       if (!response.ok) {
         throw new Error(data.error || 'Erro ao processar correção com IA.');

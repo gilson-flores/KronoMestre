@@ -27,7 +27,11 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({ teacher 
         
       if (error) {
         console.error('Erro ao buscar 2º professores:', error);
-        setErrorMsg('Erro ao carregar lista de professores de apoio.');
+        if (error.code === 'PGRST205') {
+          setErrorMsg('A tabela "second_teachers" não foi encontrada. Por favor, execute a migration SQL mais recente no painel do Supabase.');
+        } else {
+          setErrorMsg('Erro ao carregar lista de professores de apoio.');
+        }
       } else if (data) {
         const formatted: TeacherUser[] = data.map(d => ({
           id: d.id,

@@ -1,6 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || "",
   httpOptions: {
@@ -12,6 +15,12 @@ const ai = new GoogleGenAI({
 
 export async function POST(req: NextRequest) {
   try {
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json(
+        { error: "Chave GEMINI_API_KEY não configurada no servidor." },
+        { status: 500 }
+      );
+    }
     const body = await req.json();
     const {
       studentName = "Ninja",
@@ -48,10 +57,19 @@ DIRETRIZES DE ESTILO E CONTEÚDO:
 4. Escreva uma mensagem concisa e inspiradora (entre 2 e 4 parágrafos pequenos), formatada em texto puro legível (pode usar pontuações ou emojis temáticos como 🍃, ⚡, 📜, 🍥).
 5. Responda estritamente em Português do Brasil.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
-      contents: prompt,
-    });
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: "gemini-3.7-flash",
+        contents: prompt,
+      });
+    } catch (modelErr) {
+      console.warn("Tentando com gemini-flash-latest no feedback:", modelErr);
+      response = await ai.models.generateContent({
+        model: "gemini-flash-latest",
+        contents: prompt,
+      });
+    }
 
     const generatedFeedback = response.text || "Sensei: Excelente esforço na missão! Continue concentrando seu chakra nos estudos de Sociologia. Dattebayo!";
 

@@ -21,6 +21,7 @@ import { LibraryView } from '@/components/views/LibraryView';
 import { StudentPortalView } from '@/components/views/StudentPortalView';
 import { MessagesView } from '@/components/views/MessagesView';
 import { SecondTeachersView } from '@/components/views/SecondTeachersView';
+import { PlanningView } from '@/components/views/PlanningView';
 
 
 import { normalizeStudentName } from '@/lib/studentUtils';
@@ -39,6 +40,7 @@ export default function Home() {
   const [teacher, setTeacher] = useState<TeacherUser>(initialTeacher);
   const [currentStudent, setCurrentStudent] = useState<StudentUser | null>(null);
   const [inactivityTimeoutEnabled, setInactivityTimeoutEnabled] = useState<boolean>(true);
+  const [currentTab, setCurrentTab] = useState('painel');
 
   // Restaurar sessão e preferências no carregamento do cliente
   useEffect(() => {
@@ -86,8 +88,7 @@ export default function Home() {
   const [library, setLibrary] = useState<LibraryFile[]>(initialLibrary);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
 
-  // Active view tab: 'painel' | 'atividades' | 'alunos' | 'horarios' | 'arquivos' | 'grading' | 'mensagens' | 'configuracoes'
-  const [currentTab, setCurrentTab] = useState('painel');
+  // Active view tab: 'painel' | 'planejamento' | 'atividades' | 'alunos' | 'horarios' | 'arquivos' | 'grading' | 'mensagens' | 'configuracoes'
 
   const [selectedActivityForGrading, setSelectedActivityForGrading] = useState<Activity | null>(null);
 
@@ -1470,6 +1471,10 @@ export default function Home() {
               onSuperviseStudent={handleSuperviseStudent}
               onImportStudents={handleImportStudents}
             />
+          )}
+
+          {currentTab === 'planejamento' && (
+            <PlanningView students={students} />
           )}
 
           {currentTab === '2_professor' && (

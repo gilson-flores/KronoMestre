@@ -1,6 +1,9 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -64,13 +67,14 @@ INSTRUÇÕES E PARÂMETROS OBRIGATÓRIOS DE CORREÇÃO:
    - Escreva um feedback simpático e construtivo com NO MÁXIMO 300 CARACTERES.
    - Inclua um elogio ou alerta motivacional simpático.
    - Inclua uma breve observação/correção de gramática e ortografia.
+   - ATENÇÃO: NÃO mencione no feedback as palavras-chave que foram utilizadas como critério de avaliação.
 6. Nota Sugerida: Atribua uma nota numérica de 0 a ${maxEssayScore} proporcional ao desempenho do aluno.
 
 Retorne obrigatoriamente um objeto JSON conforme o schema.
 `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+    const generateParams = {
+      model: 'gemini-3.7-flash',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -105,7 +109,18 @@ Retorne obrigatoriamente um objeto JSON conforme o schema.
           required: ['suggestedScore', 'feedback', 'themeFidelity', 'keywordsCheck', 'structureCheck', 'grammarCheck'],
         },
       },
-    });
+    };
+
+    let response;
+    try {
+      response = await ai.models.generateContent(generateParams);
+    } catch (modelErr) {
+      console.warn('Tentando com gemini-flash-latest na correção de redação:', modelErr);
+      response = await ai.models.generateContent({
+        ...generateParams,
+        model: 'gemini-flash-latest',
+      });
+    }
 
     const jsonText = response.text || '{}';
     const parsedData = JSON.parse(jsonText);
