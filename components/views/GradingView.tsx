@@ -85,9 +85,8 @@ export const GradingView: React.FC<GradingViewProps> = ({
       setGeneratingFeedbackStudentId(sub.studentId);
       
       const objTotal = activity.questions ? activity.questions.filter(q => q.type === 'multiple_choice').length : 0;
-      const hasObj = objTotal > 0 || ((sub.maxObjectiveScore || 0) > 0 && activity.type !== 'Redação');
-      const objCorrect = hasObj && sub.objectiveScore ? Math.round(sub.objectiveScore) : 0;
-      const currentScore = (hasObj ? (sub.objectiveScore || 0) : 0) + (sub.essayScore || 0) + (sub.extraPoints || 0);
+      const objCorrect = sub.objectiveScore ? Math.round(sub.objectiveScore) : 0;
+      const currentScore = (sub.objectiveScore || 0) + (sub.essayScore || 0) + (sub.extraPoints || 0);
 
       const res = await fetch('/api/gemini/feedback', {
         method: 'POST',
@@ -102,18 +101,9 @@ export const GradingView: React.FC<GradingViewProps> = ({
         }),
       });
 
-      let data;
-      const textResponse = await res.text();
-      try {
-        data = JSON.parse(textResponse);
-      } catch (e) {
-        throw new Error(`A resposta do servidor não é válida (Status ${res.status}). Isso pode ocorrer devido a limite de requisição (timeout) ou resposta grande.`);
-      }
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Erro do servidor Gemini');
-      }
-
+      const resText = await res.text();
+      let data: Record<string, any> = {};
+      try { data = JSON.parse(resText); } catch { /* ignore non-json feedback */ }
       if (data.feedback) {
         handleFeedbackChange(sub.studentId, data.feedback);
       }
@@ -302,12 +292,12 @@ export const GradingView: React.FC<GradingViewProps> = ({
         }),
       });
 
-      let data;
-      const textResponse = await response.text();
+      const responseText = await response.text();
+      let data: Record<string, any> = {};
       try {
-        data = JSON.parse(textResponse);
-      } catch (e) {
-        throw new Error(`A resposta do servidor não é válida (Status ${response.status}). Isso pode ocorrer devido a limite de requisição (timeout) ou resposta grande.`);
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(`A API de correção não retornou JSON válido (Status ${response.status}).`);
       }
 
       if (!response.ok) {
@@ -685,20 +675,8 @@ export const GradingView: React.FC<GradingViewProps> = ({
     const isLoadingAi = loadingAiStudentId === sub.studentId;
     const aiDiag = aiDiagnosticMap[sub.studentId];
 
-    const hasObjective = activity.questions && activity.questions.length > 0
-      ? activity.questions.some(q => q.type === 'multiple_choice')
-      : ((sub.maxObjectiveScore || 0) > 0 && activity.type !== 'Redação');
-
-    const hasEssay = activity.questions && activity.questions.length > 0
-      ? activity.questions.some(q => q.type === 'essay')
-      : ((sub.maxEssayScore || 0) > 0 || activity.type === 'Redação' || !!sub.essayAnswer);
-
     // Calculate total grade
-    const totalScore = (hasObjective ? (sub.objectiveScore || 0) : 0) + (sub.essayScore || 0) + (sub.extraPoints || 0);
-
-    const maxTotalScore = hasObjective
-      ? ((sub.maxObjectiveScore || 0) + (sub.maxEssayScore || 0)) || (activity.maxGrade || 10)
-      : (sub.maxEssayScore || activity.maxGrade || 10);
+    const totalScore = (sub.objectiveScore || 0) + (sub.essayScore || 0) + (sub.extraPoints || 0);
 
     return (
       <div
@@ -834,41 +812,37 @@ export const GradingView: React.FC<GradingViewProps> = ({
         )}
 
         {/* Scores & Extra Points Input Grid */}
-        <div className={`grid ${hasObjective && hasEssay ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
+        <div className="grid grid-cols-3 gap-3">
           {/* Objective Score */}
-          {hasObjective && (
-            <div className="bg-[#131b2e] p-3 rounded-2xl border border-white/5">
-              <span className="block text-[9px] font-bold text-[#bccabb] uppercase tracking-wider mb-1">
-                Objetivas
-              </span>
-              <div className="text-lg font-extrabold text-[#4ade80]">
-                {(sub.objectiveScore || 0).toFixed(1)}{' '}
-                <span className="text-xs text-[#bccabb] font-normal">/ {(sub.maxObjectiveScore || 0).toFixed(1)}</span>
-              </div>
+          <div className="bg-[#131b2e] p-3 rounded-2xl border border-white/5">
+            <span className="block text-[9px] font-bold text-[#bccabb] uppercase tracking-wider mb-1">
+              Objetivas
+            </span>
+            <div className="text-lg font-extrabold text-[#4ade80]">
+              {sub.objectiveScore.toFixed(1)}{' '}
+              <span className="text-xs text-[#bccabb] font-normal">/ {sub.maxObjectiveScore.toFixed(1)}</span>
             </div>
-          )}
+          </div>
 
           {/* Essay Score */}
-          {hasEssay && (
-            <div className="bg-[#131b2e] p-3 rounded-2xl border border-white/5">
-              <span className="block text-[9px] font-bold text-[#bccabb] uppercase tracking-wider mb-1">
-                Dissertativa
-              </span>
-              <div className="flex items-baseline gap-1">
-                <input
-                  type="number"
-                  step="0.5"
-                  min="0"
-                  max={sub.maxEssayScore || activity.maxGrade || 10}
-                  value={sub.essayScore !== undefined ? sub.essayScore : ''}
-                  onChange={(e) => handleScoreChange(sub.studentId, e.target.value)}
-                  placeholder="-"
-                  className="w-14 bg-[#171f33] border border-white/10 rounded-xl px-2 py-1 text-base font-extrabold text-white text-center focus:outline-none focus:border-[#4ade80]"
-                />
-                <span className="text-xs text-[#bccabb] font-normal">/ {(sub.maxEssayScore || activity.maxGrade || 10).toFixed(1)}</span>
-              </div>
+          <div className="bg-[#131b2e] p-3 rounded-2xl border border-white/5">
+            <span className="block text-[9px] font-bold text-[#bccabb] uppercase tracking-wider mb-1">
+              Dissertativa
+            </span>
+            <div className="flex items-baseline gap-1">
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                max={sub.maxEssayScore || 5}
+                value={sub.essayScore !== undefined ? sub.essayScore : ''}
+                onChange={(e) => handleScoreChange(sub.studentId, e.target.value)}
+                placeholder="-"
+                className="w-14 bg-[#171f33] border border-white/10 rounded-xl px-2 py-1 text-base font-extrabold text-white text-center focus:outline-none focus:border-[#4ade80]"
+              />
+              <span className="text-xs text-[#bccabb] font-normal">/ {(sub.maxEssayScore || 5).toFixed(1)}</span>
             </div>
-          )}
+          </div>
 
           {/* Extra Points by Teacher */}
           <div className="bg-[#131b2e] p-3 rounded-2xl border border-amber-500/20">
@@ -896,7 +870,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
           <span className="text-xl font-extrabold text-[#4ade80]">
             {totalScore.toFixed(1)}{' '}
             <span className="text-xs text-[#bccabb]">
-              / {maxTotalScore.toFixed(1)}
+              / {((sub.maxObjectiveScore || 5) + (sub.maxEssayScore || 5)).toFixed(1)}
             </span>
           </span>
         </div>

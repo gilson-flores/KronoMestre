@@ -1,6 +1,9 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -70,7 +73,7 @@ INSTRUÇÕES E PARÂMETROS OBRIGATÓRIOS DE CORREÇÃO:
 Retorne obrigatoriamente um objeto JSON conforme o schema.
 `;
 
-    const response = await ai.models.generateContent({
+    const generateParams = {
       model: 'gemini-3.7-flash',
       contents: prompt,
       config: {
@@ -106,7 +109,21 @@ Retorne obrigatoriamente um objeto JSON conforme o schema.
           required: ['suggestedScore', 'feedback', 'themeFidelity', 'keywordsCheck', 'structureCheck', 'grammarCheck'],
         },
       },
-    });
+    };
+
+    let response;
+    try {
+      response = await ai.models.generateContent(generateParams);
+    } catch (modelErr: any) {
+      if (modelErr?.status === 429 || modelErr?.message?.includes('429') || modelErr?.message?.includes('quota')) {
+        throw modelErr;
+      }
+      console.warn('Tentando com gemini-3.1-flash-lite na correção de redação:', modelErr);
+      response = await ai.models.generateContent({
+        ...generateParams,
+        model: 'gemini-3.1-flash-lite',
+      });
+    }
 
     const jsonText = response.text || '{}';
     const parsedData = JSON.parse(jsonText);
@@ -114,6 +131,15 @@ Retorne obrigatoriamente um objeto JSON conforme o schema.
     return NextResponse.json(parsedData);
   } catch (error: any) {
     console.error('Erro na rota de correção de redação com Gemini:', error);
+    
+    const isQuotaError = error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('quota');
+    if (isQuotaError) {
+      return NextResponse.json(
+        { error: 'Limite de uso gratuito diário da IA excedido. Por favor, aguarde ou adicione uma chave de API paga nas configurações (Settings > Secrets).' },
+        { status: 429 }
+      );
+    }
+    
     return NextResponse.json(
       { error: error?.message || 'Falha ao processar correção com o Gemini.' },
       { status: 500 }

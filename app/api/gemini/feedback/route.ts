@@ -1,6 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY || "",
   httpOptions: {
@@ -12,6 +15,12 @@ const ai = new GoogleGenAI({
 
 export async function POST(req: NextRequest) {
   try {
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json(
+        { error: "Chave GEMINI_API_KEY não configurada no servidor." },
+        { status: 500 }
+      );
+    }
     const body = await req.json();
     const {
       studentName = "Ninja",
@@ -48,16 +57,37 @@ DIRETRIZES DE ESTILO E CONTEÚDO:
 4. Escreva uma mensagem concisa e inspiradora (entre 2 e 4 parágrafos pequenos), formatada em texto puro legível (pode usar pontuações ou emojis temáticos como 🍃, ⚡, 📜, 🍥).
 5. Responda estritamente em Português do Brasil.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
-      contents: prompt,
-    });
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: "gemini-3.7-flash",
+        contents: prompt,
+      });
+    } catch (modelErr: any) {
+      if (modelErr?.status === 429 || modelErr?.message?.includes('429') || modelErr?.message?.includes('quota')) {
+        throw modelErr;
+      }
+      console.warn("Tentando com gemini-3.1-flash-lite no feedback:", modelErr);
+      response = await ai.models.generateContent({
+        model: "gemini-3.1-flash-lite",
+        contents: prompt,
+      });
+    }
 
     const generatedFeedback = response.text || "Sensei: Excelente esforço na missão! Continue concentrando seu chakra nos estudos de Sociologia. Dattebayo!";
 
     return NextResponse.json({ feedback: generatedFeedback });
-  } catch (error: unknown) {
+  } catch (error: any) {
     console.error("Erro ao gerar feedback com Gemini:", error);
+    
+    const isQuotaError = error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('quota');
+    if (isQuotaError) {
+      return NextResponse.json(
+        { error: 'Limite de uso gratuito diário da IA excedido. Por favor, aguarde ou adicione uma chave de API paga nas configurações (Settings > Secrets).' },
+        { status: 429 }
+      );
+    }
+
     const errorMessage = error instanceof Error ? error.message : "Erro desconhecido ao chamar Gemini API";
     return NextResponse.json(
       { error: "Falha ao gerar feedback do Sensei.", details: errorMessage },

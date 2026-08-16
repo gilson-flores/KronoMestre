@@ -9,9 +9,8 @@ import {
   initialLibrary,
   initialChatMessages,
 } from '@/lib/initialData';
-import { UserRole, TeacherUser, StudentUser, Activity, ChatMessage, LibraryFile, PlanningItem } from '@/lib/types';
+import { UserRole, TeacherUser, StudentUser, Activity, ChatMessage, LibraryFile } from '@/lib/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { fetchAllPlannings, persistPlanningToDatabase, removePlanningFromDatabase } from '@/lib/planningStorage';
 import { AuthView } from '@/components/AuthView';
 import { Sidebar } from '@/components/Sidebar';
 import { NavbarTop } from '@/components/NavbarTop';
@@ -88,34 +87,6 @@ export default function Home() {
   const [schedule] = useState(initialSchedule);
   const [library, setLibrary] = useState<LibraryFile[]>(initialLibrary);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
-  const [plannings, setPlannings] = useState<PlanningItem[]>([]);
-
-  // Carregar planejamentos da base de dados e storage
-  useEffect(() => {
-    const loadPlannings = async () => {
-      try {
-        const list = await fetchAllPlannings();
-        setPlannings(list);
-      } catch (err) {
-        console.warn('Erro ao carregar planejamentos:', err);
-      }
-    };
-    loadPlannings();
-  }, []);
-
-  const handleSavePlanning = (plan: PlanningItem) => {
-    setPlannings((prev) => {
-      const exists = prev.some((p) => p.id === plan.id);
-      if (exists) {
-        return prev.map((p) => (p.id === plan.id ? plan : p));
-      }
-      return [plan, ...prev];
-    });
-  };
-
-  const handleDeletePlanning = (planId: string) => {
-    setPlannings((prev) => prev.filter((p) => p.id !== planId));
-  };
 
   // Active view tab: 'painel' | 'planejamento' | 'atividades' | 'alunos' | 'horarios' | 'arquivos' | 'grading' | 'mensagens' | 'configuracoes'
 
@@ -1310,12 +1281,36 @@ export default function Home() {
 
   const handleMarkThreadAsRead = useCallback((threadId: string, currentRole: 'teacher' | 'student') => {
     setChatMessages((prev) => {
-      const hasUnread = prev.some(
+      const unreadMsgs = prev.filter(
         (m) => (m.threadId === threadId || m.recipientId === threadId || m.senderId === threadId) &&
                m.senderRole !== currentRole &&
                !m.read
       );
-      if (!hasUnread) return prev;
+      if (unreadMsgs.length === 0) return prev;
+
+      if (isSupabaseConfigured && supabase) {
+        const unreadDbIds = unreadMsgs.map((m) => m.id).filter((id) => id && !id.startsWith('msg-'));
+        if (unreadDbIds.length > 0) {
+          supabase
+            .from('chat_messages')
+            .update({ read: true })
+            .in('id', unreadDbIds)
+            .then(({ error }) => {
+              if (error) console.log('Atualização de mensagens lidas no Supabase:', error.message);
+            });
+        } else {
+          supabase
+            .from('chat_messages')
+            .update({ read: true })
+            .or(`thread_id.eq.${threadId},sender_id.eq.${threadId},recipient_id.eq.${threadId}`)
+            .neq('sender_role', currentRole)
+            .eq('read', false)
+            .then(({ error }) => {
+              if (error) console.log('Atualização de mensagens lidas no Supabase:', error.message);
+            });
+        }
+      }
+
       return prev.map((m) => {
         if (
           (m.threadId === threadId || m.recipientId === threadId || m.senderId === threadId) &&
@@ -1425,7 +1420,6 @@ export default function Home() {
           {currentTab === 'painel' && (
             <DashboardView
               activities={activities}
-              plannings={plannings}
               title="Studio"
               subtitle="Gerencie avaliações, redações e dinâmicas das suas turmas."
               showStats={false}
@@ -1439,15 +1433,12 @@ export default function Home() {
               onGenerateDossier={handleGenerateDossier}
               onDeleteActivity={handleDeleteActivity}
               onSaveActivity={handleSaveActivity}
-              onSavePlanning={handleSavePlanning}
-              onDeletePlanning={handleDeletePlanning}
             />
           )}
 
           {currentTab === 'atividades' && (
             <DashboardView
               activities={activities}
-              plannings={plannings}
               title="Correções"
               subtitle="Acompanhe o desempenho geral, estatísticas de entrega e pendências de correção."
               showStats={true}
@@ -1462,8 +1453,6 @@ export default function Home() {
               onGenerateDossier={handleGenerateDossier}
               onDeleteActivity={handleDeleteActivity}
               onSaveActivity={handleSaveActivity}
-              onSavePlanning={handleSavePlanning}
-              onDeletePlanning={handleDeletePlanning}
             />
           )}
 
@@ -1509,12 +1498,7 @@ export default function Home() {
           )}
 
           {currentTab === 'planejamento' && (
-            <PlanningView
-              students={students}
-              plannings={plannings}
-              onSavePlanning={handleSavePlanning}
-              onDeletePlanning={handleDeletePlanning}
-            />
+            <PlanningView students={students} />
           )}
 
           {currentTab === '2_professor' && (

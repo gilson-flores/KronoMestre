@@ -95,11 +95,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
 
   gradedSubmissions.forEach((item) => {
     const sub = item.submission!;
-    const hasObj = item.activity.questions && item.activity.questions.length > 0
-      ? item.activity.questions.some(q => q.type === 'multiple_choice')
-      : ((sub.maxObjectiveScore || 0) > 0 && item.activity.type !== 'Redação');
-
-    const objScore = hasObj ? (sub.objectiveScore || 0) : 0;
+    const objScore = sub.objectiveScore || 0;
     const essayScore = sub.essayScore || 0;
     const extraPoints = sub.extraPoints || 0;
     const itemMax = item.activity.maxGrade || 10;
@@ -809,12 +805,8 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                   const isReturned = submission?.status === 'returned';
                   const isNotSubmitted = !submission || submission.status === 'draft';
 
-                  const hasObj = activity.questions && activity.questions.length > 0
-                    ? activity.questions.some(q => q.type === 'multiple_choice')
-                    : ((submission?.maxObjectiveScore || 0) > 0 && activity.type !== 'Redação');
-
-                  const totalScore = isGraded && submission
-                    ? (hasObj ? (submission.objectiveScore || 0) : 0) + (submission.essayScore || 0) + (submission.extraPoints || 0)
+                  const totalScore = isGraded
+                    ? (submission.objectiveScore || 0) + (submission.essayScore || 0) + (submission.extraPoints || 0)
                     : null;
 
                   const issuances = getDossierIssuances(student.id, activity.id);

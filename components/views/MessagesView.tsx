@@ -101,12 +101,12 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeThreadMessages.length, selectedStudentId]);
 
-  // Mark thread as read when selected
+  // Mark thread as read when selected or when new messages arrive
   useEffect(() => {
     if (onMarkThreadAsRead && activeThreadId) {
       onMarkThreadAsRead(activeThreadId, currentUserRole);
     }
-  }, [activeThreadId, currentUserRole, onMarkThreadAsRead]);
+  }, [activeThreadId, currentUserRole, onMarkThreadAsRead, messages]);
 
   // Calculate unique turmas for filter dropdown
   const availableTurmas = Array.from(new Set(students.map((s) => s.turma))).filter(Boolean);
@@ -697,7 +697,11 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                       >
                         <span>{msg.createdAt}</span>
                         {isMine && (
-                          <CheckCheck className="w-3 h-3 text-[#4ade80]" />
+                          msg.read ? (
+                            <span title="Lida"><CheckCheck className="w-3.5 h-3.5 text-[#4ade80]" /></span>
+                          ) : (
+                            <span title="Enviada"><Check className="w-3.5 h-3.5 text-[#869486]" /></span>
+                          )
                         )}
                       </div>
                     </div>

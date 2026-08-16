@@ -25,35 +25,39 @@ import {
   Send,
   Bot,
   Loader2,
-  MessageSquare
+  MessageSquare,
+  Link2
 } from 'lucide-react';
 import { PlanningItem, StudentUser, GuidingDocumentSlot } from '@/lib/types';
 import { DEFAULT_TURMAS } from '@/lib/studentUtils';
-import { gerarArquivoGoogleDocs } from '@/lib/googleDocsService';
-import { persistPlanningToDatabase, removePlanningFromDatabase, exportPlanningToPdf } from '@/lib/planningStorage';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 const INITIAL_PLANNINGS: PlanningItem[] = [];
 
 const DEFAULT_GUIDING_DOCS: GuidingDocumentSlot[] = [
   {
     id: 'planejamento_anual',
-    categoryName: 'Planejamento Anual (PDF)',
+    categoryName: 'Planejamento Anual (PDF / .gdoc)',
   },
   {
     id: 'calendario_joinville',
-    categoryName: 'Calendário Escolar de Joinville (PDF)',
+    categoryName: 'Calendário Escolar Oficial de Joinville (PDF / .gdoc)',
   },
   {
     id: 'livro_referencia',
-    categoryName: 'Livro Didático "Sociologia em Movimento 2024" (PDF)',
+    categoryName: 'Livro Didático de Referência (Sociologia em Movimento 2024 - PDF / .gdoc)',
   },
   {
-    id: 'modelo_oficial_sed_sc',
-    categoryName: 'Modelo Oficial SED-SC "PLANO DE AULA / SEQUÊNCIA DIDÁTICA" (PDF/Doc)',
+    id: 'modelo_plano_aula',
+    categoryName: 'Modelo Oficial SED-SC — Plano de Aula',
+  },
+  {
+    id: 'modelo_sequencia_didatica',
+    categoryName: 'Modelo Oficial SED-SC — Sequência Didática',
   },
   {
     id: 'logo_estado',
-    categoryName: 'Logo Oficial do Estado de Santa Catarina (PNG/JPG)',
+    categoryName: 'Logotipo Oficial do Estado de Santa Catarina (logo_estado.png)',
   },
 ];
 
@@ -63,19 +67,10 @@ const generateUniqueId = (): string => {
 
 interface PlanningViewProps {
   students?: StudentUser[];
-  plannings?: PlanningItem[];
-  onSavePlanning?: (plan: PlanningItem) => void;
-  onDeletePlanning?: (planId: string) => void;
 }
 
-export const PlanningView: React.FC<PlanningViewProps> = ({
-  students = [],
-  plannings: initialPlannings,
-  onSavePlanning,
-  onDeletePlanning,
-}) => {
-  const [localPlannings, setLocalPlannings] = useState<PlanningItem[]>(() => {
-    if (initialPlannings && initialPlannings.length > 0) return initialPlannings;
+export const PlanningView: React.FC<PlanningViewProps> = ({ students = [] }) => {
+  const [plannings, setPlannings] = useState<PlanningItem[]>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('sociologia_plannings');
       if (saved) {
@@ -90,9 +85,6 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
     return INITIAL_PLANNINGS;
   });
 
-  const plannings = (initialPlannings && initialPlannings.length > 0) ? initialPlannings : localPlannings;
-  const setPlannings = setLocalPlannings;
-
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('sociologia_plannings', JSON.stringify(plannings));
@@ -106,8 +98,6 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
 
   // Gemini AI Chat State
   const [aiLoading, setAiLoading] = useState(false);
-  const [executingPhase, setExecutingPhase] = useState<1 | 2 | 3>(1);
-  const [activeVisualizerTab, setActiveVisualizerTab] = useState<'todas' | 'fase1' | 'fase2' | 'fase3'>('todas');
   const [aiHistory, setAiHistory] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
   const [userChatMessage, setUserChatMessage] = useState('');
   const [currentAiPlanId, setCurrentAiPlanId] = useState<string | null>(null);
@@ -122,6 +112,7 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
   const [seqTrimestre, setSeqTrimestre] = useState('1º Trimestre');
   const [seqStartDate, setSeqStartDate] = useState('');
   const [seqEndDate, setSeqEndDate] = useState('');
+  const [seqDriveUrl, setSeqDriveUrl] = useState('https://drive.google.com/drive/folders/ee-b-prof-jandira-davila-planos-individuais');
   const [selectedTurmasCodes, setSelectedTurmasCodes] = useState<string[]>([]);
   const [isTurmaDropdownOpen, setIsTurmaDropdownOpen] = useState(false);
   const [turmaSchedules, setTurmaSchedules] = useState<Record<string, { days: string[]; format: string }>>({});
@@ -155,6 +146,69 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
     return DEFAULT_GUIDING_DOCS;
   });
 
+  // Sincronização e persistência dos documentos norteadores com o Supabase
+  useEffect(() => {
+    const syncFromSupabase = async () => {
+      if (!isSupabaseConfigured || !supabase) return;
+      try {
+        const { data } = await supabase
+          .from('library_files')
+          .select('*')
+          .eq('category', 'Documento Norteador');
+
+        if (data && data.length > 0) {
+          setGuidingDocs((prev) =>
+            prev.map((slot) => {
+              const found = data.find((d) => d.id === `guiding_${slot.id}`);
+              if (found && found.file_url) {
+                return {
+                  ...slot,
+                  fileName: found.title,
+                  fileSize: found.file_size || '1 MB',
+                  uploadedAt: found.updated_at || new Date().toLocaleDateString('pt-BR'),
+                  fileData: found.file_url,
+                };
+              }
+              return slot;
+            })
+          );
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar documentos do Supabase:', err);
+      }
+    };
+
+    syncFromSupabase();
+  }, []);
+
+  const saveDocToSupabase = async (slotId: string, fileName: string, fileSize: string, fileData: string) => {
+    if (!isSupabaseConfigured || !supabase) return;
+    try {
+      const slotObj = DEFAULT_GUIDING_DOCS.find((s) => s.id === slotId);
+      await supabase.from('library_files').upsert({
+        id: `guiding_${slotId}`,
+        title: fileName,
+        category: 'Documento Norteador',
+        turma: 'Todas',
+        file_size: fileSize,
+        updated_at: new Date().toLocaleDateString('pt-BR'),
+        file_url: fileData,
+        drive_url: slotObj?.categoryName || 'Documento Norteador',
+      });
+    } catch (err) {
+      console.warn('Erro ao salvar documento no Supabase:', err);
+    }
+  };
+
+  const removeDocFromSupabase = async (slotId: string) => {
+    if (!isSupabaseConfigured || !supabase) return;
+    try {
+      await supabase.from('library_files').delete().eq('id', `guiding_${slotId}`);
+    } catch (err) {
+      console.warn('Erro ao remover documento do Supabase:', err);
+    }
+  };
+
   const [activeSlotForUpload, setActiveSlotForUpload] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -166,98 +220,50 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
     }
   };
 
-  const saveUploadedFile = (slotId: string, fileName: string, fileData: string, rawSize: number) => {
-    const formattedSize =
-      rawSize > 1024 * 1024
-        ? `${(rawSize / (1024 * 1024)).toFixed(2)} MB`
-        : `${(rawSize / 1024).toFixed(1)} KB`;
-    const today = new Date().toLocaleDateString('pt-BR');
-
-    setGuidingDocs((prev) => {
-      const updated = prev.map((slot) => {
-        if (slot.id === slotId) {
-          return {
-            ...slot,
-            fileName,
-            fileSize: formattedSize,
-            uploadedAt: today,
-            fileData,
-          };
-        }
-        return slot;
-      });
-      if (typeof window !== 'undefined') {
-        try {
-          // Salva apenas os metadados no localStorage para evitar QuotaExceededError (cota ~5MB)
-          const metadataOnly = updated.map(({ fileData, ...rest }) => rest);
-          localStorage.setItem('sociologia_guiding_docs', JSON.stringify(metadataOnly));
-        } catch {
-          // Ignora silenciosamente se o localStorage estiver cheio ou indisponível
-        }
-      }
-      return updated;
-    });
-
-    const slotObj = DEFAULT_GUIDING_DOCS.find((s) => s.id === slotId);
-    showToast(`Documento "${fileName}" carregado com sucesso para ${slotObj?.categoryName || 'categoria'}.`);
-  };
-
   const handleFileUpload = (slotId: string, file: File) => {
     if (!file) return;
 
-    const isImage =
-      file.type.startsWith('image/') ||
-      file.name.toLowerCase().endsWith('.png') ||
-      file.name.toLowerCase().endsWith('.jpg') ||
-      file.name.toLowerCase().endsWith('.jpeg');
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const fileData = e.target?.result as string;
+      const formattedSize =
+        file.size > 1024 * 1024
+          ? `${(file.size / (1024 * 1024)).toFixed(2)} MB`
+          : `${(file.size / 1024).toFixed(1)} KB`;
+      const today = new Date().toLocaleDateString('pt-BR');
 
-    if (isImage) {
-      const imgReader = new FileReader();
-      imgReader.onload = (e) => {
-        const rawResult = e.target?.result as string;
-        const img = document.createElement('img');
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-          const maxDim = 800; // Reduzido para manter o tamanho base64 compacto (<100KB)
-          if (width > maxDim || height > maxDim) {
-            if (width > height) {
-              height = Math.round((height * maxDim) / width);
-              width = maxDim;
-            } else {
-              width = Math.round((width * maxDim) / height);
-              height = maxDim;
-            }
+      setGuidingDocs((prev) => {
+        const updated = prev.map((slot) => {
+          if (slot.id === slotId) {
+            return {
+              ...slot,
+              fileName: file.name,
+              fileSize: formattedSize,
+              uploadedAt: today,
+              fileData: fileData,
+            };
           }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.75);
-            saveUploadedFile(slotId, file.name, compressedBase64, compressedBase64.length);
-            return;
+          return slot;
+        });
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('sociologia_guiding_docs', JSON.stringify(updated));
+          } catch (err) {
+            console.warn('Erro ao salvar no localStorage:', err);
           }
-          saveUploadedFile(slotId, file.name, rawResult, file.size);
-        };
-        img.onerror = () => {
-          saveUploadedFile(slotId, file.name, rawResult, file.size);
-        };
-        img.src = rawResult;
-      };
-      imgReader.readAsDataURL(file);
-    } else {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const fileData = e.target?.result as string;
-        saveUploadedFile(slotId, file.name, fileData, file.size);
-      };
-      reader.readAsDataURL(file);
-    }
+        }
+        return updated;
+      });
+
+      const slotObj = DEFAULT_GUIDING_DOCS.find((s) => s.id === slotId);
+      saveDocToSupabase(slotId, file.name, formattedSize, fileData);
+      showToast(`Documento "${file.name}" carregado com sucesso para ${slotObj?.categoryName || 'categoria'}.`);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleRemoveFile = (slotId: string) => {
+    removeDocFromSupabase(slotId);
     setGuidingDocs((prev) => {
       const updated = prev.map((slot) => {
         if (slot.id === slotId) {
@@ -270,10 +276,9 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
       });
       if (typeof window !== 'undefined') {
         try {
-          const metadataOnly = updated.map(({ fileData, ...rest }) => rest);
-          localStorage.setItem('sociologia_guiding_docs', JSON.stringify(metadataOnly));
-        } catch {
-          // Ignora se indisponível
+          localStorage.setItem('sociologia_guiding_docs', JSON.stringify(updated));
+        } catch (err) {
+          console.warn('Erro ao salvar no localStorage:', err);
         }
       }
       return updated;
@@ -335,6 +340,7 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
       setSeqTrimestre('1º Trimestre');
       setSeqStartDate('');
       setSeqEndDate('');
+      setSeqDriveUrl('https://drive.google.com/drive/folders/ee-b-prof-jandira-davila-planos-individuais');
 
       const available = getAvailableTurmas();
       const initialTurmas = available.length > 0 ? [available[0]] : ['101'];
@@ -418,47 +424,29 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
   ) => {
     setAiLoading(true);
     try {
-      const rawHistory = currentHistory || aiHistory;
-      
-      // Otimização do histórico de chat para evitar payload excessivamente grande
-      const historyToPass = rawHistory.slice(-8).map((msg) => {
-        if (msg.role === 'assistant' && msg.content && msg.content.length > 6000) {
-          return {
-            role: msg.role,
-            content: msg.content.slice(0, 3000) + "\n\n[...conteúdo extenso do documento anterior ocultado para otimização...]\n\n" + msg.content.slice(-2000),
-          };
-        }
-        return msg;
-      });
+      const historyToPass = currentHistory || aiHistory;
 
-      // Envia somente documentos relevantes com conteúdo presente, limitando o tamanho base64 por arquivo
-      const MAX_SINGLE_DOC_BASE64_LENGTH = 600000;
-      const sanitizedGuidingDocs = guidingDocs
-        .filter((doc) => doc.fileData || doc.fileName)
-        .map((doc) => {
-          let finalData = doc.fileData;
-          if (finalData && finalData.length > MAX_SINGLE_DOC_BASE64_LENGTH) {
-            if (finalData.startsWith('data:')) {
-              const prefixEnd = finalData.indexOf(';base64,');
-              if (prefixEnd !== -1) {
-                const header = finalData.slice(0, prefixEnd + 8);
-                const body = finalData.slice(prefixEnd + 8, prefixEnd + 8 + MAX_SINGLE_DOC_BASE64_LENGTH);
-                finalData = header + body;
-              } else {
-                finalData = finalData.slice(0, MAX_SINGLE_DOC_BASE64_LENGTH);
-              }
-            } else {
-              finalData = finalData.slice(0, MAX_SINGLE_DOC_BASE64_LENGTH);
+      // Cleanly sanitize guidingDocs payload to prevent HTTP 413 / body overflow errors
+      const sanitizedGuidingDocs = guidingDocs.map((doc) => {
+        if (!doc.fileData) return doc;
+        if (typeof doc.fileData === 'string') {
+          if (doc.fileData.startsWith('data:')) {
+            // If base64 data string is larger than 1.2MB, pass reference info
+            if (doc.fileData.length > 1200000) {
+              return {
+                ...doc,
+                fileData: `[DOCUMENTO NORTEADOR: ${doc.categoryName || doc.id} (${doc.fileName || 'anexo'}) - Vinculado à base oficial].`,
+              };
             }
+          } else if (doc.fileData.length > 100000) {
+            return {
+              ...doc,
+              fileData: doc.fileData.substring(0, 100000) + '\n[...resumido para otimização de envio...]',
+            };
           }
-          return {
-            id: doc.id,
-            categoryName: doc.categoryName,
-            fileName: doc.fileName,
-            fileSize: doc.fileSize,
-            fileData: finalData,
-          };
-        });
+        }
+        return doc;
+      });
 
       const payload = {
         seqTitle: seqTitle.trim() || 'Nova Sequência Didática',
@@ -470,45 +458,27 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
         selectedTurmasCodes,
         turmaSchedules,
         guidingDocs: sanitizedGuidingDocs,
+        driveRepositoryUrl: seqDriveUrl.trim() || 'https://drive.google.com/drive/folders/ee-b-prof-jandira-davila-planos-individuais',
         userMessage: customMessage || '',
         history: historyToPass,
       };
 
-      const jsonPayload = JSON.stringify(payload);
-
-      if (jsonPayload.length > 1800000) {
-        throw new Error(
-          "O tamanho total dos arquivos anexados é muito grande para o servidor. Por favor, remova ou substitua alguns anexos por arquivos menores."
-        );
-      }
-
       const response = await fetch('/api/gemini/planning', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: jsonPayload,
+        body: JSON.stringify(payload),
       });
 
-      let data;
-      const textResponse = await response.text();
-
-      if (response.status === 413 || textResponse.includes("413") || textResponse.includes("Request Entity Too Large")) {
-        throw new Error(
-          "O tamanho dos arquivos anexados excede o limite do servidor (Erro 413 Request Entity Too Large). Remova arquivos pesados ou substitua por imagens/PDFs menores."
-        );
-      }
-
+      const responseText = await response.text();
+      let data: Record<string, any> = {};
       try {
-        data = JSON.parse(textResponse);
-      } catch (e) {
-        throw new Error(
-          response.ok 
-            ? 'A resposta do servidor não é um JSON válido.' 
-            : `Erro do servidor (${response.status}): O servidor não retornou uma resposta válida.`
-        );
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(`A API do servidor não retornou JSON (Status ${response.status}). ${responseText.substring(0, 120)}`);
       }
 
       if (!response.ok) {
-        throw new Error(data.details || data.error || 'Erro ao comunicar com a API do Gemini');
+        throw new Error(data.details || data.error || `Erro de comunicação com o servidor (${response.status})`);
       }
 
       const generatedText = data.text || 'Informação não localizada nos documentos fornecidos.';
@@ -527,42 +497,9 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
         return updatedHistory;
       });
 
-      // Generate Google Docs document if Phase 2 or Phase 3
-      const logoSlot = guidingDocs.find((d) => d.id === 'logo_estado');
-      const logoBase64 = logoSlot?.fileData;
-      let docUrl = '';
-      let docId = '';
-
-      if (targetPhase === 2) {
-        try {
-          const docRes = await gerarArquivoGoogleDocs(
-            `${seqTitle || 'Sequência Didática'} - Fase 2 (Oficial SED-SC)`,
-            generatedText,
-            logoBase64
-          );
-          docUrl = docRes.url;
-          docId = docRes.documentId;
-        } catch (docErr) {
-          console.warn('Erro ao gerar Google Docs para Fase 2:', docErr);
-        }
-      } else if (targetPhase === 3) {
-        try {
-          const docRes = await gerarArquivoGoogleDocs(
-            `${seqTitle || 'Planos de Aula'} - Fase 3 (Minuto a Minuto)`,
-            generatedText,
-            logoBase64
-          );
-          docUrl = docRes.url;
-          docId = docRes.documentId;
-        } catch (docErr) {
-          console.warn('Erro ao gerar Google Docs para Fase 3:', docErr);
-        }
-      }
-
       // Update plan persistence and phase
       const targetId = planIdToUpdate || currentAiPlanId;
       if (targetId) {
-        let updatedPlanToPersist: PlanningItem | null = null;
         setPlannings((prev) =>
           prev.map((p) => {
             if (p.id === targetId) {
@@ -571,7 +508,7 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
               const f2 = currentP === 2 ? generatedText : (p.fase2Content || '');
               const f3 = currentP === 3 ? generatedText : (p.fase3Content || '');
 
-              const updatedItem: PlanningItem = {
+              return {
                 ...p,
                 serie: p.serie || seqSerie,
                 trimestre: p.trimestre || seqTrimestre,
@@ -580,26 +517,14 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
                 fase2Content: f2,
                 fase3Content: f3,
                 currentPhase: currentP,
-                fase2DocUrl: currentP === 2 && docUrl ? docUrl : p.fase2DocUrl,
-                fase2DocumentId: currentP === 2 && docId ? docId : p.fase2DocumentId,
-                fase3DocUrl: currentP === 3 && docUrl ? docUrl : p.fase3DocUrl,
-                fase3DocumentId: currentP === 3 && docId ? docId : p.fase3DocumentId,
-                googleDocsUrl: docUrl || p.googleDocsUrl || p.fase3DocUrl || p.fase2DocUrl,
                 description: generatedText.length > 500 ? generatedText.substring(0, 500) + '...' : generatedText,
                 objectives: f2 || f1 || generatedText,
                 history: updatedHistory,
               };
-              updatedPlanToPersist = updatedItem;
-              return updatedItem;
             }
             return p;
           })
         );
-
-        if (updatedPlanToPersist) {
-          persistPlanningToDatabase(updatedPlanToPersist);
-          onSavePlanning?.(updatedPlanToPersist);
-        }
       }
 
       showToast(`Resposta do GEM (Fase ${targetPhase || 1}) gerada e salva com sucesso!`);
@@ -654,17 +579,13 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
       objectives: `Aguardando resumo e estruturação da IA Gemini...`,
       bnccSkills: 'EM13CHS101, EM13CHS102, EM13CHS201',
       currentPhase: 1,
-      driveRepositoryUrl: 'https://drive.google.com/drive/folders/ee-b-prof-jandira-davila-planos-individuais',
+      driveRepositoryUrl: seqDriveUrl.trim() || 'https://drive.google.com/drive/folders/ee-b-prof-jandira-davila-planos-individuais',
     };
 
     setPlannings((prev) => [newPlan, ...prev]);
-    persistPlanningToDatabase(newPlan);
-    onSavePlanning?.(newPlan);
     setCurrentAiPlanId(newPlanId);
     setAiHistory([]);
     setActiveModal('ai_chat');
-    setActiveVisualizerTab('todas');
-    setExecutingPhase(1);
 
     // Trigger API call to generate Phase 1
     callGeminiPlanningApi(undefined, [], newPlanId, 1);
@@ -681,15 +602,13 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
 
   const handleApprovePhase2 = () => {
     if (aiLoading) return;
-    const msg = 'Sim, pode gerar';
-    setExecutingPhase(2);
+    const msg = 'Sim, os dados e a divisão de conteúdos estão aprovados. Posso gerar o documento da Sequência Didática no Google Docs.';
     callGeminiPlanningApi(msg, undefined, currentAiPlanId, 2);
   };
 
   const handleApprovePhase3 = () => {
     if (aiLoading) return;
-    const msg = 'Sim, pode gerar';
-    setExecutingPhase(3);
+    const msg = 'Sim, deseja que eu crie agora os Planos de Aula Individuais detalhados (passo a passo de 45/90 min) em novos documentos.';
     callGeminiPlanningApi(msg, undefined, currentAiPlanId, 3);
   };
 
@@ -726,10 +645,8 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
     };
 
     setPlannings((prev) => [newPlan, ...prev]);
-    persistPlanningToDatabase(newPlan);
-    onSavePlanning?.(newPlan);
     setActiveModal(null);
-    showToast(`Plano Anual "${newPlan.title}" criado e salvo com sucesso!`);
+    showToast(`Plano Anual "${newPlan.title}" criado com sucesso!`);
   };
 
   const handleImportSubmit = (e: React.FormEvent) => {
@@ -749,11 +666,9 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
     };
 
     setPlannings(prev => [importedPlan, ...prev]);
-    persistPlanningToDatabase(importedPlan);
-    onSavePlanning?.(importedPlan);
     setActiveModal(null);
     setImportFileText('');
-    showToast('Documento norteador importado e salvo com sucesso!');
+    showToast('Documento norteador importado com sucesso!');
   };
 
   const handleDelete = (id: string, title: string) => {
@@ -764,8 +679,6 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
   const handleConfirmDelete = () => {
     if (planToDelete) {
       setPlannings((prev) => prev.filter((p) => p.id !== planToDelete.id));
-      removePlanningFromDatabase(planToDelete.id);
-      onDeletePlanning?.(planToDelete.id);
       showToast(`Planejamento "${planToDelete.title}" excluído com sucesso.`);
       setPlanToDelete(null);
       setActiveModal(null);
@@ -773,50 +686,66 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
   };
 
   const handleDownload = (plan: PlanningItem) => {
-    const logoSlot = guidingDocs.find((d) => d.id === 'logo_estado');
-    const logoBase64 = logoSlot?.fileData;
-    exportPlanningToPdf(plan, logoBase64);
-    showToast(`Visualização para impressão/PDF de "${plan.title}" aberta com sucesso!`);
-  };
+    const periodLine = plan.type === 'Sequência Didática'
+      ? `Trimestre: ${plan.trimestre || plan.period}\nPeríodo de Duração: ${plan.startDate && plan.endDate ? `${plan.startDate} a ${plan.endDate}` : 'Não informado'}`
+      : `Trimestre: ${plan.period}`;
 
-  const handleOpenGoogleDocs = async (plan: PlanningItem) => {
-    // If we already have a generated Google Docs URL, redirect immediately
-    const existingUrl = plan.googleDocsUrl || plan.fase3DocUrl || plan.fase2DocUrl;
-    if (existingUrl) {
-      if (typeof window !== 'undefined') {
-        window.open(existingUrl, '_blank');
-      }
-      return;
-    }
+    const content = `================================================================================
+ESTADO DE SANTA CATARINA
+SECRETARIA DE ESTADO DA EDUCAÇÃO
+DIRETORIA DE ENSINO
+COORDENADORIA REGIONAL DE EDUCAÇÃO DE JOINVILLE
+EEB PROF. JANDIRA D'ÁVILA
+================================================================================
+PLANO DE AULA / SEQUÊNCIA DIDÁTICA: ${plan.title.toUpperCase()}
 
-    const logoSlot = guidingDocs.find((d) => d.id === 'logo_estado');
-    const logoBase64 = logoSlot?.fileData;
-    const bodyContent = plan.fase3Content
-      ? `FASE 3 — PLANOS DE AULA INDIVIDUAIS (PASSO A PASSO / MINUTO A MINUTO)\n\n${plan.fase3Content}\n\n================================================================================\nFASE 2 — SEQUÊNCIA DIDÁTICA (MODELO OFICIAL SED-SC)\n\n${plan.fase2Content || ''}`
-      : plan.fase2Content
-      ? `FASE 2 — SEQUÊNCIA DIDÁTICA (MODELO OFICIAL SED-SC)\n\n${plan.fase2Content}`
-      : plan.fase1Content || plan.description || '';
+Professor Responsável: Gilson Rodrigo Flores
+Unidade Escolar: EEB Prof. Jandira D'Ávila
+Área de Conhecimento: Ciências Humanas e Sociais Aplicadas
+Componente Curricular: ${plan.subject || 'Sociologia'}
+Ano / Série: ${plan.serie || plan.turmas}
+Turma(s): ${plan.turmas}
+${periodLine}
+Data de Criação: ${plan.createdAt}
 
-    try {
-      showToast(`Criando documento no Google Docs...`);
-      const result = await gerarArquivoGoogleDocs(plan.title, bodyContent, logoBase64);
-      const updatedPlan: PlanningItem = {
-        ...plan,
-        googleDocsUrl: result.url,
-        fase2DocUrl: plan.fase2DocUrl || result.url,
-        fase2DocumentId: plan.fase2DocumentId || result.documentId,
-      };
-      setPlannings((prev) => prev.map((p) => (p.id === plan.id ? updatedPlan : p)));
-      persistPlanningToDatabase(updatedPlan);
-      onSavePlanning?.(updatedPlan);
-      showToast(`Documento gerado no Google Docs com sucesso!`);
-      if (typeof window !== 'undefined') {
-        window.open(result.url, '_blank');
-      }
-    } catch (err) {
-      console.error('Erro ao gerar Google Docs:', err);
-      showToast('Erro ao criar arquivo Google Docs.');
-    }
+================================================================================
+FASE 1 — RESUMO E CONFERÊNCIA CURRICULAR
+================================================================================
+${plan.fase1Content || plan.description || 'Nenhum resumo textual registrado.'}
+
+${plan.fase2Content ? `================================================================================
+FASE 2 — SEQUÊNCIA DIDÁTICA (MODELO OFICIAL SED-SC)
+================================================================================
+${plan.fase2Content}` : ''}
+
+${plan.fase3Content ? `================================================================================
+FASE 3 — PLANOS DE AULA INDIVIDUAIS (PASSO A PASSO / MINUTO A MINUTO)
+================================================================================
+${plan.fase3Content}` : ''}
+
+================================================================================
+ANEXO — REPOSITÓRIO GOOGLE DRIVE DE PLANOS DE AULAS INDIVIDUAIS
+================================================================================
+Acesse os Planos de Aulas Individuais completos e editáveis no repositório oficial do Google Drive:
+Link do Repositório: ${plan.driveRepositoryUrl || 'https://drive.google.com/drive/folders/ee-b-prof-jandira-davila-planos-individuais'}
+Instruções: Este repositório digital permite o acesso aos documentos individuais em formato Google Docs (.gdoc) e PDF.
+
+================================================================================
+Documento Oficial — EEB Prof. Jandira D'Ávila — Coordenadoria Regional de Joinville
+================================================================================
+`;
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const sanitizedTitle = plan.title.replace(/[^a-zA-Z0-9_\-]/g, '_');
+    link.download = `Planejamento_SED_SC_${sanitizedTitle}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast(`Download de "${plan.title}" realizado com sucesso!`);
   };
 
   return (
@@ -914,7 +843,7 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
                     Trimestre / Período
                   </th>
                   <th scope="col" className="py-4 px-6">
-                    Tipo
+                    Fase / Status
                   </th>
                   <th scope="col" className="py-4 px-6 text-right">
                     Ações
@@ -1020,24 +949,14 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
                           <span>Visualizar</span>
                         </button>
 
-                        {/* Botão Abrir Google Docs */}
-                        <button
-                          onClick={() => handleOpenGoogleDocs(plan)}
-                          className="px-3 py-1.5 bg-[#171f33] hover:bg-[#222a3d] text-[#34a853] hover:text-white rounded-xl border border-white/10 font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-                          title="Abrir no Google Docs"
-                        >
-                          <FileText className="w-3.5 h-3.5" />
-                          <span>Abrir Google Docs</span>
-                        </button>
-                        
-                        {/* Botão Baixar PDF */}
+                        {/* Botão Baixar (PDF/Docs) */}
                         <button
                           onClick={() => handleDownload(plan)}
                           className="px-3 py-1.5 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] hover:text-white rounded-xl border border-white/10 font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
-                          title="Baixar PDF"
+                          title="Baixar documento"
                         >
                           <Download className="w-3.5 h-3.5 text-amber-400" />
-                          <span>Baixar PDF</span>
+                          <span>Baixar</span>
                         </button>
 
                         {/* Botão Excluir */}
@@ -1346,7 +1265,87 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
                 </div>
               )}
 
-              {/* 4. Botões do modal: "Cancelar" e "Avançar para Planejamento" */}
+              {/* Seção de Repositório de Documentos Norteadores para Geração da IA */}
+              <div className="p-4 bg-[#0b1326] border border-[#4ade80]/30 rounded-2xl space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-[#4ade80]" />
+                    <span className="text-xs font-bold text-white">
+                      Repositório de Documentos Norteadores (Base para IA)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveModal('import_doc')}
+                    className="px-3 py-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border border-amber-400/40 text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer self-start sm:self-auto"
+                  >
+                    <UploadCloud className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Gerenciar Anexos ({guidingDocs.filter((d) => !!d.fileName).length}/{guidingDocs.length})</span>
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-[#bccabb] leading-relaxed">
+                  Os documentos deste repositório {isSupabaseConfigured ? 'estão salvos no Supabase e ' : 'ficam salvos gratuitamente no sistema e '}serão vinculados à Inteligência Artificial para estruturar o plano/sequência conforme as diretrizes e modelos oficiais.
+                </p>
+
+                {/* Slots e Status dos Documentos */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  {guidingDocs.map((doc) => {
+                    const isAttached = !!doc.fileName;
+                    return (
+                      <div
+                        key={doc.id}
+                        className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs transition-all ${
+                          isAttached
+                            ? 'bg-[#4ade80]/10 border-[#4ade80]/30 text-white'
+                            : 'bg-white/5 border-white/10 text-[#bccabb]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          {isAttached ? (
+                            <Check className="w-4 h-4 text-[#4ade80] shrink-0" />
+                          ) : (
+                            <FileText className="w-4 h-4 text-[#869486] shrink-0" />
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-semibold text-[11px] truncate">{doc.categoryName}</p>
+                            <p className="text-[10px] text-[#bccabb] truncate">
+                              {isAttached ? doc.fileName : 'Nenhum documento'}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => triggerFileInput(doc.id)}
+                          className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[10px] font-bold text-white shrink-0 transition-all cursor-pointer"
+                        >
+                          {isAttached ? 'Trocar' : 'Anexar'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Campo para Link da Pasta no Google Drive (Anexo do Documento) */}
+                <div className="pt-3 border-t border-white/10 space-y-1.5">
+                  <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Link2 className="w-4 h-4 text-amber-400" />
+                    <span>Link da Pasta no Google Drive (Anexo do Documento Gerado)</span>
+                  </label>
+                  <input
+                    type="url"
+                    value={seqDriveUrl}
+                    onChange={(e) => setSeqDriveUrl(e.target.value)}
+                    placeholder="https://drive.google.com/drive/folders/..."
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#131b2e] border border-white/10 text-xs text-white focus:outline-none focus:border-[#4ade80] transition-all font-mono"
+                  />
+                  <p className="text-[10px] text-[#bccabb] leading-relaxed">
+                    Este link do Google Drive será anexado oficialmente ao final do documento gerado para acesso direto aos planos de aula.
+                  </p>
+                </div>
+              </div>
+
+              {/* 4. Botões do modal: "Cancelar" e "Avançar para IA" */}
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10">
                 <button
                   type="button"
@@ -1360,7 +1359,7 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
                   className="px-6 py-2.5 rounded-2xl bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold text-xs transition-all shadow-lg flex items-center gap-2 cursor-pointer"
                 >
                   <Sparkles className="w-4 h-4" />
-                  <span>Avançar para Planejamento</span>
+                  <span>Avançar para IA</span>
                 </button>
               </div>
             </form>
@@ -1543,12 +1542,12 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
                           {isUploaded ? (
                             <p className="text-[11px] text-[#4ade80] font-semibold flex items-center gap-1.5 mt-0.5">
                               <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-[#4ade80]" />
-                              <span>Arquivo carregado: {slot.fileName}</span>
+                              <span>Documento Carregado: {slot.fileName}</span>
                             </p>
                           ) : (
                             <p className="text-[11px] text-[#bccabb]/70 flex items-center gap-1.5 mt-0.5">
                               <AlertCircle className="w-3.5 h-3.5 shrink-0 text-[#bccabb]/60" />
-                              <span>Pendente</span>
+                              <span>Nenhum documento anexado</span>
                             </p>
                           )}
                         </div>
@@ -1796,13 +1795,6 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
 
               <div className="flex flex-wrap items-center justify-end gap-3">
                 <button
-                  onClick={() => handleOpenGoogleDocs(selectedPlan)}
-                  className="px-4 py-2.5 rounded-2xl bg-[#171f33] hover:bg-[#222a3d] text-[#34a853] hover:text-white border border-[#34a853]/40 text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>Abrir no Google Docs</span>
-                </button>
-                <button
                   onClick={() => handleDownload(selectedPlan)}
                   className="px-5 py-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-black text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
                 >
@@ -1824,28 +1816,25 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
         </div>
       )}
 
-      {/* Modal: Painel de Execução Interativo GEM Gemini 2.5 Pro (Visualizadores Fases 1, 2 e 3) */}
+      {/* Modal: Painel de Execução Interativo GEM Gemini 3.1 Pro (IA Chat Fases 1, 2 e 3) */}
       {activeModal === 'ai_chat' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn overflow-y-auto">
-          <div className="glass-panel w-full max-w-5xl rounded-3xl border border-white/10 p-5 sm:p-7 space-y-5 relative bg-[#131b2e] shadow-2xl max-h-[94vh] flex flex-col my-auto">
-            {/* Header do Painel de Execução */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+          <div className="glass-panel w-full max-w-4xl rounded-3xl border border-white/10 p-6 space-y-4 relative bg-[#131b2e] shadow-2xl max-h-[92vh] flex flex-col">
+            {/* Header do Chat com Stepper de Fases */}
             <div className="flex items-center justify-between border-b border-white/10 pb-4 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-[#4ade80]/20 border border-[#4ade80]/40 text-[#4ade80] flex items-center justify-center shrink-0 shadow-lg shadow-[#4ade80]/10">
-                  <Sparkles className="w-6 h-6 animate-pulse" />
+                <div className="w-10 h-10 rounded-2xl bg-[#4ade80]/20 border border-[#4ade80]/40 text-[#4ade80] flex items-center justify-center shrink-0">
+                  <Sparkles className="w-5 h-5 animate-pulse" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="text-lg font-bold text-white">
-                      Painel de Execução do Planejamento Pedagógico GEM
-                    </h2>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-[#4ade80]/15 text-[#4ade80] border border-[#4ade80]/40 font-bold flex items-center gap-1">
-                      <Sparkles className="w-3 h-3" />
-                      Gemini 2.5 Pro
+                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                    Assistente de Planejamento Pedagógico GEM
+                    <span className="px-2 py-0.5 rounded-full text-[10px] bg-[#4ade80]/10 text-[#4ade80] border border-[#4ade80]/30 font-semibold">
+                      Gemini 3.1 Pro
                     </span>
-                  </div>
+                  </h2>
                   <p className="text-xs text-[#bccabb] mt-0.5">
-                    {seqSerie} | {seqSubject} | {seqTrimestre} | Turma(s): {selectedTurmasCodes.map((t) => `Turma ${t}`).join(', ')}
+                    {seqSerie} | {seqSubject} | {seqTrimestre} | Turma(s): {selectedTurmasCodes.join(', ')}
                   </p>
                 </div>
               </div>
@@ -1853,460 +1842,187 @@ export const PlanningView: React.FC<PlanningViewProps> = ({
               {/* Botão Fechar */}
               <button
                 onClick={() => setActiveModal(null)}
-                className="text-[#bccabb] hover:text-white p-2 rounded-full hover:bg-white/10 transition-all cursor-pointer shrink-0"
-                title="Fechar painel"
+                className="text-[#bccabb] hover:text-white p-2 rounded-full hover:bg-white/10 transition-all cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Stepper Sequencial das 3 Etapas */}
+            {/* Indicador visual de Fases (Stepper) */}
             {(() => {
               const activePlanObj = plannings.find((p) => p.id === currentAiPlanId);
-              const hasFase1 = !!(activePlanObj?.fase1Content || (aiHistory.length > 0 && !aiLoading));
-              const hasFase2 = !!activePlanObj?.fase2Content;
-              const hasFase3 = !!activePlanObj?.fase3Content;
-
+              const phase = activePlanObj?.currentPhase || 1;
               return (
-                <div className="space-y-2 shrink-0">
-                  <div className="grid grid-cols-3 gap-2 p-2 bg-[#0b1326] border border-white/10 rounded-2xl text-[11px]">
-                    {/* Etapa 1 */}
-                    <div
-                      className={`p-2.5 rounded-xl border flex items-center gap-2 transition-all ${
-                        hasFase1
-                          ? 'bg-[#4ade80]/15 text-[#4ade80] border-[#4ade80]/40 font-bold'
-                          : aiLoading && executingPhase === 1
-                          ? 'bg-amber-400/15 text-amber-300 border-amber-400/40 font-bold animate-pulse'
-                          : 'bg-white/5 text-[#bccabb] border-white/5'
-                      }`}
-                    >
-                      {hasFase1 ? (
-                        <CheckCircle2 className="w-4 h-4 text-[#4ade80] shrink-0" />
-                      ) : aiLoading && executingPhase === 1 ? (
-                        <Loader2 className="w-4 h-4 text-amber-400 animate-spin shrink-0" />
-                      ) : (
-                        <span className="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-bold shrink-0">1</span>
-                      )}
-                      <span className="truncate">Etapa 1: Resumo (Fase 1)</span>
-                    </div>
-
-                    {/* Etapa 2 */}
-                    <div
-                      className={`p-2.5 rounded-xl border flex items-center gap-2 transition-all ${
-                        hasFase2
-                          ? 'bg-[#4ade80]/15 text-[#4ade80] border-[#4ade80]/40 font-bold'
-                          : aiLoading && executingPhase === 2
-                          ? 'bg-amber-400/15 text-amber-300 border-amber-400/40 font-bold animate-pulse'
-                          : 'bg-white/5 text-[#bccabb] border-white/5'
-                      }`}
-                    >
-                      {hasFase2 ? (
-                        <CheckCircle2 className="w-4 h-4 text-[#4ade80] shrink-0" />
-                      ) : aiLoading && executingPhase === 2 ? (
-                        <Loader2 className="w-4 h-4 text-amber-400 animate-spin shrink-0" />
-                      ) : (
-                        <span className="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-bold shrink-0">2</span>
-                      )}
-                      <span className="truncate">Etapa 2: Sequência Didática (Fase 2)</span>
-                    </div>
-
-                    {/* Etapa 3 */}
-                    <div
-                      className={`p-2.5 rounded-xl border flex items-center gap-2 transition-all ${
-                        hasFase3
-                          ? 'bg-[#4ade80]/15 text-[#4ade80] border-[#4ade80]/40 font-bold'
-                          : aiLoading && executingPhase === 3
-                          ? 'bg-purple-400/15 text-purple-300 border-purple-400/40 font-bold animate-pulse'
-                          : 'bg-white/5 text-[#bccabb] border-white/5'
-                      }`}
-                    >
-                      {hasFase3 ? (
-                        <CheckCircle2 className="w-4 h-4 text-[#4ade80] shrink-0" />
-                      ) : aiLoading && executingPhase === 3 ? (
-                        <Loader2 className="w-4 h-4 text-purple-400 animate-spin shrink-0" />
-                      ) : (
-                        <span className="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-bold shrink-0">3</span>
-                      )}
-                      <span className="truncate">Etapa 3: Planos Individuais (Fase 3)</span>
-                    </div>
+                <div className="grid grid-cols-3 gap-2 p-2 bg-[#0b1326] border border-white/10 rounded-2xl text-[11px] shrink-0">
+                  <div
+                    className={`p-2 rounded-xl border flex items-center gap-2 ${
+                      phase >= 1
+                        ? 'bg-[#4ade80]/15 text-[#4ade80] border-[#4ade80]/40 font-bold'
+                        : 'bg-white/5 text-[#bccabb] border-white/5'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span className="truncate">Fase 1: Resumo & Aprovação</span>
                   </div>
-
-                  {/* Filtro de Visualizadores (Abas Rápidas) */}
-                  <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
-                    <div className="flex items-center gap-1.5 bg-[#0b1326] p-1 rounded-xl border border-white/10 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setActiveVisualizerTab('todas')}
-                        className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
-                          activeVisualizerTab === 'todas'
-                            ? 'bg-[#4ade80] text-[#003919]'
-                            : 'text-[#bccabb] hover:text-white'
-                        }`}
-                      >
-                        Painel Sequencial (Todas)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setActiveVisualizerTab('fase1')}
-                        className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
-                          activeVisualizerTab === 'fase1'
-                            ? 'bg-[#4ade80] text-[#003919]'
-                            : 'text-[#bccabb] hover:text-white'
-                        }`}
-                      >
-                        Visualizador Fase 1
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setActiveVisualizerTab('fase2')}
-                        className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
-                          activeVisualizerTab === 'fase2'
-                            ? 'bg-[#4ade80] text-[#003919]'
-                            : 'text-[#bccabb] hover:text-white'
-                        }`}
-                      >
-                        Visualizador Fase 2
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setActiveVisualizerTab('fase3')}
-                        className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
-                          activeVisualizerTab === 'fase3'
-                            ? 'bg-[#4ade80] text-[#003919]'
-                            : 'text-[#bccabb] hover:text-white'
-                        }`}
-                      >
-                        Visualizador Fase 3
-                      </button>
-                    </div>
-
-                    <span className="text-[11px] text-[#bccabb] hidden sm:inline-block">
-                      Protocolo Oficial SED-SC / EEB Prof. Jandira D&apos;Ávila
-                    </span>
+                  <div
+                    className={`p-2 rounded-xl border flex items-center gap-2 ${
+                      phase >= 2 || activePlanObj?.fase2Content
+                        ? 'bg-amber-400/15 text-amber-300 border-amber-400/40 font-bold'
+                        : 'bg-white/5 text-[#bccabb] border-white/5'
+                    }`}
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    <span className="truncate">Fase 2: Sequência Didática</span>
+                  </div>
+                  <div
+                    className={`p-2 rounded-xl border flex items-center gap-2 ${
+                      phase === 3 || activePlanObj?.fase3Content
+                        ? 'bg-purple-500/15 text-purple-300 border-purple-500/40 font-bold'
+                        : 'bg-white/5 text-[#bccabb] border-white/5'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span className="truncate">Fase 3: Planos Individuais</span>
                   </div>
                 </div>
               );
             })()}
 
-            {/* 2. Indicador visual de carregamento (Spinner/Progresso) enquanto o Gemini 2.5 Pro processa */}
-            {aiLoading && (
-              <div className="p-4 bg-[#0b1326] border border-[#4ade80]/30 rounded-2xl space-y-3 shrink-0 animate-fadeIn shadow-lg shadow-[#4ade80]/5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-[#4ade80]/20 border border-[#4ade80]/40 flex items-center justify-center text-[#4ade80]">
-                      <Loader2 className="w-5 h-5 animate-spin" />
+            {/* Chat Messages Body */}
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1 min-h-[300px]">
+              {aiHistory.length === 0 && aiLoading && (
+                <div className="p-12 text-center flex flex-col items-center justify-center space-y-3">
+                  <Loader2 className="w-8 h-8 text-[#4ade80] animate-spin" />
+                  <p className="text-xs font-semibold text-[#dae2fd]">
+                    Consultando documentos norteadores, calculando carga horária e elaborando a FASE 1...
+                  </p>
+                  <p className="text-[11px] text-[#bccabb]">
+                    Aguarde alguns segundos enquanto o GEM aplica o protocolo pedagógico oficial.
+                  </p>
+                </div>
+              )}
+
+              {aiHistory.map((msg, idx) => (
+                <div
+                  key={idx}
+                  className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  {msg.role === 'assistant' && (
+                    <div className="w-8 h-8 rounded-xl bg-[#4ade80]/20 border border-[#4ade80]/30 text-[#4ade80] flex items-center justify-center shrink-0 mt-1">
+                      <Bot className="w-4 h-4" />
                     </div>
-                    <div>
-                      <p className="text-xs font-bold text-white flex items-center gap-2">
-                        <span>Processando com Gemini 2.5 Pro — Etapa {executingPhase}</span>
-                        <span className="px-2 py-0.5 bg-[#4ade80]/20 text-[#4ade80] text-[10px] rounded-full font-mono font-bold">
-                          Cota Pro Ativa
-                        </span>
-                      </p>
-                      <p className="text-[11px] text-[#bccabb] mt-0.5">
-                        {executingPhase === 1
-                          ? 'Analisando documentos norteadores (Livro Sociologia em Movimento, Calendário Escolar Joinville, Planejamento Anual), calculando carga horária e gerando o Resumo...'
-                          : executingPhase === 2
-                          ? 'Estruturando a Sequência Didática Oficial completa no Modelo SED-SC, mapeando habilidades BNCC e estratégias metodológicas...'
-                          : 'Elaborando os Planos de Aula Individuais detalhados (passo a passo minuto a minuto para blocos de 45/90 min)...'}
-                      </p>
+                  )}
+
+                  <div
+                    className={`max-w-[85%] rounded-2xl p-4 text-xs leading-relaxed ${
+                      msg.role === 'user'
+                        ? 'bg-[#4ade80] text-[#003919] font-medium shadow-md self-end'
+                        : 'bg-[#0b1326] text-[#dae2fd] border border-white/10 space-y-2 font-sans whitespace-pre-wrap'
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
+
+                  {msg.role === 'user' && (
+                    <div className="w-8 h-8 rounded-xl bg-white/10 text-white flex items-center justify-center shrink-0 mt-1">
+                      <Users className="w-4 h-4" />
                     </div>
+                  )}
+                </div>
+              ))}
+
+              {aiHistory.length > 0 && aiLoading && (
+                <div className="flex gap-3 justify-start">
+                  <div className="w-8 h-8 rounded-xl bg-[#4ade80]/20 border border-[#4ade80]/30 text-[#4ade80] flex items-center justify-center shrink-0 mt-1">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  </div>
+                  <div className="bg-[#0b1326] text-[#bccabb] border border-white/10 rounded-2xl p-4 text-xs flex items-center gap-2">
+                    <Sparkles className="w-3.5 h-3.5 text-[#4ade80] animate-pulse" />
+                    <span>O GEM está processando as diretrizes pedagógicas e gerando a próxima fase...</span>
                   </div>
                 </div>
-
-                {/* Barra de Progresso Animada */}
-                <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-[#4ade80] via-[#6bfb9a] to-[#4ade80] w-full animate-pulse" />
-                </div>
-              </div>
-            )}
-
-            {/* 1. Corpo com os 3 Visualizadores Sequenciais */}
-            <div className="flex-1 overflow-y-auto space-y-6 pr-1 min-h-[340px]">
-              {(() => {
-                const activePlanObj = plannings.find((p) => p.id === currentAiPlanId);
-                const fase1Content =
-                  activePlanObj?.fase1Content ||
-                  (aiHistory.length > 0
-                    ? aiHistory.find((m) => m.role === 'assistant')?.content || ''
-                    : '');
-                const fase2Content = activePlanObj?.fase2Content || '';
-                const fase3Content = activePlanObj?.fase3Content || '';
-
-                const showFase1 = activeVisualizerTab === 'todas' || activeVisualizerTab === 'fase1';
-                const showFase2 = activeVisualizerTab === 'todas' || activeVisualizerTab === 'fase2';
-                const showFase3 = activeVisualizerTab === 'todas' || activeVisualizerTab === 'fase3';
-
-                return (
-                  <>
-                    {/* ========================================================================= */}
-                    {/* VISUALIZADOR FASE 1: Resumo Pedagógico (Partes 1, 2 e 3) */}
-                    {/* ========================================================================= */}
-                    {showFase1 && (
-                      <div className="bg-[#0b1326] border border-white/10 rounded-2xl p-5 space-y-4 shadow-md">
-                        <div className="flex items-center justify-between border-b border-white/10 pb-3 flex-wrap gap-2">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-xl bg-[#4ade80]/15 text-[#4ade80] border border-[#4ade80]/30 flex items-center justify-center shrink-0">
-                              <CheckCircle2 className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                                Visualizador Fase 1: Resumo e Conferência Curricular (Partes 1, 2 e 3)
-                              </h3>
-                              <p className="text-[11px] text-[#bccabb]">
-                                Carga horária real calculada, correspondência no Livro Didático e distribuição de aulas.
-                              </p>
-                            </div>
-                          </div>
-
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
-                              fase1Content
-                                ? 'bg-[#4ade80]/15 text-[#4ade80] border-[#4ade80]/40'
-                                : 'bg-amber-400/10 text-amber-300 border-amber-400/30'
-                            }`}
-                          >
-                            {fase1Content ? 'Fase 1 Gerada' : 'Aguardando Resposta'}
-                          </span>
-                        </div>
-
-                        {/* Conteúdo textual da Fase 1 */}
-                        <div className="p-4 bg-[#131b2e] border border-white/10 rounded-xl text-xs text-[#dae2fd] leading-relaxed whitespace-pre-wrap font-sans max-h-72 overflow-y-auto">
-                          {fase1Content || (
-                            <div className="flex flex-col items-center justify-center py-6 text-center text-[#bccabb] space-y-2">
-                              {aiLoading && executingPhase === 1 ? (
-                                <>
-                                  <Loader2 className="w-6 h-6 text-[#4ade80] animate-spin" />
-                                  <span>O Gemini 2.5 Pro está gerando o Resumo da Fase 1 com os dados documentais...</span>
-                                </>
-                              ) : (
-                                <span>Nenhum resumo da Fase 1 gerado ainda.</span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Botão de Confirmação da Fase 1: Aprovar e Gerar Sequência Didática (Fase 2) */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-white/5">
-                          <p className="text-[11px] text-[#bccabb]">
-                            Confira as Partes 1, 2 e 3 acima antes de autorizar a geração da Sequência Didática Oficial.
-                          </p>
-
-                          {!fase2Content ? (
-                            <button
-                              type="button"
-                              onClick={handleApprovePhase2}
-                              disabled={aiLoading || !fase1Content}
-                              className="py-2.5 px-5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#4ade80]/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
-                              <span>Aprovar e Gerar Sequência Didática (Fase 2)</span>
-                            </button>
-                          ) : (
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#4ade80]/15 text-[#4ade80] text-xs font-bold border border-[#4ade80]/30">
-                              <Check className="w-4 h-4" />
-                              <span>Fase 1 Aprovada e Sequência Didática Solicitada</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ========================================================================= */}
-                    {/* VISUALIZADOR FASE 2: Sequência Didática Oficial (Modelo SED-SC) */}
-                    {/* ========================================================================= */}
-                    {showFase2 && (
-                      <div className="bg-[#0b1326] border border-white/10 rounded-2xl p-5 space-y-4 shadow-md">
-                        <div className="flex items-center justify-between border-b border-white/10 pb-3 flex-wrap gap-2">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-xl bg-amber-400/15 text-amber-400 border border-amber-400/30 flex items-center justify-center shrink-0">
-                              <FileSpreadsheet className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                                Visualizador Fase 2: Sequência Didática Oficial (Modelo SED-SC)
-                              </h3>
-                              <p className="text-[11px] text-[#bccabb]">
-                                Estrutura completa conforme diretrizes da SED-SC e BNCC.
-                              </p>
-                            </div>
-                          </div>
-
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
-                              fase2Content
-                                ? 'bg-amber-400/15 text-amber-300 border-amber-400/40'
-                                : 'bg-white/5 text-[#bccabb] border-white/10'
-                            }`}
-                          >
-                            {fase2Content ? 'Fase 2 Concluída' : 'Aguardando Aprovação da Fase 1'}
-                          </span>
-                        </div>
-
-                        {/* Conteúdo textual da Fase 2 */}
-                        <div className="p-4 bg-[#131b2e] border border-white/10 rounded-xl text-xs text-[#dae2fd] leading-relaxed whitespace-pre-wrap font-sans max-h-80 overflow-y-auto">
-                          {fase2Content ? (
-                            fase2Content
-                          ) : aiLoading && executingPhase === 2 ? (
-                            <div className="flex flex-col items-center justify-center py-6 text-center text-[#bccabb] space-y-2">
-                              <Loader2 className="w-6 h-6 text-amber-400 animate-spin" />
-                              <span>O Gemini 2.5 Pro está construindo a Sequência Didática Oficial na íntegra...</span>
-                            </div>
-                          ) : (
-                            <div className="py-6 text-center text-[#bccabb]/70 text-xs">
-                              A Sequência Didática Oficial será gerada após a aprovação da Fase 1.
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Botão de Ação da Fase 2: Gerar Planos Individuais (Fase 3) */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-white/5">
-                          <p className="text-[11px] text-[#bccabb]">
-                            {fase2Content
-                              ? 'Sequência Didática Oficial concluída. Autorize a geração dos planos de aula individuais detalhados.'
-                              : 'Aguarde a aprovação da Fase 1 para habilitar esta etapa.'}
-                          </p>
-
-                          {fase2Content && !fase3Content ? (
-                            <button
-                              type="button"
-                              onClick={handleApprovePhase3}
-                              disabled={aiLoading}
-                              className="py-2.5 px-5 bg-purple-500 hover:bg-purple-400 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-500/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              <Sparkles className="w-4 h-4" />
-                              <span>Gerar Planos Individuais (Fase 3)</span>
-                            </button>
-                          ) : fase3Content ? (
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-500/15 text-purple-300 text-xs font-bold border border-purple-500/30">
-                              <Check className="w-4 h-4" />
-                              <span>Fase 2 e Fase 3 Geradas</span>
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ========================================================================= */}
-                    {/* VISUALIZADOR FASE 3: Planos de Aula Individuais Detalhados */}
-                    {/* ========================================================================= */}
-                    {showFase3 && (
-                      <div className="bg-[#0b1326] border border-white/10 rounded-2xl p-5 space-y-4 shadow-md">
-                        <div className="flex items-center justify-between border-b border-white/10 pb-3 flex-wrap gap-2">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-xl bg-purple-500/15 text-purple-400 border border-purple-500/30 flex items-center justify-center shrink-0">
-                              <Sparkles className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                                Visualizador Fase 3: Planos de Aula Individuais Detalhados (45/90 min)
-                              </h3>
-                              <p className="text-[11px] text-[#bccabb]">
-                                Passo a passo detalhado, minuto a minuto de cada aula do planejamento.
-                              </p>
-                            </div>
-                          </div>
-
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
-                              fase3Content
-                                ? 'bg-purple-500/15 text-purple-300 border-purple-500/40'
-                                : 'bg-white/5 text-[#bccabb] border-white/10'
-                            }`}
-                          >
-                            {fase3Content ? 'Fase 3 Concluída' : 'Aguardando Autorização da Fase 2'}
-                          </span>
-                        </div>
-
-                        {/* Conteúdo textual da Fase 3 */}
-                        <div className="p-4 bg-[#131b2e] border border-white/10 rounded-xl text-xs text-[#dae2fd] leading-relaxed whitespace-pre-wrap font-sans max-h-80 overflow-y-auto">
-                          {fase3Content ? (
-                            fase3Content
-                          ) : aiLoading && executingPhase === 3 ? (
-                            <div className="flex flex-col items-center justify-center py-6 text-center text-[#bccabb] space-y-2">
-                              <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
-                              <span>O Gemini 2.5 Pro está detalhando os planos de aula individuais minuto a minuto...</span>
-                            </div>
-                          ) : (
-                            <div className="py-6 text-center text-[#bccabb]/70 text-xs">
-                              Os Planos de Aula Individuais detalhados serão gerados na Fase 3.
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Rodapé da Fase 3 */}
-                        {fase3Content && (
-                          <div className="p-4 bg-[#131b2e] border border-[#4ade80]/30 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div className="flex items-center gap-2 text-xs text-[#4ade80] font-bold">
-                              <CheckCircle2 className="w-4 h-4" />
-                              <span>Todas as 3 Fases do Planejamento Pedagógico foram concluídas com sucesso!</span>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (activePlanObj) handleOpenGoogleDocs(activePlanObj);
-                                }}
-                                className="px-4 py-2 bg-[#171f33] hover:bg-[#222a3d] text-[#34a853] hover:text-white border border-[#34a853]/40 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0"
-                              >
-                                <FileText className="w-3.5 h-3.5" />
-                                <span>Gravar no Google Docs</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (activePlanObj) handleDownload(activePlanObj);
-                                }}
-                                className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-black font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer shrink-0"
-                              >
-                                <Download className="w-3.5 h-3.5" />
-                                <span>Baixar PDF Oficial</span>
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
+              )}
             </div>
 
-            {/* Rodapé: Envio de Observações adicionais & Concluir */}
+            {/* Controles de Ação Rápida por Fase & Campo de Entrada */}
             <div className="border-t border-white/10 pt-3 space-y-3 shrink-0">
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-                <form onSubmit={handleSendChatMessage} className="flex-1 flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={userChatMessage}
-                    onChange={(e) => setUserChatMessage(e.target.value)}
-                    placeholder="Digite orientações ou ajustes específicos para o GEM..."
-                    disabled={aiLoading}
-                    className="flex-1 bg-[#0b1326] border border-white/10 rounded-2xl px-4 py-2.5 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80] disabled:opacity-50"
-                  />
-                  <button
-                    type="submit"
-                    disabled={aiLoading || !userChatMessage.trim()}
-                    className="py-2.5 px-4 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-2xl transition-all flex items-center justify-center gap-1.5 shadow-md cursor-pointer disabled:opacity-50 text-xs shrink-0"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>Enviar</span>
-                  </button>
-                </form>
+              {(() => {
+                const activePlanObj = plannings.find((p) => p.id === currentAiPlanId);
+                const hasFase2 = !!activePlanObj?.fase2Content;
+                const hasFase3 = !!activePlanObj?.fase3Content;
 
+                return (
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Botão Fase 2 */}
+                      {!hasFase2 && (
+                        <button
+                          type="button"
+                          onClick={handleApprovePhase2}
+                          disabled={aiLoading}
+                          className="py-2 px-4 bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border border-amber-400/40 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 shadow-md"
+                        >
+                          <CheckCircle2 className="w-4 h-4 text-amber-400" />
+                          <span>Aprovar e Gerar Sequência Didática (Fase 2)</span>
+                        </button>
+                      )}
+
+                      {/* Botão Fase 3 */}
+                      {hasFase2 && !hasFase3 && (
+                        <button
+                          type="button"
+                          onClick={handleApprovePhase3}
+                          disabled={aiLoading}
+                          className="py-2 px-4 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 shadow-md"
+                        >
+                          <Sparkles className="w-4 h-4 text-purple-400" />
+                          <span>Gerar Planos de Aula Individuais (Fase 3)</span>
+                        </button>
+                      )}
+
+                      {/* Indicador de Conclusão */}
+                      {hasFase3 && (
+                        <div className="px-3.5 py-2 rounded-xl bg-[#4ade80]/15 border border-[#4ade80]/30 text-[#4ade80] text-xs font-bold flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-[#4ade80]" />
+                          <span>Planejamento Concluído (Fases 1, 2 e 3 integradas)</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveModal(null);
+                        showToast('Planejamento salvo com sucesso no painel!');
+                      }}
+                      className="py-2 px-4 bg-white/5 hover:bg-white/10 text-[#dae2fd] border border-white/10 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Concluir e Salvar no Painel</span>
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {/* Formulário de Envio do Chat */}
+              <form onSubmit={handleSendChatMessage} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={userChatMessage}
+                  onChange={(e) => setUserChatMessage(e.target.value)}
+                  placeholder="Digite suas observações ou comandos adicionais para o GEM..."
+                  disabled={aiLoading}
+                  className="flex-1 bg-[#0b1326] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80] disabled:opacity-50"
+                />
                 <button
-                  type="button"
-                  onClick={() => {
-                    setActiveModal(null);
-                    showToast('Planejamento salvo com sucesso no painel!');
-                  }}
-                  className="py-2.5 px-5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0"
+                  type="submit"
+                  disabled={aiLoading || !userChatMessage.trim()}
+                  className="py-3 px-5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-2xl transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer disabled:opacity-50"
                 >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-[#4ade80]" />
-                  <span>Concluir e Salvar</span>
+                  <Send className="w-4 h-4" />
+                  <span>Enviar</span>
                 </button>
-              </div>
+              </form>
             </div>
           </div>
         </div>
