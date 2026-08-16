@@ -1,21 +1,57 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Plus, BookOpen, Trash2, HelpCircle, FileText, Users, CheckCircle2, Link2 } from 'lucide-react';
-import { Activity, ActivityQuestion } from '@/lib/types';
-import { DEFAULT_TURMAS } from '@/lib/studentUtils';
+import {
+  X,
+  Plus,
+  BookOpen,
+  Trash2,
+  HelpCircle,
+  FileText,
+  Users,
+  CheckCircle2,
+  Link2,
+  Sparkles,
+  Gamepad2,
+  Cpu,
+  Loader2,
+  Layers,
+  ArrowRight,
+} from 'lucide-react';
+import { Activity, ActivityQuestion, StudentUser } from '@/lib/types';
+import { DEFAULT_TURMAS, doesTurmaHavePNEStudent } from '@/lib/studentUtils';
 import { TurmaMultiSelect } from '@/components/TurmaMultiSelect';
+import {
+  createAdaptedMildModerateActivity,
+  createAdaptedSeverePlayfulActivity,
+} from '@/lib/adaptationUtils';
 
 interface NewActivityModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreateActivity: (newAct: Activity) => void;
+  students?: StudentUser[];
 }
+
+const getTomorrowString = () => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(23, 59, 0, 0);
+  return tomorrow.toISOString().slice(0, 16);
+};
+
+const generateActivityId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `act-${crypto.randomUUID()}`;
+  }
+  return `act-${new Date().getTime()}`;
+};
 
 export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   isOpen,
   onClose,
   onCreateActivity,
+  students = [],
 }) => {
   const [title, setTitle] = useState('');
   const [subject, setSubject] = useState('Sociologia');
@@ -25,15 +61,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   const [selectedTurmas, setSelectedTurmas] = useState<string[]>([DEFAULT_TURMAS[0] || '101']);
   const [type, setType] = useState<'Simulado' | 'Redação' | 'Dinâmica' | 'Avaliação' | 'Trabalho em grupo' | 'Projeto de pesquisa'>('Avaliação');
   
-  // Default deadline: tomorrow at 23:59
-  const getTomorrowString = () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(23, 59, 0, 0);
-    return tomorrow.toISOString().slice(0, 16);
-  };
-
-  const [deadlineDateTime, setDeadlineDateTime] = useState(getTomorrowString());
+  const [deadlineDateTime, setDeadlineDateTime] = useState(() => getTomorrowString());
   const [maxGrade, setMaxGrade] = useState<number>(10);
   const [allowGroupWork, setAllowGroupWork] = useState<boolean>(false);
   
@@ -45,13 +73,15 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   // Array of questions added to the activity
   const [questions, setQuestions] = useState<ActivityQuestion[]>([]);
 
-  if (!isOpen) return null;
+  // State for Decision Step upon Saving
+  const [pendingActivityForDecision, setPendingActivityForDecision] = useState<Activity | null>(null);
+  const [isGeneratingPlayful, setIsGeneratingPlayful] = useState(false);
 
   // Add a 4-option multiple choice question
   const handleAddMultipleChoice = () => {
     const newQuestion: ActivityQuestion = {
       type: 'multiple_choice',
-      id: `q-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+      id: `q-mc-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       statement: '',
       options: ['', '', '', ''],
       correctOptionIndex: 0,
@@ -63,7 +93,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   const handleAddEssay = () => {
     const newQuestion: ActivityQuestion = {
       type: 'essay',
-      id: `q-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+      id: `q-es-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       statement: '',
       minCharacters: 300,
     };
@@ -136,8 +166,10 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
     const resolvedTurma = selectedTurmas.length > 0 ? selectedTurmas.join(', ') : '101';
     const formattedDeadline = formatDeadlineDisplay(deadlineDateTime);
 
+    const activityId = generateActivityId();
+
     const newActivity: Activity = {
-      id: `act-${Date.now()}`,
+      id: activityId,
       title: title.trim(),
       subject: subject.trim() || 'Sociologia',
       description: description.trim(),
@@ -158,15 +190,297 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
       submissions: [],
     };
 
-    onCreateActivity(newActivity);
-    
-    // Reset state
+    // Only open adaptation decision if selected turma has at least one PNE student
+    const hasPneStudents = doesTurmaHavePNEStudent(resolvedTurma, students);
+    if (hasPneStudents) {
+      setPendingActivityForDecision(newActivity);
+    } else {
+      onCreateActivity(newActivity);
+      resetFormAndClose();
+    }
+  };
+
+  const resetFormAndClose = () => {
     setTitle('');
     setDescription('');
     setSupportMaterial('');
     setQuestions([]);
+    setPendingActivityForDecision(null);
     onClose();
   };
+
+  const handleConfirmOnlyStandard = () => {
+    if (!pendingActivityForDecision) return;
+    onCreateActivity(pendingActivityForDecision);
+    resetFormAndClose();
+  };
+
+  const handleConfirmMildModerate = async () => {
+    if (!pendingActivityForDecision) return;
+    setIsGeneratingPlayful(true);
+    try {
+      onCreateActivity(pendingActivityForDecision);
+
+      const response = await fetch('/api/gemini/adapt-mild-moderate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: pendingActivityForDecision.title,
+          subject: pendingActivityForDecision.subject,
+          description: pendingActivityForDecision.description,
+          turma: pendingActivityForDecision.turma,
+          questions: pendingActivityForDecision.questions || [],
+          maxGrade: pendingActivityForDecision.maxGrade || 10,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok && data.questions) {
+        const adapted = createAdaptedMildModerateActivity(pendingActivityForDecision, {
+          adaptedTitle: data.adaptedTitle,
+          adaptedDescription: data.adaptedDescription,
+          questions: data.questions,
+        });
+        onCreateActivity(adapted);
+      }
+      resetFormAndClose();
+    } catch (err: any) {
+      alert(`Aviso: A atividade padrão foi salva. Você pode gerar a adaptação a qualquer momento clicando em "Adaptar (PNE)".`);
+      resetFormAndClose();
+    } finally {
+      setIsGeneratingPlayful(false);
+    }
+  };
+
+  const handleConfirmSeverePlayful = async () => {
+    if (!pendingActivityForDecision) return;
+    setIsGeneratingPlayful(true);
+    try {
+      onCreateActivity(pendingActivityForDecision);
+
+      const response = await fetch('/api/gemini/adapt-playful', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: pendingActivityForDecision.title,
+          subject: pendingActivityForDecision.subject,
+          description: pendingActivityForDecision.description,
+          turma: pendingActivityForDecision.turma,
+          questions: pendingActivityForDecision.questions || [],
+          maxGrade: pendingActivityForDecision.maxGrade || 10,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.html) {
+        throw new Error(data.error || 'Erro ao gerar o jogo lúdico');
+      }
+
+      const playfulAct = createAdaptedSeverePlayfulActivity(pendingActivityForDecision, data.html);
+      onCreateActivity(playfulAct);
+      resetFormAndClose();
+    } catch (err: any) {
+      alert(`Aviso: A atividade padrão foi salva. Houve uma falha ao gerar o jogo lúdico (${err.message}). Você pode gerá-lo a qualquer momento clicando em "Adaptar (PNE)" no card.`);
+      resetFormAndClose();
+    } finally {
+      setIsGeneratingPlayful(false);
+    }
+  };
+
+  const handleConfirmAllAdaptations = async () => {
+    if (!pendingActivityForDecision) return;
+    setIsGeneratingPlayful(true);
+    try {
+      // 1. Standard
+      onCreateActivity(pendingActivityForDecision);
+
+      // 2. Mild / Moderate via Gemini
+      try {
+        const mildRes = await fetch('/api/gemini/adapt-mild-moderate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: pendingActivityForDecision.title,
+            subject: pendingActivityForDecision.subject,
+            description: pendingActivityForDecision.description,
+            turma: pendingActivityForDecision.turma,
+            questions: pendingActivityForDecision.questions || [],
+            maxGrade: pendingActivityForDecision.maxGrade || 10,
+          }),
+        });
+        const mildData = await mildRes.json();
+        if (mildRes.ok && mildData.questions) {
+          const mildAct = createAdaptedMildModerateActivity(pendingActivityForDecision, {
+            adaptedTitle: mildData.adaptedTitle,
+            adaptedDescription: mildData.adaptedDescription,
+            questions: mildData.questions,
+          });
+          onCreateActivity(mildAct);
+        }
+      } catch (e) {
+        console.warn('Erro ao gerar adaptação leve:', e);
+      }
+
+      // 3. Playful Game via Gemini
+      const response = await fetch('/api/gemini/adapt-playful', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: pendingActivityForDecision.title,
+          subject: pendingActivityForDecision.subject,
+          description: pendingActivityForDecision.description,
+          turma: pendingActivityForDecision.turma,
+          questions: pendingActivityForDecision.questions || [],
+          maxGrade: pendingActivityForDecision.maxGrade || 10,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok && data.html) {
+        const playfulAct = createAdaptedSeverePlayfulActivity(pendingActivityForDecision, data.html);
+        onCreateActivity(playfulAct);
+      }
+      resetFormAndClose();
+    } catch (err: any) {
+      resetFormAndClose();
+    } finally {
+      setIsGeneratingPlayful(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  if (pendingActivityForDecision) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fadeIn">
+        <div className="w-full max-w-2xl bg-[#0e172a] rounded-3xl border border-white/15 p-6 sm:p-8 space-y-6 shadow-2xl relative my-auto">
+          <div className="flex items-center justify-between border-b border-white/10 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-amber-500/20 text-amber-400 rounded-2xl border border-amber-500/30">
+                <Sparkles className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Atividade Pronta! Deseja Adaptar para PNE?</h3>
+                <p className="text-xs text-[#bccabb]">
+                  Escolha as modalidades inclusivas para gerar automaticamente junto com a atividade padrão.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setPendingActivityForDecision(null)}
+              className="p-2 text-[#bccabb] hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-4 bg-[#131b2e] rounded-2xl border border-white/10 space-y-1">
+            <span className="text-[10px] font-bold text-[#869486] uppercase tracking-wider block">
+              Atividade Criada
+            </span>
+            <h4 className="text-sm font-bold text-white">{pendingActivityForDecision.title}</h4>
+            <p className="text-xs text-[#bccabb]">
+              Turma: <strong className="text-white">{pendingActivityForDecision.turma}</strong> • {questions.length} Questões cadastradas
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {/* Option 1: Standard Only */}
+            <button
+              type="button"
+              onClick={handleConfirmOnlyStandard}
+              disabled={isGeneratingPlayful}
+              className="w-full p-4 rounded-2xl bg-[#131b2e] hover:bg-[#1a243c] border border-white/10 hover:border-white/20 text-left transition-all flex items-center justify-between group cursor-pointer"
+            >
+              <div>
+                <span className="text-xs font-bold text-white block group-hover:text-[#4ade80] transition-colors">
+                  1. Publicar Somente a Versão Padrão
+                </span>
+                <span className="text-[11px] text-[#bccabb]">
+                  Salva apenas a atividade regular para toda a turma.
+                </span>
+              </div>
+              <ArrowRight className="w-4 h-4 text-[#869486] group-hover:text-white group-hover:translate-x-1 transition-all" />
+            </button>
+
+            {/* Option 2: Standard + Mild/Moderate */}
+            <button
+              type="button"
+              onClick={handleConfirmMildModerate}
+              disabled={isGeneratingPlayful}
+              className="w-full p-4 rounded-2xl bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/30 hover:border-emerald-500/50 text-left transition-all flex items-center justify-between group cursor-pointer"
+            >
+              <div className="space-y-0.5">
+                <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                  <Cpu className="w-4 h-4 text-emerald-400" />
+                  2. Publicar Padrão + Versão PNE Leve/Moderada (Função no Código)
+                </span>
+                <span className="text-[11px] text-[#bccabb] block">
+                  Reduz 50% das questões, 2 alternativas por objetiva, dissertativas simplificadas e sem caracteres mínimos.
+                </span>
+              </div>
+              <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 text-[10px] font-bold rounded-lg border border-emerald-500/30 shrink-0">
+                Instantâneo
+              </span>
+            </button>
+
+            {/* Option 3: Standard + Severe Playful Game */}
+            <button
+              type="button"
+              onClick={handleConfirmSeverePlayful}
+              disabled={isGeneratingPlayful}
+              className="w-full p-4 rounded-2xl bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/30 hover:border-amber-500/50 text-left transition-all flex items-center justify-between group cursor-pointer"
+            >
+              <div className="space-y-0.5">
+                <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                  <Gamepad2 className="w-4 h-4 text-amber-400" />
+                  3. Publicar Padrão + Jogo Lúdico para Síndromes Severas (IA Gemini)
+                </span>
+                <span className="text-[11px] text-[#bccabb] block">
+                  Gera um jogo interativo gamificado em HTML com perguntas ilustradas, sons e contagem de estrelas/pontuação.
+                </span>
+              </div>
+              {isGeneratingPlayful ? (
+                <Loader2 className="w-5 h-5 text-amber-400 animate-spin shrink-0" />
+              ) : (
+                <span className="px-2.5 py-1 bg-amber-500/20 text-amber-300 text-[10px] font-bold rounded-lg border border-amber-500/30 shrink-0">
+                  Gemini IA
+                </span>
+              )}
+            </button>
+
+            {/* Option 4: All 3 */}
+            <button
+              type="button"
+              onClick={handleConfirmAllAdaptations}
+              disabled={isGeneratingPlayful}
+              className="w-full p-4 rounded-2xl bg-[#4ade80]/10 hover:bg-[#4ade80]/15 border border-[#4ade80]/30 hover:border-[#4ade80]/50 text-left transition-all flex items-center justify-between group cursor-pointer"
+            >
+              <div className="space-y-0.5">
+                <span className="text-xs font-bold text-[#4ade80] flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-[#4ade80]" />
+                  4. Publicar Todas (Padrão + Leve/Mod + Jogo Lúdico Severo)
+                </span>
+                <span className="text-[11px] text-[#bccabb] block">
+                  Gera o pacote inclusivo completo para atender a todos os níveis de alunos da turma.
+                </span>
+              </div>
+              <span className="px-3 py-1 bg-[#4ade80]/20 text-[#4ade80] text-[10px] font-bold rounded-lg border border-[#4ade80]/40 shrink-0">
+                Pacote Completo
+              </span>
+            </button>
+          </div>
+
+          {isGeneratingPlayful && (
+            <div className="p-4 bg-[#131b2e] rounded-2xl border border-amber-500/30 flex items-center gap-3 text-xs text-amber-300">
+              <Loader2 className="w-5 h-5 animate-spin text-amber-400 shrink-0" />
+              <span>O Gemini está gerando o jogo lúdico interativo em HTML... Por favor, aguarde alguns segundos.</span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">

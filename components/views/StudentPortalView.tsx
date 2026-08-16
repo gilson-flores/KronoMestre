@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { StudentUser, TeacherUser, Activity, LibraryFile, ChatMessage, ActivityQuestion, MultipleChoiceQuestion, EssayQuestion } from '@/lib/types';
-import { canStudentAccessActivity, getActivityGradeDistribution } from '@/lib/studentUtils';
+import { canStudentAccessActivity, getActivityGradeDistribution, isStudentPNE } from '@/lib/studentUtils';
 import { MessagesView } from './MessagesView';
 import {
   LogOut,
@@ -32,7 +32,11 @@ import {
   Eye,
   FileQuestion,
   Users2,
-  PenTool
+  PenTool,
+  Gamepad2,
+  Star,
+  Trophy,
+  RefreshCw,
 } from 'lucide-react';
 
 interface StudentPortalViewProps {
@@ -113,8 +117,56 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     );
   }, [students, student.turma, student.id]);
 
+  // Check if current logged-in student has PNE status
+  const isCurrentStudentPNE = useMemo(() => isStudentPNE(student), [student]);
+
+  // Filter activities authorized for this student
+  // "Mostre as atividades adaptadas somente para alunos PNE."
+  const authorizedActivities = useMemo(() => {
+    return activities.filter((a) => {
+      // 1. Turma permission check
+      if (!canStudentAccessActivity(a.turma, student.turma)) {
+        return false;
+      }
+
+      const isActivityAdapted = Boolean(a.isAdapted || a.adaptationType);
+
+      // 2. Adapted activities must ONLY be shown to PNE students
+      if (isActivityAdapted && !isCurrentStudentPNE) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [activities, student.turma, isCurrentStudentPNE]);
+
   // Toast / Submission feedback
   const [submissionSuccessMsg, setSubmissionSuccessMsg] = useState<string | null>(null);
+
+  // Playful Game Scores from iframe postMessage: { [activityId: string]: { score: number; maxScore: number; grade: number } }
+  const [playfulScores, setPlayfulScores] = useState<{ [activityId: string]: { score: number; maxScore: number; grade: number } }>({});
+
+  useEffect(() => {
+    const handleGameMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'PLAYFUL_GAME_COMPLETED') {
+        const { score = 10, maxScore = 10, finalGrade } = event.data;
+        const calcGrade = finalGrade !== undefined ? Number(finalGrade) : (Number(score) / (Number(maxScore) || 1)) * 10;
+        
+        // Find which playful activity this applies to
+        authorizedActivities.forEach((act) => {
+          if (act.playfulGameHtml || act.adaptationType === 'severe_playful') {
+            setPlayfulScores((prev) => ({
+              ...prev,
+              [act.id]: { score: Number(score), maxScore: Number(maxScore), grade: Number(calcGrade.toFixed(1)) },
+            }));
+          }
+        });
+      }
+    };
+
+    window.addEventListener('message', handleGameMessage);
+    return () => window.removeEventListener('message', handleGameMessage);
+  }, [authorizedActivities]);
 
   // Anti-Cola Focus Lock Warning State per activity: { [activityId: string]: number }
   const [focusWarnings, setFocusWarnings] = useState<{ [activityId: string]: number }>({});
@@ -129,11 +181,6 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       setSecurityToast((current) => (current === msg ? null : current));
     }, 4000);
   };
-
-  // Filter activities authorized for this student
-  const authorizedActivities = useMemo(() => {
-    return activities.filter((a) => canStudentAccessActivity(a.turma, student.turma));
-  }, [activities, student.turma]);
 
   // Split into "A Fazer" and "Entregues/Corrigidas"
   const pendingActivities = useMemo(() => {
@@ -209,6 +256,27 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   };
 
   const handleSubmit = (act: Activity, isAutoSubmit: boolean = false) => {
+    // 1. Playful Game submission (Síndromes Severas)
+    if (act.playfulGameHtml || act.adaptationType === 'severe_playful') {
+      const gameData = playfulScores[act.id];
+      const maxScore = act.maxGrade || 10;
+      const finalScore = gameData ? gameData.grade : maxScore;
+
+      onSubmitAnswer(
+        act.id,
+        student.id,
+        '🎮 Atividade Lúdica Interativa concluída com sucesso no jogo educacional.',
+        Number(finalScore.toFixed(1)),
+        maxScore,
+        0,
+        {},
+        undefined
+      );
+
+      setSubmissionSuccessMsg(`🎉 Parabéns! Você concluiu a atividade lúdica e conquistou ${finalScore.toFixed(1)} / ${maxScore} pts!`);
+      return;
+    }
+
     const distribution = getActivityGradeDistribution(act);
     const questions = act.questions || [];
     const objectiveQuestions = questions.filter((q) => q.type === 'multiple_choice') as (ActivityQuestion & MultipleChoiceQuestion)[];
@@ -820,6 +888,12 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                           <span className="text-[11px] font-bold text-white bg-[#171f33] px-3 py-1 rounded-full border border-white/10">
                             Nota Máxima: {distribution.maxGrade.toFixed(1)} pts
                           </span>
+
+                          {act.isAdapted && (
+                            <span className="text-[11px] font-bold text-amber-300 bg-amber-500/20 px-3 py-1 rounded-full border border-amber-500/30">
+                              ✨ Adaptada PNE
+                            </span>
+                          )}
                         </div>
                         <h3 className="text-2xl font-black text-white">{act.title}</h3>
                       </div>
@@ -938,8 +1012,45 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       )}
                     </div>
 
+                    {/* JOGO LÚDICO INTERATIVO (SÍNDROMES SEVERAS) */}
+                    {(act.playfulGameHtml || act.adaptationType === 'severe_playful') && (
+                      <div className="space-y-4 pt-2 border-t border-amber-500/30">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h4 className="text-base font-bold text-amber-300 flex items-center gap-2">
+                            <Gamepad2 className="w-5 h-5 text-amber-400" />
+                            <span>Jogo Lúdico Educacional e Gamificado</span>
+                          </h4>
+                          <div className="flex items-center gap-2">
+                            {playfulScores[act.id] ? (
+                              <span className="px-3 py-1 bg-[#4ade80]/20 text-[#4ade80] font-bold text-xs rounded-full border border-[#4ade80]/30 flex items-center gap-1.5 animate-bounce">
+                                <Star className="w-4 h-4 fill-[#4ade80]" />
+                                Pontuação: {playfulScores[act.id].grade} / {act.maxGrade || 10} pts
+                              </span>
+                            ) : (
+                              <span className="px-3 py-1 bg-amber-500/20 text-amber-300 font-bold text-xs rounded-full border border-amber-500/30">
+                                🌟 Jogue na tela abaixo para pontuar!
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="w-full h-[520px] rounded-3xl overflow-hidden border-2 border-amber-500/40 shadow-2xl bg-black relative">
+                          <iframe
+                            srcDoc={act.playfulGameHtml || '<div style="color:white;padding:20px;font-family:sans-serif;">Carregando jogo...</div>'}
+                            title={`Jogo Lúdico - ${act.title}`}
+                            className="w-full h-full border-0"
+                            sandbox="allow-scripts allow-same-origin allow-modals"
+                          />
+                        </div>
+
+                        <div className="p-4 bg-amber-500/10 rounded-2xl border border-amber-500/20 flex items-center justify-between text-xs text-amber-200">
+                          <span>💡 Clique nos botões visuais dentro do jogo para responder e somar estrelas. Ao terminar, clique em &quot;Concluir Jogo e Enviar Nota&quot;.</span>
+                        </div>
+                      </div>
+                    )}
+
                     {/* PARTE 1: QUESTÕES OBJETIVAS */}
-                    {objectiveQuestions.length > 0 && (
+                    {objectiveQuestions.length > 0 && !(act.playfulGameHtml || act.adaptationType === 'severe_playful') && (
                       <div className="space-y-4 pt-2 border-t border-white/10">
                         <div className="flex items-center justify-between">
                           <h4 className="text-sm font-bold text-white flex items-center gap-2">
@@ -1174,10 +1285,23 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                     <div className="pt-4 border-t border-white/10 flex justify-end">
                       <button
                         onClick={() => handleSubmit(act)}
-                        className="py-3.5 px-8 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-black rounded-full text-xs flex items-center gap-2 transition-all shadow-xl shadow-[#4ade80]/20 cursor-pointer"
+                        className={`py-3.5 px-8 font-black rounded-full text-xs flex items-center gap-2 transition-all shadow-xl cursor-pointer ${
+                          (act.playfulGameHtml || act.adaptationType === 'severe_playful')
+                            ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-amber-400/20'
+                            : 'bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] shadow-[#4ade80]/20'
+                        }`}
                       >
-                        <Send className="w-4 h-4 stroke-[2.5]" />
-                        <span>Enviar Resposta da Atividade</span>
+                        {(act.playfulGameHtml || act.adaptationType === 'severe_playful') ? (
+                          <>
+                            <Gamepad2 className="w-4 h-4 stroke-[2.5]" />
+                            <span>Concluir Jogo e Enviar Nota 🚀</span>
+                          </>
+                        ) : (
+                          <>
+                            <Send className="w-4 h-4 stroke-[2.5]" />
+                            <span>Enviar Resposta da Atividade</span>
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>

@@ -1,3 +1,5 @@
+import { StudentUser } from './types';
+
 // Utility functions for student name normalization and standardized class (turma) management
 
 // Standardized list of class codes:
@@ -45,18 +47,66 @@ export function canStudentAccessActivity(activityTurma: string | undefined, stud
   if (!studentTurma) return false;
   if (!activityTurma) return true; // em branco = todos os alunos podem acessar
 
-  const studentTrim = studentTurma.trim().toLowerCase();
-  const list = activityTurma.split(/[,;]+/).map((s) => s.trim().toLowerCase()).filter(Boolean);
-  if (list.length === 0) return true;
+  const actList = activityTurma.split(/[,;]+/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+  if (actList.length === 0 || actList.includes('todas') || actList.includes('branco')) {
+    return true;
+  }
 
-  return list.some((actTrim) => {
-    if (actTrim === '' || actTrim === 'branco' || actTrim === 'todas') {
-      return true;
-    }
-    if (/^[1-9]$/.test(actTrim)) {
-      return studentTrim.startsWith(actTrim);
-    }
-    return actTrim === studentTrim;
+  const studentList = studentTurma.split(/[,;]+/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+  if (studentList.length === 0) return false;
+
+  return actList.some((act) => {
+    if (act === 'todas' || act === 'branco') return true;
+    return studentList.some((stud) => {
+      // Se a turma da atividade for apenas o dígito do ano (ex: "3"), abrange os anos correspondentes (301, 302, 3001)
+      if (/^[1-9]$/.test(act)) {
+        return stud.startsWith(act);
+      }
+      // Correspondência EXATA de turma: "3001" NÃO é "301"
+      return act === stud;
+    });
+  });
+}
+
+/**
+ * Checks if a student has PNE status (tag PNE)
+ */
+export function isStudentPNE(student: StudentUser | { tag?: string; pneConditions?: string[] } | null | undefined): boolean {
+  if (!student) return false;
+  const tagUpper = student.tag ? String(student.tag).trim().toUpperCase() : '';
+  return tagUpper === 'PNE';
+}
+
+/**
+ * Checks whether a given turma code or comma-separated list of turmas has at least one PNE student
+ */
+export function doesTurmaHavePNEStudent(activityTurma: string | undefined, students: StudentUser[] | undefined): boolean {
+  if (!students || students.length === 0) return false;
+  if (!activityTurma) return false;
+
+  const actList = activityTurma.split(/[,;]+/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+  if (actList.length === 0) return false;
+
+  // Filtra apenas alunos com a tag 'PNE'
+  const pneStudents = students.filter((s) => isStudentPNE(s));
+  if (pneStudents.length === 0) return false;
+
+  if (actList.includes('todas') || actList.includes('branco')) {
+    return pneStudents.length > 0;
+  }
+
+  // Verifica se algum aluno PNE pertence EXATAMENTE à turma da atividade (ou ao ano, caso seja um único dígito)
+  return pneStudents.some((s) => {
+    if (!s.turma) return false;
+    const studentList = s.turma.split(/[,;]+/).map((t) => t.trim().toLowerCase()).filter(Boolean);
+    return actList.some((act) => {
+      return studentList.some((stud) => {
+        if (/^[1-9]$/.test(act)) {
+          return stud.startsWith(act);
+        }
+        return act === stud;
+      });
+    });
   });
 }
 

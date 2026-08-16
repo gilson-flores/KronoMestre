@@ -72,7 +72,7 @@ export interface ActivitySubmission {
 export interface MultipleChoiceQuestion {
   id: string;
   statement: string;
-  options: [string, string, string, string];
+  options: string[];
   correctOptionIndex: number;
 }
 
@@ -102,6 +102,11 @@ export interface Activity {
   securityFocusLock?: boolean; // Trava 1: Trava de foco (Aviso ao sair da tela, limite de 4 avisos -> auto entrega)
   securityBlockCopyStatement?: boolean; // Trava 2: Trava de cópia dos enunciados
   securityBlockPasteEssay?: boolean; // Trava 3: Trava de copia e cola nas respostas dissertativas
+  isAdapted?: boolean; // Indica se esta atividade foi adaptada para alunos PNE
+  adaptationType?: 'mild_moderate' | 'severe_playful'; // Tipo de adaptação pedagógica
+  playfulGameHtml?: string; // Código HTML do jogo interativo lúdico para síndromes severas
+  playfulGameScoreMax?: number; // Pontuação máxima do jogo lúdico
+  adaptedFromId?: string; // ID da atividade original
   questions?: ActivityQuestion[];
   totalSubmissions: number;
   totalStudents: number;

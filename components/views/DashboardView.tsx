@@ -25,10 +25,14 @@ import {
   CopyX,
   ClipboardX,
   Clock,
-  RotateCcw
+  RotateCcw,
+  Sparkles,
+  Gamepad2,
+  Cpu,
 } from 'lucide-react';
 import { Activity, StudentUser } from '@/lib/types';
-import { canStudentAccessActivity } from '@/lib/studentUtils';
+import { canStudentAccessActivity, doesTurmaHavePNEStudent } from '@/lib/studentUtils';
+import { AdaptActivityModal } from '@/components/modals/AdaptActivityModal';
 
 interface DashboardViewProps {
   activities: Activity[];
@@ -40,6 +44,7 @@ interface DashboardViewProps {
   onGenerateDossier: (act: Activity) => void;
   onDeleteActivity?: (act: Activity) => void;
   onSaveActivity?: (act: Activity) => void;
+  onCreateAdaptedActivity?: (act: Activity) => void;
   title?: string;
   subtitle?: string;
   showStats?: boolean;
@@ -56,6 +61,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onGenerateDossier,
   onDeleteActivity,
   onSaveActivity,
+  onCreateAdaptedActivity,
   title = 'Studio',
   subtitle = 'Gerencie avaliações, redações e dinâmicas das suas turmas.',
   showStats = true,
@@ -84,6 +90,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   });
   const [activityToDelete, setActivityToDelete] = useState<Activity | null>(null);
   const [securityModalActivity, setSecurityModalActivity] = useState<Activity | null>(null);
+  const [adaptModalActivity, setAdaptModalActivity] = useState<Activity | null>(null);
 
   // Local state inside security modal
   const [secFocusLock, setSecFocusLock] = useState(false);
@@ -398,7 +405,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             Turma: {act.turma}
                           </span>
 
-                          {/* Anti-Cola Badges */}
+                          {/* PNE & Anti-Cola Badges */}
+                          {act.isAdapted && act.adaptationType === 'severe_playful' && (
+                            <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1" title="Jogo Lúdico Gamificado em HTML (Síndromes Severas)">
+                              <Gamepad2 className="w-3 h-3 text-amber-400" />
+                              <span>PNE Lúdica (Jogo)</span>
+                            </span>
+                          )}
+                          {act.isAdapted && act.adaptationType === 'mild_moderate' && (
+                            <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1" title="Atividade Adaptada Leve/Moderada (50% questões, 2 alternativas, sem caracteres mín.)">
+                              <Cpu className="w-3 h-3 text-emerald-400" />
+                              <span>PNE Leve/Mod</span>
+                            </span>
+                          )}
+                          {act.isAdapted && !act.adaptationType && (
+                            <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1" title="Atividade Adaptada para PNE">
+                              <Sparkles className="w-3 h-3 text-amber-400" />
+                              <span>Adaptada PNE</span>
+                            </span>
+                          )}
                           {act.securityFocusLock && (
                             <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1" title="Trava de Foco: Avisos ao mudar de tela (auto-entrega no 4º desvio)">
                               <ShieldAlert className="w-3 h-3 text-amber-400" />
@@ -507,6 +532,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               <span className="w-2 h-2 rounded-full bg-[#4ade80]" />
                             )}
                           </button>
+
+                          {doesTurmaHavePNEStudent(act.turma, students) && (
+                            <button
+                              onClick={() => setAdaptModalActivity(act)}
+                              className="flex-1 sm:flex-none px-4 py-2.5 bg-[#171f33] hover:bg-[#222a3d] text-amber-300 hover:text-amber-200 rounded-full text-xs font-bold border border-amber-500/20 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
+                              title="Adaptar Atividade para PNE (Metade das questões e 2 alternativas por objetiva)"
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                              <span>Adaptar (PNE)</span>
+                            </button>
+                          )}
 
                           <button
                             onClick={() => onEditActivity(act)}
@@ -737,6 +773,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           </div>
         </div>
+      )}
+      {/* Custom Adapt Activity for PNE Modal */}
+      {adaptModalActivity && (
+        <AdaptActivityModal
+          activity={adaptModalActivity}
+          isOpen={Boolean(adaptModalActivity)}
+          onClose={() => setAdaptModalActivity(null)}
+          onCreateAdaptedActivity={(adapted) => {
+            if (onCreateAdaptedActivity) {
+              onCreateAdaptedActivity(adapted);
+            }
+          }}
+          onUpdateActivityWithAdaptation={(updated) => {
+            if (onSaveActivity) {
+              onSaveActivity(updated);
+            }
+          }}
+        />
       )}
     </div>
   );

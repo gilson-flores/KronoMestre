@@ -103,63 +103,70 @@ Retorne obrigatoriamente um objeto JSON com o formato:
 
     const candidateModels = [
       'gemini-3.7-flash',
-      'gemini-3.1-flash-lite',
-      'gemini-3.5-flash',
       'gemini-flash-latest',
+      'gemini-3.1-flash-lite',
     ];
 
     let response: any = null;
     let lastError: any = null;
 
     for (const modelName of candidateModels) {
-      try {
-        response = await ai.models.generateContent({
-          model: modelName,
-          contents: prompt,
-          config: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                suggestedScore: {
-                  type: Type.NUMBER,
-                  description: `Nota sugerida entre 0.0 e ${maxEssayScore}`,
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          response = await ai.models.generateContent({
+            model: modelName,
+            contents: prompt,
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  suggestedScore: {
+                    type: Type.NUMBER,
+                    description: `Nota sugerida entre 0.0 e ${maxEssayScore}`,
+                  },
+                  feedback: {
+                    type: Type.STRING,
+                    description: 'Feedback curto para o aluno com no máximo 300 caracteres, elogio/alerta e gramática/ortografia.',
+                  },
+                  themeFidelity: {
+                    type: Type.STRING,
+                    description: 'Análise de fidelidade ao tema',
+                  },
+                  keywordsCheck: {
+                    type: Type.STRING,
+                    description: 'Verificação do uso de palavras-chave',
+                  },
+                  structureCheck: {
+                    type: Type.STRING,
+                    description: 'Análise de Introdução, Desenvolvimento e Conclusão',
+                  },
+                  grammarCheck: {
+                    type: Type.STRING,
+                    description: 'Análise sintética de gramática e ortografia',
+                  },
                 },
-                feedback: {
-                  type: Type.STRING,
-                  description: 'Feedback curto para o aluno com no máximo 300 caracteres, elogio/alerta e gramática/ortografia.',
-                },
-                themeFidelity: {
-                  type: Type.STRING,
-                  description: 'Análise de fidelidade ao tema',
-                },
-                keywordsCheck: {
-                  type: Type.STRING,
-                  description: 'Verificação do uso de palavras-chave',
-                },
-                structureCheck: {
-                  type: Type.STRING,
-                  description: 'Análise de Introdução, Desenvolvimento e Conclusão',
-                },
-                grammarCheck: {
-                  type: Type.STRING,
-                  description: 'Análise sintética de gramática e ortografia',
-                },
+                required: ['suggestedScore', 'feedback', 'themeFidelity', 'keywordsCheck', 'structureCheck', 'grammarCheck'],
               },
-              required: ['suggestedScore', 'feedback', 'themeFidelity', 'keywordsCheck', 'structureCheck', 'grammarCheck'],
             },
-          },
-        });
-        if (response && response.text) {
+          });
+          if (response && response.text) {
+            break;
+          }
+        } catch (err: any) {
+          lastError = err;
+          const status = err?.status || err?.code;
+          const isRetryable = status === 503 || status === 429 || err?.message?.includes('high demand') || err?.message?.includes('UNAVAILABLE');
+          console.warn(`Tentativa ${attempt} com modelo ${modelName} na correção:`, err?.message || err);
+          if (isRetryable && attempt < 2) {
+            await new Promise((r) => setTimeout(r, 1200));
+            continue;
+          }
           break;
         }
-      } catch (err: any) {
-        lastError = err;
-        console.warn(`Falha ao tentar modelo ${modelName} na correção:`, err?.message || err);
-        // If it's a quota / billing error, try next or throw
-        if (err?.message?.includes('prepayment') || err?.message?.includes('credits are depleted')) {
-          break;
-        }
+      }
+      if (response && response.text) {
+        break;
       }
     }
 

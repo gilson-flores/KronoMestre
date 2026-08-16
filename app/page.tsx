@@ -346,6 +346,10 @@ export default function Home() {
               securityFocusLock: act.security_focus_lock !== undefined && act.security_focus_lock !== null ? Boolean(act.security_focus_lock) : Boolean(act.securityFocusLock),
               securityBlockCopyStatement: act.security_block_copy_statement !== undefined && act.security_block_copy_statement !== null ? Boolean(act.security_block_copy_statement) : Boolean(act.securityBlockCopyStatement),
               securityBlockPasteEssay: act.security_block_paste_essay !== undefined && act.security_block_paste_essay !== null ? Boolean(act.security_block_paste_essay) : Boolean(act.securityBlockPasteEssay),
+              isAdapted: Boolean(act.is_adapted || act.isAdapted || act.title?.startsWith('[PNE Leve/Mod]') || act.title?.startsWith('[PNE Lúdica]') || act.title?.startsWith('[Adaptada PNE]')),
+              adaptationType: act.adaptation_type || act.adaptationType || (act.title?.startsWith('[PNE Lúdica]') ? 'severe_playful' : ((act.title?.startsWith('[PNE Leve/Mod]') || act.title?.startsWith('[Adaptada PNE]')) ? 'mild_moderate' : undefined)),
+              playfulGameHtml: act.playful_game_html || act.playfulGameHtml || undefined,
+              adaptedFromId: act.adapted_from_id || act.adaptedFromId || undefined,
               questions: parsedQuestions,
               totalSubmissions: act.total_submissions || subs.length,
               totalStudents: act.total_students || 0,
@@ -513,6 +517,10 @@ export default function Home() {
         security_focus_lock: newAct.securityFocusLock || false,
         security_block_copy_statement: newAct.securityBlockCopyStatement || false,
         security_block_paste_essay: newAct.securityBlockPasteEssay || false,
+        is_adapted: newAct.isAdapted || false,
+        adaptation_type: newAct.adaptationType || null,
+        playful_game_html: newAct.playfulGameHtml || null,
+        adapted_from_id: newAct.adaptedFromId || null,
         questions: newAct.questions || [],
         total_submissions: newAct.totalSubmissions || 0,
         total_students: newAct.totalStudents || 0,
@@ -540,18 +548,34 @@ export default function Home() {
           }
         }
 
-        // Tentativa 2: enviar payload com tipo saneado sem remover travas de segurança
+        // Tentativa 2: enviar payload básico saneado sem colunas adicionais
         if (error) {
-          const fallbackPayload = {
-            ...fullPayload,
-            type: sanitizeTypeForDb(fullPayload.type),
+          const basicPayload = {
+            id: newAct.id,
+            title: newAct.title,
+            subject: newAct.subject || 'Sociologia',
+            description: newAct.description || '',
+            support_material: newAct.supportMaterial || '',
+            turma: newAct.turma || '',
+            type: sanitizeTypeForDb(newAct.type),
+            status: newAct.status,
+            deadline: newAct.deadline || '',
+            max_grade: newAct.maxGrade || 10,
+            allow_group_work: newAct.allowGroupWork || false,
+            security_focus_lock: newAct.securityFocusLock || false,
+            security_block_copy_statement: newAct.securityBlockCopyStatement || false,
+            security_block_paste_essay: newAct.securityBlockPasteEssay || false,
+            questions: newAct.questions || [],
+            total_submissions: newAct.totalSubmissions || 0,
+            total_students: newAct.totalStudents || 0,
+            pending_correction: newAct.pendingCorrection || 0,
           };
 
-          const fallbackRes = await supabase.from('activities').insert(fallbackPayload);
+          const fallbackRes = await supabase.from('activities').insert(basicPayload);
           if (!fallbackRes.error) {
             error = null;
           } else {
-            const upsertRes = await supabase.from('activities').upsert(fallbackPayload);
+            const upsertRes = await supabase.from('activities').upsert(basicPayload);
             error = upsertRes.error;
           }
         }
@@ -598,6 +622,10 @@ export default function Home() {
         security_focus_lock: updatedAct.securityFocusLock || false,
         security_block_copy_statement: updatedAct.securityBlockCopyStatement || false,
         security_block_paste_essay: updatedAct.securityBlockPasteEssay || false,
+        is_adapted: updatedAct.isAdapted || false,
+        adaptation_type: updatedAct.adaptationType || null,
+        playful_game_html: updatedAct.playfulGameHtml || null,
+        adapted_from_id: updatedAct.adaptedFromId || null,
         questions: updatedAct.questions || [],
         total_submissions: updatedAct.totalSubmissions,
         total_students: updatedAct.totalStudents,
@@ -626,12 +654,30 @@ export default function Home() {
         }
 
         if (error) {
-          const fallbackPayload = {
-            ...fullPayload,
-            type: sanitizeTypeForDb(fullPayload.type),
+          const basicPayload = {
+            id: updatedAct.id,
+            title: updatedAct.title,
+            subject: updatedAct.subject || 'Sociologia',
+            description: updatedAct.description || '',
+            support_material: updatedAct.supportMaterial || '',
+            turma: updatedAct.turma || '',
+            type: sanitizeTypeForDb(updatedAct.type),
+            status: updatedAct.status,
+            deadline: updatedAct.deadline || '',
+            max_grade: updatedAct.maxGrade || 10,
+            allow_group_work: updatedAct.allowGroupWork || false,
+            security_focus_lock: updatedAct.securityFocusLock || false,
+            security_block_copy_statement: updatedAct.securityBlockCopyStatement || false,
+            security_block_paste_essay: updatedAct.securityBlockPasteEssay || false,
+            questions: updatedAct.questions || [],
+            total_submissions: updatedAct.totalSubmissions,
+            total_students: updatedAct.totalStudents,
+            pending_correction: updatedAct.pendingCorrection,
+            average_grade: updatedAct.averageGrade,
+            completed_date: updatedAct.completedDate,
           };
 
-          const fallbackRes = await supabase.from('activities').upsert(fallbackPayload);
+          const fallbackRes = await supabase.from('activities').upsert(basicPayload);
           error = fallbackRes.error;
         }
       }
@@ -937,7 +983,11 @@ export default function Home() {
     selectedObjectiveAnswers?: { [questionId: string]: number },
     groupMembers?: string
   ) => {
-    if (!currentStudent) return;
+    const studentUser = currentStudent || students.find((s) => s.id === studentId);
+    if (!studentUser) {
+      showGlobalStatus('error', 'Aluno não identificado para envio da atividade.');
+      return;
+    }
 
     if (!isSupabaseConfigured || !supabase) {
       showGlobalStatus('error', 'ARMADILHA DE BUG DISPARADA: Supabase não está configurado. Resposta NÃO enviada.');
@@ -946,7 +996,7 @@ export default function Home() {
 
     try {
       // Identify all target students involved in the submission (current student + group members)
-      const targetStudents: StudentUser[] = [currentStudent];
+      const targetStudents: StudentUser[] = [studentUser];
       if (groupMembers) {
         const memberNames = groupMembers
           .split(',')
@@ -1522,6 +1572,7 @@ export default function Home() {
               onGenerateDossier={handleGenerateDossier}
               onDeleteActivity={handleDeleteActivity}
               onSaveActivity={handleSaveActivity}
+              onCreateAdaptedActivity={handleCreateActivity}
             />
           )}
 
@@ -1543,6 +1594,7 @@ export default function Home() {
               onGenerateDossier={handleGenerateDossier}
               onDeleteActivity={handleDeleteActivity}
               onSaveActivity={handleSaveActivity}
+              onCreateAdaptedActivity={handleCreateActivity}
             />
           )}
 
@@ -1590,6 +1642,10 @@ export default function Home() {
           {currentTab === '2_professor' && (
             <SecondTeachersView
               teacher={teacher}
+              currentUserRole={role}
+              students={students}
+              activities={activities}
+              onSubmitAnswer={handleStudentSubmitAnswer}
             />
           )}
 
@@ -1911,6 +1967,7 @@ export default function Home() {
         isOpen={isNewActivityModalOpen}
         onClose={() => setIsNewActivityModalOpen(false)}
         onCreateActivity={handleCreateActivity}
+        students={students}
       />
 
       <EditActivityModal

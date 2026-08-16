@@ -72,6 +72,11 @@ export const ViewActivityModal: React.FC<ViewActivityModalProps> = ({
                 >
                   {activity.status}
                 </span>
+                {activity.isAdapted && (
+                  <span className="text-[11px] font-bold px-3 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    Adaptada PNE
+                  </span>
+                )}
                 <span className="text-[11px] font-semibold bg-[#171f33] text-white px-3 py-0.5 rounded-full border border-white/10">
                   Turma: {activity.turma || 'Todas'}
                 </span>

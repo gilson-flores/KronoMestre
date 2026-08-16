@@ -62,29 +62,37 @@ DIRETRIZES DE ESTILO E CONTEÚDO:
 
     const candidateModels = [
       'gemini-3.7-flash',
-      'gemini-3.1-flash-lite',
-      'gemini-3.5-flash',
       'gemini-flash-latest',
+      'gemini-3.1-flash-lite',
     ];
 
     let response: any = null;
     let lastError: any = null;
 
     for (const modelName of candidateModels) {
-      try {
-        response = await ai.models.generateContent({
-          model: modelName,
-          contents: prompt,
-        });
-        if (response && response.text) {
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          response = await ai.models.generateContent({
+            model: modelName,
+            contents: prompt,
+          });
+          if (response && response.text) {
+            break;
+          }
+        } catch (err: any) {
+          lastError = err;
+          const status = err?.status || err?.code;
+          const isRetryable = status === 503 || status === 429 || err?.message?.includes('high demand') || err?.message?.includes('UNAVAILABLE');
+          console.warn(`Tentativa ${attempt} com modelo ${modelName} no feedback:`, err?.message || err);
+          if (isRetryable && attempt < 2) {
+            await new Promise((r) => setTimeout(r, 1200));
+            continue;
+          }
           break;
         }
-      } catch (err: any) {
-        lastError = err;
-        console.warn(`Falha ao tentar modelo ${modelName} no feedback:`, err?.message || err);
-        if (err?.message?.includes('prepayment') || err?.message?.includes('credits are depleted')) {
-          break;
-        }
+      }
+      if (response && response.text) {
+        break;
       }
     }
 
