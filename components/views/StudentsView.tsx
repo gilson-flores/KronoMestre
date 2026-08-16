@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, Plus, UserPlus, Pencil, Trash2, Eye, ShieldCheck, Upload, Heart, AlertCircle } from 'lucide-react';
+import { Search, Plus, UserPlus, Pencil, Trash2, Eye, ShieldCheck, Upload, Heart, AlertCircle, HeartHandshake } from 'lucide-react';
 import { StudentUser } from '@/lib/types';
 import { ImportCsvModal } from '@/components/modals/ImportCsvModal';
 import { getTurmaLabel } from '@/lib/studentUtils';
@@ -181,11 +181,26 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
               </div>
 
               {/* Middle Info */}
-              <div className="flex items-center gap-6">
+              <div className="flex flex-wrap items-center gap-4 md:gap-6">
                 <span className="text-sm font-semibold text-[#dae2fd]">{student.turma}</span>
-                <span className="text-xs font-bold text-[#4ade80] tracking-wider uppercase">
-                  {student.tag || 'REGULAR'}
-                </span>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-bold text-[#4ade80] tracking-wider uppercase">
+                    {student.tag || 'REGULAR'}
+                  </span>
+                  {student.tag === 'PNE' && (
+                    <div className="flex flex-col gap-0.5">
+                      {student.pneConditions && student.pneConditions.length > 0 && (
+                        <span className="text-[10px] text-amber-300 font-semibold bg-amber-500/15 px-2 py-0.5 rounded-full border border-amber-500/30 max-w-[200px] truncate" title={`Condição: ${student.pneConditions.join(', ')}`}>
+                          {student.pneConditions.join(', ')}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-amber-400 font-medium flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 max-w-[180px] truncate" title={student.secondTeacherName ? `2º Prof: ${student.secondTeacherName}` : '2º Professor não vinculado'}>
+                        <HeartHandshake className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{student.secondTeacherName ? `2º Prof: ${student.secondTeacherName}` : 'Sem 2º Prof.'}</span>
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Right Action buttons */}

@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
-import { X, Save, Pencil, AlertTriangle } from 'lucide-react';
-import { StudentUser } from '@/lib/types';
+import React, { useState, useEffect } from 'react';
+import { X, Save, Pencil, AlertTriangle, HeartHandshake } from 'lucide-react';
+import { StudentUser, TeacherUser } from '@/lib/types';
+import { PneConditionsSelect } from '@/components/PneConditionsSelect';
+import { supabase } from '@/lib/supabase';
 import {
   normalizeStudentName,
   validateStudentName,
@@ -27,7 +29,40 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
   const [turma, setTurma] = useState(student?.turma || '301');
   const [matricula, setMatricula] = useState(student?.matricula || '');
   const [tag, setTag] = useState<'REGULAR' | 'PNE' | 'RAD'>(student?.tag || 'REGULAR');
+  const [pneConditions, setPneConditions] = useState<string[]>(student?.pneConditions || []);
+  const [secondTeacherId, setSecondTeacherId] = useState(student?.secondTeacherId || '');
+  const [availableSecondTeachers, setAvailableSecondTeachers] = useState<TeacherUser[]>([]);
   const [formError, setFormError] = useState('');
+
+  // Carregar lista de 2º professores
+  useEffect(() => {
+    if (!isOpen) return;
+    const fetchSecondTeachers = async () => {
+      if (!supabase) return;
+      try {
+        const { data } = await supabase
+          .from('second_teachers')
+          .select('id, name, email, subject, avatar_url, phone, school')
+          .order('name');
+        if (data) {
+          setAvailableSecondTeachers(
+            data.map((d) => ({
+              id: d.id,
+              name: d.name,
+              subject: d.subject || 'AEE / Inclusão Escolar',
+              email: d.email,
+              avatarUrl: d.avatar_url || '',
+              phone: d.phone,
+              school: d.school,
+            }))
+          );
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar lista de 2º professores:', err);
+      }
+    };
+    fetchSecondTeachers();
+  }, [isOpen]);
 
   if (student && student.id !== prevStudentId) {
     setPrevStudentId(student.id);
@@ -35,6 +70,8 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
     setTurma(student.turma);
     setMatricula(student.matricula);
     setTag(student.tag || 'REGULAR');
+    setPneConditions(student.pneConditions || []);
+    setSecondTeacherId(student.secondTeacherId || '');
     setFormError('');
   }
 
@@ -62,12 +99,17 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
       return;
     }
 
+    const matchedTeacher = availableSecondTeachers.find((st) => st.id === secondTeacherId);
+
     onSaveStudent({
       ...student,
       fullName: nameVal.normalized, // GUARANTEED UPPERCASE AND NO SPECIAL CHARACTERS
       turma: turma.trim(),
       matricula,
       tag,
+      pneConditions: tag === 'PNE' && pneConditions.length > 0 ? pneConditions : undefined,
+      secondTeacherId: tag === 'PNE' && secondTeacherId ? secondTeacherId : undefined,
+      secondTeacherName: tag === 'PNE' && matchedTeacher ? matchedTeacher.name : (tag === 'PNE' && !secondTeacherId ? undefined : student.secondTeacherName),
     });
     onClose();
   };
@@ -150,6 +192,49 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
               <option value="RAD" className="bg-[#0b1326]">RAD (Rendimento em Acompanhamento)</option>
             </select>
           </div>
+
+          {/* Configurações Especiais quando o Aluno for PNE */}
+          {tag === 'PNE' && (
+            <div className="space-y-4 animate-fadeIn">
+              {/* Lista suspensa com caixa de seleção de Doenças e Deficiências */}
+              <div className="p-4 bg-[#131b2e] border border-amber-500/30 rounded-2xl space-y-3">
+                <PneConditionsSelect
+                  selectedConditions={pneConditions}
+                  onChange={setPneConditions}
+                  label="Doenças ou Deficiências (PNE)"
+                  placeholder="Selecione na lista suspensa as condições..."
+                />
+              </div>
+
+              {/* Vínculo de 2º Professor */}
+              <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-2">
+                <label className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
+                  <HeartHandshake className="w-4 h-4 text-amber-400" />
+                  <span>Vincular 2º Professor (AEE / Inclusão)</span>
+                </label>
+                <p className="text-[11px] text-[#bccabb]">
+                  Selecione o profissional de inclusão responsável pelo acompanhamento deste aluno.
+                </p>
+                <select
+                  value={secondTeacherId}
+                  onChange={(e) => setSecondTeacherId(e.target.value)}
+                  className="w-full bg-[#0b1326] border border-amber-500/30 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-amber-400 font-medium"
+                >
+                  <option value="">-- Não vinculado --</option>
+                  {availableSecondTeachers.map((st) => (
+                    <option key={st.id} value={st.id} className="bg-[#0b1326] text-white">
+                      {st.name} {st.subject ? `(${st.subject})` : '(AEE)'}
+                    </option>
+                  ))}
+                </select>
+                {availableSecondTeachers.length === 0 && (
+                  <p className="text-[10px] text-amber-300/80">
+                    Nenhum 2º Professor cadastrado ainda. Cadastre profissionais na aba &quot;2º Professor&quot;.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           <button
             type="submit"

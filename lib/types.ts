@@ -17,10 +17,36 @@ export interface StudentUser {
   turma: string;
   matricula: string;
   tag?: 'REGULAR' | 'PNE' | 'RAD';
+  pneConditions?: string[]; // Doenças, deficiências ou necessidades específicas
   passwordHash: string; // default "1234"
   avatarUrl: string;
   pedagogicalNotes?: string;
+  secondTeacherId?: string;
+  secondTeacherName?: string;
 }
+
+export const PNE_CONDITIONS_LIST = [
+  'Altas Habilidades / Superdotação',
+  'Autismo leve',
+  'Autismo moderado',
+  'Autismo severo',
+  'Baixa Visão / Cegueira',
+  'Deficiência Auditiva / Surdez',
+  'Deficiência Física',
+  'Deficiência Intelectual',
+  'Deficiência Motora',
+  'Deficiência Múltipla',
+  'Discalculia',
+  'Disgrafia / Disortografia',
+  'Dislexia',
+  'Outra Necessidade Específica',
+  'Paralisia Cerebral',
+  'Síndrome de Down',
+  'TDAH (Déficit de Atenção e Hiperatividade)',
+  'TOD (Transtorno Opositor Desafiador)',
+] as const;
+
+export type PneCondition = (typeof PNE_CONDITIONS_LIST)[number];
 
 export interface ActivitySubmission {
   studentId: string;
@@ -149,6 +175,8 @@ export interface InclusionRecord {
   peiGoals: string; // Objetivos do PEI
   adaptedResources: string; // Recursos Adaptados & Metodologia Assistiva
   evaluationsHistory: InclusionEvaluation[]; // Histórico de pareceres de acompanhamento
+  secondTeacherId?: string;
+  secondTeacherName?: string;
   updatedAt?: string;
 }
 

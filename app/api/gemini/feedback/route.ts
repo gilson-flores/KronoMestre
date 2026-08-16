@@ -4,23 +4,24 @@ import { NextRequest, NextResponse } from "next/server";
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || "",
-  httpOptions: {
-    headers: {
-      "User-Agent": "aistudio-build",
-    },
-  },
-});
-
 export async function POST(req: NextRequest) {
   try {
-    if (!process.env.GEMINI_API_KEY) {
+    const apiKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.GOOGLE_GENAI_API_KEY ||
+      process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+
+    if (!apiKey) {
       return NextResponse.json(
-        { error: "Chave GEMINI_API_KEY não configurada no servidor." },
+        {
+          error:
+            "Chave GEMINI_API_KEY não configurada no servidor de produção. Adicione a variável de ambiente GEMINI_API_KEY no painel de deploy.",
+        },
         { status: 500 }
       );
     }
+
     const body = await req.json();
     const {
       studentName = "Ninja",
@@ -57,18 +58,41 @@ DIRETRIZES DE ESTILO E CONTEÚDO:
 4. Escreva uma mensagem concisa e inspiradora (entre 2 e 4 parágrafos pequenos), formatada em texto puro legível (pode usar pontuações ou emojis temáticos como 🍃, ⚡, 📜, 🍥).
 5. Responda estritamente em Português do Brasil.`;
 
-    let response;
-    try {
-      response = await ai.models.generateContent({
-        model: "gemini-flash-latest",
-        contents: prompt,
-      });
-    } catch (modelErr: any) {
-      console.warn("Tentando com gemini-3.1-flash-lite no feedback:", modelErr);
-      response = await ai.models.generateContent({
-        model: "gemini-3.1-flash-lite",
-        contents: prompt,
-      });
+    const ai = new GoogleGenAI({ apiKey });
+
+    const candidateModels = [
+      'gemini-3.7-flash',
+      'gemini-3.1-flash-lite',
+      'gemini-3.5-flash',
+      'gemini-flash-latest',
+    ];
+
+    let response: any = null;
+    let lastError: any = null;
+
+    for (const modelName of candidateModels) {
+      try {
+        response = await ai.models.generateContent({
+          model: modelName,
+          contents: prompt,
+        });
+        if (response && response.text) {
+          break;
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`Falha ao tentar modelo ${modelName} no feedback:`, err?.message || err);
+        if (err?.message?.includes('prepayment') || err?.message?.includes('credits are depleted')) {
+          break;
+        }
+      }
+    }
+
+    if (!response || !response.text) {
+      if (lastError) {
+        throw lastError;
+      }
+      throw new Error("Nenhum modelo do Gemini respondeu à solicitação de feedback.");
     }
 
     const generatedFeedback = response.text || "Sensei: Excelente esforço na missão! Continue concentrando seu chakra nos estudos de Sociologia. Dattebayo!";

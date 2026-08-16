@@ -27,10 +27,12 @@ import {
   Clock,
   RotateCcw
 } from 'lucide-react';
-import { Activity } from '@/lib/types';
+import { Activity, StudentUser } from '@/lib/types';
+import { canStudentAccessActivity } from '@/lib/studentUtils';
 
 interface DashboardViewProps {
   activities: Activity[];
+  students?: StudentUser[];
   onOpenNewActivityModal: () => void;
   onSelectActivityForGrading: (act: Activity) => void;
   onEditActivity: (act: Activity) => void;
@@ -46,6 +48,7 @@ interface DashboardViewProps {
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   activities,
+  students = [],
   onOpenNewActivityModal,
   onSelectActivityForGrading,
   onEditActivity,
@@ -62,14 +65,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [activityFilter, setActivityFilter] = useState<'todas' | 'a_fazer' | 'a_corrigir' | 'corrigidas'>('todas');
 
   const filteredActivities = activities.filter((act) => {
+    const subCount = act.submissions ? act.submissions.length : (act.totalSubmissions || 0);
+    const pendingCount = act.submissions ? act.submissions.filter((s) => s.status === 'pending' || s.status === 'draft').length : (act.pendingCorrection || 0);
+    const enrolledStudentsCount = students.length > 0
+      ? students.filter((st) => canStudentAccessActivity(act.turma, st.turma)).length
+      : (act.totalStudents || 35);
+
     if (activityFilter === 'a_fazer') {
-      return act.status === 'Ativo' || (act.totalStudents - act.totalSubmissions) > 0;
+      return act.status === 'Ativo' || (enrolledStudentsCount - subCount) > 0;
     }
     if (activityFilter === 'a_corrigir') {
-      return act.pendingCorrection > 0;
+      return pendingCount > 0;
     }
     if (activityFilter === 'corrigidas') {
-      return act.pendingCorrection === 0 && act.totalSubmissions > 0;
+      return pendingCount === 0 && subCount > 0;
     }
     return true;
   });
@@ -104,10 +113,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Calculate top KPI stats from real state
   const totalActivities = activities.length;
-  const totalSubmissions = activities.reduce((acc, a) => acc + a.totalSubmissions, 0);
-  const totalExpected = activities.reduce((acc, a) => acc + a.totalStudents, 0);
+  const totalSubmissions = activities.reduce((acc, a) => acc + (a.submissions ? a.submissions.length : (a.totalSubmissions || 0)), 0);
+  const totalExpected = activities.reduce((acc, a) => {
+    const enrolledCount = students.length > 0
+      ? students.filter((st) => canStudentAccessActivity(a.turma, st.turma)).length
+      : 0;
+    return acc + (enrolledCount > 0 ? enrolledCount : (a.totalStudents || 35));
+  }, 0);
   const completionRate = totalExpected > 0 ? Math.round((totalSubmissions / totalExpected) * 100) : 0;
-  const pendingCorrections = activities.reduce((acc, a) => acc + a.pendingCorrection, 0);
+  const pendingCorrections = activities.reduce((acc, a) => acc + (a.submissions ? a.submissions.filter(s => s.status === 'pending' || s.status === 'draft').length : (a.pendingCorrection || 0)), 0);
 
   const activitiesWithGrades = activities.filter((a) => a.averageGrade !== undefined && a.averageGrade > 0);
   const overallAverage = activitiesWithGrades.length > 0
@@ -229,8 +243,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {Object.entries(statsByType).map(([catType, items]) => {
-                const subCount = items.reduce((acc, i) => acc + i.totalSubmissions, 0);
-                const expCount = items.reduce((acc, i) => acc + i.totalStudents, 0);
+                const subCount = items.reduce((acc, i) => acc + (i.submissions ? i.submissions.length : (i.totalSubmissions || 0)), 0);
+                const expCount = items.reduce((acc, i) => {
+                  const enrolledCount = students.length > 0
+                    ? students.filter((st) => canStudentAccessActivity(i.turma, st.turma)).length
+                    : 0;
+                  return acc + (enrolledCount > 0 ? enrolledCount : (i.totalStudents || 35));
+                }, 0);
                 const catRate = expCount > 0 ? Math.round((subCount / expCount) * 100) : 0;
 
                 return (
@@ -297,7 +316,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   : 'text-[#bccabb] hover:text-white'
               }`}
             >
-              ⏳ A Corrigir ({activities.reduce((acc, a) => acc + a.pendingCorrection, 0)})
+              ⏳ A Corrigir ({pendingCorrections})
             </button>
             <button
               onClick={() => setActivityFilter('corrigidas')}
@@ -325,11 +344,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               if (act.type === 'Dinâmica' || act.type === 'Trabalho em grupo') Icon = Users2;
               if (act.type === 'Projeto de pesquisa') Icon = BookOpen;
 
-              // Calculate submission return breakdowns
-              const ret1x = act.submissions.filter((s) => s.status === 'returned' && (s.returnCount === 1 || !s.returnCount)).length;
-              const ret2x = act.submissions.filter((s) => s.status === 'returned' && s.returnCount === 2).length;
-              const ret3x = act.submissions.filter((s) => s.status === 'returned' && s.returnCount === 3).length;
-              const gradedCount = act.submissions.filter((s) => s.status === 'graded').length;
+              // Calculate submission and status breakdowns from real submissions
+              const subCount = act.submissions ? act.submissions.length : (act.totalSubmissions || 0);
+              const ret1x = act.submissions ? act.submissions.filter((s) => s.status === 'returned' && (s.returnCount === 1 || !s.returnCount)).length : 0;
+              const ret2x = act.submissions ? act.submissions.filter((s) => s.status === 'returned' && s.returnCount === 2).length : 0;
+              const ret3x = act.submissions ? act.submissions.filter((s) => s.status === 'returned' && s.returnCount === 3).length : 0;
+              const gradedCount = act.submissions ? act.submissions.filter((s) => s.status === 'graded').length : 0;
+              const pendingCount = act.submissions ? act.submissions.filter((s) => s.status === 'pending' || s.status === 'draft').length : (act.pendingCorrection || 0);
+
+              const enrolledStudentsCount = students.length > 0
+                ? students.filter((st) => canStudentAccessActivity(act.turma, st.turma)).length
+                : 0;
+              const expectedStudentsCount = enrolledStudentsCount > 0 ? enrolledStudentsCount : (act.totalStudents || 35);
 
               return (
                 <div
@@ -338,7 +364,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     if (onViewActivity) onViewActivity(act);
                   }}
                   className={`glass-panel p-5 md:p-6 rounded-3xl transition-all duration-200 border border-white/10 hover:border-[#4ade80]/40 cursor-pointer ${
-                    act.pendingCorrection > 0 ? 'ring-1 ring-[#4ade80]/30' : ''
+                    pendingCount > 0 ? 'ring-1 ring-[#4ade80]/30' : ''
                   }`}
                 >
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -402,19 +428,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           </span>
 
                           {/* Submission Status Badges */}
-                          {act.totalSubmissions > 0 ? (
+                          {subCount > 0 ? (
                             <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-[#131b2e] text-white border border-white/10 flex items-center gap-1.5">
-                              👥 {act.totalSubmissions}/{act.totalStudents} Entregas
+                              👥 {subCount}/{expectedStudentsCount} Entregas
                             </span>
                           ) : (
                             <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-[#131b2e] text-[#bccabb] border border-white/5">
-                              📜 0 Entregas (Pendente)
+                              📜 0/{expectedStudentsCount} Entregas (Pendente)
                             </span>
                           )}
 
-                          {act.pendingCorrection > 0 && (
+                          {pendingCount > 0 && (
                             <span className="px-3 py-1 rounded-xl text-xs font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1.5">
-                              ⏳ {act.pendingCorrection} A Corrigir pelo Sensei
+                              ⏳ {pendingCount} A Corrigir pelo Sensei
                             </span>
                           )}
 
@@ -465,7 +491,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         className="flex-1 sm:flex-none px-4 py-2.5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-[#4ade80]/10 cursor-pointer min-h-[44px]"
                       >
                         <CheckCheck className="w-4 h-4 stroke-[2.5] shrink-0" />
-                        <span>{act.pendingCorrection > 0 ? `Corrigir (${act.pendingCorrection})` : 'Acessar Correções'}</span>
+                        <span>{pendingCount > 0 ? `Corrigir (${pendingCount})` : 'Acessar Correções'}</span>
                       </button>
 
                       {!isCorrecoes && (

@@ -18,7 +18,8 @@ import {
   ChevronDown,
   Check,
   Send,
-  Loader2
+  Loader2,
+  Filter
 } from 'lucide-react';
 import { Activity, ActivitySubmission, StudentUser, EssayQuestion } from '@/lib/types';
 import { canStudentAccessActivity, normalizeStudentName, getActivityGradeDistribution } from '@/lib/studentUtils';
@@ -61,6 +62,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
   const [prevActivityId, setPrevActivityId] = useState(activity.id);
   const [prevSubmissions, setPrevSubmissions] = useState(activity.submissions);
   const [submissions, setSubmissions] = useState<ActivitySubmission[]>(activity.submissions || []);
+  const [selectedTurmaFilter, setSelectedTurmaFilter] = useState<string>('all');
 
   const [savedSuccessId, setSavedSuccessId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -118,6 +120,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
     setPrevActivityId(activity.id);
     setPrevSubmissions(activity.submissions);
     setSubmissions(activity.submissions || []);
+    setSelectedTurmaFilter('all');
   } else if (activity.submissions !== prevSubmissions) {
     setPrevSubmissions(activity.submissions);
     setSubmissions(activity.submissions || []);
@@ -340,15 +343,41 @@ export const GradingView: React.FC<GradingViewProps> = ({
     }
   };
 
+  // Split multiple turmas if present
+  const activityTurmas = React.useMemo(() => {
+    if (!activity.turma) return [];
+    return activity.turma
+      .split(/[,;]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+  }, [activity.turma]);
+
+  const hasMultipleTurmas = activityTurmas.length > 1;
+
+  // Helper to get student's turma for a submission
+  const getSubmissionTurma = (sub: ActivitySubmission): string => {
+    const student = students.find((st) => st.id === sub.studentId || (st.matricula && st.matricula === sub.matricula));
+    return student?.turma || '';
+  };
+
+  // Filter submissions by selected turma filter
+  const filteredSubmissions = submissions.filter((s) => {
+    if (selectedTurmaFilter === 'all') return true;
+    const stTurma = getSubmissionTurma(s);
+    if (!stTurma) return true;
+    return canStudentAccessActivity(selectedTurmaFilter, stTurma);
+  });
+
   // Categorize Submissions & Missing Students
-  const pendingQueue = submissions.filter((s) => s.status === 'pending' || s.status === 'draft');
-  const gradedQueue = submissions.filter((s) => s.status === 'graded');
-  const returnedQueue = submissions.filter((s) => s.status === 'returned');
+  const pendingQueue = filteredSubmissions.filter((s) => s.status === 'pending' || s.status === 'draft');
+  const gradedQueue = filteredSubmissions.filter((s) => s.status === 'graded');
+  const returnedQueue = filteredSubmissions.filter((s) => s.status === 'returned');
 
   // Find students in the turma who haven't submitted yet
   const submittedStudentIds = new Set(submissions.map((s) => s.studentId));
+  const activeTurmaScope = selectedTurmaFilter === 'all' ? activity.turma : selectedTurmaFilter;
   const missingStudents = students.filter((st) => {
-    const isSameTurma = canStudentAccessActivity(activity.turma, st.turma);
+    const isSameTurma = canStudentAccessActivity(activeTurmaScope, st.turma);
     return isSameTurma && !submittedStudentIds.has(st.id);
   });
 
@@ -504,6 +533,45 @@ export const GradingView: React.FC<GradingViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Turma Filter Bar (Exibido quando a atividade possui mais de uma turma associada) */}
+      {hasMultipleTurmas && (
+        <div className="flex flex-wrap items-center gap-2 p-3.5 bg-[#131b2e] rounded-2xl border border-white/10">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-[#bccabb] mr-1">
+            <Filter className="w-3.5 h-3.5 text-[#4ade80]" />
+            <span>Filtrar por Turma:</span>
+          </div>
+          <button
+            onClick={() => setSelectedTurmaFilter('all')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[36px] ${
+              selectedTurmaFilter === 'all'
+                ? 'bg-[#4ade80] text-[#003919] shadow-sm font-extrabold'
+                : 'bg-[#171f33] text-[#bccabb] hover:text-white hover:bg-[#222a3d] border border-white/5'
+            }`}
+          >
+            Todas as Turmas ({submissions.length})
+          </button>
+          {activityTurmas.map((turmaCode) => {
+            const countInTurma = submissions.filter((s) => {
+              const stTurma = getSubmissionTurma(s);
+              return stTurma ? canStudentAccessActivity(turmaCode, stTurma) : true;
+            }).length;
+            return (
+              <button
+                key={turmaCode}
+                onClick={() => setSelectedTurmaFilter(turmaCode)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[36px] ${
+                  selectedTurmaFilter === turmaCode
+                    ? 'bg-[#4ade80] text-[#003919] shadow-sm font-extrabold'
+                    : 'bg-[#171f33] text-[#bccabb] hover:text-white hover:bg-[#222a3d] border border-white/5'
+                }`}
+              >
+                Turma {turmaCode} ({countInTurma})
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Correction Sub-Tabs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 border-b border-white/10 pb-2">
@@ -685,6 +753,8 @@ export const GradingView: React.FC<GradingViewProps> = ({
     const totalScore = objectiveScore + essayScore + extraPoints;
     const maxEssayValue = distribution.hasObjective ? distribution.maxEssayGrade : distribution.maxGrade;
 
+    const studentInfo = students.find((st) => st.id === sub.studentId || (st.matricula && st.matricula === sub.matricula));
+
     return (
       <div
         key={sub.studentId}
@@ -701,7 +771,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
             <div>
               <h3 className="text-sm font-bold text-white">{sub.studentName}</h3>
               <p className="text-[10px] text-[#bccabb] uppercase tracking-wider">
-                MATRÍCULA: {sub.matricula}
+                {studentInfo?.turma ? `TURMA: ${studentInfo.turma} • ` : ''}MATRÍCULA: {sub.matricula}
               </p>
               {sub.groupMembers && (
                 <p className="text-[10px] text-purple-300 mt-0.5 font-medium">

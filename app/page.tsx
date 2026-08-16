@@ -243,18 +243,37 @@ export default function Home() {
         // 1. Carregar Alunos do Supabase
         const { data: dbStudents } = await client.from('students').select('*');
         if (dbStudents && dbStudents.length > 0) {
-          const mappedStudents: StudentUser[] = dbStudents.map((s) => ({
-            id: s.id,
-            fullName: s.full_name,
-            turma: s.turma,
-            matricula: s.matricula,
-            tag: s.tag,
-            passwordHash: s.password_hash || '1234',
-            avatarUrl:
-              s.avatar_url ||
-              'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
-            pedagogicalNotes: s.pedagogical_notes || '',
-          }));
+          const mappedStudents: StudentUser[] = dbStudents.map((s) => {
+            let parsedPneConditions: string[] | undefined = undefined;
+            if (s.pne_conditions) {
+              if (Array.isArray(s.pne_conditions)) {
+                parsedPneConditions = s.pne_conditions;
+              } else if (typeof s.pne_conditions === 'string') {
+                try {
+                  const parsed = JSON.parse(s.pne_conditions);
+                  parsedPneConditions = Array.isArray(parsed) ? parsed : [s.pne_conditions];
+                } catch {
+                  parsedPneConditions = s.pne_conditions.split(',').map((c: string) => c.trim()).filter(Boolean);
+                }
+              }
+            }
+
+            return {
+              id: s.id,
+              fullName: s.full_name,
+              turma: s.turma,
+              matricula: s.matricula,
+              tag: s.tag,
+              pneConditions: parsedPneConditions,
+              passwordHash: s.password_hash || '1234',
+              avatarUrl:
+                s.avatar_url ||
+                'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+              pedagogicalNotes: s.pedagogical_notes || '',
+              secondTeacherId: s.second_teacher_id || undefined,
+              secondTeacherName: s.second_teacher_name || undefined,
+            };
+          });
           setStudents(mappedStudents);
         }
 
@@ -1104,16 +1123,33 @@ export default function Home() {
     }
 
     try {
-      const payload = newStudents.map((s) => ({
+      const payloadWithSecondTeacher = newStudents.map((s) => ({
         full_name: s.fullName,
         turma: s.turma,
         matricula: s.matricula,
         tag: s.tag,
+        second_teacher_id: s.secondTeacherId || null,
+        second_teacher_name: s.secondTeacherName || null,
         password_hash: s.passwordHash || '1234',
         avatar_url: s.avatarUrl,
       }));
 
-      const { error } = await supabase.from('students').insert(payload);
+      let { error } = await supabase.from('students').insert(payloadWithSecondTeacher);
+
+      // Fallback gracioso se a coluna second_teacher_id ainda não foi criada no banco
+      if (error && (error.code === 'PGRST204' || error.message?.includes('second_teacher'))) {
+        console.warn('Colunas second_teacher não encontradas no Supabase. Inserindo sem elas...');
+        const payloadBase = newStudents.map((s) => ({
+          full_name: s.fullName,
+          turma: s.turma,
+          matricula: s.matricula,
+          tag: s.tag,
+          password_hash: s.passwordHash || '1234',
+          avatar_url: s.avatarUrl,
+        }));
+        const retryRes = await supabase.from('students').insert(payloadBase);
+        error = retryRes.error;
+      }
 
       if (error) {
         console.error('Erro ao importar alunos no Supabase:', error);
@@ -1136,14 +1172,31 @@ export default function Home() {
     }
 
     try {
-      const { error } = await supabase.from('students').insert({
+      let { error } = await supabase.from('students').insert({
         full_name: newStudent.fullName,
         turma: newStudent.turma,
         matricula: newStudent.matricula,
         tag: newStudent.tag,
+        pne_conditions: newStudent.pneConditions || null,
+        second_teacher_id: newStudent.secondTeacherId || null,
+        second_teacher_name: newStudent.secondTeacherName || null,
         password_hash: newStudent.passwordHash || '1234',
         avatar_url: newStudent.avatarUrl,
       });
+
+      // Fallback gracioso se colunas extras ainda não foram criadas no banco
+      if (error && (error.code === 'PGRST204' || error.message?.includes('second_teacher') || error.message?.includes('pne_conditions'))) {
+        console.warn('Colunas extras não encontradas no Supabase. Inserindo dados essenciais...');
+        const retryRes = await supabase.from('students').insert({
+          full_name: newStudent.fullName,
+          turma: newStudent.turma,
+          matricula: newStudent.matricula,
+          tag: newStudent.tag,
+          password_hash: newStudent.passwordHash || '1234',
+          avatar_url: newStudent.avatarUrl,
+        });
+        error = retryRes.error;
+      }
 
       if (error) {
         console.error('Erro ao cadastrar aluno no Supabase:', error);
@@ -1166,15 +1219,33 @@ export default function Home() {
     }
 
     try {
-      const { error } = await supabase
+      let { error } = await supabase
         .from('students')
         .update({
           full_name: updatedStudent.fullName,
           turma: updatedStudent.turma,
           matricula: updatedStudent.matricula,
           tag: updatedStudent.tag,
+          pne_conditions: updatedStudent.pneConditions || null,
+          second_teacher_id: updatedStudent.secondTeacherId || null,
+          second_teacher_name: updatedStudent.secondTeacherName || null,
         })
         .eq('id', updatedStudent.id);
+
+      // Fallback gracioso se colunas extras ainda não existirem no Supabase
+      if (error && (error.code === 'PGRST204' || error.message?.includes('second_teacher') || error.message?.includes('pne_conditions'))) {
+        console.warn('Colunas extras não encontradas no Supabase. Atualizando campos padrão...');
+        const retryRes = await supabase
+          .from('students')
+          .update({
+            full_name: updatedStudent.fullName,
+            turma: updatedStudent.turma,
+            matricula: updatedStudent.matricula,
+            tag: updatedStudent.tag,
+          })
+          .eq('id', updatedStudent.id);
+        error = retryRes.error;
+      }
 
       if (error) {
         console.error('Erro ao atualizar aluno no Supabase:', error);
@@ -1183,6 +1254,9 @@ export default function Home() {
       }
 
       setStudents((prev) => prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s)));
+      if (supervisingStudent && supervisingStudent.id === updatedStudent.id) {
+        setSupervisingStudent(updatedStudent);
+      }
       showGlobalStatus('success', `Dados do aluno "${updatedStudent.fullName}" atualizados com sucesso no Supabase!`);
     } catch (err: any) {
       console.error('Erro ao atualizar aluno no Supabase:', err);
@@ -1434,6 +1508,7 @@ export default function Home() {
           {currentTab === 'painel' && (
             <DashboardView
               activities={activities}
+              students={students}
               title="Studio"
               subtitle="Gerencie avaliações, redações e dinâmicas das suas turmas."
               showStats={false}
@@ -1453,6 +1528,7 @@ export default function Home() {
           {currentTab === 'atividades' && (
             <DashboardView
               activities={activities}
+              students={students}
               title="Correções"
               subtitle="Acompanhe o desempenho geral, estatísticas de entrega e pendências de correção."
               showStats={true}

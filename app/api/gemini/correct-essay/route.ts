@@ -4,12 +4,39 @@ import { NextRequest, NextResponse } from 'next/server';
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
+function extractJson(text: string): any {
+  let cleaned = (text || '').trim();
+  if (cleaned.startsWith('```json')) {
+    cleaned = cleaned.replace(/^```json\s*/i, '').replace(/\s*```$/, '');
+  } else if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```\s*/, '').replace(/\s*```$/, '');
+  }
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      return JSON.parse(cleaned.substring(firstBrace, lastBrace + 1));
+    }
+    throw new Error('Não foi possível interpretar a resposta estruturada da IA.');
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.GOOGLE_GENAI_API_KEY ||
+      process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'Chave GEMINI_API_KEY não configurada no servidor.' },
+        {
+          error:
+            'Chave GEMINI_API_KEY não configurada no servidor de produção. Adicione a variável de ambiente GEMINI_API_KEY no painel de deploy (ex: Vercel, Railway, Docker, .env.local).',
+        },
         { status: 500 }
       );
     }
@@ -29,14 +56,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        },
-      },
-    });
+    const ai = new GoogleGenAI({ apiKey });
 
     // Determine year level difficulty rule
     let gradeLevelRule = 'Nível Médio (2º Ano): exija clareza, boa argumentação e articulação conceitual.';
@@ -70,60 +90,87 @@ INSTRUÇÕES E PARÂMETROS OBRIGATÓRIOS DE CORREÇÃO:
    - ATENÇÃO: NÃO mencione no feedback as palavras-chave que foram utilizadas como critério de avaliação.
 6. Nota Sugerida: Atribua uma nota numérica de 0 a ${maxEssayScore} proporcional ao desempenho do aluno.
 
-Retorne obrigatoriamente um objeto JSON conforme o schema.
+Retorne obrigatoriamente um objeto JSON com o formato:
+{
+  "suggestedScore": number,
+  "feedback": string,
+  "themeFidelity": string,
+  "keywordsCheck": string,
+  "structureCheck": string,
+  "grammarCheck": string
+}
 `;
 
-    const generateParams = {
-      model: 'gemini-flash-latest',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            suggestedScore: {
-              type: Type.NUMBER,
-              description: `Nota sugerida entre 0.0 e ${maxEssayScore}`,
-            },
-            feedback: {
-              type: Type.STRING,
-              description: 'Feedback curto para o aluno com no máximo 300 caracteres, elogio/alerta e gramática/ortografia.',
-            },
-            themeFidelity: {
-              type: Type.STRING,
-              description: 'Análise de fidelidade ao tema',
-            },
-            keywordsCheck: {
-              type: Type.STRING,
-              description: 'Verificação do uso de palavras-chave',
-            },
-            structureCheck: {
-              type: Type.STRING,
-              description: 'Análise de Introdução, Desenvolvimento e Conclusão',
-            },
-            grammarCheck: {
-              type: Type.STRING,
-              description: 'Análise sintética de gramática e ortografia',
+    const candidateModels = [
+      'gemini-3.7-flash',
+      'gemini-3.1-flash-lite',
+      'gemini-3.5-flash',
+      'gemini-flash-latest',
+    ];
+
+    let response: any = null;
+    let lastError: any = null;
+
+    for (const modelName of candidateModels) {
+      try {
+        response = await ai.models.generateContent({
+          model: modelName,
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                suggestedScore: {
+                  type: Type.NUMBER,
+                  description: `Nota sugerida entre 0.0 e ${maxEssayScore}`,
+                },
+                feedback: {
+                  type: Type.STRING,
+                  description: 'Feedback curto para o aluno com no máximo 300 caracteres, elogio/alerta e gramática/ortografia.',
+                },
+                themeFidelity: {
+                  type: Type.STRING,
+                  description: 'Análise de fidelidade ao tema',
+                },
+                keywordsCheck: {
+                  type: Type.STRING,
+                  description: 'Verificação do uso de palavras-chave',
+                },
+                structureCheck: {
+                  type: Type.STRING,
+                  description: 'Análise de Introdução, Desenvolvimento e Conclusão',
+                },
+                grammarCheck: {
+                  type: Type.STRING,
+                  description: 'Análise sintética de gramática e ortografia',
+                },
+              },
+              required: ['suggestedScore', 'feedback', 'themeFidelity', 'keywordsCheck', 'structureCheck', 'grammarCheck'],
             },
           },
-          required: ['suggestedScore', 'feedback', 'themeFidelity', 'keywordsCheck', 'structureCheck', 'grammarCheck'],
-        },
-      },
-    };
-
-    let response;
-    try {
-      response = await ai.models.generateContent(generateParams);
-    } catch (modelErr: any) {
-      console.warn('Tentando com gemini-3.1-flash-lite na correção de redação:', modelErr);
-      response = await ai.models.generateContent({
-        ...generateParams,
-        model: 'gemini-3.1-flash-lite',
-      });
+        });
+        if (response && response.text) {
+          break;
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`Falha ao tentar modelo ${modelName} na correção:`, err?.message || err);
+        // If it's a quota / billing error, try next or throw
+        if (err?.message?.includes('prepayment') || err?.message?.includes('credits are depleted')) {
+          break;
+        }
+      }
     }
 
-    const jsonText = response.text || '{}';
-    const parsedData = JSON.parse(jsonText);
+    if (!response || !response.text) {
+      if (lastError) {
+        throw lastError;
+      }
+      throw new Error('Nenhum modelo do Gemini respondeu à solicitação de correção.');
+    }
+
+    const parsedData = extractJson(response.text);
 
     return NextResponse.json(parsedData);
   } catch (error: any) {

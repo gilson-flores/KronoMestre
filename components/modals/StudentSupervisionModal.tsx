@@ -20,6 +20,7 @@ import {
   Check,
   FileCheck2,
   Lock,
+  HeartHandshake,
 } from 'lucide-react';
 import { StudentUser, Activity, ActivitySubmission } from '@/lib/types';
 import { canStudentAccessActivity, getTurmaLabel } from '@/lib/studentUtils';
@@ -625,10 +626,27 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                     {student.tag || 'REGULAR'}
                   </span>
                 </div>
-                <div className="flex items-center gap-4 text-xs text-[#bccabb] mt-1 font-medium">
+                <div className="flex items-center gap-4 text-xs text-[#bccabb] mt-1 font-medium flex-wrap">
                   <span>Matrícula: <strong className="text-white">{student.matricula}</strong></span>
                   <span>•</span>
                   <span>Turma: <strong className="text-white">{getTurmaLabel(student.turma)}</strong></span>
+                  {student.tag === 'PNE' && (
+                    <>
+                      {student.pneConditions && student.pneConditions.length > 0 && (
+                        <>
+                          <span>•</span>
+                          <span className="text-amber-300 bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/30 font-semibold text-[11px]">
+                            {student.pneConditions.join(', ')}
+                          </span>
+                        </>
+                      )}
+                      <span>•</span>
+                      <span className="flex items-center gap-1 text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
+                        <HeartHandshake className="w-3.5 h-3.5 text-amber-400" />
+                        <span>2º Professor: <strong className="text-white">{student.secondTeacherName || 'Não vinculado'}</strong></span>
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

@@ -126,7 +126,7 @@ export const ViewActivityModal: React.FC<ViewActivityModalProps> = ({
                 <Users className="w-3 h-3 text-emerald-400" /> Entregas
               </span>
               <span className="font-bold text-emerald-300 text-xs sm:text-sm">
-                {activity.totalSubmissions} / {activity.totalStudents || '—'}
+                {activity.submissions ? activity.submissions.length : activity.totalSubmissions} / {activity.totalStudents || '—'}
               </span>
             </div>
           </div>
