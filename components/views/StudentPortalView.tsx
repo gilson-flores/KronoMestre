@@ -1185,7 +1185,8 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               } else {
                 const distribution = getActivityGradeDistribution(act);
                 const isGraded = sub.status === 'graded';
-                const totalScore = (sub.objectiveScore || 0) + (sub.essayScore || 0);
+                const objectiveScore = distribution.hasObjective ? (sub.objectiveScore || 0) : 0;
+                const totalScore = objectiveScore + (sub.essayScore || 0) + (sub.extraPoints || 0);
 
                 return (
                   <div
@@ -1279,7 +1280,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                           </span>
                           {isGraded || sub.essayScore !== undefined ? (
                             <span className="text-sm font-black text-white">
-                              {(sub.essayScore || 0).toFixed(1)} / {sub.maxEssayScore.toFixed(1)} pts
+                              {(sub.essayScore || 0).toFixed(1)} / {distribution.maxEssayGrade.toFixed(1)} pts
                             </span>
                           ) : (
                             <span className="text-[11px] font-bold bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30">

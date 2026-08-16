@@ -60,13 +60,10 @@ DIRETRIZES DE ESTILO E CONTEÚDO:
     let response;
     try {
       response = await ai.models.generateContent({
-        model: "gemini-3.7-flash",
+        model: "gemini-flash-latest",
         contents: prompt,
       });
     } catch (modelErr: any) {
-      if (modelErr?.status === 429 || modelErr?.message?.includes('429') || modelErr?.message?.includes('quota')) {
-        throw modelErr;
-      }
       console.warn("Tentando com gemini-3.1-flash-lite no feedback:", modelErr);
       response = await ai.models.generateContent({
         model: "gemini-3.1-flash-lite",
@@ -80,10 +77,18 @@ DIRETRIZES DE ESTILO E CONTEÚDO:
   } catch (error: any) {
     console.error("Erro ao gerar feedback com Gemini:", error);
     
+    const isPrepaymentError = error?.message?.includes('prepayment') || error?.message?.includes('credits are depleted');
+    if (isPrepaymentError) {
+      return NextResponse.json(
+        { error: 'Os créditos pré-pagos do projeto desta chave de API estão esgotados. Para usar gratuitamente, crie uma chave em um projeto novo sem faturamento pré-pago no Google AI Studio (https://aistudio.google.com/app/apikey).' },
+        { status: 429 }
+      );
+    }
+
     const isQuotaError = error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('quota');
     if (isQuotaError) {
       return NextResponse.json(
-        { error: 'Limite de uso gratuito diário da IA excedido. Por favor, aguarde ou adicione uma chave de API paga nas configurações (Settings > Secrets).' },
+        { error: 'Limite de requisições por minuto atingido. Aguarde alguns segundos e tente novamente.' },
         { status: 429 }
       );
     }

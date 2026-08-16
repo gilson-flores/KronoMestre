@@ -21,10 +21,9 @@ import { LibraryView } from '@/components/views/LibraryView';
 import { StudentPortalView } from '@/components/views/StudentPortalView';
 import { MessagesView } from '@/components/views/MessagesView';
 import { SecondTeachersView } from '@/components/views/SecondTeachersView';
-import { PlanningView } from '@/components/views/PlanningView';
 
 
-import { normalizeStudentName } from '@/lib/studentUtils';
+import { normalizeStudentName, getActivityGradeDistribution } from '@/lib/studentUtils';
 import { NewActivityModal } from '@/components/modals/NewActivityModal';
 import { EditActivityModal } from '@/components/modals/EditActivityModal';
 import { ViewActivityModal } from '@/components/modals/ViewActivityModal';
@@ -88,7 +87,7 @@ export default function Home() {
   const [library, setLibrary] = useState<LibraryFile[]>(initialLibrary);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
 
-  // Active view tab: 'painel' | 'planejamento' | 'atividades' | 'alunos' | 'horarios' | 'arquivos' | 'grading' | 'mensagens' | 'configuracoes'
+  // Active view tab: 'painel' | 'atividades' | 'alunos' | 'horarios' | 'arquivos' | 'grading' | 'mensagens' | 'configuracoes'
 
   const [selectedActivityForGrading, setSelectedActivityForGrading] = useState<Activity | null>(null);
 
@@ -265,26 +264,6 @@ export default function Home() {
 
         if (dbActivities && dbActivities.length > 0) {
           const mappedActivities: Activity[] = dbActivities.map((act) => {
-            const subs = (dbSubmissions || [])
-              .filter((sub) => sub.activity_id === act.id)
-              .map((sub) => ({
-                studentId: sub.student_id,
-                studentName: sub.student_name,
-                matricula: sub.matricula,
-                tag: sub.tag,
-                avatarUrl: sub.avatar_url,
-                objectiveScore: Number(sub.objective_score || 0),
-                maxObjectiveScore: Number(sub.max_objective_score || 5),
-                essayScore:
-                  sub.essay_score !== null && sub.essay_score !== undefined
-                    ? Number(sub.essay_score)
-                    : undefined,
-                maxEssayScore: Number(sub.max_essay_score || 5),
-                status: sub.status,
-                essayAnswer: sub.essay_answer,
-                teacherFeedback: sub.teacher_feedback,
-              }));
-
             let parsedQuestions = [];
             if (act.questions) {
               if (typeof act.questions === 'string') {
@@ -297,6 +276,41 @@ export default function Home() {
                 parsedQuestions = act.questions;
               }
             }
+
+            const actMaxGrade = act.max_grade ? Number(act.max_grade) : (act.maxGrade || 10);
+            const distribution = getActivityGradeDistribution({
+              maxGrade: actMaxGrade,
+              type: act.type,
+              questions: parsedQuestions,
+            });
+
+            const subs = (dbSubmissions || [])
+              .filter((sub) => sub.activity_id === act.id)
+              .map((sub) => ({
+                studentId: sub.student_id,
+                studentName: sub.student_name,
+                matricula: sub.matricula,
+                tag: sub.tag,
+                avatarUrl: sub.avatar_url,
+                objectiveScore: Number(sub.objective_score || 0),
+                maxObjectiveScore: sub.max_objective_score !== undefined && sub.max_objective_score !== null
+                  ? Number(sub.max_objective_score)
+                  : distribution.maxObjectiveGrade,
+                essayScore:
+                  sub.essay_score !== null && sub.essay_score !== undefined
+                    ? Number(sub.essay_score)
+                    : undefined,
+                maxEssayScore: sub.max_essay_score !== undefined && sub.max_essay_score !== null
+                  ? Number(sub.max_essay_score)
+                  : distribution.maxEssayGrade,
+                status: sub.status,
+                essayAnswer: sub.essay_answer,
+                teacherFeedback: sub.teacher_feedback,
+                extraPoints: Number(sub.extra_points || 0),
+                registeredInStateSystem: Boolean(sub.registered_in_state_system),
+                groupMembers: sub.group_members,
+                returnCount: Number(sub.return_count || 0),
+              }));
 
             return {
               id: act.id,
@@ -1495,10 +1509,6 @@ export default function Home() {
               onSuperviseStudent={handleSuperviseStudent}
               onImportStudents={handleImportStudents}
             />
-          )}
-
-          {currentTab === 'planejamento' && (
-            <PlanningView students={students} />
           )}
 
           {currentTab === '2_professor' && (

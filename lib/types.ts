@@ -152,38 +152,5 @@ export interface InclusionRecord {
   updatedAt?: string;
 }
 
-export interface PlanningItem {
-  id: string;
-  title: string;
-  createdAt: string;
-  turmas: string;
-  period: string; // Trimestre / Período
-  startDate?: string; // Data de início (para Sequência Didática)
-  endDate?: string;   // Data de fim (para Sequência Didática)
-  type: 'Sequência Didática' | 'Plano Anual';
-  description?: string;
-  objectives?: string;
-  bnccSkills?: string;
-  // Campos de Fases do GEM e Persistência
-  serie?: string;
-  trimestre?: string;
-  subject?: string;
-  fase1Content?: string;
-  fase2Content?: string;
-  fase3Content?: string;
-  currentPhase?: 1 | 2 | 3;
-  driveRepositoryUrl?: string;
-  history?: Array<{ role: 'user' | 'assistant'; content: string }>;
-}
-
-export interface GuidingDocumentSlot {
-  id: string;
-  categoryName: string;
-  fileName?: string;
-  fileSize?: string;
-  uploadedAt?: string;
-  fileData?: string;
-}
-
 
 

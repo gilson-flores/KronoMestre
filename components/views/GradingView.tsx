@@ -21,7 +21,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { Activity, ActivitySubmission, StudentUser, EssayQuestion } from '@/lib/types';
-import { canStudentAccessActivity, normalizeStudentName } from '@/lib/studentUtils';
+import { canStudentAccessActivity, normalizeStudentName, getActivityGradeDistribution } from '@/lib/studentUtils';
 
 interface GradingViewProps {
   activity: Activity;
@@ -278,6 +278,8 @@ export const GradingView: React.FC<GradingViewProps> = ({
     const essayQuestion = activity.questions?.find((q) => q.type === 'essay') as EssayQuestion | undefined;
     const questionStatement = essayQuestion?.statement || activity.description || activity.title;
     const keywords = essayQuestion?.keywords || '';
+    const distribution = getActivityGradeDistribution(activity);
+    const maxEssayForAi = distribution.hasObjective ? distribution.maxEssayGrade : distribution.maxGrade;
 
     try {
       const response = await fetch('/api/gemini/correct-essay', {
@@ -288,7 +290,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
           questionStatement,
           keywords,
           turma: activity.turma,
-          maxEssayScore: sub.maxEssayScore || 5.0,
+          maxEssayScore: maxEssayForAi || 10.0,
         }),
       });
 
@@ -674,9 +676,14 @@ export const GradingView: React.FC<GradingViewProps> = ({
     const isSaved = savedSuccessId === sub.studentId;
     const isLoadingAi = loadingAiStudentId === sub.studentId;
     const aiDiag = aiDiagnosticMap[sub.studentId];
+    const distribution = getActivityGradeDistribution(activity);
 
-    // Calculate total grade
-    const totalScore = (sub.objectiveScore || 0) + (sub.essayScore || 0) + (sub.extraPoints || 0);
+    // Calculate scores according to activity distribution
+    const objectiveScore = distribution.hasObjective ? (sub.objectiveScore || 0) : 0;
+    const essayScore = sub.essayScore !== undefined ? sub.essayScore : 0;
+    const extraPoints = sub.extraPoints || 0;
+    const totalScore = objectiveScore + essayScore + extraPoints;
+    const maxEssayValue = distribution.hasObjective ? distribution.maxEssayGrade : distribution.maxGrade;
 
     return (
       <div
@@ -812,17 +819,19 @@ export const GradingView: React.FC<GradingViewProps> = ({
         )}
 
         {/* Scores & Extra Points Input Grid */}
-        <div className="grid grid-cols-3 gap-3">
-          {/* Objective Score */}
-          <div className="bg-[#131b2e] p-3 rounded-2xl border border-white/5">
-            <span className="block text-[9px] font-bold text-[#bccabb] uppercase tracking-wider mb-1">
-              Objetivas
-            </span>
-            <div className="text-lg font-extrabold text-[#4ade80]">
-              {sub.objectiveScore.toFixed(1)}{' '}
-              <span className="text-xs text-[#bccabb] font-normal">/ {sub.maxObjectiveScore.toFixed(1)}</span>
+        <div className={`grid ${distribution.hasObjective ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
+          {/* Objective Score (Only shown if activity has objective questions) */}
+          {distribution.hasObjective && (
+            <div className="bg-[#131b2e] p-3 rounded-2xl border border-white/5">
+              <span className="block text-[9px] font-bold text-[#bccabb] uppercase tracking-wider mb-1">
+                Objetivas
+              </span>
+              <div className="text-lg font-extrabold text-[#4ade80]">
+                {objectiveScore.toFixed(1)}{' '}
+                <span className="text-xs text-[#bccabb] font-normal">/ {distribution.maxObjectiveGrade.toFixed(1)}</span>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Essay Score */}
           <div className="bg-[#131b2e] p-3 rounded-2xl border border-white/5">
@@ -834,13 +843,13 @@ export const GradingView: React.FC<GradingViewProps> = ({
                 type="number"
                 step="0.5"
                 min="0"
-                max={sub.maxEssayScore || 5}
+                max={maxEssayValue}
                 value={sub.essayScore !== undefined ? sub.essayScore : ''}
                 onChange={(e) => handleScoreChange(sub.studentId, e.target.value)}
                 placeholder="-"
                 className="w-14 bg-[#171f33] border border-white/10 rounded-xl px-2 py-1 text-base font-extrabold text-white text-center focus:outline-none focus:border-[#4ade80]"
               />
-              <span className="text-xs text-[#bccabb] font-normal">/ {(sub.maxEssayScore || 5).toFixed(1)}</span>
+              <span className="text-xs text-[#bccabb] font-normal">/ {maxEssayValue.toFixed(1)}</span>
             </div>
           </div>
 
@@ -870,7 +879,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
           <span className="text-xl font-extrabold text-[#4ade80]">
             {totalScore.toFixed(1)}{' '}
             <span className="text-xs text-[#bccabb]">
-              / {((sub.maxObjectiveScore || 5) + (sub.maxEssayScore || 5)).toFixed(1)}
+              / {distribution.maxGrade.toFixed(1)}
             </span>
           </span>
         </div>

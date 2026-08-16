@@ -74,7 +74,7 @@ Retorne obrigatoriamente um objeto JSON conforme o schema.
 `;
 
     const generateParams = {
-      model: 'gemini-3.7-flash',
+      model: 'gemini-flash-latest',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -115,9 +115,6 @@ Retorne obrigatoriamente um objeto JSON conforme o schema.
     try {
       response = await ai.models.generateContent(generateParams);
     } catch (modelErr: any) {
-      if (modelErr?.status === 429 || modelErr?.message?.includes('429') || modelErr?.message?.includes('quota')) {
-        throw modelErr;
-      }
       console.warn('Tentando com gemini-3.1-flash-lite na correção de redação:', modelErr);
       response = await ai.models.generateContent({
         ...generateParams,
@@ -132,10 +129,18 @@ Retorne obrigatoriamente um objeto JSON conforme o schema.
   } catch (error: any) {
     console.error('Erro na rota de correção de redação com Gemini:', error);
     
+    const isPrepaymentError = error?.message?.includes('prepayment') || error?.message?.includes('credits are depleted');
+    if (isPrepaymentError) {
+      return NextResponse.json(
+        { error: 'Os créditos pré-pagos do projeto desta chave de API estão esgotados. Para usar gratuitamente, crie uma chave em um projeto novo sem faturamento pré-pago no Google AI Studio (https://aistudio.google.com/app/apikey).' },
+        { status: 429 }
+      );
+    }
+
     const isQuotaError = error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('quota');
     if (isQuotaError) {
       return NextResponse.json(
-        { error: 'Limite de uso gratuito diário da IA excedido. Por favor, aguarde ou adicione uma chave de API paga nas configurações (Settings > Secrets).' },
+        { error: 'Limite de requisições por minuto atingido. Aguarde alguns segundos e tente novamente.' },
         { status: 429 }
       );
     }
