@@ -497,54 +497,76 @@ export const AuthView: React.FC<AuthViewProps> = ({
           </form>
         )}
 
-        {/* 2º Professor Login Form */}
+        {/* 2º Professor Login Form - Mostra a mesma coisa do login do Aluno */}
         {activeTab === 'second_teacher' && (
-          <form onSubmit={handleSecondTeacherSubmit} className="space-y-4">
-            <div className="flex items-center gap-2 text-xs text-amber-300 bg-amber-500/10 p-3 rounded-2xl border border-amber-500/20 mb-2">
-              <HeartHandshake className="w-4 h-4 shrink-0 text-amber-400" />
-              <span>Acesso para Professor de Inclusão / AEE (Atendimento Educacional Especializado).</span>
+          <form onSubmit={handleStudentSubmit} className="space-y-4">
+            <div className="flex items-center gap-2 text-xs text-[#c0c1ff] bg-indigo-500/10 p-3 rounded-2xl border border-indigo-500/20 mb-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-[#4ade80]" />
+              <span>Acesso rápido: Informe seu Nome Completo ou Matrícula (Senha padrão: 1234).</span>
             </div>
 
-            {secondTeacherError && (
+            {studentError && (
               <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-2xl text-xs font-medium">
-                {secondTeacherError}
+                {studentError}
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">E-mail do 2º Professor</label>
+              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">
+                Nome Completo do Aluno ou Matrícula
+              </label>
               <input
-                type="email"
+                type="text"
                 required
-                value={secondTeacherEmail}
-                onChange={(e) => setSecondTeacherEmail(e.target.value)}
-                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
-                placeholder="inclusao@escola.edu.br"
+                value={studentFullName}
+                onChange={(e) => setStudentFullName(e.target.value)}
+                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80] uppercase tracking-wide"
+                placeholder="Ex: AMANDHA LETTICIA SILVA PACHECO"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">Senha</label>
+              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">
+                Turma (Opcional)
+              </label>
+              <select
+                value={studentTurma}
+                onChange={(e) => setStudentTurma(e.target.value)}
+                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#4ade80]"
+              >
+                <option value="">Todas / Identificar automaticamente</option>
+                {availableTurmas.map((t) => (
+                  <option key={t} value={t} className="bg-[#0b1326] text-white">
+                    Turma {getTurmaLabel(t)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">
+                Senha (Padrão: 1234)
+              </label>
               <div className="relative">
                 <input
                   type="password"
-                  required
-                  value={secondTeacherPassword}
-                  onChange={(e) => setSecondTeacherPassword(e.target.value)}
+                  value={studentPassword}
+                  onChange={(e) => setStudentPassword(e.target.value)}
                   className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
-                  placeholder="Sua senha de acesso"
+                  placeholder="Deixe em branco ou digite 1234"
                 />
                 <Lock className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-[#869486]" />
               </div>
-              <p className="text-[11px] text-[#bccabb] mt-1 ml-1">Autenticação cadastrada pelo Professor ADM</p>
+              <p className="text-[11px] text-[#bccabb] mt-1 ml-1">
+                A senha padrão cadastrada para todos os alunos é <span className="font-bold text-white">1234</span>
+              </p>
             </div>
 
             <button
               type="submit"
-              disabled={secondTeacherLoading}
-              className="w-full py-3.5 bg-amber-400 hover:bg-amber-300 text-black font-bold rounded-full transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-amber-400/20 cursor-pointer mt-6"
+              className="w-full py-3.5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-[#4ade80]/20 cursor-pointer mt-6"
             >
-              <span>{secondTeacherLoading ? 'Autenticando...' : 'Entrar no Painel do 2º Professor'}</span>
+              <span>Acessar Atividades e Notas</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
@@ -553,3 +575,5 @@ export const AuthView: React.FC<AuthViewProps> = ({
     </div>
   );
 };
+
+export default AuthView;

@@ -915,3 +915,5 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
     </div>
   );
 };
+
+export default NewActivityModal;

@@ -102,9 +102,9 @@ Retorne obrigatoriamente um objeto JSON com o formato:
 `;
 
     const candidateModels = [
+      'gemini-3.1-flash-lite',
       'gemini-3.7-flash',
       'gemini-flash-latest',
-      'gemini-3.1-flash-lite',
     ];
 
     let response: any = null;
@@ -156,10 +156,18 @@ Retorne obrigatoriamente um objeto JSON com o formato:
         } catch (err: any) {
           lastError = err;
           const status = err?.status || err?.code;
-          const isRetryable = status === 503 || status === 429 || err?.message?.includes('high demand') || err?.message?.includes('UNAVAILABLE');
-          console.warn(`Tentativa ${attempt} com modelo ${modelName} na correção:`, err?.message || err);
-          if (isRetryable && attempt < 2) {
-            await new Promise((r) => setTimeout(r, 1200));
+          const errMsg = String(err?.message || '');
+          const isQuotaExhausted = status === 429 || errMsg.includes('Quota exceeded') || errMsg.includes('RESOURCE_EXHAUSTED');
+          const isHighDemand = status === 503 || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE');
+
+          console.warn(`Tentativa ${attempt} com modelo ${modelName} na correção:`, errMsg || err);
+
+          if (isQuotaExhausted) {
+            break;
+          }
+
+          if (isHighDemand && attempt < 2) {
+            await new Promise((r) => setTimeout(r, 600));
             continue;
           }
           break;

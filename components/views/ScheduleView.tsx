@@ -51,3 +51,5 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ schedule }) => {
     </div>
   );
 };
+
+export default ScheduleView;

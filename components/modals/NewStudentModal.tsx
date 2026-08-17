@@ -255,3 +255,5 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
     </div>
   );
 };
+
+export default NewStudentModal;

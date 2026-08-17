@@ -134,3 +134,5 @@ export const TurmaMultiSelect: React.FC<TurmaMultiSelectProps> = ({
     </div>
   );
 };
+
+export default TurmaMultiSelect;

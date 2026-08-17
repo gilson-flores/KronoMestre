@@ -250,3 +250,5 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
     </div>
   );
 };
+
+export default StudentsView;

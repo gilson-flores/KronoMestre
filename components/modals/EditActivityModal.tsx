@@ -518,3 +518,5 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
     </div>
   );
 };
+
+export default EditActivityModal;

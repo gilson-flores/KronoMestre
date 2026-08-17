@@ -61,9 +61,9 @@ DIRETRIZES DE ESTILO E CONTEÚDO:
     const ai = new GoogleGenAI({ apiKey });
 
     const candidateModels = [
+      'gemini-3.1-flash-lite',
       'gemini-3.7-flash',
       'gemini-flash-latest',
-      'gemini-3.1-flash-lite',
     ];
 
     let response: any = null;
@@ -82,10 +82,18 @@ DIRETRIZES DE ESTILO E CONTEÚDO:
         } catch (err: any) {
           lastError = err;
           const status = err?.status || err?.code;
-          const isRetryable = status === 503 || status === 429 || err?.message?.includes('high demand') || err?.message?.includes('UNAVAILABLE');
-          console.warn(`Tentativa ${attempt} com modelo ${modelName} no feedback:`, err?.message || err);
-          if (isRetryable && attempt < 2) {
-            await new Promise((r) => setTimeout(r, 1200));
+          const errMsg = String(err?.message || '');
+          const isQuotaExhausted = status === 429 || errMsg.includes('Quota exceeded') || errMsg.includes('RESOURCE_EXHAUSTED');
+          const isHighDemand = status === 503 || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE');
+
+          console.warn(`Tentativa ${attempt} com modelo ${modelName} no feedback:`, errMsg || err);
+
+          if (isQuotaExhausted) {
+            break;
+          }
+
+          if (isHighDemand && attempt < 2) {
+            await new Promise((r) => setTimeout(r, 600));
             continue;
           }
           break;

@@ -996,3 +996,5 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
     </div>
   );
 };
+
+export default StudentSupervisionModal;

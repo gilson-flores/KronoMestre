@@ -375,3 +375,5 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
     </div>
   );
 };
+
+export default ImportCsvModal;

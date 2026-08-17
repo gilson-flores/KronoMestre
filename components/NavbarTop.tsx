@@ -125,3 +125,5 @@ export const NavbarTop: React.FC<NavbarTopProps> = ({
     </header>
   );
 };
+
+export default NavbarTop;

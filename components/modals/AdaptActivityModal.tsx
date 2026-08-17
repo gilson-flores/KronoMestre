@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   X,
   Sparkles,
@@ -15,15 +15,20 @@ import {
   RefreshCw,
   Eye,
   Zap,
+  MessageSquareQuote,
+  GraduationCap,
 } from 'lucide-react';
-import { Activity, ActivityQuestion, MultipleChoiceQuestion, EssayQuestion } from '@/lib/types';
+import { Activity, ActivityQuestion, MultipleChoiceQuestion, EssayQuestion, StudentUser } from '@/lib/types';
 import {
   createAdaptedMildModerateActivity,
   createAdaptedSeverePlayfulActivity,
+  extractCleanHtml,
 } from '@/lib/adaptationUtils';
+import { getRecommendedAdaptationForClass, AdaptationRecommendation } from '@/lib/studentUtils';
 
 interface AdaptActivityModalProps {
   activity: Activity | null;
+  students?: StudentUser[];
   isOpen: boolean;
   onClose: () => void;
   onCreateAdaptedActivity: (adaptedActivity: Activity) => void;
@@ -32,16 +37,32 @@ interface AdaptActivityModalProps {
 
 export const AdaptActivityModal: React.FC<AdaptActivityModalProps> = ({
   activity,
+  students = [],
   isOpen,
   onClose,
   onCreateAdaptedActivity,
   onUpdateActivityWithAdaptation,
 }) => {
+  // Decisão pedagógica automática baseada nas deficiências dos alunos da turma
+  const recommendation: AdaptationRecommendation = useMemo(() => {
+    return getRecommendedAdaptationForClass(activity?.turma, students);
+  }, [activity?.turma, students]);
+
   // Permite marcar independentemente as duas opções via caixa de seleção (checkboxes)
-  const [includeMildModerate, setIncludeMildModerate] = useState(true);
-  const [includeSeverePlayful, setIncludeSeverePlayful] = useState(false);
-  const [activeTab, setActiveTab] = useState<'mild_moderate' | 'severe_playful'>('mild_moderate');
+  // Inicializado automaticamente com a melhor decisão pedagógica
+  const [includeMildModerate, setIncludeMildModerate] = useState(
+    () => recommendation.recommendedType === 'mild_moderate' || recommendation.recommendedType === 'both'
+  );
+  const [includeSeverePlayful, setIncludeSeverePlayful] = useState(
+    () => recommendation.recommendedType === 'severe_playful' || recommendation.recommendedType === 'both'
+  );
+  const [activeTab, setActiveTab] = useState<'mild_moderate' | 'severe_playful'>(
+    () => (recommendation.recommendedType === 'severe_playful' ? 'severe_playful' : 'mild_moderate')
+  );
   const [saveMode, setSaveMode] = useState<'create_copy' | 'overwrite'>('create_copy');
+
+  // Caixa de Texto para o Prompt Customizado Exclusivo para Síndromes Severas (Jogos Lúdicos)
+  const [customPrompt, setCustomPrompt] = useState('');
 
   // Estado para Adaptação Leve / Moderada com Gemini
   const [isGeneratingMild, setIsGeneratingMild] = useState(false);
@@ -54,7 +75,7 @@ export const AdaptActivityModal: React.FC<AdaptActivityModalProps> = ({
 
   // Estado para Síndromes Severas / Jogos Lúdicos com Gemini
   const [isGeneratingPlayful, setIsGeneratingPlayful] = useState(false);
-  const [playfulHtml, setPlayfulHtml] = useState<string | null>(activity?.playfulGameHtml || null);
+  const [playfulHtml, setPlayfulHtml] = useState<string | null>(activity?.playfulGameHtml ? extractCleanHtml(activity.playfulGameHtml) : null);
   const [playfulError, setPlayfulError] = useState<string | null>(null);
   const [previewTab, setPreviewTab] = useState<'game' | 'code'>('game');
 
@@ -143,6 +164,7 @@ export const AdaptActivityModal: React.FC<AdaptActivityModalProps> = ({
           turma: activity.turma,
           questions: activity.questions || [],
           maxGrade: activity.maxGrade || 10,
+          customPrompt,
         }),
       });
 
@@ -155,7 +177,7 @@ export const AdaptActivityModal: React.FC<AdaptActivityModalProps> = ({
         throw new Error('Nenhum código HTML retornado pelo Gemini.');
       }
 
-      setPlayfulHtml(data.html);
+      setPlayfulHtml(extractCleanHtml(data.html));
     } catch (err: any) {
       console.error('Erro na geração de jogo lúdico:', err);
       setPlayfulError(err.message || 'Falha ao gerar o jogo lúdico com o Gemini. Tente novamente.');
@@ -230,21 +252,11 @@ export const AdaptActivityModal: React.FC<AdaptActivityModalProps> = ({
       <div className="bg-[#0e172a] border border-white/15 rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto">
         {/* Header */}
         <div className="p-5 sm:p-6 border-b border-white/10 flex items-center justify-between shrink-0 bg-[#131b2e]/80">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-amber-500/20 rounded-2xl border border-amber-500/30 text-amber-400">
-              <Sparkles className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-bold text-white">Adaptação Pedagógica Inclusiva (PNE)</h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase tracking-wider">
-                  100% IA GEMINI
-                </span>
-              </div>
-              <p className="text-xs text-[#bccabb]">
-                Marque uma ou ambas as opções com as caixas de seleção para gerar as adaptações com o Gemini.
-              </p>
-            </div>
+          <div>
+            <h2 className="text-base sm:text-lg font-bold text-white">Adaptação Pedagógica Inclusiva (PNE)</h2>
+            <p className="text-xs text-[#bccabb] mt-0.5">
+              Marque uma ou ambas as opções com as caixas de seleção para gerar as adaptações com o Gemini.
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -272,6 +284,42 @@ export const AdaptActivityModal: React.FC<AdaptActivityModalProps> = ({
             <span className="px-3 py-1 bg-white/5 rounded-xl border border-white/10 text-xs font-semibold text-[#dae2fd]">
               {originalTotal} Questões Originais
             </span>
+          </div>
+
+          {/* DECISÃO PEDAGÓGICA AUTOMÁTICA PELA DEFICIÊNCIA DO ALUNO */}
+          <div className="p-4 bg-emerald-950/30 border border-emerald-500/30 rounded-2xl flex items-start gap-3.5">
+            <div className="p-2.5 bg-emerald-500/20 rounded-xl text-emerald-400 border border-emerald-500/30 shrink-0 mt-0.5">
+              <GraduationCap className="w-5 h-5" />
+            </div>
+            <div className="space-y-1.5 text-xs flex-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-bold text-emerald-300">
+                  Decisão Pedagógica Automática (Por Deficiência do Aluno)
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  {recommendation.recommendedType === 'severe_playful'
+                    ? 'Opção Recomendada: Jogo Lúdico'
+                    : recommendation.recommendedType === 'both'
+                    ? 'Opção Recomendada: Ambas as Modalidades'
+                    : 'Opção Recomendada: Leve / Moderada'}
+                </span>
+              </div>
+              <p className="text-[#dae2fd] leading-relaxed">
+                {recommendation.summaryText}
+              </p>
+              {recommendation.matchedStudents.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {recommendation.matchedStudents.map((st) => (
+                    <span
+                      key={st.id}
+                      className="px-2 py-0.5 bg-white/5 rounded-md text-[11px] text-[#bccabb] border border-white/10"
+                    >
+                      <strong className="text-white">{st.name}:</strong> {st.conditions.join(', ')}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* DUAS OPÇÕES COM CAIXA DE SELEÇÃO (PERMITE MARCAR AS DUAS) */}
@@ -605,6 +653,25 @@ export const AdaptActivityModal: React.FC<AdaptActivityModalProps> = ({
           {/* PAINEL DA MODALIDADE 2: SÍNDROMES SEVERAS - JOGOS LÚDICOS (GEMINI) */}
           {(includeSeverePlayful && (!isBothSelected || activeTab === 'severe_playful')) && (
             <div className="space-y-5 pt-2 animate-fadeIn">
+              {/* CAIXA DE TEXTO: PROMPT/INSTRUÇÕES EXCLUSIVO PARA SÍNDROMES SEVERAS (JOGOS LÚDICOS) */}
+              <div className="p-4 bg-[#131b2e] rounded-2xl border border-amber-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="custom-severe-prompt" className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-2">
+                    <MessageSquareQuote className="w-4 h-4 text-amber-400" />
+                    <span>Instruções / Prompt do Jogo Lúdico (Exclusivo para Síndromes Severas):</span>
+                  </label>
+                  <span className="text-[10px] text-amber-400/80 font-semibold">Opcional</span>
+                </div>
+                <textarea
+                  id="custom-severe-prompt"
+                  value={customPrompt}
+                  onChange={(e) => setCustomPrompt(e.target.value)}
+                  placeholder="Instruções adicionais para o Gemini gerar o jogo (ex: 'Tema com elementos da natureza', 'Focar em 2 botões grandes com sons suaves de vitória', 'Cores contrastantes para baixa visão', 'Perguntas curtas de associação direta')..."
+                  rows={3}
+                  className="w-full bg-[#0a0f1d] border border-white/15 rounded-xl p-3 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all resize-none"
+                />
+              </div>
+
               <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
@@ -617,7 +684,7 @@ export const AdaptActivityModal: React.FC<AdaptActivityModalProps> = ({
                     </span>
                   </div>
                   <p className="text-xs text-[#bccabb] max-w-xl leading-relaxed">
-                    Gera um jogo interativo completo em HTML com ilustrações emoji, botões táteis grandes, sintetizador sonoro suave e registro de nota para alunos com deficiências severas.
+                    Gera um jogo interativo completo em HTML com ícones visuais, múltiplas fases de desafios, botões táteis grandes, sintetizador sonoro suave e registro de nota para alunos com deficiências severas.
                   </p>
                 </div>
 
@@ -836,3 +903,5 @@ export const AdaptActivityModal: React.FC<AdaptActivityModalProps> = ({
     </div>
   );
 };
+
+export default AdaptActivityModal;

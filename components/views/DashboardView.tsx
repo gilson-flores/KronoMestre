@@ -777,7 +777,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Custom Adapt Activity for PNE Modal */}
       {adaptModalActivity && (
         <AdaptActivityModal
+          key={adaptModalActivity.id}
           activity={adaptModalActivity}
+          students={students}
           isOpen={Boolean(adaptModalActivity)}
           onClose={() => setAdaptModalActivity(null)}
           onCreateAdaptedActivity={(adapted) => {
@@ -796,3 +798,4 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   );
 };
 
+export default DashboardView;

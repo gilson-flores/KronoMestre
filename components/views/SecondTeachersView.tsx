@@ -45,6 +45,7 @@ import {
   getActivityGradeDistribution,
   isStudentPNE
 } from '@/lib/studentUtils';
+import { extractCleanHtml } from '@/lib/adaptationUtils';
 
 interface SecondTeachersViewProps {
   teacher: TeacherUser;
@@ -160,15 +161,15 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
   // Filter inclusion/PNE students
   // 1. Students bound to this second teacher OR all PNE students
+  // "Aluno PNE não vê atividade de aluno regular, só adaptações, 2 professor também só vê PNE."
   const boundOrPneStudents = useMemo(() => {
     return students.filter((s) => {
       const isBound =
         (s.secondTeacherId && s.secondTeacherId === teacher.id) ||
         (s.secondTeacherName && s.secondTeacherName.toLowerCase() === teacher.name?.toLowerCase());
 
-      const isPne = isStudentPNE(s) || (s.pneConditions && s.pneConditions.length > 0);
+      const isPne = isStudentPNE(s) || (s.pneConditions && s.pneConditions.length > 0) || s.tag === 'PNE';
 
-      // If user is second_teacher, show bound students or all PNE students
       return isBound || isPne;
     });
   }, [students, teacher.id, teacher.name]);
@@ -195,6 +196,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   }, [students, selectedStudentId, filteredStudents]);
 
   // Adapted activities available for the active student
+  // "2 professor também só vê PNE (atividades adaptadas)"
   const studentAdaptedActivities = useMemo(() => {
     if (!activeStudent) return [];
 
@@ -203,17 +205,15 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
       if (!canStudentAccessActivity(act.turma, activeStudent.turma)) {
         return false;
       }
-      // 2. Prioritize adapted activities, but include all accessible if none specifically flagged
+      // 2. 2º professor só vê adaptações PNE
       return Boolean(act.isAdapted || act.adaptationType);
     });
   }, [activities, activeStudent]);
 
-  // If no explicitly adapted activities exist for the class, show all activities of the class
+  // 2º Professor só vê atividades adaptadas PNE
   const displayedActivities = useMemo(() => {
-    if (!activeStudent) return [];
-    if (studentAdaptedActivities.length > 0) return studentAdaptedActivities;
-    return activities.filter((act) => canStudentAccessActivity(act.turma, activeStudent.turma));
-  }, [studentAdaptedActivities, activities, activeStudent]);
+    return studentAdaptedActivities;
+  }, [studentAdaptedActivities]);
 
   // Listen to playful game events from iframe
   useEffect(() => {
@@ -532,10 +532,63 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
               )}
             </div>
 
-            {/* Right Column: Atividades Adaptadas e Execução no Celular com o Aluno */}
+            {/* Right Column: Atividades Adaptadas e Execução com o Aluno */}
             <div className="lg:col-span-8 space-y-6">
-              {/* If an activity is currently being executed in mobile view with the student */}
-              {executingActivity ? (
+              {/* If a playful activity is being executed with the student -> Fullscreen Window */}
+              {executingActivity && (executingActivity.playfulGameHtml || executingActivity.adaptationType === 'severe_playful') ? (
+                <div className="fixed inset-0 z-50 w-screen h-screen bg-[#070d19] flex flex-col p-2 sm:p-4 animate-fadeIn">
+                  {/* Top Control Bar */}
+                  <div className="flex items-center justify-between gap-3 pb-2.5 px-2 border-b border-white/10">
+                    <button
+                      onClick={() => setExecutingActivityId(null)}
+                      className="px-4 py-2.5 bg-[#171f33] hover:bg-[#222c42] text-white font-bold text-xs sm:text-sm rounded-xl border border-white/10 transition-all flex items-center gap-2 cursor-pointer shadow active:scale-95 shrink-0"
+                    >
+                      <ArrowLeft className="w-4 h-4 text-amber-400" />
+                      <span>Voltar</span>
+                    </button>
+
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Gamepad2 className="w-5 h-5 text-amber-400 shrink-0" />
+                      <span className="font-extrabold text-white text-sm sm:text-base truncate max-w-xs sm:max-w-md">
+                        {executingActivity.title}
+                      </span>
+                      <span className="text-xs text-amber-300 font-semibold bg-[#171f33] px-2.5 py-1 rounded-full border border-amber-500/30 hidden sm:inline">
+                        Aluno: {activeStudent?.fullName}
+                      </span>
+                      {playfulScore && (
+                        <span className="px-3 py-1 bg-[#4ade80]/20 text-[#4ade80] font-bold text-xs rounded-full border border-[#4ade80]/30 hidden sm:flex items-center gap-1.5 shrink-0">
+                          <Star className="w-3.5 h-3.5 fill-[#4ade80]" />
+                          {playfulScore.grade} / {executingActivity.maxGrade || 10} pts
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      disabled={isSubmitting}
+                      onClick={() => handleConfirmSubmit(executingActivity)}
+                      className="px-5 py-2.5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-black text-xs sm:text-sm rounded-xl transition-all shadow-lg shadow-[#4ade80]/20 cursor-pointer flex items-center gap-2 active:scale-95 shrink-0 disabled:opacity-50"
+                    >
+                      <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                      <span>{isSubmitting ? 'Enviando...' : 'Enviar Atividade'}</span>
+                    </button>
+                  </div>
+
+                  {/* Container do Jogo em Tela Inteira com Borda Discreta */}
+                  <div className="flex-1 w-full rounded-2xl overflow-hidden border border-white/10 bg-black shadow-2xl relative mt-2">
+                    <iframe
+                      srcDoc={
+                        executingActivity.playfulGameHtml
+                          ? extractCleanHtml(executingActivity.playfulGameHtml)
+                          : '<div style="color:white;padding:20px;font-family:sans-serif;text-align:center;">Carregando jogo interativo...</div>'
+                      }
+                      title={`Jogo Lúdico Fullscreen - ${executingActivity.title}`}
+                      className="w-full h-full border-0 block"
+                      allow="autoplay; fullscreen"
+                      sandbox="allow-scripts allow-same-origin allow-modals"
+                    />
+                  </div>
+                </div>
+              ) : executingActivity ? (
                 <div className="glass-panel p-4 sm:p-6 rounded-3xl border-2 border-amber-400/40 space-y-6 shadow-2xl bg-[#0e162a]">
                   {/* Top Bar of Mobile Simulator */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
@@ -1022,3 +1075,5 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
     </div>
   );
 };
+
+export default SecondTeachersView;

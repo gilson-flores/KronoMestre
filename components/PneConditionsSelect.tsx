@@ -211,3 +211,5 @@ export const PneConditionsSelect: React.FC<PneConditionsSelectProps> = ({
     </div>
   );
 };
+
+export default PneConditionsSelect;

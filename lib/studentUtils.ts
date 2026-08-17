@@ -111,6 +111,127 @@ export function doesTurmaHavePNEStudent(activityTurma: string | undefined, stude
 }
 
 /**
+ * Verifica se uma condição PNE é classificada pedagogicamente como Síndrome Severa (jogos lúdicos)
+ * ou se é uma necessidade de Deficiência Leve/Moderada.
+ */
+export function isSevereCondition(condition: string): boolean {
+  if (!condition) return false;
+  const lower = condition.toLowerCase().trim();
+  return (
+    lower.includes('sever') ||
+    lower.includes('paralisia') ||
+    lower.includes('down') ||
+    lower.includes('múltipla') ||
+    lower.includes('multipla') ||
+    lower.includes('profund') ||
+    lower.includes('grave')
+  );
+}
+
+export interface AdaptationRecommendation {
+  recommendedType: 'mild_moderate' | 'severe_playful' | 'both';
+  hasMildModerate: boolean;
+  hasSeverePlayful: boolean;
+  severeConditions: string[];
+  mildConditions: string[];
+  summaryText: string;
+  matchedStudents: Array<{ id: string; name: string; conditions: string[]; isSevere: boolean }>;
+}
+
+/**
+ * Analisa as condições de alunos PNE e decide automaticamente a melhor modalidade de adaptação pedagógica.
+ */
+export function getRecommendedAdaptationForClass(
+  activityTurma: string | undefined,
+  students: StudentUser[] | undefined
+): AdaptationRecommendation {
+  if (!students || students.length === 0) {
+    return {
+      recommendedType: 'mild_moderate',
+      hasMildModerate: true,
+      hasSeverePlayful: false,
+      severeConditions: [],
+      mildConditions: [],
+      summaryText: 'Deficiência Leve e Moderada recomendada como padrão para adaptação curricular.',
+      matchedStudents: [],
+    };
+  }
+
+  // Filtra alunos PNE da turma da atividade
+  const relevantStudents = students.filter((st) => {
+    if (!isStudentPNE(st)) return false;
+    return canStudentAccessActivity(activityTurma, st.turma);
+  });
+
+  if (relevantStudents.length === 0) {
+    return {
+      recommendedType: 'mild_moderate',
+      hasMildModerate: true,
+      hasSeverePlayful: false,
+      severeConditions: [],
+      mildConditions: [],
+      summaryText: 'Nenhum aluno PNE específico cadastrado nesta turma; modalidade Leve/Moderada pré-selecionada.',
+      matchedStudents: [],
+    };
+  }
+
+  const severeConditionsSet = new Set<string>();
+  const mildConditionsSet = new Set<string>();
+  const matchedStudents: AdaptationRecommendation['matchedStudents'] = [];
+
+  relevantStudents.forEach((st) => {
+    const conditions = st.pneConditions && st.pneConditions.length > 0 ? st.pneConditions : ['Necessidade Específica'];
+    let studentHasSevere = false;
+
+    conditions.forEach((c) => {
+      if (isSevereCondition(c)) {
+        severeConditionsSet.add(c);
+        studentHasSevere = true;
+      } else {
+        mildConditionsSet.add(c);
+      }
+    });
+
+    matchedStudents.push({
+      id: st.id,
+      name: st.fullName,
+      conditions,
+      isSevere: studentHasSevere,
+    });
+  });
+
+  const severeConditions = Array.from(severeConditionsSet);
+  const mildConditions = Array.from(mildConditionsSet);
+  const hasSeverePlayful = severeConditions.length > 0;
+  const hasMildModerate = mildConditions.length > 0 || !hasSeverePlayful;
+
+  let recommendedType: 'mild_moderate' | 'severe_playful' | 'both' = 'mild_moderate';
+  let summaryText = '';
+
+  if (hasSeverePlayful && mildConditions.length > 0) {
+    recommendedType = 'both';
+    summaryText = `Decisão pedagógica automática: Turma possui perfis diversos (${severeConditions.join(', ')} e ${mildConditions.join(', ')}). Ambas as modalidades selecionadas para atender a todos os alunos.`;
+  } else if (hasSeverePlayful) {
+    recommendedType = 'severe_playful';
+    summaryText = `Decisão pedagógica automática: Aluno(s) com ${severeConditions.join(', ')} detectado(s). Jogo Lúdico Interativo selecionado como a melhor opção pedagógica.`;
+  } else {
+    recommendedType = 'mild_moderate';
+    summaryText = `Decisão pedagógica automática: Aluno(s) com ${mildConditions.join(', ')} detectado(s). Redução cognitiva e 2 alternativas selecionadas como a melhor opção.`;
+  }
+
+  return {
+    recommendedType,
+    hasMildModerate,
+    hasSeverePlayful,
+    severeConditions,
+    mildConditions,
+    summaryText,
+    matchedStudents,
+  };
+}
+
+
+/**
  * Calculates grade distribution: 50% Objetivas + 50% Dissertativas for mixed activities,
  * or 100% for single-type activities.
  */

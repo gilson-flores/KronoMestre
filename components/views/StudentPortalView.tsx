@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { StudentUser, TeacherUser, Activity, LibraryFile, ChatMessage, ActivityQuestion, MultipleChoiceQuestion, EssayQuestion } from '@/lib/types';
 import { canStudentAccessActivity, getActivityGradeDistribution, isStudentPNE } from '@/lib/studentUtils';
+import { extractCleanHtml } from '@/lib/adaptationUtils';
 import { MessagesView } from './MessagesView';
 import {
   LogOut,
@@ -37,6 +38,8 @@ import {
   Star,
   Trophy,
   RefreshCw,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 
 interface StudentPortalViewProps {
@@ -99,6 +102,9 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   // Selected Activity for detail/execution view (null = show list view)
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
 
+  // Fullscreen / Immersive Mode for PNE Severe Playful Activities
+  const [fullscreenGameActivityId, setFullscreenGameActivityId] = useState<string | null>(null);
+
 
   // Interactive student answers per activity
   // essayInputs[activityId] -> string
@@ -122,6 +128,8 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
   // Filter activities authorized for this student
   // "Mostre as atividades adaptadas somente para alunos PNE."
+  // Filter activities authorized for this student
+  // "Aluno PNE não vê atividade de aluno regular, só adaptações, 2 professor também só vê PNE."
   const authorizedActivities = useMemo(() => {
     return activities.filter((a) => {
       // 1. Turma permission check
@@ -131,12 +139,13 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
       const isActivityAdapted = Boolean(a.isAdapted || a.adaptationType);
 
-      // 2. Adapted activities must ONLY be shown to PNE students
-      if (isActivityAdapted && !isCurrentStudentPNE) {
-        return false;
+      // Aluno PNE só vê atividades adaptadas (não vê atividade de aluno regular)
+      if (isCurrentStudentPNE) {
+        return isActivityAdapted;
       }
 
-      return true;
+      // Aluno regular só vê atividades regulares (não vê adaptações)
+      return !isActivityAdapted;
     });
   }, [activities, student.turma, isCurrentStudentPNE]);
 
@@ -725,13 +734,19 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
                         <div className="shrink-0 pt-2 sm:pt-0">
                           <button
-                            onClick={() => handleOpenActivity(act.id)}
-                            className="w-full sm:w-auto py-3 px-6 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-[#4ade80]/20"
+                            onClick={() => {
+                              if (act.playfulGameHtml || act.adaptationType === 'severe_playful') {
+                                setFullscreenGameActivityId(act.id);
+                              } else {
+                                handleOpenActivity(act.id);
+                              }
+                            }}
+                            className="w-full sm:w-auto py-3 px-6 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-[#4ade80]/20 active:scale-95"
                           >
                             {isPending ? (
                               <>
                                 <PenTool className="w-4 h-4" />
-                                <span>Resolver Atividade</span>
+                                <span>{act.playfulGameHtml || act.adaptationType === 'severe_playful' ? 'Fazer Atividade' : 'Resolver Atividade'}</span>
                               </>
                             ) : (
                               <>
@@ -899,8 +914,8 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Security Active Banner */}
-                    {(act.securityFocusLock || act.securityBlockCopyStatement || act.securityBlockPasteEssay) && (
+                    {/* Security Active Banner (Apenas para atividades convencionais) */}
+                    {!(act.playfulGameHtml || act.adaptationType === 'severe_playful') && (act.securityFocusLock || act.securityBlockCopyStatement || act.securityBlockPasteEssay) && (
                       <div className="bg-[#171f33] p-3.5 rounded-2xl border border-amber-500/30 flex flex-wrap items-center gap-2.5 text-xs text-amber-200 shadow-md">
                         <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
                         <span className="font-bold text-white">Seguranças Anti-Cola Ativas:</span>
@@ -924,128 +939,202 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       </div>
                     )}
 
-                    {/* Grade Distribution Rule Banner (REGRA 50% / 50%) */}
-                    <div className="bg-[#131b2e] p-4 rounded-2xl border border-[#4ade80]/30 flex items-start gap-3 text-xs text-[#dae2fd]">
-                      <Sparkles className="w-5 h-5 text-[#4ade80] shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-bold text-white">
-                          Regra de Pontuação da Atividade:
-                        </p>
-                        <p className="text-[#bccabb] mt-0.5">
-                          {distribution.distributionLabel}.
-                        </p>
-                        <p className="text-[11px] text-[#4ade80] font-semibold mt-1">
-                          ⚡ As questões objetivas têm correção automática instantânea ao enviar. A parte dissertativa é corrigida pelo professor.
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Description / Statement / Support Material */}
-                    <div
-                      className={`space-y-4 ${act.securityBlockCopyStatement ? 'select-none' : ''}`}
-                      onCopy={(e) => {
-                        if (act.securityBlockCopyStatement) {
-                          e.preventDefault();
-                          showSecurityToast('❌ Cópia de enunciados e textos bloqueada para esta atividade.');
-                        }
-                      }}
-                      onCut={(e) => {
-                        if (act.securityBlockCopyStatement) {
-                          e.preventDefault();
-                          showSecurityToast('❌ Ação de recortar bloqueada nesta atividade.');
-                        }
-                      }}
-                      onContextMenu={(e) => {
-                        if (act.securityBlockCopyStatement) {
-                          e.preventDefault();
-                          showSecurityToast('❌ Menu de contexto (botão direito) bloqueado nesta atividade.');
-                        }
-                      }}
-                    >
-                      <div>
-                        <h4 className="text-xs font-bold text-[#bccabb] uppercase tracking-wider mb-1">
-                          Orientações do Professor:
-                        </h4>
-                        <p className="text-xs text-[#dae2fd] leading-relaxed bg-[#171f33]/60 p-4 rounded-2xl border border-white/5">
-                          {act.description}
-                        </p>
-                      </div>
-
-                      {act.supportMaterial && (
-                        <div className="bg-[#171f33] p-4 rounded-2xl border border-white/10 space-y-2">
-                          <h5 className="text-xs font-bold text-[#c0c1ff] flex items-center gap-1.5">
-                            <BookOpen className="w-4 h-4 text-[#4ade80]" />
-                            <span>Texto de Apoio / Leitura Obrigatória:</span>
-                          </h5>
-                          <div className="text-xs text-[#bccabb] leading-relaxed space-y-1.5">
-                            {act.supportMaterial.split('\n').map((line, i) => {
-                              const urlMatch = line.match(/(https?:\/\/[^\s]+)/g);
-                              if (urlMatch) {
-                                const parts = line.split(/(https?:\/\/[^\s]+)/g);
-                                return (
-                                  <p key={i} className="whitespace-pre-wrap flex flex-wrap items-center gap-1.5 my-1">
-                                    {parts.map((part, pIdx) => {
-                                      if (part.match(/^https?:\/\//i)) {
-                                        return (
-                                          <a
-                                            key={pIdx}
-                                            href={part}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#4ade80]/20 hover:bg-[#4ade80]/30 border border-[#4ade80]/40 text-[#4ade80] font-bold rounded-xl text-xs transition-all underline cursor-pointer shadow-sm active:scale-95 my-0.5"
-                                          >
-                                            <Link2 className="w-3.5 h-3.5 shrink-0" />
-                                            <span className="truncate max-w-xs">{part}</span>
-                                            <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-                                          </a>
-                                        );
-                                      }
-                                      return <span key={pIdx}>{part}</span>;
-                                    })}
-                                  </p>
-                                );
-                              }
-                              return <p key={i} className="whitespace-pre-wrap">{line}</p>;
-                            })}
-                          </div>
+                    {/* Grade Distribution Rule Banner (Apenas para atividades convencionais com questões) */}
+                    {!(act.playfulGameHtml || act.adaptationType === 'severe_playful') && (
+                      <div className="bg-[#131b2e] p-4 rounded-2xl border border-[#4ade80]/30 flex items-start gap-3 text-xs text-[#dae2fd]">
+                        <Sparkles className="w-5 h-5 text-[#4ade80] shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold text-white">
+                            Regra de Pontuação da Atividade:
+                          </p>
+                          <p className="text-[#bccabb] mt-0.5">
+                            {distribution.distributionLabel}.
+                          </p>
+                          <p className="text-[11px] text-[#4ade80] font-semibold mt-1">
+                            ⚡ As questões objetivas têm correção automática instantânea ao enviar. A parte dissertativa é corrigida pelo professor.
+                          </p>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
 
-                    {/* JOGO LÚDICO INTERATIVO (SÍNDROMES SEVERAS) */}
-                    {(act.playfulGameHtml || act.adaptationType === 'severe_playful') && (
-                      <div className="space-y-4 pt-2 border-t border-amber-500/30">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h4 className="text-base font-bold text-amber-300 flex items-center gap-2">
-                            <Gamepad2 className="w-5 h-5 text-amber-400" />
-                            <span>Jogo Lúdico Educacional e Gamificado</span>
+                    {/* Description / Statement / Support Material (Para atividades convencionais) */}
+                    {!(act.playfulGameHtml || act.adaptationType === 'severe_playful') && (
+                      <div
+                        className={`space-y-4 ${act.securityBlockCopyStatement ? 'select-none' : ''}`}
+                        onCopy={(e) => {
+                          if (act.securityBlockCopyStatement) {
+                            e.preventDefault();
+                            showSecurityToast('❌ Cópia de enunciados e textos bloqueada para esta atividade.');
+                          }
+                        }}
+                        onCut={(e) => {
+                          if (act.securityBlockCopyStatement) {
+                            e.preventDefault();
+                            showSecurityToast('❌ Ação de recortar bloqueada nesta atividade.');
+                          }
+                        }}
+                        onContextMenu={(e) => {
+                          if (act.securityBlockCopyStatement) {
+                            e.preventDefault();
+                            showSecurityToast('❌ Menu de contexto (botão direito) bloqueado nesta atividade.');
+                          }
+                        }}
+                      >
+                        <div>
+                          <h4 className="text-xs font-bold text-[#bccabb] uppercase tracking-wider mb-1">
+                            Orientações do Professor:
                           </h4>
+                          <p className="text-xs text-[#dae2fd] leading-relaxed bg-[#171f33]/60 p-4 rounded-2xl border border-white/5">
+                            {act.description}
+                          </p>
+                        </div>
+
+                        {act.supportMaterial && (
+                          <div className="bg-[#171f33] p-4 rounded-2xl border border-white/10 space-y-2">
+                            <h5 className="text-xs font-bold text-[#c0c1ff] flex items-center gap-1.5">
+                              <BookOpen className="w-4 h-4 text-[#4ade80]" />
+                              <span>Texto de Apoio / Leitura Obrigatória:</span>
+                            </h5>
+                            <div className="text-xs text-[#bccabb] leading-relaxed space-y-1.5">
+                              {act.supportMaterial.split('\n').map((line, i) => {
+                                const urlMatch = line.match(/(https?:\/\/[^\s]+)/g);
+                                if (urlMatch) {
+                                  const parts = line.split(/(https?:\/\/[^\s]+)/g);
+                                  return (
+                                    <p key={i} className="whitespace-pre-wrap flex flex-wrap items-center gap-1.5 my-1">
+                                      {parts.map((part, pIdx) => {
+                                        if (part.match(/^https?:\/\//i)) {
+                                          return (
+                                            <a
+                                              key={pIdx}
+                                              href={part}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#4ade80]/20 hover:bg-[#4ade80]/30 border border-[#4ade80]/40 text-[#4ade80] font-bold rounded-xl text-xs transition-all underline cursor-pointer shadow-sm active:scale-95 my-0.5"
+                                            >
+                                              <Link2 className="w-3.5 h-3.5 shrink-0" />
+                                              <span className="truncate max-w-xs">{part}</span>
+                                              <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                                            </a>
+                                          );
+                                        }
+                                        return <span key={pIdx}>{part}</span>;
+                                      })}
+                                    </p>
+                                  );
+                                }
+                                return <p key={i} className="whitespace-pre-wrap">{line}</p>;
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* JOGO LÚDICO INTERATIVO (CASOS SEVEROS PNE) - IMERSIVO, LIMPO E RESPONSIVO */}
+                    {(act.playfulGameHtml || act.adaptationType === 'severe_playful') && (
+                      <div className="space-y-4">
+                        {/* Enunciado Limpo e direto */}
+                        {act.description && (
+                          <div className="bg-[#131b2e] p-3.5 sm:p-4 rounded-2xl border border-amber-500/20 text-xs sm:text-sm text-[#dae2fd] leading-relaxed flex items-center gap-2">
+                            <span className="font-bold text-amber-400 shrink-0">🎯 Enunciado:</span>
+                            <span>{act.description}</span>
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#131b2e]/80 p-3 rounded-2xl border border-amber-500/30">
                           <div className="flex items-center gap-2">
+                            <Gamepad2 className="w-5 h-5 text-amber-400" />
+                            <span className="font-bold text-sm text-white">{act.title}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2.5">
                             {playfulScores[act.id] ? (
-                              <span className="px-3 py-1 bg-[#4ade80]/20 text-[#4ade80] font-bold text-xs rounded-full border border-[#4ade80]/30 flex items-center gap-1.5 animate-bounce">
+                              <span className="px-3 py-1.5 bg-[#4ade80]/20 text-[#4ade80] font-bold text-xs rounded-full border border-[#4ade80]/30 flex items-center gap-1.5 shadow-sm">
                                 <Star className="w-4 h-4 fill-[#4ade80]" />
-                                Pontuação: {playfulScores[act.id].grade} / {act.maxGrade || 10} pts
+                                Conquistado: {playfulScores[act.id].grade} / {act.maxGrade || 10} pts
                               </span>
                             ) : (
-                              <span className="px-3 py-1 bg-amber-500/20 text-amber-300 font-bold text-xs rounded-full border border-amber-500/30">
-                                🌟 Jogue na tela abaixo para pontuar!
+                              <span className="px-3 py-1.5 bg-amber-500/20 text-amber-300 font-bold text-xs rounded-full border border-amber-500/30 flex items-center gap-1">
+                                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                                <span>Responda na tela</span>
                               </span>
                             )}
+
+                            {/* Botão de Tela Cheia / Modo Imersivo */}
+                            <button
+                              type="button"
+                              onClick={() => setFullscreenGameActivityId(act.id)}
+                              className="px-3.5 py-1.5 bg-[#171f33] hover:bg-[#202b44] text-white hover:text-amber-300 font-bold text-xs rounded-full border border-white/10 transition-all flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95"
+                              title="Expandir para tela cheia"
+                            >
+                              <Maximize2 className="w-3.5 h-3.5 text-amber-400" />
+                              <span className="hidden sm:inline">Tela Cheia</span>
+                            </button>
                           </div>
                         </div>
 
-                        <div className="w-full h-[520px] rounded-3xl overflow-hidden border-2 border-amber-500/40 shadow-2xl bg-black relative">
+                        {/* Container do Jogo Responsivo */}
+                        <div className="w-full h-[65vh] sm:h-[75vh] min-h-[480px] sm:min-h-[560px] rounded-3xl overflow-hidden border-2 border-amber-500/40 shadow-2xl bg-black relative">
                           <iframe
-                            srcDoc={act.playfulGameHtml || '<div style="color:white;padding:20px;font-family:sans-serif;">Carregando jogo...</div>'}
+                            srcDoc={act.playfulGameHtml || '<div style="color:white;padding:20px;font-family:sans-serif;text-align:center;">Carregando jogo interativo...</div>'}
                             title={`Jogo Lúdico - ${act.title}`}
-                            className="w-full h-full border-0"
+                            className="w-full h-full border-0 block"
+                            allow="autoplay; fullscreen"
                             sandbox="allow-scripts allow-same-origin allow-modals"
                           />
                         </div>
 
-                        <div className="p-4 bg-amber-500/10 rounded-2xl border border-amber-500/20 flex items-center justify-between text-xs text-amber-200">
-                          <span>💡 Clique nos botões visuais dentro do jogo para responder e somar estrelas. Ao terminar, clique em &quot;Concluir Jogo e Enviar Nota&quot;.</span>
-                        </div>
+                        {/* Modal Imersivo em Tela Cheia quando acionado */}
+                        {fullscreenGameActivityId === act.id && (
+                          <div className="fixed inset-0 z-50 bg-[#060a14] p-2 sm:p-4 flex flex-col justify-between animate-fadeIn">
+                            {/* Barra Superior Imersiva */}
+                            <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10 px-2">
+                              <div className="flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setFullscreenGameActivityId(null)}
+                                  className="px-4 py-2 bg-[#171f33] hover:bg-[#222c42] text-white font-bold text-xs sm:text-sm rounded-full border border-white/10 transition-all flex items-center gap-2 cursor-pointer shadow"
+                                >
+                                  <Minimize2 className="w-4 h-4 text-amber-400" />
+                                  <span>Sair da Tela Cheia</span>
+                                </button>
+                                <span className="font-black text-white text-sm sm:text-base hidden sm:inline">{act.title}</span>
+                              </div>
+
+                              <div className="flex items-center gap-3">
+                                {playfulScores[act.id] && (
+                                  <span className="px-3 py-1 bg-[#4ade80]/20 text-[#4ade80] font-bold text-xs rounded-full border border-[#4ade80]/30 flex items-center gap-1.5">
+                                    <Star className="w-4 h-4 fill-[#4ade80]" />
+                                    {playfulScores[act.id].grade} / {act.maxGrade || 10} pts
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFullscreenGameActivityId(null);
+                                    handleSubmit(act);
+                                  }}
+                                  className="px-5 py-2 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-black text-xs sm:text-sm rounded-full transition-all shadow-lg shadow-[#4ade80]/20 cursor-pointer flex items-center gap-2"
+                                >
+                                  <Gamepad2 className="w-4 h-4 stroke-[2.5]" />
+                                  <span>Concluir e Enviar Nota 🚀</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Iframe em Tela Cheia */}
+                            <div className="flex-1 w-full rounded-2xl overflow-hidden border-2 border-amber-500/40 bg-black shadow-2xl relative">
+                              <iframe
+                                srcDoc={act.playfulGameHtml || '<div style="color:white;padding:20px;font-family:sans-serif;text-align:center;">Carregando jogo interativo...</div>'}
+                                title={`Jogo Lúdico Fullscreen - ${act.title}`}
+                                className="w-full h-full border-0 block"
+                                allow="autoplay; fullscreen"
+                                sandbox="allow-scripts allow-same-origin allow-modals"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -1604,6 +1693,68 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         </div>
       )}
 
+      {/* Modal/Janela em Tela Cheia para Atividade Lúdica PNE (Preenche a tela inteira, borda discreta, botão voltar e botão enviar) */}
+      {fullscreenGameActivityId && (() => {
+        const act = activities.find((a) => a.id === fullscreenGameActivityId);
+        if (!act) return null;
+
+        return (
+          <div className="fixed inset-0 z-50 w-screen h-screen bg-[#070d19] flex flex-col p-2 sm:p-4 animate-fadeIn">
+            {/* Barra de Ações Superior */}
+            <div className="flex items-center justify-between gap-3 pb-2.5 px-2 border-b border-white/10">
+              <button
+                type="button"
+                onClick={() => setFullscreenGameActivityId(null)}
+                className="px-4 py-2.5 bg-[#171f33] hover:bg-[#222c42] text-white font-bold text-xs sm:text-sm rounded-xl border border-white/10 transition-all flex items-center gap-2 cursor-pointer shadow active:scale-95 shrink-0"
+              >
+                <ArrowLeft className="w-4 h-4 text-amber-400" />
+                <span>Voltar</span>
+              </button>
+
+              <div className="flex items-center gap-2 min-w-0">
+                <Gamepad2 className="w-5 h-5 text-amber-400 shrink-0" />
+                <span className="font-extrabold text-white text-sm sm:text-base truncate max-w-xs sm:max-w-md">
+                  {act.title}
+                </span>
+                {playfulScores[act.id] && (
+                  <span className="px-3 py-1 bg-[#4ade80]/20 text-[#4ade80] font-bold text-xs rounded-full border border-[#4ade80]/30 hidden sm:flex items-center gap-1.5 shrink-0">
+                    <Star className="w-3.5 h-3.5 fill-[#4ade80]" />
+                    {playfulScores[act.id].grade} / {act.maxGrade || 10} pts
+                  </span>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setFullscreenGameActivityId(null);
+                  handleSubmit(act);
+                }}
+                className="px-5 py-2.5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-black text-xs sm:text-sm rounded-xl transition-all shadow-lg shadow-[#4ade80]/20 cursor-pointer flex items-center gap-2 active:scale-95 shrink-0"
+              >
+                <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                <span>Enviar Atividade</span>
+              </button>
+            </div>
+
+            {/* Container do Jogo em Tela Inteira com Borda Discreta */}
+            <div className="flex-1 w-full rounded-2xl overflow-hidden border border-white/10 bg-black shadow-2xl relative mt-2">
+              <iframe
+                srcDoc={
+                  act.playfulGameHtml
+                    ? extractCleanHtml(act.playfulGameHtml)
+                    : '<div style="color:white;padding:20px;font-family:sans-serif;text-align:center;">Carregando jogo interativo...</div>'
+                }
+                title={`Jogo Lúdico Fullscreen - ${act.title}`}
+                className="w-full h-full border-0 block"
+                allow="autoplay; fullscreen"
+                sandbox="allow-scripts allow-same-origin allow-modals"
+              />
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Anti-Cola Focus Lock Warning / Auto-Submit Modal */}
       {securityNotice && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
@@ -1667,3 +1818,5 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     </div>
   );
 };
+
+export default StudentPortalView;

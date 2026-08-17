@@ -1062,3 +1062,5 @@ export const GradingView: React.FC<GradingViewProps> = ({
     );
   }
 };
+
+export default GradingView;

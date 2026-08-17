@@ -272,3 +272,5 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
     </div>
   );
 };
+
+export default NewSecondTeacherModal;

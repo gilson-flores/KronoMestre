@@ -18,7 +18,8 @@ import {
   Sparkles,
   Key,
   ExternalLink,
-  Link2
+  Link2,
+  Gamepad2,
 } from 'lucide-react';
 import { Activity, MultipleChoiceQuestion, EssayQuestion } from '@/lib/types';
 
@@ -190,6 +191,30 @@ export const ViewActivityModal: React.FC<ViewActivityModalProps> = ({
             </div>
           )}
 
+          {/* Playful Game Preview (PNE Severo) */}
+          {(activity.playfulGameHtml || activity.adaptationType === 'severe_playful') && (
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-between border-b border-amber-500/30 pb-3">
+                <h3 className="text-sm font-extrabold text-amber-300 uppercase tracking-wider flex items-center gap-2">
+                  <Gamepad2 className="w-4 h-4 text-amber-400" />
+                  Visualização do Jogo Lúdico Adaptado (PNE Severo)
+                </h3>
+                <span className="text-xs font-bold text-amber-300 bg-amber-500/20 border border-amber-500/30 px-3 py-1 rounded-full">
+                  ⭐ Interativo / Gamificado
+                </span>
+              </div>
+              <div className="w-full h-[460px] rounded-2xl overflow-hidden border-2 border-amber-500/40 bg-black relative shadow-xl">
+                <iframe
+                  srcDoc={activity.playfulGameHtml || '<div style="color:white;padding:20px;font-family:sans-serif;text-align:center;">Carregando jogo interativo...</div>'}
+                  title={`Jogo Lúdico - ${activity.title}`}
+                  className="w-full h-full border-0 block"
+                  allow="autoplay; fullscreen"
+                  sandbox="allow-scripts allow-same-origin allow-modals"
+                />
+              </div>
+            </div>
+          )}
+
           {/* Questions Section */}
           <div className="space-y-4 pt-2">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
@@ -347,3 +372,5 @@ export const ViewActivityModal: React.FC<ViewActivityModalProps> = ({
     </div>
   );
 };
+
+export default ViewActivityModal;
