@@ -185,5 +185,19 @@ export interface InclusionRecord {
   updatedAt?: string;
 }
 
+export interface AtestadoRadRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentTurma?: string;
+  dataFalta: string; // Data da falta justificada (YYYY-MM-DD)
+  dataAtestado: string; // Data do atestado (YYYY-MM-DD)
+  diasAtestado: number; // Dias de atestado
+  dataFinal: string; // Data final calculada automaticamente (YYYY-MM-DD)
+  motivo?: string; // Motivo para justificar (opcional)
+  tipo: 'Atestado' | 'RAD'; // RAD se diasAtestado >= 15 ou Atestado
+  createdAt: string;
+}
+
 
 

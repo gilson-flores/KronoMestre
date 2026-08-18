@@ -98,8 +98,8 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
       matricula,
       tag,
       pneConditions: tag === 'PNE' && pneConditions.length > 0 ? pneConditions : undefined,
-      secondTeacherId: tag === 'PNE' && secondTeacherId ? secondTeacherId : undefined,
-      secondTeacherName: tag === 'PNE' && matchedTeacher ? matchedTeacher.name : undefined,
+      secondTeacherId: secondTeacherId ? secondTeacherId : undefined,
+      secondTeacherName: matchedTeacher ? matchedTeacher.name : undefined,
       passwordHash: '1234', // default password rule
       avatarUrl:
         'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',

@@ -11,7 +11,8 @@ import {
   X,
   BookOpen,
   MessageSquare,
-  HeartHandshake
+  HeartHandshake,
+  FileSpreadsheet
 } from 'lucide-react';
 import { TeacherUser } from '@/lib/types';
 import { formatAvatarUrl } from '@/lib/utils';
@@ -25,6 +26,7 @@ interface SidebarProps {
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
   unreadMessagesCount?: number;
+  hiddenNavItems?: string[];
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -35,15 +37,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isMobileOpen = false,
   onCloseMobile,
   unreadMessagesCount = 0,
+  hiddenNavItems = [],
 }) => {
   const navItems = [
     { id: 'painel', label: 'Studio', icon: LayoutDashboard },
     { id: 'atividades', label: 'Correções', icon: FileCheck },
     { id: 'mensagens', label: 'Mensagens', icon: MessageSquare, badge: unreadMessagesCount },
     { id: 'alunos', label: 'Alunos', icon: Users },
+    { id: 'atestados_rad', label: 'Atestados e RAD', icon: FileSpreadsheet },
     { id: 'arquivos', label: 'Arquivos', icon: FolderOpen },
     { id: '2_professor', label: '2º Professor', icon: HeartHandshake },
-  ];
+  ].filter((item) => !hiddenNavItems.includes(item.id));
 
 
   const handleTabClick = (tabId: string) => {

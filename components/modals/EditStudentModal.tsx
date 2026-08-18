@@ -107,9 +107,9 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
       turma: turma.trim(),
       matricula,
       tag,
-      pneConditions: tag === 'PNE' && pneConditions.length > 0 ? pneConditions : undefined,
-      secondTeacherId: tag === 'PNE' && secondTeacherId ? secondTeacherId : undefined,
-      secondTeacherName: tag === 'PNE' && matchedTeacher ? matchedTeacher.name : (tag === 'PNE' && !secondTeacherId ? undefined : student.secondTeacherName),
+      pneConditions: tag === 'PNE' && pneConditions.length > 0 ? pneConditions : (student.pneConditions || undefined),
+      secondTeacherId: secondTeacherId ? secondTeacherId : undefined,
+      secondTeacherName: matchedTeacher ? matchedTeacher.name : (secondTeacherId ? student.secondTeacherName : undefined),
     });
     onClose();
   };

@@ -21,6 +21,7 @@ import { LibraryView } from '@/components/views/LibraryView';
 import { StudentPortalView } from '@/components/views/StudentPortalView';
 import { MessagesView } from '@/components/views/MessagesView';
 import { SecondTeachersView } from '@/components/views/SecondTeachersView';
+import { AtestadosRadView } from '@/components/views/AtestadosRadView';
 
 
 import { normalizeStudentName, getActivityGradeDistribution } from '@/lib/studentUtils';
@@ -45,20 +46,20 @@ export default function Home() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const timer = setTimeout(() => {
-      const savedDriveUrl = localStorage.getItem('teacher_drive_folder_url');
-      if (savedDriveUrl) {
-        setTeacher((prev) => ({ ...prev, driveFolderUrl: savedDriveUrl }));
-      }
+    queueMicrotask(() => {
+      try {
+        const savedDriveUrl = localStorage.getItem('teacher_drive_folder_url');
+        if (savedDriveUrl) {
+          setTeacher((prev) => ({ ...prev, driveFolderUrl: savedDriveUrl }));
+        }
 
-      const savedTimeout = localStorage.getItem('inactivity_timeout_enabled');
-      if (savedTimeout !== null) {
-        setInactivityTimeoutEnabled(savedTimeout === 'true');
-      }
+        const savedTimeout = localStorage.getItem('inactivity_timeout_enabled');
+        if (savedTimeout !== null) {
+          setInactivityTimeoutEnabled(savedTimeout === 'true');
+        }
 
-      const sessionStr = sessionStorage.getItem('active_session');
-      if (sessionStr) {
-        try {
+        const sessionStr = sessionStorage.getItem('active_session');
+        if (sessionStr) {
           const session = JSON.parse(sessionStr);
           if (session.role === 'teacher') {
             setRole('teacher');
@@ -71,13 +72,11 @@ export default function Home() {
             setCurrentStudent(session.studentData);
             setRole('student');
           }
-        } catch (e) {
-          console.warn('Erro ao ler sessão armazenada:', e);
         }
+      } catch (e) {
+        console.warn('Erro ao restaurar sessão armazenada:', e);
       }
-    }, 0);
-
-    return () => clearTimeout(timer);
+    });
   }, []);
 
   // App datasets
@@ -109,6 +108,31 @@ export default function Home() {
   const [teacherSaveStatus, setTeacherSaveStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [globalDbStatus, setGlobalDbStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [newTeacherPassword, setNewTeacherPassword] = useState('');
+
+  // Sidebar Items Visibility State
+  const [hiddenSidebarItems, setHiddenSidebarItems] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('hidden_sidebar_items');
+        if (saved) return JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return [];
+  });
+
+  const toggleSidebarItemVisibility = (itemId: string) => {
+    setHiddenSidebarItems((prev) => {
+      const updated = prev.includes(itemId)
+        ? prev.filter((id) => id !== itemId)
+        : [...prev, itemId];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('hidden_sidebar_items', JSON.stringify(updated));
+      }
+      return updated;
+    });
+  };
 
   const showGlobalStatus = (type: 'success' | 'error', message: string) => {
     setGlobalDbStatus({ type, message });
@@ -421,7 +445,6 @@ export default function Home() {
     setCurrentTab('painel');
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('active_session', JSON.stringify({ role: 'teacher', teacherData: loggedTeacher }));
-      window.location.reload();
     }
   };
 
@@ -431,7 +454,6 @@ export default function Home() {
     setCurrentTab('2_professor');
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('active_session', JSON.stringify({ role: 'second_teacher', teacherData: loggedTeacher }));
-      window.location.reload();
     }
   };
 
@@ -447,13 +469,15 @@ export default function Home() {
           studentData: loggedStudent,
         })
       );
-      window.location.reload();
     }
   };
 
   const handleLogout = (reason?: string) => {
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('active_session');
+    }
+    if (isSupabaseConfigured && supabase) {
+      supabase.auth.signOut().catch(() => {});
     }
     setRole(null);
     setCurrentStudent(null);
@@ -607,6 +631,33 @@ export default function Home() {
     }
 
     try {
+      // Auto adjust status if deadline is specified
+      const dateStr = updatedAct.deadline ? updatedAct.deadline.trim() : '';
+      if (dateStr) {
+        let isoDate: string | null = null;
+        const isoMatch = dateStr.match(/\b(20\d\d)-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b/);
+        if (isoMatch) isoDate = isoMatch[0];
+        const brMatch = dateStr.match(/\b(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/(20\d\d)\b/);
+        if (brMatch) {
+          const [, day, month, year] = brMatch;
+          isoDate = `${year}-${month}-${day}`;
+        }
+        const brShortMatch = dateStr.match(/\b(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\b/);
+        if (brShortMatch) {
+          const [, day, month] = brShortMatch;
+          isoDate = `2026-${month}-${day}`;
+        }
+
+        if (isoDate) {
+          const todayISO = new Date().toISOString().split('T')[0];
+          if (isoDate >= todayISO) {
+            updatedAct.status = 'Ativo';
+          } else {
+            updatedAct.status = 'Prazo Encerrado';
+          }
+        }
+      }
+
       const fullPayload = {
         id: updatedAct.id,
         title: updatedAct.title,
@@ -1187,8 +1238,7 @@ export default function Home() {
       let { error } = await supabase.from('students').insert(payloadWithSecondTeacher);
 
       // Fallback gracioso se a coluna second_teacher_id ainda não foi criada no banco
-      if (error && (error.code === 'PGRST204' || error.message?.includes('second_teacher'))) {
-        console.warn('Colunas second_teacher não encontradas no Supabase. Inserindo sem elas...');
+      if (error && (error.code === 'PGRST204' || error.message?.includes('second_teacher') || error.message?.includes('pne_conditions') || error.code === '42703')) {
         const payloadBase = newStudents.map((s) => ({
           full_name: s.fullName,
           turma: s.turma,
@@ -1235,8 +1285,7 @@ export default function Home() {
       });
 
       // Fallback gracioso se colunas extras ainda não foram criadas no banco
-      if (error && (error.code === 'PGRST204' || error.message?.includes('second_teacher') || error.message?.includes('pne_conditions'))) {
-        console.warn('Colunas extras não encontradas no Supabase. Inserindo dados essenciais...');
+      if (error && (error.code === 'PGRST204' || error.message?.includes('second_teacher') || error.message?.includes('pne_conditions') || error.code === '42703')) {
         const retryRes = await supabase.from('students').insert({
           full_name: newStudent.fullName,
           turma: newStudent.turma,
@@ -1283,8 +1332,7 @@ export default function Home() {
         .eq('id', updatedStudent.id);
 
       // Fallback gracioso se colunas extras ainda não existirem no Supabase
-      if (error && (error.code === 'PGRST204' || error.message?.includes('second_teacher') || error.message?.includes('pne_conditions'))) {
-        console.warn('Colunas extras não encontradas no Supabase. Atualizando campos padrão...');
+      if (error && (error.code === 'PGRST204' || error.message?.includes('second_teacher') || error.message?.includes('pne_conditions') || error.code === '42703')) {
         const retryRes = await supabase
           .from('students')
           .update({
@@ -1513,6 +1561,7 @@ export default function Home() {
         isMobileOpen={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
         unreadMessagesCount={teacherUnreadMessagesCount}
+        hiddenNavItems={role === 'second_teacher' ? hiddenSidebarItems : []}
       />
 
 
@@ -1639,6 +1688,10 @@ export default function Home() {
             />
           )}
 
+          {currentTab === 'atestados_rad' && (
+            <AtestadosRadView students={students} />
+          )}
+
           {currentTab === '2_professor' && (
             <SecondTeachersView
               teacher={teacher}
@@ -1646,6 +1699,7 @@ export default function Home() {
               students={students}
               activities={activities}
               onSubmitAnswer={handleStudentSubmitAnswer}
+              onSaveStudent={handleSaveStudent}
             />
           )}
 
@@ -1750,32 +1804,75 @@ export default function Home() {
                   <p className="text-[10px] text-[#bccabb] mt-1 ml-1">Preencha apenas se desejar alterar a senha de acesso (Supabase Auth).</p>
                 </div>
 
-                <div className="pt-4 border-t border-white/10 space-y-2">
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <span>Segurança da Sessão</span>
-                  </h3>
-                  <div className="flex items-center justify-between p-4 bg-[#131b2e] rounded-2xl border border-white/10">
-                    <div>
-                      <p className="text-xs font-bold text-white">Deslogar por 8 minutos de inatividade</p>
-                      <p className="text-[11px] text-[#bccabb] mt-0.5">Sua sessão será encerrada automaticamente após 8 minutos sem cliques ou movimentação.</p>
+                {role !== 'second_teacher' && (
+                  <>
+                    <div className="pt-4 border-t border-white/10 space-y-3">
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>Menu Lateral (Sidebar) do 2º Professor - Opções de Visibilidade</span>
+                      </h3>
+                      <p className="text-[11px] text-[#bccabb]">
+                        Selecione quais opções o 2º Professor poderá visualizar ou ocultar na barra de navegação lateral. O seu próprio menu como Professor ADM não será alterado.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                        {[
+                          { id: 'painel', label: 'Studio (Painel)' },
+                          { id: 'atividades', label: 'Correções' },
+                          { id: 'mensagens', label: 'Mensagens' },
+                          { id: 'alunos', label: 'Alunos' },
+                          { id: 'atestados_rad', label: 'Atestados e RAD' },
+                          { id: 'arquivos', label: 'Arquivos' },
+                          { id: '2_professor', label: '2º Professor (Inclusão)' },
+                        ].map((item) => {
+                          const isVisible = !hiddenSidebarItems.includes(item.id);
+                          return (
+                            <label
+                              key={item.id}
+                              className="flex items-center justify-between p-3 bg-[#131b2e] rounded-2xl border border-white/10 cursor-pointer hover:border-white/20 transition-all"
+                            >
+                              <span className="text-xs font-semibold text-white">{item.label}</span>
+                              <div className="relative inline-flex items-center cursor-pointer shrink-0 ml-2">
+                                <input
+                                  type="checkbox"
+                                  checked={isVisible}
+                                  onChange={() => toggleSidebarItemVisibility(item.id)}
+                                  className="sr-only peer"
+                                />
+                                <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#4ade80]"></div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
-                      <input
-                        type="checkbox"
-                        checked={inactivityTimeoutEnabled}
-                        onChange={(e) => {
-                          const val = e.target.checked;
-                          setInactivityTimeoutEnabled(val);
-                          if (typeof window !== 'undefined') {
-                            localStorage.setItem('inactivity_timeout_enabled', String(val));
-                          }
-                        }}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#4ade80]"></div>
-                    </label>
-                  </div>
-                </div>
+
+                    <div className="pt-4 border-t border-white/10 space-y-2">
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>Segurança da Sessão</span>
+                      </h3>
+                      <div className="flex items-center justify-between p-4 bg-[#131b2e] rounded-2xl border border-white/10">
+                        <div>
+                          <p className="text-xs font-bold text-white">Deslogar por 8 minutos de inatividade</p>
+                          <p className="text-[11px] text-[#bccabb] mt-0.5">Sua sessão será encerrada automaticamente após 8 minutos sem cliques ou movimentação.</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
+                          <input
+                            type="checkbox"
+                            checked={inactivityTimeoutEnabled}
+                            onChange={(e) => {
+                              const val = e.target.checked;
+                              setInactivityTimeoutEnabled(val);
+                              if (typeof window !== 'undefined') {
+                                localStorage.setItem('inactivity_timeout_enabled', String(val));
+                              }
+                            }}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#4ade80]"></div>
+                        </label>
+                      </div>
+                    </div>
+                  </>
+                )}
                 <button
                   onClick={async () => {
                     try {

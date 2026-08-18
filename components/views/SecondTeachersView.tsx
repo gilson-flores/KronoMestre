@@ -27,7 +27,9 @@ import {
   HelpCircle,
   User,
   ArrowLeft,
-  GraduationCap
+  GraduationCap,
+  KeyRound,
+  X
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import {
@@ -62,6 +64,7 @@ interface SecondTeachersViewProps {
     selectedObjectiveAnswers?: { [questionId: string]: number },
     groupMembers?: string
   ) => Promise<void> | void;
+  onSaveStudent?: (updatedStudent: StudentUser) => void;
 }
 
 export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
@@ -70,6 +73,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   students = [],
   activities = [],
   onSubmitAnswer,
+  onSaveStudent,
 }) => {
   // Main view tab: 'atividades_alunos' (Alunos e Atividades Adaptadas) | 'professores_apoio' (Cadastro de 2º Professores)
   const isSecondTeacher = currentUserRole === 'second_teacher';
@@ -139,6 +143,57 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
     fetchSecondTeachers();
   }, []);
 
+  // Reset password requests state (chamados)
+  const [resetRequests, setResetRequests] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('second_teacher_reset_requests');
+        if (saved) return JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return [];
+  });
+
+  const handleResetTeacherPassword = async (st: TeacherUser) => {
+    if (!confirm(`Deseja redefinir a senha do 2º Professor "${st.name}" para "1234"?`)) {
+      return;
+    }
+
+    try {
+      if (supabase && st.email) {
+        const cleanEmail = st.email.trim().toLowerCase();
+
+        // 1. Atualizar em second_teachers
+        await supabase
+          .from('second_teachers')
+          .update({ password: '1234' })
+          .ilike('email', cleanEmail);
+
+        // 2. Atualizar em teachers
+        await supabase
+          .from('teachers')
+          .update({ password: '1234' })
+          .ilike('email', cleanEmail);
+      }
+
+      // Remover da lista de pendentes em localStorage
+      if (typeof window !== 'undefined' && st.email) {
+        const cleanEmail = st.email.trim().toLowerCase();
+        const updated = resetRequests.filter((e) => e.toLowerCase() !== cleanEmail);
+        setResetRequests(updated);
+        localStorage.setItem('second_teacher_reset_requests', JSON.stringify(updated));
+      }
+
+      setSuccessMsg(`Senha do professor ${st.name} redefinida para "1234" com sucesso!`);
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (err: any) {
+      setErrorMsg('Erro ao redefinir senha: ' + (err?.message || 'Tente novamente.'));
+      setTimeout(() => setErrorMsg(''), 4000);
+    }
+  };
+
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Deseja realmente remover o acesso de ${name}?`)) return;
 
@@ -159,33 +214,224 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
     }
   };
 
+  // Change Password State
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [changePasswordNewPass, setChangePasswordNewPass] = useState('');
+  const [changePasswordConfirmPass, setChangePasswordConfirmPass] = useState('');
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
+  const [changePasswordMsg, setChangePasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setChangePasswordMsg(null);
+
+    if (!changePasswordNewPass || changePasswordNewPass.length < 4) {
+      setChangePasswordMsg({ type: 'error', text: 'A nova senha deve ter no mínimo 4 caracteres.' });
+      return;
+    }
+
+    if (changePasswordNewPass !== changePasswordConfirmPass) {
+      setChangePasswordMsg({ type: 'error', text: 'A confirmação de senha não coincide com a nova senha.' });
+      return;
+    }
+
+    setChangePasswordLoading(true);
+
+    try {
+      if (supabase && teacher.email) {
+        // 1. Update in second_teachers
+        await supabase
+          .from('second_teachers')
+          .update({ password: changePasswordNewPass })
+          .ilike('email', teacher.email.trim().toLowerCase());
+
+        // 2. Update in teachers if present
+        await supabase
+          .from('teachers')
+          .update({ password: changePasswordNewPass })
+          .ilike('email', teacher.email.trim().toLowerCase());
+
+        // 3. Update Supabase Auth user password
+        try {
+          await supabase.auth.updateUser({ password: changePasswordNewPass });
+        } catch (authErr) {
+          console.warn('Auth user password update warning:', authErr);
+        }
+      }
+
+      setChangePasswordMsg({
+        type: 'success',
+        text: 'Sua senha de acesso foi alterada e salva com sucesso!',
+      });
+      setTimeout(() => {
+        setIsChangePasswordOpen(false);
+        setChangePasswordMsg(null);
+        setChangePasswordNewPass('');
+        setChangePasswordConfirmPass('');
+      }, 2000);
+    } catch (err: any) {
+      setChangePasswordMsg({
+        type: 'error',
+        text: 'Erro ao alterar senha: ' + (err?.message || 'Tente novamente.'),
+      });
+    } finally {
+      setChangePasswordLoading(false);
+    }
+  };
+
+  // Tutelage scope filter: 'minha_tutela' (Apenas alunos sob minha tutela direta) | 'todos_pne' (Todos os alunos AEE/Inclusão)
+  const [tutelaScope, setTutelaScope] = useState<'minha_tutela' | 'todos_pne'>('minha_tutela');
+
+  // Helper to resolve bound 2nd teacher name for any student
+  const getStudentBoundTeacherName = (s: StudentUser): string | undefined => {
+    if (s.secondTeacherName?.trim()) return s.secondTeacherName.trim();
+
+    if (s.secondTeacherId) {
+      const stId = s.secondTeacherId.toString().trim().toLowerCase();
+
+      // Match current logged in teacher
+      if (
+        (teacher.id && stId === teacher.id.toString().trim().toLowerCase()) ||
+        (teacher.email && stId === teacher.email.trim().toLowerCase())
+      ) {
+        return teacher.name;
+      }
+
+      // Match in list of second teachers
+      const found = secondTeachers.find(
+        (t) =>
+          (t.id && t.id.toString().trim().toLowerCase() === stId) ||
+          (t.email && t.email.trim().toLowerCase() === stId) ||
+          (t.name && t.name.trim().toLowerCase() === stId)
+      );
+      if (found) return found.name;
+    }
+
+    return undefined;
+  };
+
+  // Bind student to current logged in 2nd teacher
+  const handleBindStudentToMe = async (studentToBind: StudentUser, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const updated: StudentUser = {
+      ...studentToBind,
+      secondTeacherId: teacher.id,
+      secondTeacherName: teacher.name,
+    };
+
+    if (onSaveStudent) {
+      onSaveStudent(updated);
+    }
+  };
+
+  // Unbind student from current 2nd teacher
+  const handleUnbindStudent = async (studentToUnbind: StudentUser, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const updated: StudentUser = {
+      ...studentToUnbind,
+      secondTeacherId: undefined,
+      secondTeacherName: undefined,
+    };
+
+    if (onSaveStudent) {
+      onSaveStudent(updated);
+    }
+  };
+
   // Filter inclusion/PNE students
-  // 1. Students bound to this second teacher OR all PNE students
-  // "Aluno PNE não vê atividade de aluno regular, só adaptações, 2 professor também só vê PNE."
+  // 1. Students bound to this second teacher
+  const myTutelageStudents = useMemo(() => {
+    return students.filter((s) => {
+      const boundName = getStudentBoundTeacherName(s);
+
+      const tId = teacher.id?.toString().trim().toLowerCase();
+      const tName = teacher.name?.trim().toLowerCase();
+      const tEmail = teacher.email?.trim().toLowerCase();
+
+      const stId = s.secondTeacherId?.toString().trim().toLowerCase();
+      const stName = (boundName || s.secondTeacherName)?.trim().toLowerCase();
+
+      const matchId = Boolean(stId && tId && stId === tId);
+      const matchEmail = Boolean(stId && tEmail && stId === tEmail);
+      const matchName = Boolean(
+        stName &&
+          ((tName && (stName === tName || stName.includes(tName) || tName.includes(stName))) ||
+            (tEmail && stName === tEmail))
+      );
+
+      return matchId || matchEmail || matchName;
+    });
+  }, [students, teacher.id, teacher.name, teacher.email, secondTeachers]);
+
+  // 2. All PNE/Inclusão students in the school
   const boundOrPneStudents = useMemo(() => {
     return students.filter((s) => {
-      const isBound =
-        (s.secondTeacherId && s.secondTeacherId === teacher.id) ||
-        (s.secondTeacherName && s.secondTeacherName.toLowerCase() === teacher.name?.toLowerCase());
-
       const isPne = isStudentPNE(s) || (s.pneConditions && s.pneConditions.length > 0) || s.tag === 'PNE';
+      const isBound = Boolean(getStudentBoundTeacherName(s) || s.secondTeacherId);
 
-      return isBound || isPne;
+      return isPne || isBound;
     });
-  }, [students, teacher.id, teacher.name]);
+  }, [students, secondTeachers, teacher.id, teacher.name, teacher.email]);
+
+  // Selected base scope for student list
+  const activeScopeStudents = useMemo(() => {
+    if (tutelaScope === 'minha_tutela') {
+      return myTutelageStudents;
+    }
+    return boundOrPneStudents;
+  }, [tutelaScope, myTutelageStudents, boundOrPneStudents]);
 
   // Filtered by search query
   const filteredStudents = useMemo(() => {
-    if (!studentSearch.trim()) return boundOrPneStudents;
+    if (!studentSearch.trim()) return activeScopeStudents;
     const q = studentSearch.toLowerCase().trim();
-    return boundOrPneStudents.filter(
+    return activeScopeStudents.filter(
       (s) =>
         s.fullName.toLowerCase().includes(q) ||
         s.turma.toLowerCase().includes(q) ||
         (s.matricula && s.matricula.toLowerCase().includes(q)) ||
         (s.pneConditions && s.pneConditions.some((c) => c.toLowerCase().includes(q)))
     );
-  }, [boundOrPneStudents, studentSearch]);
+  }, [activeScopeStudents, studentSearch]);
+
+  // Tutelage overall metrics
+  const tutelageMetrics = useMemo(() => {
+    const targetStudents = myTutelageStudents.length > 0 ? myTutelageStudents : boundOrPneStudents;
+    const studentIds = new Set(targetStudents.map((s) => s.id));
+    const studentMatriculas = new Set(targetStudents.map((s) => s.matricula));
+
+    let totalPending = 0;
+    let totalToCorrect = 0;
+    let totalGraded = 0;
+
+    activities.forEach((act) => {
+      if (!act.isAdapted && !act.adaptationType) return;
+
+      targetStudents.forEach((st) => {
+        if (!canStudentAccessActivity(act.turma, st.turma)) return;
+
+        const sub = act.submissions?.find(
+          (s) => s.studentId === st.id || s.matricula === st.matricula || s.studentName === st.fullName
+        );
+
+        if (!sub || sub.status === 'returned' || sub.status === 'draft') {
+          totalPending += 1;
+        } else if (sub.status === 'pending') {
+          totalToCorrect += 1;
+        } else if (sub.status === 'graded') {
+          totalGraded += 1;
+        }
+      });
+    });
+
+    return {
+      totalTutelageStudents: myTutelageStudents.length,
+      totalAeeStudents: boundOrPneStudents.length,
+      totalPending,
+      totalToCorrect,
+      totalGraded,
+    };
+  }, [myTutelageStudents, boundOrPneStudents, activities]);
 
   const activeStudent = useMemo(() => {
     if (selectedStudentId) {
@@ -346,6 +592,19 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
         {/* Tab switcher for regente or quick actions */}
         <div className="flex items-center gap-2">
+          {isSecondTeacher && (
+            <button
+              onClick={() => {
+                setChangePasswordMsg(null);
+                setIsChangePasswordOpen(true);
+              }}
+              className="py-2 px-4 bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 font-bold rounded-full transition-all border border-amber-400/30 flex items-center gap-1.5 cursor-pointer text-xs shrink-0 shadow-md"
+            >
+              <KeyRound className="w-4 h-4 text-amber-400" />
+              <span>Trocar Senha</span>
+            </button>
+          )}
+
           {!isSecondTeacher && (
             <div className="flex bg-[#131b2e] p-1 rounded-2xl border border-white/10">
               <button
@@ -408,6 +667,49 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
       {/* TAB 1: ALUNOS & ATIVIDADES ADAPTADAS (AEE WORKSPACE) */}
       {activeTab === 'atividades_alunos' && (
         <div className="space-y-6">
+          {/* Painel de Tutela e Métricas Rápidas AEE */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+            <div className="glass-panel p-4 rounded-3xl border border-amber-400/30 bg-amber-500/5 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-400/20 border border-amber-400/30 flex items-center justify-center text-amber-300 shrink-0">
+                <GraduationCap className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase text-amber-300 tracking-wider">Sob Sua Tutela</p>
+                <p className="text-xl font-black text-white">{tutelageMetrics.totalTutelageStudents} <span className="text-xs font-normal text-[#bccabb]">Alunos</span></p>
+              </div>
+            </div>
+
+            <div className="glass-panel p-4 rounded-3xl border border-white/10 bg-[#131b2e] flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase text-[#bccabb] tracking-wider">A Fazer com Suporte</p>
+                <p className="text-xl font-black text-white">{tutelageMetrics.totalPending} <span className="text-xs font-normal text-[#bccabb]">Atividades</span></p>
+              </div>
+            </div>
+
+            <div className="glass-panel p-4 rounded-3xl border border-white/10 bg-[#131b2e] flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 shrink-0">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase text-[#bccabb] tracking-wider">Enviadas p/ Regente</p>
+                <p className="text-xl font-black text-white">{tutelageMetrics.totalToCorrect} <span className="text-xs font-normal text-[#bccabb]">Em Análise</span></p>
+              </div>
+            </div>
+
+            <div className="glass-panel p-4 rounded-3xl border border-white/10 bg-[#131b2e] flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-[#4ade80] shrink-0">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase text-[#bccabb] tracking-wider">Avaliado / Corrigido</p>
+                <p className="text-xl font-black text-white">{tutelageMetrics.totalGraded} <span className="text-xs font-normal text-[#bccabb]">Concluídas</span></p>
+              </div>
+            </div>
+          </div>
+
           {/* Main Layout: Left Column (Student selector) + Right Column (Activities & Cellphone runner) */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Left Column: Lista de Alunos de Inclusão */}
@@ -419,13 +721,37 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                       <GraduationCap className="w-4 h-4" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-white text-sm">Alunos Vinculados</h3>
-                      <p className="text-[11px] text-[#bccabb]">Estudantes com suporte e AEE</p>
+                      <h3 className="font-bold text-white text-sm">Painel de Tutela</h3>
+                      <p className="text-[11px] text-[#bccabb]">Estudantes sob acompanhamento</p>
                     </div>
                   </div>
                   <span className="px-2 py-0.5 bg-amber-400/10 text-amber-400 border border-amber-400/20 rounded-full text-[10px] font-bold">
-                    {filteredStudents.length} Alunos
+                    {filteredStudents.length} {filteredStudents.length === 1 ? 'Aluno' : 'Alunos'}
                   </span>
+                </div>
+
+                {/* Tutelage Scope Switcher */}
+                <div className="grid grid-cols-2 p-1 bg-[#131b2e] rounded-2xl border border-white/10 text-xs">
+                  <button
+                    onClick={() => setTutelaScope('minha_tutela')}
+                    className={`py-1.5 px-2 rounded-xl font-bold transition-all cursor-pointer text-center text-[11px] ${
+                      tutelaScope === 'minha_tutela'
+                        ? 'bg-amber-400 text-black shadow'
+                        : 'text-[#bccabb] hover:text-white'
+                    }`}
+                  >
+                    Minha Tutela ({myTutelageStudents.length})
+                  </button>
+                  <button
+                    onClick={() => setTutelaScope('todos_pne')}
+                    className={`py-1.5 px-2 rounded-xl font-bold transition-all cursor-pointer text-center text-[11px] ${
+                      tutelaScope === 'todos_pne'
+                        ? 'bg-amber-400 text-black shadow'
+                        : 'text-[#bccabb] hover:text-white'
+                    }`}
+                  >
+                    Todos AEE ({boundOrPneStudents.length})
+                  </button>
                 </div>
 
                 {/* Search */}
@@ -443,70 +769,115 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                 {/* Student list */}
                 <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
                   {filteredStudents.length === 0 ? (
-                    <div className="py-8 text-center text-xs text-[#bccabb]">
-                      Nenhum aluno de inclusão encontrado.
+                    <div className="py-8 text-center text-xs text-[#bccabb] space-y-2">
+                      <p>Nenhum aluno encontrado para este filtro.</p>
+                      {tutelaScope === 'minha_tutela' && (
+                        <button
+                          onClick={() => setTutelaScope('todos_pne')}
+                          className="px-3 py-1 bg-amber-400/20 text-amber-300 rounded-full text-[11px] font-bold border border-amber-400/30"
+                        >
+                          Ver Todos os Alunos AEE ({boundOrPneStudents.length})
+                        </button>
+                      )}
                     </div>
                   ) : (
                     filteredStudents.map((s) => {
                       const isSelected = activeStudent?.id === s.id;
-                      const hasBound = s.secondTeacherId === teacher.id || s.secondTeacherName === teacher.name;
+                      const boundTeacherName = getStudentBoundTeacherName(s);
+                      const isBoundToMe =
+                        s.secondTeacherId === teacher.id ||
+                        (s.secondTeacherName && s.secondTeacherName.toLowerCase() === teacher.name?.toLowerCase()) ||
+                        boundTeacherName === teacher.name;
 
                       return (
-                        <button
+                        <div
                           key={s.id}
+                          role="button"
+                          tabIndex={0}
                           onClick={() => {
                             setSelectedStudentId(s.id);
                             setExecutingActivityId(null);
                             setViewingActivityDetailId(null);
                           }}
-                          className={`w-full text-left p-3 rounded-2xl border transition-all cursor-pointer flex items-start gap-3 ${
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              setSelectedStudentId(s.id);
+                              setExecutingActivityId(null);
+                              setViewingActivityDetailId(null);
+                            }
+                          }}
+                          className={`w-full text-left p-3 rounded-2xl border transition-all cursor-pointer flex flex-col gap-2 ${
                             isSelected
                               ? 'bg-amber-400/15 border-amber-400/50 shadow-md ring-1 ring-amber-400/30'
                               : 'bg-[#131b2e] border-white/5 hover:border-white/20 hover:bg-[#171f33]'
                           }`}
                         >
-                          <div className="relative shrink-0">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={s.avatarUrl}
-                              alt={s.fullName}
-                              className="w-10 h-10 rounded-full object-cover border border-amber-400/40"
-                            />
-                            <span className="absolute -bottom-1 -right-1 px-1.5 py-0.2 bg-amber-400 text-black font-extrabold text-[8px] rounded-full">
-                              PNE
-                            </span>
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-1">
-                              <h4 className="font-bold text-white text-xs truncate">{s.fullName}</h4>
-                              <span className="text-[10px] text-amber-300 font-semibold shrink-0">
-                                T: {s.turma}
+                          <div className="flex items-start gap-3 w-full">
+                            <div className="relative shrink-0">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={s.avatarUrl}
+                                alt={s.fullName}
+                                className="w-10 h-10 rounded-full object-cover border border-amber-400/40"
+                              />
+                              <span className="absolute -bottom-1 -right-1 px-1.5 py-0.2 bg-amber-400 text-black font-extrabold text-[8px] rounded-full">
+                                PNE
                               </span>
                             </div>
 
-                            {/* Conditions tags */}
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {s.pneConditions && s.pneConditions.length > 0 ? (
-                                s.pneConditions.slice(0, 2).map((c, i) => (
-                                  <span
-                                    key={i}
-                                    className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-[9px] text-[#dae2fd] truncate max-w-[120px]"
-                                  >
-                                    {c}
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-[9px] text-[#bccabb]">Atendimento AEE</span>
-                              )}
-                              {hasBound && (
-                                <span className="px-1.5 py-0.5 bg-emerald-500/20 border border-emerald-500/30 text-[#4ade80] rounded text-[8px] font-bold">
-                                  Vinculado a Você
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-1">
+                                <h4 className="font-bold text-white text-xs truncate">{s.fullName}</h4>
+                                <span className="text-[10px] text-amber-300 font-semibold shrink-0">
+                                  T: {s.turma}
                                 </span>
+                              </div>
+
+                              {/* Conditions tags */}
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {s.pneConditions && s.pneConditions.length > 0 ? (
+                                  s.pneConditions.slice(0, 2).map((c, i) => (
+                                    <span
+                                      key={i}
+                                      className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-[9px] text-[#dae2fd] truncate max-w-[120px]"
+                                    >
+                                      {c}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-[9px] text-[#bccabb]">Atendimento AEE</span>
+                                )}
+                                {isBoundToMe && (
+                                  <span className="px-1.5 py-0.5 bg-emerald-500/20 border border-emerald-500/30 text-[#4ade80] rounded text-[8px] font-bold">
+                                    Sob Sua Tutela
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* 2º Professor Vinculado Info (Oculto em Minha Tutela para o 2º Professor) */}
+                              {(!isSecondTeacher || tutelaScope === 'todos_pne') && (
+                                <div className="mt-2 flex items-center gap-1.5 text-[10px] bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded-lg text-amber-300 w-fit max-w-full">
+                                  <HeartHandshake className="w-3 h-3 text-amber-400 shrink-0" />
+                                  <span className="truncate">
+                                    2º Prof: <strong className="text-white font-bold">{boundTeacherName || 'Não vinculado'}</strong>
+                                  </span>
+                                </div>
                               )}
                             </div>
                           </div>
-                        </button>
+
+                          {/* Botão para vincular aluno à minha tutela (exibido na aba 'Todos AEE' se desvinculado) */}
+                          {isSecondTeacher && !isBoundToMe && (
+                            <button
+                              onClick={(e) => handleBindStudentToMe(s, e)}
+                              className="w-full py-1.5 px-2 bg-amber-400 hover:bg-amber-300 text-black font-extrabold text-[10px] rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 shadow hover:scale-[1.01] active:scale-[0.99]"
+                              title="Vincular este estudante à minha tutela AEE"
+                            >
+                              <UserPlus className="w-3.5 h-3.5" />
+                              <span>Vincular à Minha Tutela</span>
+                            </button>
+                          )}
+                        </div>
                       );
                     })
                   )}
@@ -515,18 +886,102 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
               {/* Active student info summary */}
               {activeStudent && (
-                <div className="glass-panel p-4 rounded-3xl border border-white/10 space-y-2 text-xs">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
-                    Dados do Acompanhamento
-                  </span>
-                  <p className="text-white font-bold">{activeStudent.fullName}</p>
-                  <p className="text-[#bccabb]">
-                    Matrícula: <strong className="text-white">{activeStudent.matricula}</strong> | Turma: <strong className="text-white">{activeStudent.turma}</strong>
-                  </p>
-                  {activeStudent.pedagogicalNotes && (
-                    <div className="mt-2 p-2.5 bg-[#131b2e] rounded-xl border border-white/5 text-[11px] text-[#bccabb] leading-relaxed">
-                      <strong>Observações do PEI / Laudo:</strong> {activeStudent.pedagogicalNotes}
+                <div className="glass-panel p-4.5 rounded-3xl border border-amber-400/30 bg-[#131b2e] space-y-3 text-xs shadow-xl">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                      Ficha do Estudante AEE
+                    </span>
+                    {activeStudent.secondTeacherId === teacher.id ||
+                    activeStudent.secondTeacherName === teacher.name ||
+                    getStudentBoundTeacherName(activeStudent) === teacher.name ? (
+                      <span className="px-2 py-0.5 bg-emerald-500/20 text-[#4ade80] border border-emerald-500/30 rounded-full text-[9px] font-bold">
+                        Sob Sua Tutela Direta
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded-full text-[9px] font-bold">
+                        Acompanhamento Geral
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={activeStudent.avatarUrl}
+                      alt={activeStudent.fullName}
+                      className="w-11 h-11 rounded-full object-cover border-2 border-amber-400/60 shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-white font-bold text-sm truncate">{activeStudent.fullName}</p>
+                      <p className="text-[11px] text-[#bccabb] font-medium mt-0.5">
+                        Matrícula: <strong className="text-white">{activeStudent.matricula}</strong> | Turma: <strong className="text-white">{activeStudent.turma}</strong>
+                      </p>
+                      {(!isSecondTeacher || tutelaScope === 'todos_pne') && (
+                        <p className="text-[11px] text-amber-300 font-semibold mt-1 flex items-center gap-1">
+                          <HeartHandshake className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span>2º Professor: <strong className="text-white font-bold">{getStudentBoundTeacherName(activeStudent) || 'Não vinculado'}</strong></span>
+                        </p>
+                      )}
                     </div>
+                  </div>
+
+                  {/* Botão de Controle de Vinculação na Ficha do Estudante */}
+                  {isSecondTeacher && (
+                    <div className="pt-2 border-t border-white/10">
+                      {getStudentBoundTeacherName(activeStudent) === teacher.name ||
+                      activeStudent.secondTeacherId === teacher.id ||
+                      activeStudent.secondTeacherName === teacher.name ? (
+                        <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-2xl">
+                          <span className="text-emerald-400 text-xs font-bold flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4" />
+                            Aluno vinculado à sua tutela
+                          </span>
+                          <button
+                            onClick={() => handleUnbindStudent(activeStudent)}
+                            className="text-[10px] text-rose-400 hover:text-rose-300 font-bold underline cursor-pointer"
+                          >
+                            Desvincular
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleBindStudentToMe(activeStudent)}
+                          className="w-full py-2.5 px-4 bg-amber-400 hover:bg-amber-300 text-black font-black text-xs rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg hover:scale-[1.01] active:scale-[0.99]"
+                        >
+                          <UserPlus className="w-4 h-4" />
+                          <span>Vincular Este Aluno à Minha Tutela</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Conditions Pills */}
+                  {activeStudent.pneConditions && activeStudent.pneConditions.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold text-[#bccabb] uppercase">Necessidades & Laudos:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {activeStudent.pneConditions.map((cond, i) => (
+                          <span
+                            key={i}
+                            className="px-2 py-0.5 bg-amber-400/15 text-amber-300 border border-amber-400/30 rounded-lg text-[10px] font-semibold"
+                          >
+                            {cond}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {activeStudent.pedagogicalNotes ? (
+                    <div className="p-2.5 bg-[#0b1326] rounded-xl border border-white/10 text-[11px] text-[#dae2fd] leading-relaxed space-y-1">
+                      <p className="font-bold text-amber-300 text-[10px] uppercase flex items-center gap-1">
+                        <BookOpen className="w-3 h-3" /> Observações do PEI / Laudo
+                      </p>
+                      <p className="whitespace-pre-wrap">{activeStudent.pedagogicalNotes}</p>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-[#bccabb] italic">Sem observações de PEI cadastradas para este aluno.</p>
                   )}
                 </div>
               )}
@@ -1003,60 +1458,85 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                 </button>
               </div>
             ) : (
-              secondTeachers.map((st) => (
-                <div
-                  key={st.id}
-                  className="glass-panel p-5 rounded-3xl border border-white/10 flex flex-col justify-between group"
-                >
-                  <div>
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-amber-500/30 shadow-md">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={st.avatarUrl} alt={st.name} className="w-full h-full object-cover" />
-                      </div>
-                      <span className="flex items-center gap-1 bg-amber-500/10 text-amber-400 px-2.5 py-1 rounded-full text-[10px] font-bold border border-amber-500/20">
-                        <ShieldCheck className="w-3 h-3" /> AEE
-                      </span>
-                    </div>
-                    <h3 className="font-bold text-white text-lg mb-1 truncate">{st.name}</h3>
+              secondTeachers.map((st) => {
+                const isPendingReset =
+                  st.email && resetRequests.some((e) => e.toLowerCase() === st.email?.toLowerCase());
 
-                    <div className="space-y-2 mt-4">
-                      <div className="flex items-center gap-2 text-xs text-[#bccabb]">
-                        <Mail className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate">{st.email}</span>
+                return (
+                  <div
+                    key={st.id}
+                    className="glass-panel p-5 rounded-3xl border border-white/10 flex flex-col justify-between group"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-amber-500/30 shadow-md">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={st.avatarUrl} alt={st.name} className="w-full h-full object-cover" />
+                        </div>
+                        <span className="flex items-center gap-1 bg-amber-500/10 text-amber-400 px-2.5 py-1 rounded-full text-[10px] font-bold border border-amber-500/20">
+                          <ShieldCheck className="w-3 h-3" /> AEE
+                        </span>
                       </div>
-                      {st.phone && (
-                        <div className="flex items-center gap-2 text-xs text-[#bccabb]">
-                          <Phone className="w-3.5 h-3.5 shrink-0" />
-                          <span>{st.phone}</span>
+                      <h3 className="font-bold text-white text-lg mb-1 truncate">{st.name}</h3>
+
+                      {isPendingReset && (
+                        <div className="mt-2 text-[11px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/40 px-3 py-1.5 rounded-xl flex items-center gap-1.5 animate-pulse">
+                          <KeyRound className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span>Solicitação de Reset (Senha 1234)</span>
                         </div>
                       )}
-                      {st.subject && (
+
+                      <div className="space-y-2 mt-4">
                         <div className="flex items-center gap-2 text-xs text-[#bccabb]">
-                          <BookOpen className="w-3.5 h-3.5 shrink-0" />
-                          <span className="truncate">{st.subject}</span>
+                          <Mail className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">{st.email}</span>
                         </div>
-                      )}
-                      {st.school && (
-                        <div className="flex items-center gap-2 text-xs text-[#bccabb]">
-                          <School className="w-3.5 h-3.5 shrink-0" />
-                          <span className="truncate">{st.school}</span>
-                        </div>
-                      )}
+                        {st.phone && (
+                          <div className="flex items-center gap-2 text-xs text-[#bccabb]">
+                            <Phone className="w-3.5 h-3.5 shrink-0" />
+                            <span>{st.phone}</span>
+                          </div>
+                        )}
+                        {st.subject && (
+                          <div className="flex items-center gap-2 text-xs text-[#bccabb]">
+                            <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">{st.subject}</span>
+                          </div>
+                        )}
+                        {st.school && (
+                          <div className="flex items-center gap-2 text-xs text-[#bccabb]">
+                            <School className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">{st.school}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between gap-2">
+                      <button
+                        onClick={() => handleResetTeacherPassword(st)}
+                        className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                          isPendingReset
+                            ? 'bg-amber-400 text-black hover:bg-amber-300 border-amber-300 shadow-amber-400/30'
+                            : 'bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 hover:text-amber-200 border-amber-400/30'
+                        }`}
+                        title="Resetar senha deste professor para 1234"
+                      >
+                        <KeyRound className="w-3.5 h-3.5 shrink-0" />
+                        <span>Resetar Senha (1234)</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleDelete(st.id, st.name)}
+                        className="p-2 text-rose-400 hover:text-white hover:bg-rose-500 rounded-xl transition-all cursor-pointer"
+                        title="Remover acesso"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
-
-                  <div className="mt-6 pt-4 border-t border-white/10 flex justify-end">
-                    <button
-                      onClick={() => handleDelete(st.id, st.name)}
-                      className="p-2 text-rose-400 hover:text-white hover:bg-rose-500 rounded-xl transition-all cursor-pointer"
-                      title="Remover acesso"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -1072,6 +1552,91 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
           setTimeout(() => setSuccessMsg(''), 3000);
         }}
       />
+
+      {/* Modal Trocar Senha no Painel */}
+      {isChangePasswordOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="glass-panel w-full max-w-md p-6 rounded-3xl border border-white/10 space-y-5 bg-[#0e172a] shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+                <KeyRound className="w-5 h-5" />
+                <span>Trocar Minha Senha de Acesso</span>
+              </div>
+              <button
+                onClick={() => setIsChangePasswordOpen(false)}
+                className="text-[#bccabb] hover:text-white p-1 rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {changePasswordMsg && (
+              <div
+                className={`p-3 rounded-2xl text-xs font-semibold ${
+                  changePasswordMsg.type === 'success'
+                    ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300'
+                    : 'bg-rose-500/20 border border-rose-500/40 text-rose-300'
+                }`}
+              >
+                {changePasswordMsg.text}
+              </div>
+            )}
+
+            <form onSubmit={handleChangePassword} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-[#bccabb] font-semibold mb-1">E-mail Cadastrado</label>
+                <input
+                  type="email"
+                  disabled
+                  value={teacher.email || ''}
+                  className="w-full bg-[#131b2e]/60 border border-white/10 rounded-2xl px-4 py-3 text-white/70 cursor-not-allowed"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[#bccabb] font-semibold mb-1">Nova Senha (Mínimo 4 caracteres)</label>
+                <input
+                  type="password"
+                  required
+                  value={changePasswordNewPass}
+                  onChange={(e) => setChangePasswordNewPass(e.target.value)}
+                  className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-amber-400"
+                  placeholder="Digite sua nova senha"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[#bccabb] font-semibold mb-1">Confirmar Nova Senha</label>
+                <input
+                  type="password"
+                  required
+                  value={changePasswordConfirmPass}
+                  onChange={(e) => setChangePasswordConfirmPass(e.target.value)}
+                  className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-amber-400"
+                  placeholder="Repita a nova senha"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsChangePasswordOpen(false)}
+                  className="flex-1 py-3 bg-[#131b2e] hover:bg-[#1a243b] text-[#bccabb] font-bold rounded-2xl border border-white/10 transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={changePasswordLoading}
+                  className="flex-1 py-3 bg-amber-400 hover:bg-amber-300 text-black font-bold rounded-2xl transition-all shadow-lg shadow-amber-400/20 cursor-pointer"
+                >
+                  {changePasswordLoading ? 'Salvando...' : 'Atualizar Senha'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

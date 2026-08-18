@@ -158,24 +158,50 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   useEffect(() => {
     const handleGameMessage = (event: MessageEvent) => {
       if (event.data && event.data.type === 'PLAYFUL_GAME_COMPLETED') {
-        const { score = 10, maxScore = 10, finalGrade } = event.data;
+        const { score = 10, maxScore = 10, finalGrade, activityId } = event.data;
         const calcGrade = finalGrade !== undefined ? Number(finalGrade) : (Number(score) / (Number(maxScore) || 1)) * 10;
         
         // Find which playful activity this applies to
-        authorizedActivities.forEach((act) => {
-          if (act.playfulGameHtml || act.adaptationType === 'severe_playful') {
-            setPlayfulScores((prev) => ({
-              ...prev,
-              [act.id]: { score: Number(score), maxScore: Number(maxScore), grade: Number(calcGrade.toFixed(1)) },
-            }));
-          }
-        });
+        const act = authorizedActivities.find(
+          (a) => (activityId && a.id === activityId) || (selectedActivityId && a.id === selectedActivityId) || (fullscreenGameActivityId && a.id === fullscreenGameActivityId) || a.playfulGameHtml || a.adaptationType === 'severe_playful'
+        );
+
+        if (act) {
+          const maxG = act.maxGrade || Number(maxScore) || 10;
+          const recordedScore = Number(calcGrade.toFixed(1));
+
+          setPlayfulScores((prev) => ({
+            ...prev,
+            [act.id]: { score: Number(score), maxScore: Number(maxScore), grade: recordedScore },
+          }));
+
+          // Finalizar e enviar para persistência no banco e fila de correção
+          onSubmitAnswer(
+            act.id,
+            student.id,
+            '🎮 Atividade Lúdica Interativa concluída com sucesso no jogo educacional.',
+            recordedScore,
+            maxG,
+            0,
+            {},
+            undefined
+          );
+
+          setSubmissionSuccessMsg(`🎉 Atividade Finalizada e Enviada! Nota conquistada: ${recordedScore} / ${maxG} pts.`);
+          setTimeout(() => setSubmissionSuccessMsg(null), 6000);
+
+          // Fechar a atividade e retornar à lista inicial com filtros
+          setSelectedActivityId(null);
+          setFullscreenGameActivityId(null);
+          setStudentFilter('a_corrigir');
+          setActiveTab('atividades');
+        }
       }
     };
 
     window.addEventListener('message', handleGameMessage);
     return () => window.removeEventListener('message', handleGameMessage);
-  }, [authorizedActivities]);
+  }, [authorizedActivities, selectedActivityId, fullscreenGameActivityId, student.id, onSubmitAnswer]);
 
   // Anti-Cola Focus Lock Warning State per activity: { [activityId: string]: number }
   const [focusWarnings, setFocusWarnings] = useState<{ [activityId: string]: number }>({});
@@ -283,6 +309,14 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       );
 
       setSubmissionSuccessMsg(`🎉 Parabéns! Você concluiu a atividade lúdica e conquistou ${finalScore.toFixed(1)} / ${maxScore} pts!`);
+      setTimeout(() => setSubmissionSuccessMsg(null), 6000);
+
+      // Fechar visualização da atividade e retornar à lista inicial com filtros
+      setFocusWarnings((prev) => ({ ...prev, [act.id]: 0 }));
+      setSelectedActivityId(null);
+      setFullscreenGameActivityId(null);
+      setStudentFilter('a_corrigir');
+      setActiveTab('atividades');
       return;
     }
 
@@ -367,6 +401,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
     // Close detail view and switch to "A Corrigir" list filter
     setSelectedActivityId(null);
+    setFullscreenGameActivityId(null);
     setStudentFilter('a_corrigir');
     setActiveTab('atividades');
   };

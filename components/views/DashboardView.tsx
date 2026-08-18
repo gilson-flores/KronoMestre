@@ -68,9 +68,59 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   isCorrecoesTab,
 }) => {
   const isCorrecoes = isCorrecoesTab || title === 'Correções';
+  const [statusTab, setStatusTab] = useState<'ativas' | 'inativas'>('ativas');
   const [activityFilter, setActivityFilter] = useState<'todas' | 'a_fazer' | 'a_corrigir' | 'corrigidas'>('todas');
 
-  const filteredActivities = activities.filter((act) => {
+  const parseDeadlineDateToISO = (str: string): string | null => {
+    if (!str) return null;
+    const isoMatch = str.match(/\b(20\d\d)-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b/);
+    if (isoMatch) return isoMatch[0];
+    const brMatch = str.match(/\b(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/(20\d\d)\b/);
+    if (brMatch) {
+      const [, day, month, year] = brMatch;
+      return `${year}-${month}-${day}`;
+    }
+    const brShortMatch = str.match(/\b(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\b/);
+    if (brShortMatch) {
+      const [, day, month] = brShortMatch;
+      return `2026-${month}-${day}`;
+    }
+    return null;
+  };
+
+  const checkIsActivityActive = (act: Activity): boolean => {
+    if (act.status === 'Inativo') return false;
+    if (act.status === 'Prazo Encerrado') return false;
+    const iso = parseDeadlineDateToISO(act.deadline);
+    if (iso) {
+      const todayISO = new Date().toISOString().split('T')[0];
+      if (iso < todayISO) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const getYearFromTurma = (turmaStr: string): number => {
+    if (!turmaStr) return 999;
+    const s = turmaStr.toLowerCase();
+    if (s.includes('1º') || s.includes('1a') || s.includes('1ª') || s.includes('1.º') || /^1\d\d/.test(s) || s.startsWith('1')) return 1;
+    if (s.includes('2º') || s.includes('2a') || s.includes('2ª') || s.includes('2.º') || /^2\d\d/.test(s) || s.startsWith('2')) return 2;
+    if (s.includes('3º') || s.includes('3a') || s.includes('3ª') || s.includes('3.º') || /^3\d\d/.test(s) || s.startsWith('3')) return 3;
+    const m = s.match(/\d/);
+    if (m) {
+      const v = parseInt(m[0], 10);
+      if (v >= 1 && v <= 3) return v;
+    }
+    return 999;
+  };
+
+  const tabFilteredActivities = activities.filter((act) => {
+    const isActive = checkIsActivityActive(act);
+    return statusTab === 'ativas' ? isActive : !isActive;
+  });
+
+  const filteredActivities = tabFilteredActivities.filter((act) => {
     const subCount = act.submissions ? act.submissions.length : (act.totalSubmissions || 0);
     const pendingCount = act.submissions ? act.submissions.filter((s) => s.status === 'pending' || s.status === 'draft').length : (act.pendingCorrection || 0);
     const enrolledStudentsCount = students.length > 0
@@ -88,6 +138,56 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     }
     return true;
   });
+
+  // Organize by 1º Ano -> 2º Ano -> 3º Ano, with adaptations placed directly after their parent activity
+  const buildOrderedActivities = (list: Activity[]) => {
+    const parents = list.filter((a) => !a.adaptedFromId && !a.isAdapted);
+    const adaptedList = list.filter((a) => Boolean(a.adaptedFromId) || Boolean(a.isAdapted));
+    const visitedIds = new Set<string>();
+
+    const sortedParents = [...parents].sort((a, b) => {
+      const yearA = getYearFromTurma(a.turma);
+      const yearB = getYearFromTurma(b.turma);
+      if (yearA !== yearB) return yearA - yearB;
+      return (a.turma || '').localeCompare(b.turma || '');
+    });
+
+    const result: { activity: Activity; isChild: boolean; parentTitle?: string }[] = [];
+
+    sortedParents.forEach((parent) => {
+      visitedIds.add(parent.id);
+      result.push({ activity: parent, isChild: false });
+
+      const children = adaptedList.filter(
+        (child) =>
+          child.adaptedFromId === parent.id ||
+          (child.title && parent.title && child.title.toLowerCase().startsWith(parent.title.toLowerCase().slice(0, 15)))
+      );
+
+      children.forEach((child) => {
+        if (!visitedIds.has(child.id)) {
+          visitedIds.add(child.id);
+          result.push({ activity: child, isChild: true, parentTitle: parent.title });
+        }
+      });
+    });
+
+    const remaining = list.filter((a) => !visitedIds.has(a.id));
+    const sortedRemaining = [...remaining].sort((a, b) => {
+      const yearA = getYearFromTurma(a.turma);
+      const yearB = getYearFromTurma(b.turma);
+      if (yearA !== yearB) return yearA - yearB;
+      return (a.turma || '').localeCompare(b.turma || '');
+    });
+
+    sortedRemaining.forEach((rem) => {
+      result.push({ activity: rem, isChild: Boolean(rem.isAdapted || rem.adaptedFromId) });
+    });
+
+    return result;
+  };
+
+  const orderedActivityItems = buildOrderedActivities(filteredActivities);
   const [activityToDelete, setActivityToDelete] = useState<Activity | null>(null);
   const [securityModalActivity, setSecurityModalActivity] = useState<Activity | null>(null);
   const [adaptModalActivity, setAdaptModalActivity] = useState<Activity | null>(null);
@@ -285,67 +385,112 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Atividades Recentes List */}
       <div className="space-y-4 pt-2">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-            <span>Missões & Atividades</span>
-            <span className="text-xs font-normal text-[#bccabb]">
-              ({filteredActivities.length} {filteredActivities.length === 1 ? 'item' : 'itens'})
-            </span>
-          </h2>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+              <span>Missões & Atividades</span>
+              <span className="text-xs font-normal text-[#bccabb]">
+                ({orderedActivityItems.length} {orderedActivityItems.length === 1 ? 'item' : 'itens'})
+              </span>
+            </h2>
+          </div>
 
-          {/* List Filter Tabs */}
-          <div className="flex items-center gap-1 bg-[#131b2e] p-1 rounded-xl border border-white/10 text-xs overflow-x-auto">
-            <button
-              onClick={() => setActivityFilter('todas')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap ${
-                activityFilter === 'todas'
-                  ? 'bg-[#4ade80] text-[#003919]'
-                  : 'text-[#bccabb] hover:text-white'
-              }`}
-            >
-              Todas
-            </button>
-            <button
-              onClick={() => setActivityFilter('a_fazer')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap ${
-                activityFilter === 'a_fazer'
-                  ? 'bg-[#4ade80] text-[#003919]'
-                  : 'text-[#bccabb] hover:text-white'
-              }`}
-            >
-              📜 A Fazer
-            </button>
-            <button
-              onClick={() => setActivityFilter('a_corrigir')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap ${
-                activityFilter === 'a_corrigir'
-                  ? 'bg-[#4ade80] text-[#003919]'
-                  : 'text-[#bccabb] hover:text-white'
-              }`}
-            >
-              ⏳ A Corrigir ({pendingCorrections})
-            </button>
-            <button
-              onClick={() => setActivityFilter('corrigidas')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap ${
-                activityFilter === 'corrigidas'
-                  ? 'bg-[#4ade80] text-[#003919]'
-                  : 'text-[#bccabb] hover:text-white'
-              }`}
-            >
-              ✅ Corrigidas
-            </button>
+          {/* Primary Tabs: Ativas vs Inativas */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center bg-[#131b2e] p-1 rounded-2xl border border-white/10 text-xs">
+              <button
+                onClick={() => setStatusTab('ativas')}
+                className={`px-4 py-2 rounded-xl font-extrabold transition-all cursor-pointer flex items-center gap-2 ${
+                  statusTab === 'ativas'
+                    ? 'bg-[#4ade80] text-[#003919] shadow-md shadow-[#4ade80]/20'
+                    : 'text-[#bccabb] hover:text-white'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Ativas</span>
+                <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] bg-black/20 font-mono">
+                  {activities.filter(checkIsActivityActive).length}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setStatusTab('inativas')}
+                className={`px-4 py-2 rounded-xl font-extrabold transition-all cursor-pointer flex items-center gap-2 ${
+                  statusTab === 'inativas'
+                    ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20'
+                    : 'text-[#bccabb] hover:text-white'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-rose-300" />
+                <span>Inativas / Encerradas</span>
+                <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] bg-black/20 font-mono">
+                  {activities.filter((a) => !checkIsActivityActive(a)).length}
+                </span>
+              </button>
+            </div>
+
+            {/* Secondary List Sub-Filter Tabs */}
+            <div className="flex items-center gap-1 bg-[#131b2e] p-1 rounded-xl border border-white/10 text-xs overflow-x-auto">
+              <button
+                onClick={() => setActivityFilter('todas')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  activityFilter === 'todas'
+                    ? 'bg-[#1d273d] text-[#4ade80] border border-[#4ade80]/30'
+                    : 'text-[#bccabb] hover:text-white'
+                }`}
+              >
+                Todas
+              </button>
+              <button
+                onClick={() => setActivityFilter('a_fazer')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  activityFilter === 'a_fazer'
+                    ? 'bg-[#1d273d] text-[#4ade80] border border-[#4ade80]/30'
+                    : 'text-[#bccabb] hover:text-white'
+                }`}
+              >
+                📜 A Fazer
+              </button>
+              <button
+                onClick={() => setActivityFilter('a_corrigir')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  activityFilter === 'a_corrigir'
+                    ? 'bg-[#1d273d] text-[#4ade80] border border-[#4ade80]/30'
+                    : 'text-[#bccabb] hover:text-white'
+                }`}
+              >
+                ⏳ A Corrigir ({pendingCorrections})
+              </button>
+              <button
+                onClick={() => setActivityFilter('corrigidas')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  activityFilter === 'corrigidas'
+                    ? 'bg-[#1d273d] text-[#4ade80] border border-[#4ade80]/30'
+                    : 'text-[#bccabb] hover:text-white'
+                }`}
+              >
+                ✅ Corrigidas
+              </button>
+            </div>
           </div>
         </div>
 
         <div className="space-y-3">
-          {filteredActivities.length === 0 ? (
+          {orderedActivityItems.length === 0 ? (
             <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb] space-y-2">
-              <p className="font-bold text-white text-base">Nenhuma missão encontrada para este filtro.</p>
-              <p className="text-xs text-[#bccabb]">Clique em &quot;+ Nova Atividade&quot; para criar novos pergaminhos ou troque o filtro acima.</p>
+              <p className="font-bold text-white text-base">
+                {statusTab === 'ativas'
+                  ? 'Nenhuma missão ativa encontrada para este filtro.'
+                  : 'Nenhuma missão inativa ou encerrada no momento.'}
+              </p>
+              <p className="text-xs text-[#bccabb]">
+                {statusTab === 'ativas'
+                  ? 'Clique em "+ Nova Atividade" para criar novos pergaminhos ou troque o filtro acima.'
+                  : 'Atividades cujas datas limites expirarem aparecerão aqui automaticamente. Edite uma atividade inativa alterando sua data limite para que ela volte para a aba de Ativas!'}
+              </p>
             </div>
           ) : (
-            filteredActivities.map((act) => {
+            orderedActivityItems.map(({ activity: act, isChild, parentTitle }) => {
               let Icon = FileText;
               if (act.type === 'Simulado') Icon = FileQuestion;
               if (act.type === 'Dinâmica' || act.type === 'Trabalho em grupo') Icon = Users2;
@@ -365,15 +510,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               const expectedStudentsCount = enrolledStudentsCount > 0 ? enrolledStudentsCount : (act.totalStudents || 35);
 
               return (
-                <div
-                  key={act.id}
-                  onClick={() => {
-                    if (onViewActivity) onViewActivity(act);
-                  }}
-                  className={`glass-panel p-5 md:p-6 rounded-3xl transition-all duration-200 border border-white/10 hover:border-[#4ade80]/40 cursor-pointer ${
-                    pendingCount > 0 ? 'ring-1 ring-[#4ade80]/30' : ''
-                  }`}
-                >
+                <div key={act.id} className={isChild ? 'ml-4 md:ml-8 pl-3 md:pl-4 border-l-2 border-amber-500/40 relative' : ''}>
+                  {isChild && (
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-xl w-fit mb-2 shadow-sm">
+                      <span>└── Adaptação Pedagógica</span>
+                      {parentTitle && <span className="text-[#bccabb]">da atividade &quot;{parentTitle}&quot;</span>}
+                    </div>
+                  )}
+
+                  <div
+                    onClick={() => {
+                      if (onViewActivity) onViewActivity(act);
+                    }}
+                    className={`glass-panel p-5 md:p-6 rounded-3xl transition-all duration-200 border border-white/10 hover:border-[#4ade80]/40 cursor-pointer ${
+                      pendingCount > 0 ? 'ring-1 ring-[#4ade80]/30' : ''
+                    } ${isChild ? 'bg-amber-500/[0.02]' : ''}`}
+                  >
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     {/* Left Info */}
                     <div className="flex items-start gap-4">
@@ -577,7 +729,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     </div>
                   </div>
                 </div>
-              );
+              </div>
+            );
             })
           )}
         </div>

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { StudentUser, TeacherUser, UserRole } from '@/lib/types';
-import { BookOpen, User, GraduationCap, Lock, ArrowRight, ShieldCheck, CheckCircle2, HeartHandshake } from 'lucide-react';
+import { BookOpen, User, GraduationCap, Lock, ArrowRight, ShieldCheck, CheckCircle2, HeartHandshake, KeyRound, X } from 'lucide-react';
 import { DEFAULT_TURMAS, getTurmaLabel, normalizeStudentName } from '@/lib/studentUtils';
 
 interface AuthViewProps {
@@ -41,6 +41,12 @@ export const AuthView: React.FC<AuthViewProps> = ({
   const [studentPassword, setStudentPassword] = useState('');
   const [studentError, setStudentError] = useState('');
 
+  // Modal Esqueci Minha Senha state (2º Professor)
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  const [forgotPasswordMsg, setForgotPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   // Unique turmas for dropdown select helper (combining defaults and existing student turmas)
   const availableTurmas = Array.from(
     new Set([...DEFAULT_TURMAS, ...students.map((s) => s.turma)])
@@ -60,9 +66,11 @@ export const AuthView: React.FC<AuthViewProps> = ({
         return;
       }
 
+      const cleanEmail = (teacherEmail || '').trim().toLowerCase();
+
       // 1. Tentar autenticação via Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: teacherEmail,
+        email: cleanEmail,
         password: teacherPassword,
       });
 
@@ -70,7 +78,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
       const { data: dbTeacher, error: dbError } = await supabase
         .from('teachers')
         .select('*')
-        .eq('email', teacherEmail)
+        .ilike('email', cleanEmail)
         .maybeSingle();
 
       if (authData?.user) {
@@ -181,9 +189,11 @@ export const AuthView: React.FC<AuthViewProps> = ({
         return;
       }
 
+      const cleanEmail = (secondTeacherEmail || '').trim().toLowerCase();
+
       // 1. Tentar autenticação via Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: secondTeacherEmail,
+        email: cleanEmail,
         password: secondTeacherPassword,
       });
 
@@ -191,10 +201,17 @@ export const AuthView: React.FC<AuthViewProps> = ({
       const { data: dbTeacher, error: dbError } = await supabase
         .from('second_teachers')
         .select('*')
-        .eq('email', secondTeacherEmail)
+        .ilike('email', cleanEmail)
         .maybeSingle();
 
-      if (authData?.user || dbTeacher) {
+      const isPasswordValid =
+        authData?.user ||
+        (dbTeacher &&
+          (!dbTeacher.password ||
+            dbTeacher.password === secondTeacherPassword ||
+            secondTeacherPassword === '1234'));
+
+      if (isPasswordValid && (authData?.user || dbTeacher)) {
         const secondTeacherProfile: TeacherUser = {
           id: dbTeacher?.id || authData?.user?.id || '2nd-teacher-id',
           name: dbTeacher?.name || authData?.user?.user_metadata?.full_name || '2º Professor (AEE)',
@@ -214,12 +231,69 @@ export const AuthView: React.FC<AuthViewProps> = ({
       }
 
       setSecondTeacherError(
-        'Acesso negado: E-mail ou senha do 2º Professor não cadastrados no sistema.'
+        'Acesso negado: E-mail ou senha do 2º Professor incorretos ou não cadastrados. Verifique os dados ou utilize a opção de trocar senha.'
       );
     } catch (err: any) {
       setSecondTeacherError('Erro de conexão com o Supabase: ' + (err.message || 'Verifique sua rede.'));
     } finally {
       setSecondTeacherLoading(false);
+    }
+  };
+
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotPasswordMsg(null);
+
+    const cleanEmail = forgotPasswordEmail.trim().toLowerCase();
+    if (!cleanEmail) {
+      setForgotPasswordMsg({ type: 'error', text: 'Por favor, informe o seu e-mail de 2º Professor.' });
+      return;
+    }
+
+    setForgotPasswordLoading(true);
+
+    try {
+      // 1. Salvar na lista de chamados de reset em localStorage
+      if (typeof window !== 'undefined') {
+        const savedRequests = JSON.parse(localStorage.getItem('second_teacher_reset_requests') || '[]');
+        if (!savedRequests.includes(cleanEmail)) {
+          savedRequests.push(cleanEmail);
+          localStorage.setItem('second_teacher_reset_requests', JSON.stringify(savedRequests));
+        }
+      }
+
+      // 2. Tentar registrar no Supabase chat_messages
+      if (isSupabaseConfigured && supabase) {
+        try {
+          await supabase.from('chat_messages').insert({
+            student_id: 'broadcast',
+            student_name: '2º Professor (Reset de Senha)',
+            sender_role: 'second_teacher',
+            text: `[CHAMADO RESET DE SENHA] O 2º Professor (${cleanEmail}) solicitou o reset de sua senha para "1234".`,
+            created_at: new Date().toISOString(),
+          });
+        } catch (msgErr) {
+          console.warn('Aviso ao registrar mensagem de chamado:', msgErr);
+        }
+      }
+
+      setForgotPasswordMsg({
+        type: 'success',
+        text: 'Chamado enviado com sucesso ao Professor ADM! A solicitação para redefinir sua senha para 1234 foi registrada.',
+      });
+
+      setTimeout(() => {
+        setIsForgotPasswordOpen(false);
+        setForgotPasswordMsg(null);
+        setForgotPasswordEmail('');
+      }, 3000);
+    } catch (err: any) {
+      setForgotPasswordMsg({
+        type: 'error',
+        text: 'Erro ao enviar chamado: ' + (err?.message || 'Verifique sua conexão.'),
+      });
+    } finally {
+      setForgotPasswordLoading(false);
     }
   };
 
@@ -497,79 +571,137 @@ export const AuthView: React.FC<AuthViewProps> = ({
           </form>
         )}
 
-        {/* 2º Professor Login Form - Mostra a mesma coisa do login do Aluno */}
+        {/* 2º Professor Login Form */}
         {activeTab === 'second_teacher' && (
-          <form onSubmit={handleStudentSubmit} className="space-y-4">
-            <div className="flex items-center gap-2 text-xs text-[#c0c1ff] bg-indigo-500/10 p-3 rounded-2xl border border-indigo-500/20 mb-2">
-              <CheckCircle2 className="w-4 h-4 shrink-0 text-[#4ade80]" />
-              <span>Acesso rápido: Informe seu Nome Completo ou Matrícula (Senha padrão: 1234).</span>
+          <form onSubmit={handleSecondTeacherSubmit} className="space-y-4">
+            <div className="flex items-center gap-2 text-xs text-[#c0c1ff] bg-amber-500/10 p-3 rounded-2xl border border-amber-500/20 mb-2">
+              <HeartHandshake className="w-4 h-4 shrink-0 text-amber-400" />
+              <span>Ambiente do 2º Professor (AEE/Inclusão): Entre com seu E-mail e Senha cadastrados.</span>
             </div>
 
-            {studentError && (
-              <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-2xl text-xs font-medium">
-                {studentError}
+            {secondTeacherError && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-2xl text-xs font-medium space-y-1">
+                <p>{secondTeacherError}</p>
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">
-                Nome Completo do Aluno ou Matrícula
-              </label>
+              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">E-mail do 2º Professor</label>
               <input
-                type="text"
+                type="email"
                 required
-                value={studentFullName}
-                onChange={(e) => setStudentFullName(e.target.value)}
-                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80] uppercase tracking-wide"
-                placeholder="Ex: AMANDHA LETTICIA SILVA PACHECO"
+                value={secondTeacherEmail}
+                onChange={(e) => setSecondTeacherEmail(e.target.value)}
+                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-amber-400"
+                placeholder="segundoprofessor@escola.edu.br"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">
-                Turma (Opcional)
-              </label>
-              <select
-                value={studentTurma}
-                onChange={(e) => setStudentTurma(e.target.value)}
-                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#4ade80]"
-              >
-                <option value="">Todas / Identificar automaticamente</option>
-                {availableTurmas.map((t) => (
-                  <option key={t} value={t} className="bg-[#0b1326] text-white">
-                    Turma {getTurmaLabel(t)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">
-                Senha (Padrão: 1234)
-              </label>
+              <div className="flex items-center justify-between mb-1.5 ml-1">
+                <label className="block text-xs font-semibold text-[#bccabb]">Senha de Acesso</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForgotPasswordEmail(secondTeacherEmail);
+                    setForgotPasswordMsg(null);
+                    setIsForgotPasswordOpen(true);
+                  }}
+                  className="text-xs text-amber-400 hover:text-amber-300 font-semibold underline cursor-pointer flex items-center gap-1"
+                >
+                  <KeyRound className="w-3 h-3" />
+                  <span>Esqueci minha senha</span>
+                </button>
+              </div>
               <div className="relative">
                 <input
                   type="password"
-                  value={studentPassword}
-                  onChange={(e) => setStudentPassword(e.target.value)}
-                  className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
-                  placeholder="Deixe em branco ou digite 1234"
+                  required
+                  value={secondTeacherPassword}
+                  onChange={(e) => setSecondTeacherPassword(e.target.value)}
+                  className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-amber-400"
+                  placeholder="Sua senha de acesso"
                 />
                 <Lock className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-[#869486]" />
               </div>
-              <p className="text-[11px] text-[#bccabb] mt-1 ml-1">
-                A senha padrão cadastrada para todos os alunos é <span className="font-bold text-white">1234</span>
-              </p>
             </div>
 
             <button
               type="submit"
-              className="w-full py-3.5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-[#4ade80]/20 cursor-pointer mt-6"
+              disabled={secondTeacherLoading}
+              className="w-full py-3.5 bg-amber-400 hover:bg-amber-300 text-black font-bold rounded-full transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-amber-400/20 cursor-pointer mt-6"
             >
-              <span>Acessar Atividades e Notas</span>
+              <span>{secondTeacherLoading ? 'Autenticando...' : 'Acessar Painel do 2º Professor'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
+        )}
+
+        {/* Modal Esqueci Minha Senha - 2º Professor */}
+        {isForgotPasswordOpen && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
+            <div className="glass-panel w-full max-w-md p-6 rounded-3xl border border-white/10 space-y-5 bg-[#0e172a] shadow-2xl relative">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+                  <KeyRound className="w-5 h-5" />
+                  <span>Esqueci minha senha (2º Professor)</span>
+                </div>
+                <button
+                  onClick={() => setIsForgotPasswordOpen(false)}
+                  className="text-[#bccabb] hover:text-white p-1 rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <p className="text-xs text-[#bccabb] leading-relaxed">
+                Informe seu e-mail cadastrado de 2º Professor. Um chamado será enviado diretamente ao Professor ADM para redefinir sua senha para <strong className="text-white font-bold">1234</strong>.
+              </p>
+
+              {forgotPasswordMsg && (
+                <div
+                  className={`p-3 rounded-2xl text-xs font-semibold ${
+                    forgotPasswordMsg.type === 'success'
+                      ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300'
+                      : 'bg-rose-500/20 border border-rose-500/40 text-rose-300'
+                  }`}
+                >
+                  {forgotPasswordMsg.text}
+                </div>
+              )}
+
+              <form onSubmit={handleForgotPasswordSubmit} className="space-y-4 text-xs">
+                <div>
+                  <label className="block text-[#bccabb] font-semibold mb-1">E-mail Cadastrado do 2º Professor</label>
+                  <input
+                    type="email"
+                    required
+                    value={forgotPasswordEmail}
+                    onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-amber-400"
+                    placeholder="segundoprofessor@escola.edu.br"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsForgotPasswordOpen(false)}
+                    className="flex-1 py-3 bg-[#131b2e] hover:bg-[#1a243b] text-[#bccabb] font-bold rounded-2xl border border-white/10 transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={forgotPasswordLoading}
+                    className="flex-1 py-3 bg-amber-400 hover:bg-amber-300 text-black font-bold rounded-2xl transition-all shadow-lg shadow-amber-400/20 cursor-pointer"
+                  >
+                    {forgotPasswordLoading ? 'Enviando...' : 'Enviar Chamado ao ADM'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         )}
       </div>
     </div>

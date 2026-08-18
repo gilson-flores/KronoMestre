@@ -133,6 +133,34 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       finalSupport = finalSupport ? `${finalSupport}\n\n${linkString}` : linkString;
     }
 
+    // Auto update status if deadline is set/changed
+    let finalStatus = status;
+    const dateStr = deadline.trim();
+    if (dateStr) {
+      let isoDate: string | null = null;
+      const isoMatch = dateStr.match(/\b(20\d\d)-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b/);
+      if (isoMatch) isoDate = isoMatch[0];
+      const brMatch = dateStr.match(/\b(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/(20\d\d)\b/);
+      if (brMatch) {
+        const [, day, month, year] = brMatch;
+        isoDate = `${year}-${month}-${day}`;
+      }
+      const brShortMatch = dateStr.match(/\b(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\b/);
+      if (brShortMatch) {
+        const [, day, month] = brShortMatch;
+        isoDate = `2026-${month}-${day}`;
+      }
+
+      if (isoDate) {
+        const todayISO = new Date().toISOString().split('T')[0];
+        if (isoDate >= todayISO) {
+          finalStatus = 'Ativo';
+        } else {
+          finalStatus = 'Prazo Encerrado';
+        }
+      }
+    }
+
     const updatedActivity: Activity = {
       ...activity,
       title: title.trim(),
@@ -141,7 +169,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       supportMaterial: finalSupport,
       turma: selectedTurmas.length > 0 ? selectedTurmas.join(', ') : '101',
       type,
-      status,
+      status: finalStatus,
       deadline: deadline.trim() || 'Amanhã, 23:59',
       maxGrade,
       allowGroupWork,
