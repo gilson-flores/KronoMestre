@@ -2075,6 +2075,7 @@ export default function Home() {
         }}
         activity={editingActivity}
         onSaveActivity={handleSaveActivity}
+        students={students}
       />
 
       <ViewActivityModal

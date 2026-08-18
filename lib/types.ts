@@ -107,6 +107,7 @@ export interface Activity {
   playfulGameHtml?: string; // Código HTML do jogo interativo lúdico para síndromes severas
   playfulGameScoreMax?: number; // Pontuação máxima do jogo lúdico
   adaptedFromId?: string; // ID da atividade original
+  includedPneStudentIds?: string[]; // IDs dos alunos PNE selecionados por proficiência para fazer a atividade normal
   questions?: ActivityQuestion[];
   totalSubmissions: number;
   totalStudents: number;

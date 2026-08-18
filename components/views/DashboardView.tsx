@@ -31,7 +31,7 @@ import {
   Cpu,
 } from 'lucide-react';
 import { Activity, StudentUser } from '@/lib/types';
-import { canStudentAccessActivity, doesTurmaHavePNEStudent } from '@/lib/studentUtils';
+import { canStudentAccessActivity, doesTurmaHavePNEStudent, getActivityStudentAndSubmissionCounts } from '@/lib/studentUtils';
 import { AdaptActivityModal } from '@/components/modals/AdaptActivityModal';
 
 interface DashboardViewProps {
@@ -121,14 +121,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   });
 
   const filteredActivities = tabFilteredActivities.filter((act) => {
-    const subCount = act.submissions ? act.submissions.length : (act.totalSubmissions || 0);
-    const pendingCount = act.submissions ? act.submissions.filter((s) => s.status === 'pending' || s.status === 'draft').length : (act.pendingCorrection || 0);
-    const enrolledStudentsCount = students.length > 0
-      ? students.filter((st) => canStudentAccessActivity(act.turma, st.turma)).length
-      : (act.totalStudents || 35);
+    const { subCount, pendingCount, expectedStudentsCount } = getActivityStudentAndSubmissionCounts(act, activities, students);
 
     if (activityFilter === 'a_fazer') {
-      return act.status === 'Ativo' || (enrolledStudentsCount - subCount) > 0;
+      return act.status === 'Ativo' || (expectedStudentsCount - subCount) > 0;
     }
     if (activityFilter === 'a_corrigir') {
       return pendingCount > 0;
@@ -220,15 +216,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Calculate top KPI stats from real state
   const totalActivities = activities.length;
-  const totalSubmissions = activities.reduce((acc, a) => acc + (a.submissions ? a.submissions.length : (a.totalSubmissions || 0)), 0);
+  const totalSubmissions = activities.reduce((acc, a) => {
+    const { subCount } = getActivityStudentAndSubmissionCounts(a, activities, students || []);
+    return acc + subCount;
+  }, 0);
   const totalExpected = activities.reduce((acc, a) => {
-    const enrolledCount = students.length > 0
-      ? students.filter((st) => canStudentAccessActivity(a.turma, st.turma)).length
-      : 0;
-    return acc + (enrolledCount > 0 ? enrolledCount : (a.totalStudents || 35));
+    const { expectedStudentsCount } = getActivityStudentAndSubmissionCounts(a, activities, students || []);
+    return acc + expectedStudentsCount;
   }, 0);
   const completionRate = totalExpected > 0 ? Math.round((totalSubmissions / totalExpected) * 100) : 0;
-  const pendingCorrections = activities.reduce((acc, a) => acc + (a.submissions ? a.submissions.filter(s => s.status === 'pending' || s.status === 'draft').length : (a.pendingCorrection || 0)), 0);
+  const pendingCorrections = activities.reduce((acc, a) => {
+    const { pendingCount } = getActivityStudentAndSubmissionCounts(a, activities, students || []);
+    return acc + pendingCount;
+  }, 0);
 
   const activitiesWithGrades = activities.filter((a) => a.averageGrade !== undefined && a.averageGrade > 0);
   const overallAverage = activitiesWithGrades.length > 0
@@ -350,12 +350,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {Object.entries(statsByType).map(([catType, items]) => {
-                const subCount = items.reduce((acc, i) => acc + (i.submissions ? i.submissions.length : (i.totalSubmissions || 0)), 0);
+                const subCount = items.reduce((acc, i) => {
+                  const { subCount: sc } = getActivityStudentAndSubmissionCounts(i, activities, students || []);
+                  return acc + sc;
+                }, 0);
                 const expCount = items.reduce((acc, i) => {
-                  const enrolledCount = students.length > 0
-                    ? students.filter((st) => canStudentAccessActivity(i.turma, st.turma)).length
-                    : 0;
-                  return acc + (enrolledCount > 0 ? enrolledCount : (i.totalStudents || 35));
+                  const { expectedStudentsCount: ec } = getActivityStudentAndSubmissionCounts(i, activities, students || []);
+                  return acc + ec;
                 }, 0);
                 const catRate = expCount > 0 ? Math.round((subCount / expCount) * 100) : 0;
 
@@ -496,18 +497,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               if (act.type === 'Dinâmica' || act.type === 'Trabalho em grupo') Icon = Users2;
               if (act.type === 'Projeto de pesquisa') Icon = BookOpen;
 
-              // Calculate submission and status breakdowns from real submissions
-              const subCount = act.submissions ? act.submissions.length : (act.totalSubmissions || 0);
-              const ret1x = act.submissions ? act.submissions.filter((s) => s.status === 'returned' && (s.returnCount === 1 || !s.returnCount)).length : 0;
-              const ret2x = act.submissions ? act.submissions.filter((s) => s.status === 'returned' && s.returnCount === 2).length : 0;
-              const ret3x = act.submissions ? act.submissions.filter((s) => s.status === 'returned' && s.returnCount === 3).length : 0;
-              const gradedCount = act.submissions ? act.submissions.filter((s) => s.status === 'graded').length : 0;
-              const pendingCount = act.submissions ? act.submissions.filter((s) => s.status === 'pending' || s.status === 'draft').length : (act.pendingCorrection || 0);
-
-              const enrolledStudentsCount = students.length > 0
-                ? students.filter((st) => canStudentAccessActivity(act.turma, st.turma)).length
-                : 0;
-              const expectedStudentsCount = enrolledStudentsCount > 0 ? enrolledStudentsCount : (act.totalStudents || 35);
+              // Calculate submission and status breakdowns using PNE deduction helper
+              const {
+                expectedStudentsCount,
+                subCount,
+                gradedCount,
+                pendingCount,
+                ret1x,
+                ret2x,
+                ret3x,
+              } = getActivityStudentAndSubmissionCounts(act, activities, students || []);
 
               return (
                 <div key={act.id} className={isChild ? 'ml-4 md:ml-8 pl-3 md:pl-4 border-l-2 border-amber-500/40 relative' : ''}>

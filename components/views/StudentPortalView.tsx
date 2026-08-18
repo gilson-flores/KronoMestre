@@ -139,15 +139,25 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
       const isActivityAdapted = Boolean(a.isAdapted || a.adaptationType);
 
-      // Aluno PNE só vê atividades adaptadas (não vê atividade de aluno regular)
+      // Aluno PNE: por padrão vê adaptações, exceto se incluído na atividade normal por proficiência
       if (isCurrentStudentPNE) {
-        return isActivityAdapted;
+        if (isActivityAdapted) {
+          // Se esta é a adaptação de uma atividade onde o aluno foi selecionado para fazer a normal, oculta a adaptação
+          const parentAct = activities.find((parent) => parent.id === a.adaptedFromId);
+          if (parentAct?.includedPneStudentIds?.includes(student.id)) {
+            return false;
+          }
+          return true;
+        } else {
+          // Atividade normal: só aparece para o aluno PNE se ele tiver sido incluído pelo professor por proficiência
+          return Boolean(a.includedPneStudentIds?.includes(student.id));
+        }
       }
 
       // Aluno regular só vê atividades regulares (não vê adaptações)
       return !isActivityAdapted;
     });
-  }, [activities, student.turma, isCurrentStudentPNE]);
+  }, [activities, student.turma, student.id, isCurrentStudentPNE]);
 
   // Toast / Submission feedback
   const [submissionSuccessMsg, setSubmissionSuccessMsg] = useState<string | null>(null);

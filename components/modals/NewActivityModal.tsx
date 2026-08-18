@@ -17,9 +17,11 @@ import {
   Loader2,
   Layers,
   ArrowRight,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { Activity, ActivityQuestion, StudentUser } from '@/lib/types';
-import { DEFAULT_TURMAS, doesTurmaHavePNEStudent } from '@/lib/studentUtils';
+import { DEFAULT_TURMAS, doesTurmaHavePNEStudent, canStudentAccessActivity, isStudentPNE } from '@/lib/studentUtils';
 import { TurmaMultiSelect } from '@/components/TurmaMultiSelect';
 import {
   createAdaptedMildModerateActivity,
@@ -64,6 +66,19 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   const [deadlineDateTime, setDeadlineDateTime] = useState(() => getTomorrowString());
   const [maxGrade, setMaxGrade] = useState<number>(10);
   const [allowGroupWork, setAllowGroupWork] = useState<boolean>(false);
+  
+  // PNE Proficiency Override: Selected PNE students to receive the normal/regular activity
+  const [includedPneStudentIds, setIncludedPneStudentIds] = useState<string[]>([]);
+  const [isPneDropdownOpen, setIsPneDropdownOpen] = useState<boolean>(false);
+
+  // Filter PNE students enrolled in the currently selected turmas
+  const pneStudentsInSelectedTurmas = React.useMemo(() => {
+    if (!students || students.length === 0 || selectedTurmas.length === 0) return [];
+    return students.filter((st) => {
+      if (!isStudentPNE(st)) return false;
+      return selectedTurmas.some((t) => canStudentAccessActivity(t, st.turma));
+    });
+  }, [students, selectedTurmas]);
   
   // Anti-Cheat Security Locks
   const [securityFocusLock, setSecurityFocusLock] = useState<boolean>(true);
@@ -183,6 +198,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
       securityFocusLock,
       securityBlockCopyStatement,
       securityBlockPasteEssay,
+      includedPneStudentIds,
       questions,
       totalSubmissions: 0,
       totalStudents: resolvedTurma ? 35 : 120,
@@ -205,6 +221,8 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
     setDescription('');
     setSupportMaterial('');
     setQuestions([]);
+    setIncludedPneStudentIds([]);
+    setIsPneDropdownOpen(false);
     setPendingActivityForDecision(null);
     onClose();
   };
@@ -587,6 +605,126 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
               </select>
             </div>
           </div>
+
+          {/* Janela / Lista Suspensa com Caixas de Seleção para Alunos PNE com Proficiência */}
+          {pneStudentsInSelectedTurmas.length > 0 && (
+            <div className="bg-[#131b2e] border border-amber-500/30 rounded-2xl p-4 space-y-3 shadow-inner">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                      Alunos PNE com Proficiência (Atividade Normal)
+                    </span>
+                    <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">
+                      {pneStudentsInSelectedTurmas.length} PNE na(s) turma(s)
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#bccabb] mt-0.5">
+                    Selecione os alunos PNE que já atingiram proficiência para realizarem a <strong>atividade normal</strong> (evita retrocesso por desmotivação).
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsPneDropdownOpen((prev) => !prev)}
+                  className="flex items-center justify-between sm:justify-center gap-2 px-3.5 py-2 bg-[#1a243c] hover:bg-[#223050] text-xs font-semibold text-white rounded-xl border border-white/10 transition-colors cursor-pointer shrink-0"
+                >
+                  <span>
+                    {includedPneStudentIds.length === 0
+                      ? 'Nenhum incluído na normal'
+                      : `${includedPneStudentIds.length} selecionado(s) para normal`}
+                  </span>
+                  {isPneDropdownOpen ? (
+                    <ChevronUp className="w-4 h-4 text-amber-400" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-amber-400" />
+                  )}
+                </button>
+              </div>
+
+              {isPneDropdownOpen && (
+                <div className="pt-3 border-t border-white/10 space-y-3 animate-fadeIn">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[#bccabb] text-[11px]">
+                      Marque para liberar a atividade normal:
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIncludedPneStudentIds(pneStudentsInSelectedTurmas.map((s) => s.id))}
+                        className="text-[11px] text-[#4ade80] hover:underline cursor-pointer font-medium"
+                      >
+                        Marcar todos
+                      </button>
+                      <span className="text-white/20">•</span>
+                      <button
+                        type="button"
+                        onClick={() => setIncludedPneStudentIds([])}
+                        className="text-[11px] text-rose-400 hover:underline cursor-pointer font-medium"
+                      >
+                        Desmarcar todos
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="max-h-48 overflow-y-auto custom-scrollbar space-y-1.5 pr-1">
+                    {pneStudentsInSelectedTurmas.map((st) => {
+                      const isSelected = includedPneStudentIds.includes(st.id);
+                      const conditionText =
+                        st.pneConditions && st.pneConditions.length > 0
+                          ? st.pneConditions.join(', ')
+                          : 'PNE';
+
+                      return (
+                        <label
+                          key={st.id}
+                          className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-amber-500/10 border-amber-500/40 text-white'
+                              : 'bg-[#0e172a] border-white/5 text-[#bccabb] hover:border-white/15'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setIncludedPneStudentIds((prev) => [...prev, st.id]);
+                                } else {
+                                  setIncludedPneStudentIds((prev) => prev.filter((id) => id !== st.id));
+                                }
+                              }}
+                              className="w-4 h-4 rounded border-white/20 text-amber-500 focus:ring-amber-400 focus:ring-offset-0 bg-[#131b2e] cursor-pointer"
+                            />
+                            <div className="truncate">
+                              <span className="text-xs font-semibold text-white block truncate">
+                                {st.fullName}
+                              </span>
+                              <span className="text-[10px] text-[#869486] block truncate">
+                                Turma: <strong className="text-[#bccabb]">{st.turma}</strong> • {conditionText}
+                              </span>
+                            </div>
+                          </div>
+
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ml-2 ${
+                              isSelected
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : 'bg-white/5 text-[#869486]'
+                            }`}
+                          >
+                            {isSelected ? 'Atividade Normal' : 'Ativ. Adaptada'}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Nota Máxima e Permitir Trabalho em Grupo */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-[#131b2e]/60 p-4 rounded-2xl border border-white/5">

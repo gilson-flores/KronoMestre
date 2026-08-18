@@ -1,4 +1,4 @@
-import { StudentUser } from './types';
+import { StudentUser, Activity } from './types';
 
 // Utility functions for student name normalization and standardized class (turma) management
 
@@ -339,5 +339,106 @@ export function validateStudentName(rawName: string): {
     isValid: true,
     normalized,
     hasSpecialCharsRemoved,
+  };
+}
+
+/**
+ * Calculates expected student count and submission metrics for an activity:
+ * - Adapted activities ONLY count PNE students and PNE submissions.
+ * - Principal activities with adaptations DEDUCT PNE students and PNE submissions to avoid duplicate data.
+ * - Principal activities without adaptations count all students in the turma.
+ */
+export function getActivityStudentAndSubmissionCounts(
+  act: Activity,
+  allActivities: Activity[],
+  students: StudentUser[]
+) {
+  const isAdaptedAct = Boolean(act.isAdapted || act.adaptedFromId);
+
+  // Filter students for this turma
+  const enrolledStudents = students.filter((st) =>
+    canStudentAccessActivity(act.turma, st.turma)
+  );
+
+  // PNE students who are proficient and assigned to the normal/regular activity
+  const parentAct = isAdaptedAct
+    ? allActivities.find((a) => a.id === act.adaptedFromId)
+    : null;
+  const includedProficientPneIds = new Set(
+    isAdaptedAct
+      ? (parentAct?.includedPneStudentIds || [])
+      : (act.includedPneStudentIds || [])
+  );
+
+  const pneEnrolledTakingAdaptation = enrolledStudents.filter(
+    (st) => isStudentPNE(st) && !includedProficientPneIds.has(st.id)
+  );
+  const studentsTakingNormal = enrolledStudents.filter(
+    (st) => !isStudentPNE(st) || includedProficientPneIds.has(st.id)
+  );
+
+  // Check if this principal activity has an adapted version created for it
+  const hasAdaptationChild = !isAdaptedAct && allActivities.some(
+    (a) =>
+      a.id !== act.id &&
+      (a.adaptedFromId === act.id ||
+        (Boolean(a.isAdapted) &&
+          canStudentAccessActivity(a.turma, act.turma) &&
+          a.title &&
+          act.title &&
+          a.title.toLowerCase().startsWith(act.title.toLowerCase().slice(0, 15))))
+  );
+
+  let expectedStudentsCount = 0;
+  let submissionsList = act.submissions || [];
+
+  if (isAdaptedAct) {
+    // 1. ADAPTED ACTIVITY: ONLY count PNE students who take the adaptation (not proficient in normal)
+    expectedStudentsCount = enrolledStudents.length > 0 ? pneEnrolledTakingAdaptation.length : 1;
+
+    if (act.submissions && act.submissions.length > 0) {
+      submissionsList = act.submissions.filter((s) => {
+        const st = students.find((x) => x.id === s.studentId || x.matricula === s.matricula);
+        return (st && isStudentPNE(st) && !includedProficientPneIds.has(st.id)) || s.tag === 'PNE';
+      });
+    }
+  } else if (hasAdaptationChild) {
+    // 2. PRINCIPAL ACTIVITY WITH ADAPTATION: Regular students + proficient PNE students!
+    expectedStudentsCount = enrolledStudents.length > 0
+      ? studentsTakingNormal.length
+      : Math.max(1, (act.totalStudents || 35) - pneEnrolledTakingAdaptation.length);
+
+    if (act.submissions && act.submissions.length > 0) {
+      submissionsList = act.submissions.filter((s) => {
+        const st = students.find((x) => x.id === s.studentId || x.matricula === s.matricula);
+        if (st) {
+          return !isStudentPNE(st) || includedProficientPneIds.has(st.id);
+        }
+        return s.tag !== 'PNE';
+      });
+    }
+  } else {
+    // 3. PRINCIPAL ACTIVITY WITHOUT ADAPTATION: All enrolled students
+    expectedStudentsCount = enrolledStudents.length > 0
+      ? enrolledStudents.length
+      : (act.totalStudents || 35);
+  }
+
+  const subCount = submissionsList.length;
+  const gradedCount = submissionsList.filter((s) => s.status === 'graded').length;
+  const pendingCount = submissionsList.filter((s) => s.status === 'pending' || s.status === 'draft').length;
+  const ret1x = submissionsList.filter((s) => s.status === 'returned' && (s.returnCount === 1 || !s.returnCount)).length;
+  const ret2x = submissionsList.filter((s) => s.status === 'returned' && s.returnCount === 2).length;
+  const ret3x = submissionsList.filter((s) => s.status === 'returned' && s.returnCount === 3).length;
+
+  return {
+    expectedStudentsCount,
+    subCount,
+    gradedCount,
+    pendingCount,
+    ret1x,
+    ret2x,
+    ret3x,
+    submissionsList,
   };
 }

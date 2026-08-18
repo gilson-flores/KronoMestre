@@ -146,7 +146,14 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
   };
 
   useEffect(() => {
-    fetchRecords();
+    let isSubscribed = true;
+    async function loadData() {
+      await fetchRecords();
+    }
+    loadData();
+    return () => {
+      isSubscribed = false;
+    };
   }, []);
 
   // Sync to LocalStorage

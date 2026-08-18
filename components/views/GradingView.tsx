@@ -22,7 +22,7 @@ import {
   Filter
 } from 'lucide-react';
 import { Activity, ActivitySubmission, StudentUser, EssayQuestion } from '@/lib/types';
-import { canStudentAccessActivity, normalizeStudentName, getActivityGradeDistribution } from '@/lib/studentUtils';
+import { canStudentAccessActivity, normalizeStudentName, getActivityGradeDistribution, isStudentPNE } from '@/lib/studentUtils';
 
 interface GradingViewProps {
   activity: Activity;
@@ -376,9 +376,44 @@ export const GradingView: React.FC<GradingViewProps> = ({
   // Find students in the turma who haven't submitted yet
   const submittedStudentIds = new Set(submissions.map((s) => s.studentId));
   const activeTurmaScope = selectedTurmaFilter === 'all' ? activity.turma : selectedTurmaFilter;
+
+  const isAdaptedActivity = Boolean(activity.isAdapted || activity.adaptedFromId);
+  const hasAdaptationChild = !isAdaptedActivity && (allActivities || []).some(
+    (a) =>
+      a.id !== activity.id &&
+      (a.adaptedFromId === activity.id ||
+        (Boolean(a.isAdapted) &&
+          canStudentAccessActivity(a.turma, activity.turma) &&
+          a.title && activity.title &&
+          a.title.toLowerCase().startsWith(activity.title.toLowerCase().slice(0, 15))))
+  );
+
+  const parentAct = isAdaptedActivity
+    ? (allActivities || []).find((a) => a.id === activity.adaptedFromId)
+    : null;
+  const includedProficientPneIds = new Set(
+    isAdaptedActivity
+      ? (parentAct?.includedPneStudentIds || [])
+      : (activity.includedPneStudentIds || [])
+  );
+
   const missingStudents = students.filter((st) => {
     const isSameTurma = canStudentAccessActivity(activeTurmaScope, st.turma);
-    return isSameTurma && !submittedStudentIds.has(st.id);
+    const hasSubmitted = submittedStudentIds.has(st.id);
+    const isPne = isStudentPNE(st);
+
+    if (!isSameTurma || hasSubmitted) return false;
+
+    if (isAdaptedActivity) {
+      // Adapted activity -> only expect PNE students who are NOT proficient for normal activity
+      return isPne && !includedProficientPneIds.has(st.id);
+    }
+    if (hasAdaptationChild) {
+      // Principal activity with adaptation -> expect regular students + proficient PNE students
+      return !isPne || includedProficientPneIds.has(st.id);
+    }
+    // Principal activity without adaptation -> expect all students
+    return true;
   });
 
   return (
