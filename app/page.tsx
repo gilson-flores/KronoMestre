@@ -35,79 +35,55 @@ import { NewSecondTeacherModal } from '@/components/modals/NewSecondTeacherModal
 import { CheckCircle2, AlertTriangle, HeartHandshake, UserPlus } from 'lucide-react';
 
 export default function Home() {
-  // Auth state - Inicialização síncrona a partir da sessão ativa para evitar flickering/piscar de tela
-  const [role, setRole] = useState<UserRole>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const sessionStr = sessionStorage.getItem('active_session');
-        if (sessionStr) {
-          const session = JSON.parse(sessionStr);
-          if (session.role) return session.role;
-        }
-      } catch (e) {
-        console.warn('Erro ao restaurar papel da sessão inicial:', e);
-      }
-    }
-    return null;
-  });
+  // Mounting state to prevent SSR/hydration mismatch
+  const [isMounted, setIsMounted] = useState(false);
 
-  const [teacher, setTeacher] = useState<TeacherUser>(() => {
-    let baseTeacher = initialTeacher;
-    if (typeof window !== 'undefined') {
+  // Auth state
+  const [role, setRole] = useState<UserRole>(null);
+  const [teacher, setTeacher] = useState<TeacherUser>(initialTeacher);
+  const [currentStudent, setCurrentStudent] = useState<StudentUser | null>(null);
+  const [inactivityTimeoutEnabled, setInactivityTimeoutEnabled] = useState<boolean>(true);
+  const [currentTab, setCurrentTab] = useState<string>('painel');
+
+  // Restaurar sessão e preferências no cliente de forma segura para hidratação
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsMounted(true);
+      if (typeof window === 'undefined') return;
+
       try {
         const sessionStr = sessionStorage.getItem('active_session');
         if (sessionStr) {
           const session = JSON.parse(sessionStr);
-          if (session.teacherData) baseTeacher = session.teacherData;
+          if (session.role === 'teacher') {
+            setRole('teacher');
+            if (session.teacherData) setTeacher(session.teacherData);
+          } else if (session.role === 'second_teacher') {
+            setRole('second_teacher');
+            if (session.teacherData) setTeacher(session.teacherData);
+            setCurrentTab('2_professor');
+          } else if (session.role === 'student' && session.studentData) {
+            setCurrentStudent(session.studentData);
+            setRole('student');
+          }
         }
+
         const savedDriveUrl = localStorage.getItem('teacher_drive_folder_url');
         if (savedDriveUrl) {
-          baseTeacher = { ...baseTeacher, driveFolderUrl: savedDriveUrl };
+          setTeacher((prev) => ({ ...prev, driveFolderUrl: savedDriveUrl }));
         }
-      } catch (e) {
-        console.warn('Erro ao restaurar professor inicial:', e);
-      }
-    }
-    return baseTeacher;
-  });
 
-  const [currentStudent, setCurrentStudent] = useState<StudentUser | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const sessionStr = sessionStorage.getItem('active_session');
-        if (sessionStr) {
-          const session = JSON.parse(sessionStr);
-          if (session.studentData) return session.studentData;
-        }
-      } catch (e) {
-        console.warn('Erro ao restaurar aluno inicial:', e);
-      }
-    }
-    return null;
-  });
-
-  const [inactivityTimeoutEnabled, setInactivityTimeoutEnabled] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      try {
         const savedTimeout = localStorage.getItem('inactivity_timeout_enabled');
-        if (savedTimeout !== null) return savedTimeout === 'true';
-      } catch (e) {}
-    }
-    return true;
-  });
-
-  const [currentTab, setCurrentTab] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const sessionStr = sessionStorage.getItem('active_session');
-        if (sessionStr) {
-          const session = JSON.parse(sessionStr);
-          if (session.role === 'second_teacher') return '2_professor';
+        if (savedTimeout !== null) {
+          setInactivityTimeoutEnabled(savedTimeout === 'true');
         }
-      } catch (e) {}
-    }
-    return 'painel';
-  });
+      } catch (e) {
+        console.warn('Erro ao restaurar sessão no cliente:', e);
+      }
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   // App datasets
   const [students, setStudents] = useState<StudentUser[]>(initialStudents);
@@ -172,29 +148,83 @@ export default function Home() {
   };
 
   const handleSaveDriveFolderUrl = async (url: string) => {
-    setTeacher((prev) => ({ ...prev, driveFolderUrl: url }));
+    const cleanUrl = url.trim();
+
+    // 1. Atualizar estado em memória
+    setTeacher((prev) => ({ ...prev, driveFolderUrl: cleanUrl }));
+
+    // 2. Persistir localmente no localStorage e sessionStorage
     if (typeof window !== 'undefined') {
-      localStorage.setItem('teacher_drive_folder_url', url);
-    }
-    if (isSupabaseConfigured && supabase) {
       try {
-        const isValidUUID = (id?: string | null) => !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-        if (teacher.id && isValidUUID(teacher.id)) {
-          await supabase
-            .from('teachers')
-            .update({ drive_folder_url: url })
-            .eq('id', teacher.id);
-        } else if (teacher.email) {
-          await supabase
-            .from('teachers')
-            .update({ drive_folder_url: url })
-            .eq('email', teacher.email);
+        localStorage.setItem('teacher_drive_folder_url', cleanUrl);
+
+        const sessionStr = sessionStorage.getItem('active_session');
+        if (sessionStr) {
+          const session = JSON.parse(sessionStr);
+          if (session.teacherData) {
+            session.teacherData.driveFolderUrl = cleanUrl;
+            sessionStorage.setItem('active_session', JSON.stringify(session));
+          }
         }
-      } catch (err) {
-        console.warn('Persistência no Supabase para drive_folder_url:', err);
+      } catch (e) {
+        console.warn('Erro ao atualizar armazenamento local da sessão:', e);
       }
     }
-    showGlobalStatus('success', 'Link da pasta do Google Drive salvo com sucesso!');
+
+    // 3. Persistir de forma garantida no Supabase (Upsert / Update)
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const cleanEmail = (teacher.email || 'gilson.flores@escola.edu.br').trim().toLowerCase();
+        const isValidUUID = (id?: string | null) => !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+        const payload: any = {
+          email: cleanEmail,
+          name: teacher.name || 'Gilson Flores',
+          subject: teacher.subject || 'Sociologia',
+          avatar_url: teacher.avatarUrl || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
+          phone: teacher.phone || null,
+          school: teacher.school || null,
+          drive_folder_url: cleanUrl,
+        };
+
+        if (teacher.id && isValidUUID(teacher.id)) {
+          payload.id = teacher.id;
+        }
+
+        // Tentativa de upsert no Supabase
+        const { data: upsertData, error: upsertErr } = await supabase
+          .from('teachers')
+          .upsert(payload, { onConflict: 'email' })
+          .select('*')
+          .maybeSingle();
+
+        if (upsertErr) {
+          console.warn('Upsert de drive_folder_url no Supabase teve aviso, tentando fallback de update:', upsertErr.message);
+          let updated = false;
+
+          if (teacher.id && isValidUUID(teacher.id)) {
+            const { error: errId } = await supabase
+              .from('teachers')
+              .update({ drive_folder_url: cleanUrl })
+              .eq('id', teacher.id);
+            if (!errId) updated = true;
+          }
+
+          if (!updated && teacher.email) {
+            await supabase
+              .from('teachers')
+              .update({ drive_folder_url: cleanUrl })
+              .eq('email', teacher.email);
+          }
+        } else if (upsertData?.id) {
+          setTeacher((prev) => ({ ...prev, id: upsertData.id, driveFolderUrl: cleanUrl }));
+        }
+      } catch (err) {
+        console.warn('Exceção ao salvar drive_folder_url no Supabase:', err);
+      }
+    }
+
+    showGlobalStatus('success', 'Link do repositório do Google Drive salvo e gravado com sucesso!');
   };
 
   const sanitizeLibraryForStorage = (files: LibraryFile[]) => {
@@ -1543,6 +1573,18 @@ export default function Home() {
   const teacherUnreadMessagesCount = chatMessages.filter(
     (m) => m.senderRole === 'student' && !m.read
   ).length;
+
+  // 0. Server-side rendering / initial hydration shell
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen bg-[#0b1326] text-[#dae2fd] flex flex-col justify-center items-center">
+        <div className="flex items-center gap-3 text-sm font-medium text-[#bccabb] bg-[#131b2e] px-6 py-4 rounded-full border border-white/10 shadow-xl">
+          <div className="w-4 h-4 border-2 border-[#4ade80] border-t-transparent rounded-full animate-spin shrink-0" />
+          <span>Carregando plataforma de Sociologia On-line...</span>
+        </div>
+      </div>
+    );
+  }
 
   // 1. Unauthenticated state -> Show Login Screen
   if (!role) {
