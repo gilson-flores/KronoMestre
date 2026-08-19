@@ -74,7 +74,9 @@ export function canStudentAccessActivity(activityTurma: string | undefined, stud
 export function isStudentPNE(student: StudentUser | { tag?: string; pneConditions?: string[] } | null | undefined): boolean {
   if (!student) return false;
   const tagUpper = student.tag ? String(student.tag).trim().toUpperCase() : '';
-  return tagUpper === 'PNE';
+  if (tagUpper === 'PNE' || tagUpper === 'AEE' || tagUpper === 'INCLUSÃO' || tagUpper === 'INCLUSAO') return true;
+  if (student.pneConditions && Array.isArray(student.pneConditions) && student.pneConditions.length > 0) return true;
+  return false;
 }
 
 /**

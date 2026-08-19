@@ -37,7 +37,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   const [securityBlockCopyStatement, setSecurityBlockCopyStatement] = useState<boolean>(false);
   const [securityBlockPasteEssay, setSecurityBlockPasteEssay] = useState<boolean>(false);
   const [includedPneStudentIds, setIncludedPneStudentIds] = useState<string[]>([]);
-  const [isPneDropdownOpen, setIsPneDropdownOpen] = useState<boolean>(false);
+  const [isPneDropdownOpen, setIsPneDropdownOpen] = useState<boolean>(true);
   const [questions, setQuestions] = useState<ActivityQuestion[]>([]);
 
   if (activity && activity.id !== prevActivityId) {

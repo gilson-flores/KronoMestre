@@ -69,7 +69,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   
   // PNE Proficiency Override: Selected PNE students to receive the normal/regular activity
   const [includedPneStudentIds, setIncludedPneStudentIds] = useState<string[]>([]);
-  const [isPneDropdownOpen, setIsPneDropdownOpen] = useState<boolean>(false);
+  const [isPneDropdownOpen, setIsPneDropdownOpen] = useState<boolean>(true);
 
   // Filter PNE students enrolled in the currently selected turmas
   const pneStudentsInSelectedTurmas = React.useMemo(() => {
@@ -229,32 +229,39 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
 
   const handleConfirmOnlyStandard = () => {
     if (!pendingActivityForDecision) return;
-    onCreateActivity(pendingActivityForDecision);
+    onCreateActivity({
+      ...pendingActivityForDecision,
+      includedPneStudentIds,
+    });
     resetFormAndClose();
   };
 
   const handleConfirmMildModerate = async () => {
     if (!pendingActivityForDecision) return;
     setIsGeneratingPlayful(true);
+    const targetActivity = {
+      ...pendingActivityForDecision,
+      includedPneStudentIds,
+    };
     try {
-      onCreateActivity(pendingActivityForDecision);
+      onCreateActivity(targetActivity);
 
       const response = await fetch('/api/gemini/adapt-mild-moderate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: pendingActivityForDecision.title,
-          subject: pendingActivityForDecision.subject,
-          description: pendingActivityForDecision.description,
-          turma: pendingActivityForDecision.turma,
-          questions: pendingActivityForDecision.questions || [],
-          maxGrade: pendingActivityForDecision.maxGrade || 10,
+          title: targetActivity.title,
+          subject: targetActivity.subject,
+          description: targetActivity.description,
+          turma: targetActivity.turma,
+          questions: targetActivity.questions || [],
+          maxGrade: targetActivity.maxGrade || 10,
         }),
       });
 
       const data = await response.json();
       if (response.ok && data.questions) {
-        const adapted = createAdaptedMildModerateActivity(pendingActivityForDecision, {
+        const adapted = createAdaptedMildModerateActivity(targetActivity, {
           adaptedTitle: data.adaptedTitle,
           adaptedDescription: data.adaptedDescription,
           questions: data.questions,
@@ -273,19 +280,23 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   const handleConfirmSeverePlayful = async () => {
     if (!pendingActivityForDecision) return;
     setIsGeneratingPlayful(true);
+    const targetActivity = {
+      ...pendingActivityForDecision,
+      includedPneStudentIds,
+    };
     try {
-      onCreateActivity(pendingActivityForDecision);
+      onCreateActivity(targetActivity);
 
       const response = await fetch('/api/gemini/adapt-playful', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: pendingActivityForDecision.title,
-          subject: pendingActivityForDecision.subject,
-          description: pendingActivityForDecision.description,
-          turma: pendingActivityForDecision.turma,
-          questions: pendingActivityForDecision.questions || [],
-          maxGrade: pendingActivityForDecision.maxGrade || 10,
+          title: targetActivity.title,
+          subject: targetActivity.subject,
+          description: targetActivity.description,
+          turma: targetActivity.turma,
+          questions: targetActivity.questions || [],
+          maxGrade: targetActivity.maxGrade || 10,
         }),
       });
 
@@ -294,7 +305,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
         throw new Error(data.error || 'Erro ao gerar o jogo lúdico');
       }
 
-      const playfulAct = createAdaptedSeverePlayfulActivity(pendingActivityForDecision, data.html);
+      const playfulAct = createAdaptedSeverePlayfulActivity(targetActivity, data.html);
       onCreateActivity(playfulAct);
       resetFormAndClose();
     } catch (err: any) {
@@ -308,9 +319,13 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   const handleConfirmAllAdaptations = async () => {
     if (!pendingActivityForDecision) return;
     setIsGeneratingPlayful(true);
+    const targetActivity = {
+      ...pendingActivityForDecision,
+      includedPneStudentIds,
+    };
     try {
       // 1. Standard
-      onCreateActivity(pendingActivityForDecision);
+      onCreateActivity(targetActivity);
 
       // 2. Mild / Moderate via Gemini
       try {
@@ -318,17 +333,17 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            title: pendingActivityForDecision.title,
-            subject: pendingActivityForDecision.subject,
-            description: pendingActivityForDecision.description,
-            turma: pendingActivityForDecision.turma,
-            questions: pendingActivityForDecision.questions || [],
-            maxGrade: pendingActivityForDecision.maxGrade || 10,
+            title: targetActivity.title,
+            subject: targetActivity.subject,
+            description: targetActivity.description,
+            turma: targetActivity.turma,
+            questions: targetActivity.questions || [],
+            maxGrade: targetActivity.maxGrade || 10,
           }),
         });
         const mildData = await mildRes.json();
         if (mildRes.ok && mildData.questions) {
-          const mildAct = createAdaptedMildModerateActivity(pendingActivityForDecision, {
+          const mildAct = createAdaptedMildModerateActivity(targetActivity, {
             adaptedTitle: mildData.adaptedTitle,
             adaptedDescription: mildData.adaptedDescription,
             questions: mildData.questions,
@@ -344,18 +359,18 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: pendingActivityForDecision.title,
-          subject: pendingActivityForDecision.subject,
-          description: pendingActivityForDecision.description,
-          turma: pendingActivityForDecision.turma,
-          questions: pendingActivityForDecision.questions || [],
-          maxGrade: pendingActivityForDecision.maxGrade || 10,
+          title: targetActivity.title,
+          subject: targetActivity.subject,
+          description: targetActivity.description,
+          turma: targetActivity.turma,
+          questions: targetActivity.questions || [],
+          maxGrade: targetActivity.maxGrade || 10,
         }),
       });
 
       const data = await response.json();
       if (response.ok && data.html) {
-        const playfulAct = createAdaptedSeverePlayfulActivity(pendingActivityForDecision, data.html);
+        const playfulAct = createAdaptedSeverePlayfulActivity(targetActivity, data.html);
         onCreateActivity(playfulAct);
       }
       resetFormAndClose();

@@ -1378,31 +1378,72 @@ export default function Home() {
     }
 
     try {
-      let { error } = await supabase
-        .from('students')
-        .update({
-          full_name: updatedStudent.fullName,
-          turma: updatedStudent.turma,
-          matricula: updatedStudent.matricula,
-          tag: updatedStudent.tag,
-          pne_conditions: updatedStudent.pneConditions || null,
-          second_teacher_id: updatedStudent.secondTeacherId || null,
-          second_teacher_name: updatedStudent.secondTeacherName || null,
-        })
-        .eq('id', updatedStudent.id);
+      const payload = {
+        full_name: updatedStudent.fullName,
+        turma: updatedStudent.turma,
+        matricula: updatedStudent.matricula,
+        tag: updatedStudent.tag,
+        pne_conditions: updatedStudent.pneConditions || null,
+        second_teacher_id: updatedStudent.secondTeacherId || null,
+        second_teacher_name: updatedStudent.secondTeacherName || null,
+      };
 
-      // Fallback gracioso se colunas extras ainda não existirem no Supabase
-      if (error && (error.code === 'PGRST204' || error.message?.includes('second_teacher') || error.message?.includes('pne_conditions') || error.code === '42703')) {
-        const retryRes = await supabase
+      // 1. Tentar atualização por ID no Supabase
+      let { data, error } = await supabase
+        .from('students')
+        .update(payload)
+        .eq('id', updatedStudent.id)
+        .select('*');
+
+      // 2. Se não encontrou por ID (data vazio/nulo ou erro de UUID/ID divergente), tentar atualizar por matrícula
+      if ((!error && (!data || data.length === 0)) || (error && error.code === '22P02')) {
+        if (updatedStudent.matricula) {
+          const resByMatricula = await supabase
+            .from('students')
+            .update(payload)
+            .eq('matricula', updatedStudent.matricula)
+            .select('*');
+          if (!resByMatricula.error && resByMatricula.data && resByMatricula.data.length > 0) {
+            data = resByMatricula.data;
+            error = null;
+          }
+        }
+      }
+
+      // 3. Se ainda não encontrou, tentar atualizar por nome completo
+      if (!error && (!data || data.length === 0)) {
+        const resByName = await supabase
           .from('students')
-          .update({
-            full_name: updatedStudent.fullName,
-            turma: updatedStudent.turma,
-            matricula: updatedStudent.matricula,
-            tag: updatedStudent.tag,
-          })
-          .eq('id', updatedStudent.id);
-        error = retryRes.error;
+          .update(payload)
+          .ilike('full_name', updatedStudent.fullName)
+          .select('*');
+        if (!resByName.error && resByName.data && resByName.data.length > 0) {
+          data = resByName.data;
+          error = null;
+        }
+      }
+
+      // 4. Se o aluno não existia no Supabase (0 linhas afetadas), inserir novo registro no Supabase
+      if (!error && (!data || data.length === 0)) {
+        const insertPayload: any = {
+          ...payload,
+          password_hash: updatedStudent.passwordHash || '1234',
+          avatar_url: updatedStudent.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+        };
+        const isValidUUID = (id?: string) => !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+        if (isValidUUID(updatedStudent.id)) {
+          insertPayload.id = updatedStudent.id;
+        }
+        const insertRes = await supabase
+          .from('students')
+          .insert(insertPayload)
+          .select('*');
+        if (!insertRes.error && insertRes.data && insertRes.data.length > 0) {
+          data = insertRes.data;
+          error = null;
+        } else if (insertRes.error) {
+          error = insertRes.error;
+        }
       }
 
       if (error) {
@@ -1411,11 +1452,17 @@ export default function Home() {
         return;
       }
 
-      setStudents((prev) => prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s)));
-      if (supervisingStudent && supervisingStudent.id === updatedStudent.id) {
-        setSupervisingStudent(updatedStudent);
+      // Se o Supabase retornou o ID oficial persistido, sincroniza o estado local
+      const finalStudent: StudentUser = {
+        ...updatedStudent,
+        id: data && data[0] ? data[0].id : updatedStudent.id,
+      };
+
+      setStudents((prev) => prev.map((s) => (s.id === updatedStudent.id || s.id === finalStudent.id ? finalStudent : s)));
+      if (supervisingStudent && (supervisingStudent.id === updatedStudent.id || supervisingStudent.id === finalStudent.id)) {
+        setSupervisingStudent(finalStudent);
       }
-      showGlobalStatus('success', `Dados do aluno "${updatedStudent.fullName}" atualizados com sucesso no Supabase!`);
+      showGlobalStatus('success', `Vínculo do aluno "${finalStudent.fullName}" salvo e gravado com sucesso no Supabase!`);
     } catch (err: any) {
       console.error('Erro ao atualizar aluno no Supabase:', err);
       showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro de conexão (${err?.message || ''})`);
