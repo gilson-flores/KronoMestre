@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import {
   Plus,
+  Minus,
   CheckCircle2,
   CheckCheck,
   BarChart3,
@@ -187,6 +188,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [activityToDelete, setActivityToDelete] = useState<Activity | null>(null);
   const [securityModalActivity, setSecurityModalActivity] = useState<Activity | null>(null);
   const [adaptModalActivity, setAdaptModalActivity] = useState<Activity | null>(null);
+
+  // State for collapsible retractable activity rows
+  const [expandedActivityIds, setExpandedActivityIds] = useState<Record<string, boolean>>({});
+
+  const toggleActivityExpand = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setExpandedActivityIds((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
+  const expandAllActivities = () => {
+    const all: Record<string, boolean> = {};
+    orderedActivityItems.forEach(({ activity }) => {
+      all[activity.id] = true;
+    });
+    setExpandedActivityIds(all);
+  };
+
+  const collapseAllActivities = () => {
+    setExpandedActivityIds({});
+  };
 
   // Local state inside security modal
   const [secFocusLock, setSecFocusLock] = useState(false);
@@ -473,10 +497,35 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 ✅ Corrigidas
               </button>
             </div>
+
+            {/* Quick Expand / Collapse All Controls */}
+            {orderedActivityItems.length > 0 && (
+              <div className="flex items-center gap-1 bg-[#131b2e] p-1 rounded-xl border border-white/10 text-xs ml-auto">
+                <button
+                  type="button"
+                  onClick={expandAllActivities}
+                  className="px-2.5 py-1.5 rounded-lg font-bold text-[#4ade80] hover:bg-white/5 transition-all flex items-center gap-1 cursor-pointer"
+                  title="Expandir todas as atividades (+)"
+                >
+                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span className="hidden sm:inline">Expandir Todas</span>
+                </button>
+                <span className="text-white/20">|</span>
+                <button
+                  type="button"
+                  onClick={collapseAllActivities}
+                  className="px-2.5 py-1.5 rounded-lg font-bold text-[#bccabb] hover:text-white hover:bg-white/5 transition-all flex items-center gap-1 cursor-pointer"
+                  title="Recolher todas as atividades (-)"
+                >
+                  <Minus className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <span className="hidden sm:inline">Recolher Todas</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {orderedActivityItems.length === 0 ? (
             <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb] space-y-2">
               <p className="font-bold text-white text-base">
@@ -497,6 +546,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               if (act.type === 'Dinâmica' || act.type === 'Trabalho em grupo') Icon = Users2;
               if (act.type === 'Projeto de pesquisa') Icon = BookOpen;
 
+              const isExpanded = Boolean(expandedActivityIds[act.id]);
+
               // Calculate submission and status breakdowns using PNE deduction helper
               const {
                 expectedStudentsCount,
@@ -509,227 +560,273 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               } = getActivityStudentAndSubmissionCounts(act, activities, students || []);
 
               return (
-                <div key={act.id} className={isChild ? 'ml-4 md:ml-8 pl-3 md:pl-4 border-l-2 border-amber-500/40 relative' : ''}>
+                <div key={act.id} className={isChild ? 'ml-3 sm:ml-6 md:ml-8 pl-2.5 sm:pl-4 border-l-2 border-amber-500/40 relative' : ''}>
                   {isChild && (
-                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-xl w-fit mb-2 shadow-sm">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-3 py-0.5 rounded-xl w-fit mb-1.5 shadow-sm">
                       <span>└── Adaptação Pedagógica</span>
                       {parentTitle && <span className="text-[#bccabb]">da atividade &quot;{parentTitle}&quot;</span>}
                     </div>
                   )}
 
                   <div
-                    onClick={() => {
-                      if (onViewActivity) onViewActivity(act);
-                    }}
-                    className={`glass-panel p-5 md:p-6 rounded-3xl transition-all duration-200 border border-white/10 hover:border-[#4ade80]/40 cursor-pointer ${
+                    className={`glass-panel rounded-2xl md:rounded-3xl transition-all duration-200 border border-white/10 hover:border-[#4ade80]/40 ${
                       pendingCount > 0 ? 'ring-1 ring-[#4ade80]/30' : ''
-                    } ${isChild ? 'bg-amber-500/[0.02]' : ''}`}
+                    } ${isChild ? 'bg-amber-500/[0.03]' : ''} ${
+                      isExpanded ? 'p-4 sm:p-5 md:p-6 shadow-xl' : 'p-3 sm:p-4 hover:bg-[#131b2e]/70'
+                    }`}
                   >
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    {/* Left Info */}
-                    <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 rounded-2xl bg-[#1d273d] border border-white/10 text-[#4ade80] flex items-center justify-center shrink-0 mt-0.5">
-                        <Icon className="w-6 h-6" />
-                      </div>
+                    {/* Linha Principal Otimizada (Nome da Atividade, Turma e Botão +/-) */}
+                    <div
+                      onClick={() => toggleActivityExpand(act.id)}
+                      className="flex items-center justify-between gap-3 cursor-pointer select-none"
+                    >
+                      {/* Left: Botão +/-, Ícone, Nome da Atividade e Turma */}
+                      <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
+                        {/* Botão + e - Retrátil */}
+                        <button
+                          type="button"
+                          onClick={(e) => toggleActivityExpand(act.id, e)}
+                          className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                            isExpanded
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                              : 'bg-[#1d273d] text-[#4ade80] border-[#4ade80]/30 hover:bg-[#283654] hover:scale-105 shadow-sm'
+                          }`}
+                          title={isExpanded ? 'Recolher atividade (-)' : 'Expandir atividade (+)'}
+                        >
+                          {isExpanded ? (
+                            <Minus className="w-4 h-4 stroke-[2.5]" />
+                          ) : (
+                            <Plus className="w-4 h-4 stroke-[2.5]" />
+                          )}
+                        </button>
 
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-base md:text-lg font-bold text-white leading-snug">
+                        {/* Ícone do Tipo */}
+                        <div className="w-8 h-8 rounded-xl bg-[#1d273d] border border-white/10 text-[#4ade80] flex items-center justify-center shrink-0 hidden sm:flex">
+                          <Icon className="w-4 h-4" />
+                        </div>
+
+                        {/* Nome da Atividade & Turma na Mesma Linha */}
+                        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 min-w-0 flex-1">
+                          <h3 className="text-sm sm:text-base font-bold text-white leading-tight truncate">
                             {act.title}
                           </h3>
 
-                          {/* Status Badge */}
-                          <span
-                            className={`text-[11px] font-bold px-3 py-0.5 rounded-full ${
-                              act.status === 'Ativo'
-                                ? 'bg-[#4ade80]/20 text-[#4ade80] border border-[#4ade80]/30'
-                                : act.status === 'Prazo Encerrado'
-                                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                                : 'bg-slate-700/50 text-slate-300 border border-slate-600'
-                            }`}
-                          >
-                            {act.status}
-                          </span>
-
                           {/* Turma Badge */}
-                          <span className="text-[11px] font-semibold bg-[#171f33] text-[#bccabb] px-3 py-0.5 rounded-full border border-white/5">
-                            Turma: {act.turma}
+                          <span className="text-[11px] font-semibold bg-[#171f33] text-[#bccabb] px-2.5 py-0.5 rounded-full border border-white/5 whitespace-nowrap shrink-0">
+                            Turma: <strong className="text-white">{act.turma}</strong>
                           </span>
-
-                          {/* PNE & Anti-Cola Badges */}
-                          {act.isAdapted && act.adaptationType === 'severe_playful' && (
-                            <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1" title="Jogo Lúdico Gamificado em HTML (Síndromes Severas)">
-                              <Gamepad2 className="w-3 h-3 text-amber-400" />
-                              <span>PNE Lúdica (Jogo)</span>
-                            </span>
-                          )}
-                          {act.isAdapted && act.adaptationType === 'mild_moderate' && (
-                            <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1" title="Atividade Adaptada Leve/Moderada (50% questões, 2 alternativas, sem caracteres mín.)">
-                              <Cpu className="w-3 h-3 text-emerald-400" />
-                              <span>PNE Leve/Mod</span>
-                            </span>
-                          )}
-                          {act.isAdapted && !act.adaptationType && (
-                            <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1" title="Atividade Adaptada para PNE">
-                              <Sparkles className="w-3 h-3 text-amber-400" />
-                              <span>Adaptada PNE</span>
-                            </span>
-                          )}
-                          {act.securityFocusLock && (
-                            <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1" title="Trava de Foco: Avisos ao mudar de tela (auto-entrega no 4º desvio)">
-                              <ShieldAlert className="w-3 h-3 text-amber-400" />
-                              <span>Trava de Foco</span>
-                            </span>
-                          )}
-                          {act.securityBlockCopyStatement && (
-                            <span className="text-[10px] font-bold bg-rose-500/20 text-rose-300 px-2.5 py-0.5 rounded-full border border-rose-500/30 flex items-center gap-1" title="Cópia dos enunciados bloqueada">
-                              <CopyX className="w-3 h-3 text-rose-400" />
-                              <span>Sem Cópia</span>
-                            </span>
-                          )}
-                          {act.securityBlockPasteEssay && (
-                            <span className="text-[10px] font-bold bg-purple-500/20 text-purple-300 px-2.5 py-0.5 rounded-full border border-purple-500/30 flex items-center gap-1" title="Colar em respostas dissertativas bloqueado">
-                              <ClipboardX className="w-3 h-3 text-purple-400" />
-                              <span>Sem Cola</span>
-                            </span>
-                          )}
                         </div>
+                      </div>
 
-                        {/* Subtle Deadline & Status Breakdown Row */}
-                        <div className="flex flex-wrap items-center gap-2 text-xs">
-                          {/* Subtle Highlighted Deadline Badge */}
-                          <span className="px-3 py-1 rounded-xl text-xs font-bold bg-[#131b2e] text-amber-300 border border-amber-500/30 flex items-center gap-1.5 shadow-sm">
-                            <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                            <span>Prazo Limite: {act.deadline || 'Sem data'}</span>
+                      {/* Right: Badges Resumidos na Linha */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Status Badge */}
+                        <span
+                          className={`text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-0.5 rounded-full whitespace-nowrap ${
+                            act.status === 'Ativo'
+                              ? 'bg-[#4ade80]/20 text-[#4ade80] border border-[#4ade80]/30'
+                              : act.status === 'Prazo Encerrado'
+                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                              : 'bg-slate-700/50 text-slate-300 border border-slate-600'
+                          }`}
+                        >
+                          {act.status}
+                        </span>
+
+                        {/* PNE Tag Compacta */}
+                        {act.isAdapted && (
+                          <span className="hidden md:inline-flex text-[10px] font-bold bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30 items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-amber-400" />
+                            <span>PNE</span>
                           </span>
+                        )}
 
-                          {/* Submission Status Badges */}
-                          {subCount > 0 ? (
-                            <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-[#131b2e] text-white border border-white/10 flex items-center gap-1.5">
-                              👥 {subCount}/{expectedStudentsCount} Entregas
-                            </span>
-                          ) : (
-                            <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-[#131b2e] text-[#bccabb] border border-white/5">
-                              📜 0/{expectedStudentsCount} Entregas (Pendente)
-                            </span>
-                          )}
-
-                          {pendingCount > 0 && (
-                            <span className="px-3 py-1 rounded-xl text-xs font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1.5">
-                              ⏳ {pendingCount} A Corrigir pelo Sensei
-                            </span>
-                          )}
-
-                          {gradedCount > 0 && (
-                            <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
-                              ✅ {gradedCount} Corrigidas
-                            </span>
-                          )}
-
-                          {/* Returned Badges */}
-                          {ret1x > 0 && (
-                            <span className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-orange-500/15 text-orange-300 border border-orange-500/30">
-                              ↩️ {ret1x} Devolvida 1x
-                            </span>
-                          )}
-                          {ret2x > 0 && (
-                            <span className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-orange-600/20 text-orange-200 border border-orange-500/40">
-                              ↩️ {ret2x} Devolvida 2x
-                            </span>
-                          )}
-                          {ret3x > 0 && (
-                            <span className="px-2.5 py-1 rounded-xl text-xs font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                              🚨 {ret3x} Devolvida 3x
-                            </span>
-                          )}
-                        </div>
+                        {/* Pendentes a Corrigir na linha */}
+                        {pendingCount > 0 && (
+                          <span className="text-[10px] sm:text-[11px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 sm:px-2.5 py-0.5 rounded-full hidden sm:inline-flex items-center gap-1">
+                            ⏳ {pendingCount} a corrigir
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    {/* Right Actions */}
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="flex flex-wrap items-center gap-2 w-full lg:w-auto pt-2 lg:pt-0 border-t lg:border-t-0 border-white/5"
-                    >
-                      {onViewActivity && (
-                        <button
-                          onClick={() => onViewActivity(act)}
-                          className="flex-1 sm:flex-none px-4 py-2.5 bg-[#1d273d] hover:bg-[#283654] text-[#dae2fd] hover:text-white rounded-full text-xs font-bold border border-white/10 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
-                          title="Ver detalhes e formulário da atividade"
-                        >
-                          <Eye className="w-4 h-4 text-sky-400 shrink-0" />
-                          <span>Abrir Atividade</span>
-                        </button>
-                      )}
-
-                      <button
-                        onClick={() => onSelectActivityForGrading(act)}
-                        className="flex-1 sm:flex-none px-4 py-2.5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-[#4ade80]/10 cursor-pointer min-h-[44px]"
-                      >
-                        <CheckCheck className="w-4 h-4 stroke-[2.5] shrink-0" />
-                        <span>{pendingCount > 0 ? `Corrigir (${pendingCount})` : 'Acessar Correções'}</span>
-                      </button>
-
-                      {!isCorrecoes && (
-                        <>
-                          <button
-                            onClick={() => handleOpenSecurityModal(act)}
-                            className="flex-1 sm:flex-none px-4 py-2.5 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] hover:text-white rounded-full text-xs font-bold border border-white/10 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
-                            title="Configurar Trava de Foco, Cópia de Enunciado e Cola de Redação"
-                          >
-                            <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                            <span>Anti-Cola</span>
-                            {(act.securityFocusLock || act.securityBlockCopyStatement || act.securityBlockPasteEssay) && (
-                              <span className="w-2 h-2 rounded-full bg-[#4ade80]" />
+                    {/* Janela Retrátil Estendida (Ao Clicar no +) */}
+                    {isExpanded && (
+                      <div className="space-y-4 pt-4 mt-3 border-t border-white/10 animate-fadeIn">
+                        {/* Informações detalhadas, Badges e Metadados */}
+                        <div className="space-y-2.5">
+                          {/* Badges de Travas e Adaptações */}
+                          <div className="flex flex-wrap items-center gap-2">
+                            {act.isAdapted && act.adaptationType === 'severe_playful' && (
+                              <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1" title="Jogo Lúdico Gamificado em HTML (Síndromes Severas)">
+                                <Gamepad2 className="w-3 h-3 text-amber-400" />
+                                <span>PNE Lúdica (Jogo)</span>
+                              </span>
                             )}
-                          </button>
+                            {act.isAdapted && act.adaptationType === 'mild_moderate' && (
+                              <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1" title="Atividade Adaptada Leve/Moderada (50% questões, 2 alternativas, sem caracteres mín.)">
+                                <Cpu className="w-3 h-3 text-emerald-400" />
+                                <span>PNE Leve/Mod</span>
+                              </span>
+                            )}
+                            {act.isAdapted && !act.adaptationType && (
+                              <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1" title="Atividade Adaptada para PNE">
+                                <Sparkles className="w-3 h-3 text-amber-400" />
+                                <span>Adaptada PNE</span>
+                              </span>
+                            )}
+                            {act.securityFocusLock && (
+                              <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1" title="Trava de Foco: Avisos ao mudar de tela (auto-entrega no 4º desvio)">
+                                <ShieldAlert className="w-3 h-3 text-amber-400" />
+                                <span>Trava de Foco</span>
+                              </span>
+                            )}
+                            {act.securityBlockCopyStatement && (
+                              <span className="text-[10px] font-bold bg-rose-500/20 text-rose-300 px-2.5 py-0.5 rounded-full border border-rose-500/30 flex items-center gap-1" title="Cópia dos enunciados bloqueada">
+                                <CopyX className="w-3 h-3 text-rose-400" />
+                                <span>Sem Cópia</span>
+                              </span>
+                            )}
+                            {act.securityBlockPasteEssay && (
+                              <span className="text-[10px] font-bold bg-purple-500/20 text-purple-300 px-2.5 py-0.5 rounded-full border border-purple-500/30 flex items-center gap-1" title="Colar em respostas dissertativas bloqueado">
+                                <ClipboardX className="w-3 h-3 text-purple-400" />
+                                <span>Sem Cola</span>
+                              </span>
+                            )}
+                          </div>
 
-                          {doesTurmaHavePNEStudent(act.turma, students) && (
+                          {/* Prazo e Desglose de Entregas */}
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                            <span className="px-3 py-1 rounded-xl text-xs font-bold bg-[#131b2e] text-amber-300 border border-amber-500/30 flex items-center gap-1.5 shadow-sm">
+                              <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                              <span>Prazo Limite: {act.deadline || 'Sem data'}</span>
+                            </span>
+
+                            {subCount > 0 ? (
+                              <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-[#131b2e] text-white border border-white/10 flex items-center gap-1.5">
+                                👥 {subCount}/{expectedStudentsCount} Entregas
+                              </span>
+                            ) : (
+                              <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-[#131b2e] text-[#bccabb] border border-white/5">
+                                📜 0/{expectedStudentsCount} Entregas (Pendente)
+                              </span>
+                            )}
+
+                            {pendingCount > 0 && (
+                              <span className="px-3 py-1 rounded-xl text-xs font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1.5">
+                                ⏳ {pendingCount} A Corrigir pelo Sensei
+                              </span>
+                            )}
+
+                            {gradedCount > 0 && (
+                              <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+                                ✅ {gradedCount} Corrigidas
+                              </span>
+                            )}
+
+                            {ret1x > 0 && (
+                              <span className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-orange-500/15 text-orange-300 border border-orange-500/30">
+                                ↩️ {ret1x} Devolvida 1x
+                              </span>
+                            )}
+                            {ret2x > 0 && (
+                              <span className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-orange-600/20 text-orange-200 border border-orange-500/40">
+                                ↩️ {ret2x} Devolvida 2x
+                              </span>
+                            )}
+                            {ret3x > 0 && (
+                              <span className="px-2.5 py-1 rounded-xl text-xs font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                                🚨 {ret3x} Devolvida 3x
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Botões de Ação na Janela Retrátil */}
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/10"
+                        >
+                          {onViewActivity && (
                             <button
-                              onClick={() => setAdaptModalActivity(act)}
-                              className="flex-1 sm:flex-none px-4 py-2.5 bg-[#171f33] hover:bg-[#222a3d] text-amber-300 hover:text-amber-200 rounded-full text-xs font-bold border border-amber-500/20 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
-                              title="Adaptar Atividade para PNE (Metade das questões e 2 alternativas por objetiva)"
+                              onClick={() => onViewActivity(act)}
+                              className="flex-1 sm:flex-none px-4 py-2.5 bg-[#1d273d] hover:bg-[#283654] text-[#dae2fd] hover:text-white rounded-full text-xs font-bold border border-white/10 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[42px]"
+                              title="Ver detalhes e formulário da atividade"
                             >
-                              <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                              <span>Adaptar (PNE)</span>
+                              <Eye className="w-4 h-4 text-sky-400 shrink-0" />
+                              <span>Abrir Atividade</span>
                             </button>
                           )}
 
                           <button
-                            onClick={() => onEditActivity(act)}
-                            className="flex-1 sm:flex-none px-4 py-2.5 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] hover:text-white rounded-full text-xs font-bold border border-white/10 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
+                            onClick={() => onSelectActivityForGrading(act)}
+                            className="flex-1 sm:flex-none px-4 py-2.5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-[#4ade80]/10 cursor-pointer min-h-[42px]"
                           >
-                            <Pencil className="w-3.5 h-3.5 text-[#4ade80] shrink-0" />
-                            <span>Editar</span>
+                            <CheckCheck className="w-4 h-4 stroke-[2.5] shrink-0" />
+                            <span>{pendingCount > 0 ? `Corrigir (${pendingCount})` : 'Acessar Correções'}</span>
                           </button>
-                        </>
-                      )}
 
-                      {act.status === 'Prazo Encerrado' && (
-                        <button
-                          onClick={() => onGenerateDossier(act)}
-                          className="flex-1 sm:flex-none px-4 py-2.5 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] rounded-full text-xs font-bold border border-white/10 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
-                        >
-                          <FileSpreadsheet className="w-3.5 h-3.5 text-[#c0c1ff] shrink-0" />
-                          <span>Gerar Dossiê</span>
-                        </button>
-                      )}
+                          {!isCorrecoes && (
+                            <>
+                              <button
+                                onClick={() => handleOpenSecurityModal(act)}
+                                className="flex-1 sm:flex-none px-4 py-2.5 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] hover:text-white rounded-full text-xs font-bold border border-white/10 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[42px]"
+                                title="Configurar Trava de Foco, Cópia de Enunciado e Cola de Redação"
+                              >
+                                <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                <span>Anti-Cola</span>
+                                {(act.securityFocusLock || act.securityBlockCopyStatement || act.securityBlockPasteEssay) && (
+                                  <span className="w-2 h-2 rounded-full bg-[#4ade80]" />
+                                )}
+                              </button>
 
-                      {!isCorrecoes && onDeleteActivity && (
-                        <button
-                          onClick={() => setActivityToDelete(act)}
-                          className="px-3.5 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 rounded-full text-xs font-bold border border-rose-500/20 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
-                          title="Excluir Atividade"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 shrink-0" />
-                          <span>Excluir</span>
-                        </button>
-                      )}
-                    </div>
+                              {doesTurmaHavePNEStudent(act.turma, students) && (
+                                <button
+                                  onClick={() => setAdaptModalActivity(act)}
+                                  className="flex-1 sm:flex-none px-4 py-2.5 bg-[#171f33] hover:bg-[#222a3d] text-amber-300 hover:text-amber-200 rounded-full text-xs font-bold border border-amber-500/20 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[42px]"
+                                  title="Adaptar Atividade para PNE (Metade das questões e 2 alternativas por objetiva)"
+                                >
+                                  <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                  <span>Adaptar (PNE)</span>
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => onEditActivity(act)}
+                                className="flex-1 sm:flex-none px-4 py-2.5 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] hover:text-white rounded-full text-xs font-bold border border-white/10 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[42px]"
+                              >
+                                <Pencil className="w-3.5 h-3.5 text-[#4ade80] shrink-0" />
+                                <span>Editar</span>
+                              </button>
+                            </>
+                          )}
+
+                          {act.status === 'Prazo Encerrado' && (
+                            <button
+                              onClick={() => onGenerateDossier(act)}
+                              className="flex-1 sm:flex-none px-4 py-2.5 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] rounded-full text-xs font-bold border border-white/10 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[42px]"
+                            >
+                              <FileSpreadsheet className="w-3.5 h-3.5 text-[#c0c1ff] shrink-0" />
+                              <span>Gerar Dossiê</span>
+                            </button>
+                          )}
+
+                          {!isCorrecoes && onDeleteActivity && (
+                            <button
+                              onClick={() => setActivityToDelete(act)}
+                              className="px-3.5 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 rounded-full text-xs font-bold border border-rose-500/20 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[42px]"
+                              title="Excluir Atividade"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                              <span>Excluir</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
-            );
+              );
             })
           )}
         </div>

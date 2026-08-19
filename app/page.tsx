@@ -35,49 +35,79 @@ import { NewSecondTeacherModal } from '@/components/modals/NewSecondTeacherModal
 import { CheckCircle2, AlertTriangle, HeartHandshake, UserPlus } from 'lucide-react';
 
 export default function Home() {
-  // Auth state
-  const [role, setRole] = useState<UserRole>(null);
-  const [teacher, setTeacher] = useState<TeacherUser>(initialTeacher);
-  const [currentStudent, setCurrentStudent] = useState<StudentUser | null>(null);
-  const [inactivityTimeoutEnabled, setInactivityTimeoutEnabled] = useState<boolean>(true);
-  const [currentTab, setCurrentTab] = useState('painel');
-
-  // Restaurar sessão e preferências no carregamento do cliente
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    queueMicrotask(() => {
+  // Auth state - Inicialização síncrona a partir da sessão ativa para evitar flickering/piscar de tela
+  const [role, setRole] = useState<UserRole>(() => {
+    if (typeof window !== 'undefined') {
       try {
-        const savedDriveUrl = localStorage.getItem('teacher_drive_folder_url');
-        if (savedDriveUrl) {
-          setTeacher((prev) => ({ ...prev, driveFolderUrl: savedDriveUrl }));
-        }
-
-        const savedTimeout = localStorage.getItem('inactivity_timeout_enabled');
-        if (savedTimeout !== null) {
-          setInactivityTimeoutEnabled(savedTimeout === 'true');
-        }
-
         const sessionStr = sessionStorage.getItem('active_session');
         if (sessionStr) {
           const session = JSON.parse(sessionStr);
-          if (session.role === 'teacher') {
-            setRole('teacher');
-            if (session.teacherData) setTeacher(session.teacherData);
-          } else if (session.role === 'second_teacher') {
-            setRole('second_teacher');
-            if (session.teacherData) setTeacher(session.teacherData);
-            setCurrentTab('2_professor');
-          } else if (session.role === 'student' && session.studentData) {
-            setCurrentStudent(session.studentData);
-            setRole('student');
-          }
+          if (session.role) return session.role;
         }
       } catch (e) {
-        console.warn('Erro ao restaurar sessão armazenada:', e);
+        console.warn('Erro ao restaurar papel da sessão inicial:', e);
       }
-    });
-  }, []);
+    }
+    return null;
+  });
+
+  const [teacher, setTeacher] = useState<TeacherUser>(() => {
+    let baseTeacher = initialTeacher;
+    if (typeof window !== 'undefined') {
+      try {
+        const sessionStr = sessionStorage.getItem('active_session');
+        if (sessionStr) {
+          const session = JSON.parse(sessionStr);
+          if (session.teacherData) baseTeacher = session.teacherData;
+        }
+        const savedDriveUrl = localStorage.getItem('teacher_drive_folder_url');
+        if (savedDriveUrl) {
+          baseTeacher = { ...baseTeacher, driveFolderUrl: savedDriveUrl };
+        }
+      } catch (e) {
+        console.warn('Erro ao restaurar professor inicial:', e);
+      }
+    }
+    return baseTeacher;
+  });
+
+  const [currentStudent, setCurrentStudent] = useState<StudentUser | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const sessionStr = sessionStorage.getItem('active_session');
+        if (sessionStr) {
+          const session = JSON.parse(sessionStr);
+          if (session.studentData) return session.studentData;
+        }
+      } catch (e) {
+        console.warn('Erro ao restaurar aluno inicial:', e);
+      }
+    }
+    return null;
+  });
+
+  const [inactivityTimeoutEnabled, setInactivityTimeoutEnabled] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedTimeout = localStorage.getItem('inactivity_timeout_enabled');
+        if (savedTimeout !== null) return savedTimeout === 'true';
+      } catch (e) {}
+    }
+    return true;
+  });
+
+  const [currentTab, setCurrentTab] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const sessionStr = sessionStorage.getItem('active_session');
+        if (sessionStr) {
+          const session = JSON.parse(sessionStr);
+          if (session.role === 'second_teacher') return '2_professor';
+        }
+      } catch (e) {}
+    }
+    return 'painel';
+  });
 
   // App datasets
   const [students, setStudents] = useState<StudentUser[]>(initialStudents);
@@ -472,7 +502,7 @@ export default function Home() {
     }
   };
 
-  const handleLogout = (reason?: string) => {
+  const handleLogout = useCallback((reason?: string) => {
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('active_session');
     }
@@ -484,7 +514,7 @@ export default function Home() {
     if (reason && typeof reason === 'string') {
       showGlobalStatus('error', reason);
     }
-  };
+  }, []);
 
   // Temporizador de Desconexão por Inatividade (8 minutos)
   useEffect(() => {
@@ -509,7 +539,7 @@ export default function Home() {
       clearTimeout(timeoutId);
       events.forEach((evt) => window.removeEventListener(evt, resetTimer));
     };
-  }, [role, inactivityTimeoutEnabled]);
+  }, [role, inactivityTimeoutEnabled, handleLogout]);
 
   // Activity Handlers
   const sanitizeTypeForDb = (rawType: string): string => {
