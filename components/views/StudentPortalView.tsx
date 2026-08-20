@@ -73,7 +73,34 @@ interface StudentPortalViewProps {
     activityTitle?: string;
   }) => void;
   onMarkThreadAsRead?: (threadId: string, currentRole: 'teacher' | 'student') => void;
+  onUpdateAvatar?: (studentId: string, newAvatarUrl: string) => void;
 }
+
+const POP_AVATARS = [
+  // Femininos
+  'https://api.dicebear.com/9.x/adventurer/svg?seed=Arwen',        // Senhor dos Anéis
+  'https://api.dicebear.com/9.x/adventurer/svg?seed=Eowyn',        // Senhor dos Anéis (Guerreira/Brava)
+  'https://api.dicebear.com/9.x/avataaars/svg?seed=SpiderGwen',    // Homem-Aranha
+  'https://api.dicebear.com/9.x/micah/svg?seed=MaryJane',          // Homem-Aranha (Inspirada)
+  'https://api.dicebear.com/9.x/adventurer/svg?seed=Sakura',       // Naruto (Focada)
+  'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Hinata',        // Naruto (Fofinha/Tímida)
+  'https://api.dicebear.com/9.x/adventurer/svg?seed=Nami',         // One Piece
+  'https://api.dicebear.com/9.x/micah/svg?seed=NicoRobin',         // One Piece (Séria)
+  'https://api.dicebear.com/9.x/adventurer/svg?seed=Nezuko',       // Demon Slayer
+  'https://api.dicebear.com/9.x/bottts/svg?seed=Anri',             // Jaspion (Andróide)
+  
+  // Masculinos
+  'https://api.dicebear.com/9.x/adventurer/svg?seed=Frodo',        // Senhor dos Anéis (Inspirado)
+  'https://api.dicebear.com/9.x/adventurer/svg?seed=Aragorn',      // Senhor dos Anéis (Bravo/Corajoso)
+  'https://api.dicebear.com/9.x/avataaars/svg?seed=PeterParker',   // Homem-Aranha
+  'https://api.dicebear.com/9.x/micah/svg?seed=MilesMorales',      // Homem-Aranha (Estiloso)
+  'https://api.dicebear.com/9.x/adventurer/svg?seed=NarutoUzumaki',// Naruto (Determinado)
+  'https://api.dicebear.com/9.x/avataaars/svg?seed=UchihaSasuke',  // Naruto (Frio/Sério)
+  'https://api.dicebear.com/9.x/adventurer/svg?seed=Luffy',        // One Piece (Feliz)
+  'https://api.dicebear.com/9.x/micah/svg?seed=RoronoaZoro',       // One Piece (Sério)
+  'https://api.dicebear.com/9.x/adventurer/svg?seed=Tanjiro',      // Demon Slayer (Focado)
+  'https://api.dicebear.com/9.x/bottts/svg?seed=Jaspion'           // Jaspion (Mecha/Robô)
+];
 
 export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   student,
@@ -93,9 +120,11 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   onSubmitAnswer,
   onSendMessage,
   onMarkThreadAsRead,
+  onUpdateAvatar,
 }) => {
   // Tab state: 'atividades' | 'correcoes' | 'mensagens' | 'arquivos'
   const [activeTab, setActiveTab] = useState<'atividades' | 'correcoes' | 'mensagens' | 'arquivos'>('atividades');
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
 
   // List filter state for students: 'todas' | 'a_fazer' | 'a_corrigir' | 'corrigidas'
   const [studentFilter, setStudentFilter] = useState<'todas' | 'a_fazer' | 'a_corrigir' | 'corrigidas'>('todas');
@@ -498,11 +527,16 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       {/* Top Banner */}
       <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-6 shadow-xl">
         <div className="flex items-center gap-4">
-          <img
-            src={student.avatarUrl}
-            alt={student.fullName}
-            className="w-16 h-16 rounded-full object-cover border-2 border-[#4ade80] shadow-md"
-          />
+          <div className="relative group cursor-pointer" onClick={() => setIsAvatarModalOpen(true)}>
+            <img
+              src={student.avatarUrl}
+              alt={student.fullName}
+              className="w-16 h-16 rounded-full object-cover border-2 border-[#4ade80] shadow-md transition-all group-hover:brightness-50"
+            />
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <PenTool className="w-5 h-5 text-white" />
+            </div>
+          </div>
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-[#4ade80] uppercase tracking-wider bg-[#4ade80]/10 px-3 py-0.5 rounded-full border border-[#4ade80]/20">
@@ -1857,6 +1891,78 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             >
               {securityNotice.isAutoSubmitted ? 'Entendido (Ver Correções)' : 'Entendido, Voltar para a Prova'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Avatar Selection Modal */}
+      {isAvatarModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-[#0e172a] border border-white/10 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl space-y-6 relative max-h-[90vh] flex flex-col">
+            <button
+              onClick={() => setIsAvatarModalOpen(false)}
+              className="absolute top-4 right-4 p-2 text-[#bccabb] hover:text-white bg-[#131b2e] hover:bg-rose-500/20 rounded-full transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            
+            <div>
+              <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-400" />
+                Escolha seu Avatar
+              </h2>
+              <p className="text-sm text-[#bccabb] mt-1">
+                Selecione o seu personagem favorito para usar no seu perfil!
+              </p>
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-6">
+              <div>
+                <h3 className="text-sm font-bold text-pink-400 mb-3 border-b border-pink-500/20 pb-2">Meninas Heróinas & Pop</h3>
+                <div className="grid grid-cols-4 sm:grid-cols-5 gap-4">
+                  {POP_AVATARS.slice(0, 10).map((avatarUrl, idx) => (
+                    <button
+                      key={`fem-${idx}`}
+                      onClick={() => {
+                        if (onUpdateAvatar) onUpdateAvatar(student.id, avatarUrl);
+                        setIsAvatarModalOpen(false);
+                      }}
+                      className="aspect-square rounded-2xl border-2 border-transparent hover:border-pink-400 focus:border-pink-400 bg-white/5 hover:bg-white/10 transition-all p-2 cursor-pointer relative group"
+                    >
+                      <img src={avatarUrl} alt="Avatar" className="w-full h-full object-contain group-hover:scale-110 transition-transform" />
+                      {student.avatarUrl === avatarUrl && (
+                        <div className="absolute -top-2 -right-2 bg-pink-500 text-white p-1 rounded-full border-2 border-[#0e172a]">
+                          <Check className="w-3 h-3 stroke-[3]" />
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-bold text-blue-400 mb-3 border-b border-blue-500/20 pb-2">Heróis & Lendas Pop</h3>
+                <div className="grid grid-cols-4 sm:grid-cols-5 gap-4">
+                  {POP_AVATARS.slice(10, 20).map((avatarUrl, idx) => (
+                    <button
+                      key={`masc-${idx}`}
+                      onClick={() => {
+                        if (onUpdateAvatar) onUpdateAvatar(student.id, avatarUrl);
+                        setIsAvatarModalOpen(false);
+                      }}
+                      className="aspect-square rounded-2xl border-2 border-transparent hover:border-blue-400 focus:border-blue-400 bg-white/5 hover:bg-white/10 transition-all p-2 cursor-pointer relative group"
+                    >
+                      <img src={avatarUrl} alt="Avatar" className="w-full h-full object-contain group-hover:scale-110 transition-transform" />
+                      {student.avatarUrl === avatarUrl && (
+                        <div className="absolute -top-2 -right-2 bg-blue-500 text-white p-1 rounded-full border-2 border-[#0e172a]">
+                          <Check className="w-3 h-3 stroke-[3]" />
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

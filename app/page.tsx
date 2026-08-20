@@ -1133,6 +1133,43 @@ export default function Home() {
     }
   };
 
+  const handleUpdateStudentAvatar = async (studentId: string, newAvatarUrl: string) => {
+    if (!isSupabaseConfigured || !supabase) {
+      showGlobalStatus('error', 'Supabase não configurado. Foto não atualizada.');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('students')
+        .update({ avatar_url: newAvatarUrl })
+        .eq('id', studentId);
+
+      if (error) {
+        throw error;
+      }
+
+      setStudents((prev) => {
+        const next = prev.map((s) => (s.id === studentId ? { ...s, avatarUrl: newAvatarUrl } : s));
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('local_students_data', JSON.stringify(next));
+          } catch (e) {}
+        }
+        return next;
+      });
+
+      if (currentStudent && currentStudent.id === studentId) {
+        setCurrentStudent({ ...currentStudent, avatarUrl: newAvatarUrl });
+      }
+      
+      showGlobalStatus('success', 'Avatar atualizado com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao atualizar avatar:', err);
+      showGlobalStatus('error', `Falha ao atualizar avatar: ${err.message}`);
+    }
+  };
+
   const handleStudentSubmitAnswer = async (
     activityId: string,
     studentId: string,
@@ -1799,6 +1836,7 @@ export default function Home() {
         onSubmitAnswer={handleStudentSubmitAnswer}
         onSendMessage={handleSendMessage}
         onMarkThreadAsRead={handleMarkThreadAsRead}
+        onUpdateAvatar={handleUpdateStudentAvatar}
       />
     );
   }
