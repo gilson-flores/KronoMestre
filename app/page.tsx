@@ -742,7 +742,7 @@ export default function Home() {
     try {
       // Auto adjust status if deadline is specified
       const dateStr = updatedAct.deadline ? updatedAct.deadline.trim() : '';
-      if (dateStr) {
+      if (updatedAct.status !== 'Inativo' && dateStr) {
         let isoDate: string | null = null;
         const isoMatch = dateStr.match(/\b(20\d\d)-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b/);
         if (isoMatch) isoDate = isoMatch[0];

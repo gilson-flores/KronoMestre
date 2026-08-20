@@ -19,6 +19,7 @@ import {
   Layers,
   Award,
   Eye,
+  EyeOff,
   ShieldAlert,
   ShieldCheck,
   Lock,
@@ -798,6 +799,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                                 <Pencil className="w-3.5 h-3.5 text-[#4ade80] shrink-0" />
                                 <span>Editar</span>
                               </button>
+
+                              {onSaveActivity && (
+                                <button
+                                  onClick={() => {
+                                    onSaveActivity({
+                                      ...act,
+                                      status: act.status === 'Inativo' ? 'Ativo' : 'Inativo'
+                                    });
+                                  }}
+                                  className={`flex-1 sm:flex-none px-4 py-2.5 ${act.status === 'Inativo' ? 'bg-[#4ade80]/10 hover:bg-[#4ade80]/20 text-[#4ade80] border-[#4ade80]/20' : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 border-rose-500/20'} rounded-full text-xs font-bold border flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[42px]`}
+                                  title={act.status === 'Inativo' ? "Ativar (Mostrar para aluno)" : "Desativar (Ocultar do aluno)"}
+                                >
+                                  {act.status === 'Inativo' ? <Eye className="w-3.5 h-3.5 shrink-0" /> : <EyeOff className="w-3.5 h-3.5 shrink-0" />}
+                                  <span>{act.status === 'Inativo' ? "Ativar" : "Desativar"}</span>
+                                </button>
+                              )}
                             </>
                           )}
 

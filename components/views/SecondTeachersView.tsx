@@ -431,9 +431,11 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
     activities.forEach((act) => {
       if (!act.isAdapted && !act.adaptationType) return;
+      const parentAct = activities.find((parent) => parent.id === act.adaptedFromId);
 
       targetStudents.forEach((st) => {
         if (!canStudentAccessActivity(act.turma, st.turma)) return;
+        if (parentAct?.includedPneStudentIds?.includes(st.id)) return; // PNE student taking normal activity
 
         const sub = act.submissions?.find(
           (s) => s.studentId === st.id || s.matricula === st.matricula || s.studentName === st.fullName
@@ -477,7 +479,17 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
         return false;
       }
       // 2. 2º professor só vê adaptações PNE
-      return Boolean(act.isAdapted || act.adaptationType);
+      const isActivityAdapted = Boolean(act.isAdapted || act.adaptationType);
+      
+      if (isActivityAdapted) {
+        // Se esta é a adaptação de uma atividade onde o aluno foi selecionado para fazer a normal, oculta a adaptação
+        const parentAct = activities.find((parent) => parent.id === act.adaptedFromId);
+        if (parentAct?.includedPneStudentIds?.includes(activeStudent.id)) {
+          return false;
+        }
+        return true;
+      }
+      return false;
     });
   }, [activities, activeStudent]);
 

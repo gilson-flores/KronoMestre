@@ -396,7 +396,7 @@ export function getActivityStudentAndSubmissionCounts(
 
   if (isAdaptedAct) {
     // 1. ADAPTED ACTIVITY: ONLY count PNE students who take the adaptation (not proficient in normal)
-    expectedStudentsCount = enrolledStudents.length > 0 ? pneEnrolledTakingAdaptation.length : 1;
+    expectedStudentsCount = students && students.length > 0 ? pneEnrolledTakingAdaptation.length : 1;
 
     if (act.submissions && act.submissions.length > 0) {
       submissionsList = act.submissions.filter((s) => {
@@ -406,7 +406,7 @@ export function getActivityStudentAndSubmissionCounts(
     }
   } else if (hasAdaptationChild) {
     // 2. PRINCIPAL ACTIVITY WITH ADAPTATION: Regular students + proficient PNE students!
-    expectedStudentsCount = enrolledStudents.length > 0
+    expectedStudentsCount = students && students.length > 0
       ? studentsTakingNormal.length
       : Math.max(1, (act.totalStudents || 35) - pneEnrolledTakingAdaptation.length);
 
@@ -421,7 +421,7 @@ export function getActivityStudentAndSubmissionCounts(
     }
   } else {
     // 3. PRINCIPAL ACTIVITY WITHOUT ADAPTATION: All enrolled students
-    expectedStudentsCount = enrolledStudents.length > 0
+    expectedStudentsCount = students && students.length > 0
       ? enrolledStudents.length
       : (act.totalStudents || 35);
   }
