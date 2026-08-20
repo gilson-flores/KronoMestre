@@ -106,6 +106,17 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
         }
       }
 
+      if (typeof window !== 'undefined') {
+        try {
+          const cached = localStorage.getItem('local_second_teachers_data');
+          const list: TeacherUser[] = cached ? JSON.parse(cached) : [];
+          const updated = [...list.filter((t) => t.email !== newTeacher.email), newTeacher];
+          localStorage.setItem('local_second_teachers_data', JSON.stringify(updated));
+        } catch (e) {
+          console.warn('Erro ao salvar 2º professor em cache local:', e);
+        }
+      }
+
       setFormSuccess(`2º Professor "${newTeacher.name}" cadastrado com sucesso!`);
       onCreateSecondTeacher(newTeacher);
 

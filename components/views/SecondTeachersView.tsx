@@ -104,7 +104,25 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   // Fetch second teachers
   const fetchSecondTeachers = async () => {
     setIsLoadingTeachers(true);
-    if (!supabase) return;
+    // 1. Carregar do cache local primeiro
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('local_second_teachers_data');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setSecondTeachers(parsed);
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao ler cache local de 2º professores:', e);
+      }
+    }
+
+    if (!supabase) {
+      setIsLoadingTeachers(false);
+      return;
+    }
 
     try {
       const { data, error } = await supabase
@@ -119,7 +137,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
         } else {
           setErrorMsg('Erro ao carregar lista de professores de apoio.');
         }
-      } else if (data) {
+      } else if (data && data.length > 0) {
         const formatted: TeacherUser[] = data.map((d) => ({
           id: d.id,
           name: d.name,
@@ -130,6 +148,13 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
           school: d.school || '',
         }));
         setSecondTeachers(formatted);
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('local_second_teachers_data', JSON.stringify(formatted));
+          } catch (e) {
+            console.warn('Erro ao atualizar cache local de 2º professores:', e);
+          }
+        }
       }
     } catch (err) {
       console.error(err);

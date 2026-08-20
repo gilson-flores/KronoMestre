@@ -38,24 +38,45 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     const fetchSecondTeachers = async () => {
+      // 1. Carregar cache local de 2º professores
+      if (typeof window !== 'undefined') {
+        try {
+          const cached = localStorage.getItem('local_second_teachers_data');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setAvailableSecondTeachers(parsed);
+            }
+          }
+        } catch (e) {
+          console.warn('Erro ao ler cache de 2º professores:', e);
+        }
+      }
+
       if (!supabase) return;
       try {
         const { data } = await supabase
           .from('second_teachers')
           .select('id, name, email, subject, avatar_url, phone, school')
           .order('name');
-        if (data) {
-          setAvailableSecondTeachers(
-            data.map((d) => ({
-              id: d.id,
-              name: d.name,
-              subject: d.subject || 'AEE / Inclusão Escolar',
-              email: d.email,
-              avatarUrl: d.avatar_url || '',
-              phone: d.phone,
-              school: d.school,
-            }))
-          );
+        if (data && data.length > 0) {
+          const mapped: TeacherUser[] = data.map((d) => ({
+            id: d.id,
+            name: d.name,
+            subject: d.subject || 'AEE / Inclusão Escolar',
+            email: d.email,
+            avatarUrl: d.avatar_url || '',
+            phone: d.phone,
+            school: d.school,
+          }));
+          setAvailableSecondTeachers(mapped);
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('local_second_teachers_data', JSON.stringify(mapped));
+            } catch (e) {
+              console.warn('Erro ao salvar cache de 2º professores:', e);
+            }
+          }
         }
       } catch (err) {
         console.warn('Erro ao carregar lista de 2º professores:', err);
