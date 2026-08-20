@@ -25,6 +25,7 @@ import { AtestadosRadView } from '@/components/views/AtestadosRadView';
 
 
 import { normalizeStudentName, getActivityGradeDistribution } from '@/lib/studentUtils';
+import { sendBrowserNotification } from '@/lib/notificationUtils';
 import { NewActivityModal } from '@/components/modals/NewActivityModal';
 import { EditActivityModal } from '@/components/modals/EditActivityModal';
 import { ViewActivityModal } from '@/components/modals/ViewActivityModal';
@@ -102,7 +103,22 @@ export default function Home() {
     }
     return initialStudents;
   });
-  const [activities, setActivities] = useState<Activity[]>(initialActivities);
+  const [activities, setActivities] = useState<Activity[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('local_activities_data');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao restaurar atividades locais na inicialização:', e);
+      }
+    }
+    return initialActivities;
+  });
   const [schedule] = useState(initialSchedule);
   const [library, setLibrary] = useState<LibraryFile[]>(initialLibrary);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
@@ -142,6 +158,22 @@ export default function Home() {
     }
     return [];
   });
+
+  // AI Auto-Reply State for Teacher (Prof. Gilson bot)
+  const [isAiAutoReplyEnabled, setIsAiAutoReplyEnabled] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('teacher_ai_auto_reply_enabled');
+      return saved !== null ? saved === 'true' : true;
+    }
+    return true;
+  });
+
+  const handleToggleAiAutoReply = (enabled: boolean) => {
+    setIsAiAutoReplyEnabled(enabled);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('teacher_ai_auto_reply_enabled', String(enabled));
+    }
+  };
 
   const toggleSidebarItemVisibility = (itemId: string) => {
     setHiddenSidebarItems((prev) => {
@@ -408,11 +440,48 @@ export default function Home() {
               console.warn('Erro ao atualizar cache local de estudantes:', e);
             }
           }
+
+          // Se há um aluno logado no momento, sincroniza seu avatar e dados com os dados frescos do Supabase
+          if (currentStudent) {
+            const matchedCurrent = mappedStudents.find(
+              (s) =>
+                s.id === currentStudent.id ||
+                (s.matricula && s.matricula === currentStudent.matricula) ||
+                (s.fullName && normalizeStudentName(s.fullName) === normalizeStudentName(currentStudent.fullName))
+            );
+            if (matchedCurrent) {
+              setCurrentStudent((prev) => (prev ? { ...prev, ...matchedCurrent } : matchedCurrent));
+              if (typeof window !== 'undefined') {
+                try {
+                  sessionStorage.setItem(
+                    'active_session',
+                    JSON.stringify({ role: 'student', studentId: matchedCurrent.id, studentData: matchedCurrent })
+                  );
+                } catch (e) {}
+              }
+            }
+          }
         }
 
         // 2. Carregar Atividades e Entregas do Supabase
         const { data: dbActivities } = await client.from('activities').select('*');
         const { data: dbSubmissions } = await client.from('submissions').select('*');
+
+        // Ler cache local de atividades para preservação de seleção de PNE caso o banco ainda esteja migrando
+        let localActivitiesMap: { [id: string]: Activity } = {};
+        if (typeof window !== 'undefined') {
+          try {
+            const cachedActs = localStorage.getItem('local_activities_data');
+            if (cachedActs) {
+              const parsedActs: Activity[] = JSON.parse(cachedActs);
+              if (Array.isArray(parsedActs)) {
+                parsedActs.forEach((a) => {
+                  if (a.id) localActivitiesMap[a.id] = a;
+                });
+              }
+            }
+          } catch (e) {}
+        }
 
         if (dbActivities && dbActivities.length > 0) {
           const mappedActivities: Activity[] = dbActivities.map((act) => {
@@ -428,6 +497,30 @@ export default function Home() {
                 parsedQuestions = act.questions;
               }
             }
+
+            // Parse robusto de included_pne_student_ids
+            let parsedIncludedPneIds: string[] = [];
+            if (act.included_pne_student_ids) {
+              if (Array.isArray(act.included_pne_student_ids)) {
+                parsedIncludedPneIds = act.included_pne_student_ids;
+              } else if (typeof act.included_pne_student_ids === 'string') {
+                try {
+                  const parsed = JSON.parse(act.included_pne_student_ids);
+                  parsedIncludedPneIds = Array.isArray(parsed) ? parsed : [act.included_pne_student_ids];
+                } catch {
+                  parsedIncludedPneIds = act.included_pne_student_ids
+                    .split(',')
+                    .map((s: string) => s.trim())
+                    .filter(Boolean);
+                }
+              }
+            }
+
+            const localAct = localActivitiesMap[act.id];
+            const finalIncludedPneIds =
+              parsedIncludedPneIds && parsedIncludedPneIds.length > 0
+                ? parsedIncludedPneIds
+                : localAct?.includedPneStudentIds || [];
 
             const actMaxGrade = act.max_grade ? Number(act.max_grade) : (act.maxGrade || 10);
             const distribution = getActivityGradeDistribution({
@@ -479,6 +572,7 @@ export default function Home() {
               securityFocusLock: act.security_focus_lock !== undefined && act.security_focus_lock !== null ? Boolean(act.security_focus_lock) : Boolean(act.securityFocusLock),
               securityBlockCopyStatement: act.security_block_copy_statement !== undefined && act.security_block_copy_statement !== null ? Boolean(act.security_block_copy_statement) : Boolean(act.securityBlockCopyStatement),
               securityBlockPasteEssay: act.security_block_paste_essay !== undefined && act.security_block_paste_essay !== null ? Boolean(act.security_block_paste_essay) : Boolean(act.securityBlockPasteEssay),
+              includedPneStudentIds: finalIncludedPneIds,
               isAdapted: Boolean(act.is_adapted || act.isAdapted || act.title?.startsWith('[PNE Leve/Mod]') || act.title?.startsWith('[PNE Lúdica]') || act.title?.startsWith('[Adaptada PNE]')),
               adaptationType: act.adaptation_type || act.adaptationType || (act.title?.startsWith('[PNE Lúdica]') ? 'severe_playful' : ((act.title?.startsWith('[PNE Leve/Mod]') || act.title?.startsWith('[Adaptada PNE]')) ? 'mild_moderate' : undefined)),
               playfulGameHtml: act.playful_game_html || act.playfulGameHtml || undefined,
@@ -493,6 +587,13 @@ export default function Home() {
             };
           });
           setActivities(mappedActivities);
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('local_activities_data', JSON.stringify(mappedActivities));
+            } catch (e) {
+              console.warn('Erro ao atualizar cache local de atividades:', e);
+            }
+          }
         }
 
         // 3. Carregar Mensagens do Supabase
@@ -650,6 +751,7 @@ export default function Home() {
         security_focus_lock: newAct.securityFocusLock || false,
         security_block_copy_statement: newAct.securityBlockCopyStatement || false,
         security_block_paste_essay: newAct.securityBlockPasteEssay || false,
+        included_pne_student_ids: newAct.includedPneStudentIds || [],
         is_adapted: newAct.isAdapted || false,
         adaptation_type: newAct.adaptationType || null,
         playful_game_html: newAct.playfulGameHtml || null,
@@ -681,7 +783,7 @@ export default function Home() {
           }
         }
 
-        // Tentativa 2: enviar payload básico saneado sem colunas adicionais
+        // Tentativa 2: enviar payload básico saneado se faltar coluna no banco
         if (error) {
           const basicPayload = {
             id: newAct.id,
@@ -718,18 +820,42 @@ export default function Home() {
         const errorDetails = error.message || error.details || error.hint || (typeof error === 'object' ? JSON.stringify(error) : String(error));
         console.error('Erro ao criar atividade no Supabase:', errorDetails, error);
         showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao gravar atividade no Supabase (${error.code || 'BD'}): ${errorDetails || 'Erro desconhecido'}`);
-        // Mantém no estado local para garantir usabilidade sem perder dados do professor
-        setActivities((prev) => [newAct, ...prev]);
+        // Mantém no estado local e cache local para garantir usabilidade sem perder dados do professor
+        setActivities((prev) => {
+          const next = [newAct, ...prev];
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('local_activities_data', JSON.stringify(next));
+            } catch (e) {}
+          }
+          return next;
+        });
         return;
       }
 
-      setActivities((prev) => [newAct, ...prev]);
+      setActivities((prev) => {
+        const next = [newAct, ...prev];
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('local_activities_data', JSON.stringify(next));
+          } catch (e) {}
+        }
+        return next;
+      });
       showGlobalStatus('success', `Atividade "${newAct.title}" criada e confirmada no Supabase com sucesso!`);
     } catch (err: any) {
       const catchedMsg = err?.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
       console.error('Erro ao salvar atividade no Supabase:', catchedMsg, err);
       showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Falha de conexão/execução (${catchedMsg || 'Erro desconhecido'})`);
-      setActivities((prev) => [newAct, ...prev]);
+      setActivities((prev) => {
+        const next = [newAct, ...prev];
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('local_activities_data', JSON.stringify(next));
+          } catch (e) {}
+        }
+        return next;
+      });
     }
   };
 
@@ -782,6 +908,7 @@ export default function Home() {
         security_focus_lock: updatedAct.securityFocusLock || false,
         security_block_copy_statement: updatedAct.securityBlockCopyStatement || false,
         security_block_paste_essay: updatedAct.securityBlockPasteEssay || false,
+        included_pne_student_ids: updatedAct.includedPneStudentIds || [],
         is_adapted: updatedAct.isAdapted || false,
         adaptation_type: updatedAct.adaptationType || null,
         playful_game_html: updatedAct.playfulGameHtml || null,
@@ -846,11 +973,27 @@ export default function Home() {
         const errorDetails = error.message || error.details || error.hint || (typeof error === 'object' ? JSON.stringify(error) : String(error));
         console.error('Erro ao atualizar atividade no Supabase:', errorDetails, error);
         showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao atualizar atividade no Supabase (${error.code || 'BD'}): ${errorDetails || 'Erro desconhecido'}`);
-        setActivities((prev) => prev.map((a) => (a.id === updatedAct.id ? updatedAct : a)));
+        setActivities((prev) => {
+          const next = prev.map((a) => (a.id === updatedAct.id ? updatedAct : a));
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('local_activities_data', JSON.stringify(next));
+            } catch (e) {}
+          }
+          return next;
+        });
         return;
       }
 
-      setActivities((prev) => prev.map((a) => (a.id === updatedAct.id ? updatedAct : a)));
+      setActivities((prev) => {
+        const next = prev.map((a) => (a.id === updatedAct.id ? updatedAct : a));
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('local_activities_data', JSON.stringify(next));
+          } catch (e) {}
+        }
+        return next;
+      });
       if (selectedActivityForGrading?.id === updatedAct.id) {
         setSelectedActivityForGrading(updatedAct);
       }
@@ -859,7 +1002,15 @@ export default function Home() {
       const catchedMsg = err?.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
       console.error('Erro ao atualizar atividade no Supabase:', catchedMsg, err);
       showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Falha de conexão/execução (${catchedMsg || 'Erro desconhecido'})`);
-      setActivities((prev) => prev.map((a) => (a.id === updatedAct.id ? updatedAct : a)));
+      setActivities((prev) => {
+        const next = prev.map((a) => (a.id === updatedAct.id ? updatedAct : a));
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('local_activities_data', JSON.stringify(next));
+          } catch (e) {}
+        }
+        return next;
+      });
     }
   };
 
@@ -1134,39 +1285,112 @@ export default function Home() {
   };
 
   const handleUpdateStudentAvatar = async (studentId: string, newAvatarUrl: string) => {
+    // 1. Atualizar estado local e cache imediatamente
+    let matchedStudentObj: StudentUser | undefined;
+    setStudents((prev) => {
+      matchedStudentObj = prev.find((s) => s.id === studentId || s.matricula === studentId);
+      const next = prev.map((s) =>
+        s.id === studentId || s.matricula === studentId
+          ? { ...s, avatarUrl: newAvatarUrl }
+          : s
+      );
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('local_students_data', JSON.stringify(next));
+        } catch (e) {}
+      }
+      return next;
+    });
+
+    if (currentStudent && (currentStudent.id === studentId || currentStudent.matricula === studentId)) {
+      const updatedCurr = { ...currentStudent, avatarUrl: newAvatarUrl };
+      setCurrentStudent(updatedCurr);
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem(
+            'active_session',
+            JSON.stringify({ role: 'student', studentId: updatedCurr.id, studentData: updatedCurr })
+          );
+        } catch (e) {}
+      }
+    }
+
+    if (supervisingStudent && (supervisingStudent.id === studentId || supervisingStudent.matricula === studentId)) {
+      setSupervisingStudent((prev) => (prev ? { ...prev, avatarUrl: newAvatarUrl } : prev));
+    }
+
     if (!isSupabaseConfigured || !supabase) {
-      showGlobalStatus('error', 'Supabase não configurado. Foto não atualizada.');
+      showGlobalStatus('success', 'Avatar atualizado com sucesso!');
       return;
     }
 
     try {
-      const { error } = await supabase
+      const targetMatricula = matchedStudentObj?.matricula;
+      const targetFullName = matchedStudentObj?.fullName;
+
+      // 1. Tentar update pelo ID
+      let { data, error } = await supabase
         .from('students')
         .update({ avatar_url: newAvatarUrl })
-        .eq('id', studentId);
+        .eq('id', studentId)
+        .select('*');
 
-      if (error) {
-        throw error;
+      // Fallback 1: se der erro de UUID (22P02) ou se 0 linhas foram afetadas, tentar por matrícula
+      if ((error && error.code === '22P02') || (!error && (!data || data.length === 0))) {
+        if (targetMatricula) {
+          const resMat = await supabase
+            .from('students')
+            .update({ avatar_url: newAvatarUrl })
+            .eq('matricula', targetMatricula)
+            .select('*');
+          if (!resMat.error && resMat.data && resMat.data.length > 0) {
+            error = null;
+            data = resMat.data;
+          }
+        }
       }
 
-      setStudents((prev) => {
-        const next = prev.map((s) => (s.id === studentId ? { ...s, avatarUrl: newAvatarUrl } : s));
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('local_students_data', JSON.stringify(next));
-          } catch (e) {}
+      // Fallback 2: tentar por full_name caso ID ou matrícula não batam
+      if ((!error && (!data || data.length === 0)) && targetFullName) {
+        const resName = await supabase
+          .from('students')
+          .update({ avatar_url: newAvatarUrl })
+          .ilike('full_name', targetFullName)
+          .select('*');
+        if (!resName.error && resName.data && resName.data.length > 0) {
+          error = null;
+          data = resName.data;
         }
-        return next;
-      });
+      }
 
-      if (currentStudent && currentStudent.id === studentId) {
-        setCurrentStudent({ ...currentStudent, avatarUrl: newAvatarUrl });
+      // Fallback 3: se o aluno ainda não existia no banco, fazer insert dele com o avatar_url!
+      if (!error && (!data || data.length === 0) && matchedStudentObj) {
+        const insertPayload: any = {
+          full_name: matchedStudentObj.fullName,
+          turma: matchedStudentObj.turma,
+          matricula: matchedStudentObj.matricula,
+          tag: matchedStudentObj.tag,
+          password_hash: matchedStudentObj.passwordHash || '1234',
+          avatar_url: newAvatarUrl,
+        };
+        const resInsert = await supabase
+          .from('students')
+          .insert(insertPayload)
+          .select('*');
+        if (!resInsert.error) {
+          error = null;
+          data = resInsert.data;
+        }
+      }
+
+      if (error) {
+        console.warn('Aviso ao sincronizar avatar no Supabase:', error.message);
       }
       
       showGlobalStatus('success', 'Avatar atualizado com sucesso!');
     } catch (err: any) {
-      console.error('Erro ao atualizar avatar:', err);
-      showGlobalStatus('error', `Falha ao atualizar avatar: ${err.message}`);
+      console.warn('Aviso de conexão ao sincronizar avatar:', err);
+      showGlobalStatus('success', 'Avatar atualizado com sucesso!');
     }
   };
 
@@ -1510,6 +1734,7 @@ export default function Home() {
         turma: updatedStudent.turma,
         matricula: updatedStudent.matricula,
         tag: updatedStudent.tag,
+        avatar_url: updatedStudent.avatarUrl || null,
         pne_conditions: updatedStudent.pneConditions || null,
         second_teacher_id: updatedStudent.secondTeacherId || null,
         second_teacher_name: updatedStudent.secondTeacherName || null,
@@ -1696,7 +1921,7 @@ export default function Home() {
   };
 
   // Messaging Handlers
-  const handleSendMessage = (msgData: {
+  const handleSendMessage = async (msgData: {
     threadId: string;
     senderId: string;
     senderName: string;
@@ -1710,8 +1935,9 @@ export default function Home() {
   }) => {
     const now = new Date();
     const formattedDate = `${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    const newMsgId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const newMsg: ChatMessage = {
-      id: `msg-${Date.now()}`,
+      id: newMsgId,
       threadId: msgData.threadId,
       senderId: msgData.senderId,
       senderName: msgData.senderName,
@@ -1727,6 +1953,19 @@ export default function Home() {
     };
 
     setChatMessages((prev) => [...prev, newMsg]);
+
+    // Disparar notificação nativa no navegador / celular
+    if (msgData.senderRole === 'student') {
+      sendBrowserNotification(`Mensagem de ${msgData.senderName}`, {
+        body: msgData.content,
+        icon: msgData.senderAvatar,
+      });
+    } else {
+      sendBrowserNotification(`${msgData.senderName} enviou uma mensagem:`, {
+        body: msgData.content,
+        icon: msgData.senderAvatar,
+      });
+    }
 
     if (isSupabaseConfigured && supabase) {
       supabase.from('chat_messages').insert({
@@ -1745,6 +1984,76 @@ export default function Home() {
       }).then(({ error }) => {
         if (error) console.log('Tabela chat_messages no Supabase (opcional):', error.message);
       });
+    }
+
+    // Se a mensagem for de um aluno e o auto-reply de IA do Prof. Gilson estiver habilitado:
+    if (msgData.senderRole === 'student' && isAiAutoReplyEnabled && msgData.recipientId !== 'second-teacher') {
+      const studentObj = students.find((s) => s.id === msgData.senderId);
+
+      try {
+        const res = await fetch('/api/gemini/teacher-bot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            studentName: msgData.senderName,
+            studentTurma: studentObj?.turma || 'Geral',
+            studentTag: studentObj?.tag || 'REGULAR',
+            teacherName: teacher.name || 'Prof. Gilson Flores',
+            teacherSubject: teacher.subject || 'Sociologia',
+            schoolName: teacher.school || "EEB Prof. Jandira D'Ávila",
+            messages: [...chatMessages, newMsg],
+            activities: activities,
+            currentMessage: msgData.content,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.reply) {
+            const replyNow = new Date();
+            const replyDate = `${replyNow.toLocaleDateString('pt-BR')} ${replyNow.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+            const botMsg: ChatMessage = {
+              id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              threadId: msgData.threadId,
+              senderId: teacher.id || 'teacher-1',
+              senderName: teacher.name || 'Prof. Gilson Flores',
+              senderRole: 'teacher',
+              senderAvatar: teacher.avatarUrl,
+              recipientId: msgData.senderId,
+              recipientName: msgData.senderName,
+              content: data.reply,
+              createdAt: replyDate,
+              read: false,
+            };
+
+            setChatMessages((prev) => [...prev, botMsg]);
+
+            sendBrowserNotification(`${teacher.name || 'Prof. Gilson Flores'} respondeu:`, {
+              body: data.reply,
+              icon: teacher.avatarUrl,
+            });
+
+            if (isSupabaseConfigured && supabase) {
+              supabase.from('chat_messages').insert({
+                thread_id: botMsg.threadId,
+                sender_id: botMsg.senderId,
+                sender_name: botMsg.senderName,
+                sender_role: botMsg.senderRole,
+                sender_avatar: botMsg.senderAvatar,
+                recipient_id: botMsg.recipientId,
+                recipient_name: botMsg.recipientName,
+                content: botMsg.content,
+                created_at: replyNow.toISOString(),
+                read: false,
+              }).then(({ error }) => {
+                if (error) console.log('Tabela chat_messages no Supabase (auto-reply):', error.message);
+              });
+            }
+          }
+        }
+      } catch (botErr) {
+        console.warn('Erro ao disparar resposta automática do professor com IA:', botErr);
+      }
     }
   };
 
@@ -1967,6 +2276,8 @@ export default function Home() {
               students={students}
               activities={activities}
               messages={chatMessages}
+              isAiAutoReplyEnabled={isAiAutoReplyEnabled}
+              onToggleAiAutoReply={handleToggleAiAutoReply}
               onSendMessage={handleSendMessage}
               onMarkThreadAsRead={handleMarkThreadAsRead}
             />

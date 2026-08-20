@@ -397,6 +397,14 @@ export const GradingView: React.FC<GradingViewProps> = ({
       : (activity.includedPneStudentIds || [])
   );
 
+  const isProficientPne = (st: StudentUser) => {
+    return (
+      includedProficientPneIds.has(st.id) ||
+      (Boolean(st.matricula) && includedProficientPneIds.has(st.matricula)) ||
+      (Boolean(st.fullName) && includedProficientPneIds.has(st.fullName))
+    );
+  };
+
   const missingStudents = students.filter((st) => {
     const isSameTurma = canStudentAccessActivity(activeTurmaScope, st.turma);
     const hasSubmitted = submittedStudentIds.has(st.id);
@@ -406,11 +414,11 @@ export const GradingView: React.FC<GradingViewProps> = ({
 
     if (isAdaptedActivity) {
       // Adapted activity -> only expect PNE students who are NOT proficient for normal activity
-      return isPne && !includedProficientPneIds.has(st.id);
+      return isPne && !isProficientPne(st);
     }
     if (hasAdaptationChild) {
       // Principal activity with adaptation -> expect regular students + proficient PNE students
-      return !isPne || includedProficientPneIds.has(st.id);
+      return !isPne || isProficientPne(st);
     }
     // Principal activity without adaptation -> expect all students
     return true;

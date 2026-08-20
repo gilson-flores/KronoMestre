@@ -335,8 +335,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
       });
     }
 
-    // 2. Se ainda não encontrou e Supabase estiver configurado, buscar no Supabase
-    if (!matched && isSupabaseConfigured && supabase) {
+    // 2. Se o Supabase estiver configurado, buscar/atualizar com o registro mais recente do Supabase
+    if (isSupabaseConfigured && supabase) {
       try {
         const { data: dbStudents } = await supabase
           .from('students')
@@ -346,24 +346,41 @@ export const AuthView: React.FC<AuthViewProps> = ({
           const dbMatched = dbStudents.find((s) => {
             const matchName = normalizeStudentName(s.full_name) === normalizedInputName;
             const matchMatricula = s.matricula && s.matricula.trim().toLowerCase() === rawInput.toLowerCase();
-            return matchName || matchMatricula;
+            const matchId = matched && s.id === matched.id;
+            return matchName || matchMatricula || matchId;
           });
 
           if (dbMatched) {
+            let parsedPneConditions: string[] | undefined = undefined;
+            if (dbMatched.pne_conditions) {
+              if (Array.isArray(dbMatched.pne_conditions)) {
+                parsedPneConditions = dbMatched.pne_conditions;
+              } else if (typeof dbMatched.pne_conditions === 'string') {
+                try {
+                  parsedPneConditions = JSON.parse(dbMatched.pne_conditions);
+                } catch {
+                  parsedPneConditions = dbMatched.pne_conditions.split(',').map((x: string) => x.trim()).filter(Boolean);
+                }
+              }
+            }
+
             matched = {
               id: dbMatched.id,
               fullName: dbMatched.full_name,
               turma: dbMatched.turma,
               matricula: dbMatched.matricula,
               tag: dbMatched.tag,
+              pneConditions: parsedPneConditions || (matched ? matched.pneConditions : undefined),
+              secondTeacherId: dbMatched.second_teacher_id || (matched ? matched.secondTeacherId : undefined),
+              secondTeacherName: dbMatched.second_teacher_name || (matched ? matched.secondTeacherName : undefined),
               passwordHash: dbMatched.password_hash || '1234',
-              avatarUrl: dbMatched.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
-              pedagogicalNotes: dbMatched.pedagogical_notes || '',
+              avatarUrl: dbMatched.avatar_url || (matched ? matched.avatarUrl : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200'),
+              pedagogicalNotes: dbMatched.pedagogical_notes || (matched ? matched.pedagogicalNotes : ''),
             };
           }
         }
       } catch (err) {
-        console.error('Erro ao buscar aluno no Supabase:', err);
+        console.warn('Erro ao buscar dados atualizados do aluno no Supabase:', err);
       }
     }
 

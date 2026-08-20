@@ -17,10 +17,21 @@ import {
   Shield,
   Smile,
   X,
-  Users
+  Users,
+  Bell,
+  BellRing,
+  Bot,
+  Loader2,
+  Volume2
 } from 'lucide-react';
 import { ChatMessage, StudentUser, TeacherUser, Activity } from '@/lib/types';
 import { formatAvatarUrl } from '@/lib/utils';
+import {
+  getNotificationPermission,
+  requestNotificationPermission,
+  isNotificationSupported,
+  playNotificationSound
+} from '@/lib/notificationUtils';
 
 interface MessagesViewProps {
   currentUserRole: 'teacher' | 'student';
@@ -29,6 +40,8 @@ interface MessagesViewProps {
   students: StudentUser[];
   activities: Activity[];
   messages: ChatMessage[];
+  isAiAutoReplyEnabled?: boolean;
+  onToggleAiAutoReply?: (enabled: boolean) => void;
   onSendMessage: (msg: {
     threadId: string;
     senderId: string;
@@ -51,6 +64,8 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
   students,
   activities,
   messages,
+  isAiAutoReplyEnabled = true,
+  onToggleAiAutoReply,
   onSendMessage,
   onMarkThreadAsRead,
 }) => {
@@ -64,6 +79,23 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
 
   // Mobile navigation state (true = viewing conversation, false = viewing thread list)
   const [isMobileChatOpen, setIsMobileChatOpen] = useState<boolean>(false);
+
+  // Notification permission state
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(() => {
+    if (typeof window !== 'undefined' && isNotificationSupported()) {
+      return getNotificationPermission();
+    }
+    return 'default';
+  });
+  const [isGeneratingAiDraft, setIsGeneratingAiDraft] = useState(false);
+
+  const handleToggleNotifications = async () => {
+    const perm = await requestNotificationPermission();
+    setNotifPermission(perm);
+    if (perm === 'granted') {
+      playNotificationSound();
+    }
+  };
 
   // Filters
   const [selectedStudentFilter, setSelectedStudentFilter] = useState<string>('Todos');
@@ -244,6 +276,42 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
 
   const quickPrompts = currentUserRole === 'teacher' ? teacherPrompts : studentPrompts;
 
+  // Generate intelligent response draft using Gemini acting as Prof. Gilson
+  const handleGenerateAiTeacherDraft = async () => {
+    if (isGeneratingAiDraft) return;
+    setIsGeneratingAiDraft(true);
+
+    try {
+      const lastStudentMsg = [...activeThreadMessages].reverse().find(m => m.senderRole === 'student');
+      const res = await fetch('/api/gemini/teacher-bot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentName: activeStudent?.fullName || 'Aluno',
+          studentTurma: activeStudent?.turma || 'Geral',
+          studentTag: activeStudent?.tag || 'REGULAR',
+          teacherName: teacher.name || 'Prof. Gilson Flores',
+          teacherSubject: teacher.subject || 'Sociologia',
+          schoolName: teacher.school || "EEB Prof. Jandira D'Ávila",
+          messages: activeThreadMessages,
+          activities: activities,
+          currentMessage: lastStudentMsg ? lastStudentMsg.content : (newMessageText || 'Como posso ajudar você hoje nas aulas de Sociologia?'),
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.reply) {
+          setNewMessageText(data.reply);
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao gerar rascunho com IA:', e);
+    } finally {
+      setIsGeneratingAiDraft(false);
+    }
+  };
+
   return (
     <div className="space-y-4 max-w-7xl mx-auto pb-6 sm:pb-10 w-full min-w-0">
       {/* Header Banner */}
@@ -257,22 +325,67 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               <span className="text-[10px] sm:text-xs font-bold text-[#4ade80] uppercase tracking-wider bg-[#4ade80]/10 px-2.5 sm:px-3 py-0.5 rounded-full border border-[#4ade80]/20 shrink-0">
                 Mensagens
               </span>
-              <span className="text-[10px] sm:text-xs font-semibold text-[#bccabb] truncate">Divisão de inteligência de Konoha</span>
+              <span className="text-[10px] sm:text-xs font-semibold text-[#bccabb] truncate">Sociologia On-line • Comunicação Direta</span>
             </div>
             <h1 className="text-lg sm:text-2xl font-extrabold text-white mt-1 truncate">
-              {currentUserRole === 'teacher' ? 'Mensagens e Suporte com Alunos' : 'Mensagens com o Professor'}
+              {currentUserRole === 'teacher' ? 'Central de Mensagens e Atendimento' : 'Atendimento com o Prof. Gilson'}
             </h1>
             <p className="text-[11px] sm:text-xs text-[#bccabb] mt-0.5 line-clamp-2 sm:line-clamp-none">
               {currentUserRole === 'teacher'
-                ? 'Tire dúvidas, envie feedbacks individuais e acompanhe o engajamento de cada estudante.'
-                : 'Tire suas dúvidas diretamente com seu professor e receba orientações pedagógicas exclusivas.'}
+                ? 'Tire dúvidas, envie feedbacks individuais e acompanhe respostas automáticas com IA.'
+                : 'Tire dúvidas conceituais, consulte prazos de atividades e receba orientações pedagógicas em tempo real.'}
             </p>
           </div>
         </div>
 
-        <div className="bg-[#131b2e] px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl border border-white/10 flex items-center gap-2.5 sm:gap-3 text-xs text-[#dae2fd] shrink-0 self-start md:self-auto">
-          <Shield className="w-4 h-4 text-[#4ade80] shrink-0" />
-          <span className="text-[11px] sm:text-xs font-medium">Canal protegido & monitorado</span>
+        {/* Action Controls in Header: Notifications & AI Auto-Reply */}
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap self-start md:self-auto">
+          {/* Notification Button */}
+          <button
+            type="button"
+            onClick={handleToggleNotifications}
+            className={`px-3 py-2 rounded-2xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm ${
+              notifPermission === 'granted'
+                ? 'bg-[#4ade80]/15 text-[#4ade80] border-[#4ade80]/30 hover:bg-[#4ade80]/25'
+                : 'bg-[#131b2e] text-[#bccabb] border-white/10 hover:text-white hover:bg-white/5'
+            }`}
+            title="Ativar ou verificar notificações no navegador Chrome e Smartphone"
+          >
+            {notifPermission === 'granted' ? (
+              <>
+                <BellRing className="w-3.5 h-3.5 text-[#4ade80]" />
+                <span className="hidden sm:inline">Notificações Ativas</span>
+                <span className="sm:hidden">Notificações</span>
+              </>
+            ) : (
+              <>
+                <Bell className="w-3.5 h-3.5 text-amber-400" />
+                <span>Ativar Notificações</span>
+              </>
+            )}
+          </button>
+
+          {/* Teacher AI Auto-Reply Toggle */}
+          {currentUserRole === 'teacher' && onToggleAiAutoReply && (
+            <button
+              type="button"
+              onClick={() => onToggleAiAutoReply(!isAiAutoReplyEnabled)}
+              className={`px-3 py-2 rounded-2xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm ${
+                isAiAutoReplyEnabled
+                  ? 'bg-purple-500/20 text-purple-300 border-purple-500/40 hover:bg-purple-500/30'
+                  : 'bg-[#131b2e] text-[#bccabb] border-white/10 hover:text-white'
+              }`}
+              title="Ativar/Pausar respostas automáticas com IA do Prof. Gilson para os alunos"
+            >
+              <Bot className={`w-3.5 h-3.5 ${isAiAutoReplyEnabled ? 'text-purple-400' : 'text-[#869486]'}`} />
+              <span>IA Prof. Gilson: {isAiAutoReplyEnabled ? 'Ativo' : 'Pausado'}</span>
+            </button>
+          )}
+
+          <div className="bg-[#131b2e] px-3 py-2 rounded-2xl border border-white/10 flex items-center gap-2 text-xs text-[#dae2fd] shrink-0">
+            <Shield className="w-3.5 h-3.5 text-[#4ade80] shrink-0" />
+            <span className="text-[11px] font-medium hidden lg:inline">Canal Seguro</span>
+          </div>
         </div>
       </div>
 
@@ -806,14 +919,37 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                   ? 'Escrever mensagem para a turma...'
                   : currentUserRole === 'teacher'
                   ? `Escrever para ${activeStudent?.fullName ? activeStudent.fullName.split(' ')[0] : 'o aluno'}...`
-                  : 'Escrever mensagem...'
+                  : 'Escrever sua dúvida para o Prof. Gilson...'
               }
               className="flex-1 min-w-0 bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2 sm:py-3 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80] leading-relaxed min-h-[38px] sm:min-h-[44px]"
             />
 
+            {/* Teacher AI Draft Assistant Button */}
+            {currentUserRole === 'teacher' && selectedStudentId !== 'broadcast' && (
+              <button
+                type="button"
+                onClick={handleGenerateAiTeacherDraft}
+                disabled={isGeneratingAiDraft}
+                className="px-2.5 sm:px-3 py-2 sm:py-3 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 rounded-xl sm:rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 min-h-[38px] sm:min-h-[44px]"
+                title="Pedir para a IA do Prof. Gilson redigir uma resposta pedagógica"
+              >
+                {isGeneratingAiDraft ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
+                    <span className="hidden lg:inline text-[11px]">Gerando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                    <span className="hidden lg:inline text-[11px]">IA Gilson</span>
+                  </>
+                )}
+              </button>
+            )}
+
             <button
               type="submit"
-              disabled={!newMessageText.trim()}
+              disabled={!newMessageText.trim() || isGeneratingAiDraft}
               className="px-3 sm:px-5 py-2 sm:py-3 bg-[#4ade80] hover:bg-[#6bfb9a] disabled:opacity-40 disabled:hover:bg-[#4ade80] text-[#003919] font-extrabold rounded-xl sm:rounded-2xl text-xs transition-all shadow-md cursor-pointer flex items-center justify-center gap-1.5 shrink-0 min-h-[38px] sm:min-h-[44px]"
             >
               <Send className="w-4 h-4 shrink-0" />

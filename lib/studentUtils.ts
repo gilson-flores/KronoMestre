@@ -372,11 +372,19 @@ export function getActivityStudentAndSubmissionCounts(
       : (act.includedPneStudentIds || [])
   );
 
+  const isProficientPne = (st: StudentUser) => {
+    return (
+      includedProficientPneIds.has(st.id) ||
+      (Boolean(st.matricula) && includedProficientPneIds.has(st.matricula)) ||
+      (Boolean(st.fullName) && includedProficientPneIds.has(st.fullName))
+    );
+  };
+
   const pneEnrolledTakingAdaptation = enrolledStudents.filter(
-    (st) => isStudentPNE(st) && !includedProficientPneIds.has(st.id)
+    (st) => isStudentPNE(st) && !isProficientPne(st)
   );
   const studentsTakingNormal = enrolledStudents.filter(
-    (st) => !isStudentPNE(st) || includedProficientPneIds.has(st.id)
+    (st) => !isStudentPNE(st) || isProficientPne(st)
   );
 
   // Check if this principal activity has an adapted version created for it
@@ -401,7 +409,7 @@ export function getActivityStudentAndSubmissionCounts(
     if (act.submissions && act.submissions.length > 0) {
       submissionsList = act.submissions.filter((s) => {
         const st = students.find((x) => x.id === s.studentId || x.matricula === s.matricula);
-        return (st && isStudentPNE(st) && !includedProficientPneIds.has(st.id)) || s.tag === 'PNE';
+        return (st && isStudentPNE(st) && !isProficientPne(st)) || s.tag === 'PNE';
       });
     }
   } else if (hasAdaptationChild) {
@@ -414,7 +422,7 @@ export function getActivityStudentAndSubmissionCounts(
       submissionsList = act.submissions.filter((s) => {
         const st = students.find((x) => x.id === s.studentId || x.matricula === s.matricula);
         if (st) {
-          return !isStudentPNE(st) || includedProficientPneIds.has(st.id);
+          return !isStudentPNE(st) || isProficientPne(st);
         }
         return s.tag !== 'PNE';
       });

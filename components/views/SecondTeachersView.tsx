@@ -435,7 +435,12 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
       targetStudents.forEach((st) => {
         if (!canStudentAccessActivity(act.turma, st.turma)) return;
-        if (parentAct?.includedPneStudentIds?.includes(st.id)) return; // PNE student taking normal activity
+        const isIncludedInNormal = parentAct?.includedPneStudentIds && (
+          parentAct.includedPneStudentIds.includes(st.id) ||
+          (Boolean(st.matricula) && parentAct.includedPneStudentIds.includes(st.matricula)) ||
+          (Boolean(st.fullName) && parentAct.includedPneStudentIds.includes(st.fullName))
+        );
+        if (isIncludedInNormal) return; // PNE student taking normal activity
 
         const sub = act.submissions?.find(
           (s) => s.studentId === st.id || s.matricula === st.matricula || s.studentName === st.fullName
@@ -484,7 +489,12 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
       if (isActivityAdapted) {
         // Se esta é a adaptação de uma atividade onde o aluno foi selecionado para fazer a normal, oculta a adaptação
         const parentAct = activities.find((parent) => parent.id === act.adaptedFromId);
-        if (parentAct?.includedPneStudentIds?.includes(activeStudent.id)) {
+        const isIncludedInNormal = parentAct?.includedPneStudentIds && (
+          parentAct.includedPneStudentIds.includes(activeStudent.id) ||
+          (Boolean(activeStudent.matricula) && parentAct.includedPneStudentIds.includes(activeStudent.matricula)) ||
+          (Boolean(activeStudent.fullName) && parentAct.includedPneStudentIds.includes(activeStudent.fullName))
+        );
+        if (isIncludedInNormal) {
           return false;
         }
         return true;
