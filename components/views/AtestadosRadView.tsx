@@ -69,6 +69,8 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
 
   // Form State
   const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [modalStudentSearch, setModalStudentSearch] = useState('');
+  const [isStudentDropdownOpen, setIsStudentDropdownOpen] = useState(false);
   const [dataFalta, setDataFalta] = useState(getTodayStr());
   const [dataAtestado, setDataAtestado] = useState(getTodayStr());
   const [diasAtestado, setDiasAtestado] = useState<number>(1);
@@ -79,6 +81,14 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
   const [searchTerm, setSearchTerm] = useState('');
   const [turmaFilter, setTurmaFilter] = useState('all');
   const [tipoFilter, setTipoFilter] = useState<'all' | 'Atestado' | 'RAD'>('all');
+
+  const filteredModalStudents = useMemo(() => {
+    if (!modalStudentSearch.trim()) return students;
+    const q = modalStudentSearch.toLowerCase();
+    return students.filter(
+      (s) => s.fullName.toLowerCase().includes(q) || (s.turma && s.turma.toLowerCase().includes(q))
+    );
+  }, [students, modalStudentSearch]);
 
   // Computed calculated end date
   const calculatedDataFinal = useMemo(() => {
@@ -244,6 +254,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
 
   const resetForm = () => {
     setSelectedStudentId('');
+    setModalStudentSearch('');
     setDataFalta(getTodayStr());
     setDataAtestado(getTodayStr());
     setDiasAtestado(1);
@@ -625,26 +636,66 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-              {/* Nome do Aluno (Lista Suspensa) */}
-              <div>
+              {/* Nome do Aluno (Lista Suspensa / Pesquisa) */}
+              <div className="relative">
                 <label className="block text-[#bccabb] font-semibold mb-1.5">
                   Nome do Aluno <span className="text-amber-400">*</span>
                 </label>
-                <select
-                  required
-                  value={selectedStudentId}
-                  onChange={(e) => setSelectedStudentId(e.target.value)}
-                  className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white font-semibold focus:outline-none focus:border-amber-400 cursor-pointer"
-                >
-                  <option value="" className="bg-[#0e172a] text-[#869486]">
-                    -- Selecione o Aluno na Lista --
-                  </option>
-                  {students.map((student) => (
-                    <option key={student.id} value={student.id} className="bg-[#0e172a] text-white">
-                      {student.fullName} ({student.turma || 'Sem Turma'}) {student.tag ? `- [${student.tag}]` : ''}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required={!selectedStudentId}
+                    value={modalStudentSearch}
+                    onChange={(e) => {
+                      setModalStudentSearch(e.target.value);
+                      setIsStudentDropdownOpen(true);
+                      if (selectedStudentId) setSelectedStudentId('');
+                    }}
+                    onFocus={() => setIsStudentDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setIsStudentDropdownOpen(false), 200)}
+                    placeholder="Digite o nome do aluno..."
+                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl pl-10 pr-4 py-3 text-white font-semibold focus:outline-none focus:border-amber-400"
+                  />
+                  <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-[#869486]" />
+                  {selectedStudentId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedStudentId('');
+                        setModalStudentSearch('');
+                        setIsStudentDropdownOpen(true);
+                      }}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-[#869486] hover:text-white"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {isStudentDropdownOpen && (
+                  <div className="absolute z-50 w-full mt-2 bg-[#0e172a] border border-white/10 rounded-2xl shadow-xl max-h-60 overflow-y-auto custom-scrollbar">
+                    {filteredModalStudents.length === 0 ? (
+                      <div className="p-4 text-center text-[#869486]">Nenhum aluno encontrado.</div>
+                    ) : (
+                      filteredModalStudents.map((student) => (
+                        <div
+                          key={student.id}
+                          onClick={() => {
+                            setSelectedStudentId(student.id);
+                            setModalStudentSearch(`${student.fullName} (${student.turma || 'Sem Turma'})${student.tag ? ` - [${student.tag}]` : ''}`);
+                            setIsStudentDropdownOpen(false);
+                          }}
+                          className="px-4 py-3 hover:bg-[#131b2e] cursor-pointer text-white border-b border-white/5 last:border-0 flex flex-col"
+                        >
+                          <span className="font-semibold">{student.fullName}</span>
+                          <span className="text-[10px] text-[#bccabb]">
+                            Turma: {student.turma || 'Sem Turma'} {student.tag ? ` • [${student.tag}]` : ''}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Grid 2 colunas: Data da Falta e Data do Atestado */}
