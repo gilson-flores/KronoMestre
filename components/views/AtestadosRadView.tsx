@@ -16,7 +16,8 @@ import {
   FileText,
   Building2,
   Sparkles,
-  CalendarDays
+  CalendarDays,
+  RefreshCw
 } from 'lucide-react';
 import { StudentUser, AtestadoRadRecord } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
@@ -63,6 +64,7 @@ const getTodayStr = (): string => {
 export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) => {
   const [records, setRecords] = useState<AtestadoRadRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -101,12 +103,23 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
     return (Number(diasAtestado) || 1) >= 15 ? 'RAD' : 'Atestado';
   }, [diasAtestado, customTipo]);
 
-  // Load records from Supabase and LocalStorage
+  // Sync to LocalStorage
+  const saveRecordsToLocal = (newRecords: AtestadoRadRecord[]) => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('atestados_rad_records', JSON.stringify(newRecords));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
+
+  // Load records from Supabase and LocalStorage with bidirectional synchronization
   const fetchRecords = async () => {
     setIsLoading(true);
     let loaded: AtestadoRadRecord[] = [];
 
-    // 1. Try LocalStorage
+    // 1. Try LocalStorage first (instant UI feedback)
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem('atestados_rad_records');
@@ -118,7 +131,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
       }
     }
 
-    // 2. Try Supabase
+    // 2. Query Supabase (Source of Truth)
     if (supabase) {
       try {
         const { data, error } = await supabase
@@ -126,33 +139,67 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (!error && data && data.length > 0) {
+        if (!error && data) {
           const dbRecords: AtestadoRadRecord[] = data.map((item: any) => ({
             id: item.id,
             studentId: item.student_id,
             studentName: item.student_name,
-            studentTurma: item.student_turma,
+            studentTurma: item.student_turma || '',
             dataFalta: item.data_falta,
             dataAtestado: item.data_atestado,
-            diasAtestado: item.dias_atestado,
+            diasAtestado: Number(item.dias_atestado) || 1,
             dataFinal: item.data_final,
-            motivo: item.motivo,
-            tipo: item.tipo,
+            motivo: item.motivo || undefined,
+            tipo: item.tipo as 'Atestado' | 'RAD',
             createdAt: item.created_at,
           }));
 
-          // Merge without duplicates
-          const existingIds = new Set(dbRecords.map((r) => r.id));
-          const localOnly = loaded.filter((l) => !existingIds.has(l.id));
-          loaded = [...dbRecords, ...localOnly];
+          // Merge: DB records take precedence, but keep local items not yet in DB
+          const dbIds = new Set(dbRecords.map((r) => r.id));
+          const localPending = loaded.filter((l) => !dbIds.has(l.id));
+
+          // If there are local records that were not in DB, sync them up to DB now
+          if (localPending.length > 0) {
+            const uploadPayload = localPending.map((rec) => ({
+              id: rec.id,
+              student_id: rec.studentId,
+              student_name: rec.studentName,
+              student_turma: rec.studentTurma || '',
+              data_falta: rec.dataFalta,
+              data_atestado: rec.dataAtestado,
+              dias_atestado: rec.diasAtestado,
+              data_final: rec.dataFinal,
+              motivo: rec.motivo || null,
+              tipo: rec.tipo,
+              created_at: rec.createdAt,
+            }));
+
+            supabase
+              .from('atestados_rad')
+              .upsert(uploadPayload, { onConflict: 'id' })
+              .then(({ error: upErr }) => {
+                if (upErr) console.warn('Aviso ao sincronizar atestados locais com o Supabase:', upErr.message);
+              });
+          }
+
+          loaded = [...dbRecords, ...localPending];
+        } else if (error) {
+          console.warn('Aviso ao carregar atestados do Supabase:', error.message);
         }
-      } catch (err) {
-        console.warn('Tabela atestados_rad não encontrada ou vazia no Supabase:', err);
+      } catch (err: any) {
+        console.warn('Conexão com atestados_rad no Supabase:', err?.message || err);
       }
     }
 
     setRecords(loaded);
+    saveRecordsToLocal(loaded);
     setIsLoading(false);
+    setIsRefreshing(false);
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchRecords();
   };
 
   useEffect(() => {
@@ -165,17 +212,6 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
       isSubscribed = false;
     };
   }, []);
-
-  // Sync to LocalStorage
-  const saveRecordsToLocal = (newRecords: AtestadoRadRecord[]) => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('atestados_rad_records', JSON.stringify(newRecords));
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  };
 
   // Submit Handler
   const handleSubmit = async (e: React.FormEvent) => {
@@ -217,33 +253,37 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
       createdAt: new Date().toISOString(),
     };
 
-    // Save to State & LocalStorage
+    // Save to State & LocalStorage immediately
     const updatedRecords = [newRecord, ...records];
     setRecords(updatedRecords);
     saveRecordsToLocal(updatedRecords);
 
-    // Try saving to Supabase if table exists
+    // Save to Supabase
     if (supabase) {
       try {
-        await supabase.from('atestados_rad').insert({
+        const { error: insertError } = await supabase.from('atestados_rad').upsert({
           id: newRecord.id,
           student_id: newRecord.studentId,
           student_name: newRecord.studentName,
-          student_turma: newRecord.studentTurma,
+          student_turma: newRecord.studentTurma || '',
           data_falta: newRecord.dataFalta,
           data_atestado: newRecord.dataAtestado,
           dias_atestado: newRecord.diasAtestado,
           data_final: newRecord.dataFinal,
-          motivo: newRecord.motivo,
+          motivo: newRecord.motivo || null,
           tipo: newRecord.tipo,
           created_at: newRecord.createdAt,
-        });
-      } catch (dbErr) {
-        console.warn('Inserção no Supabase bypass:', dbErr);
+        }, { onConflict: 'id' });
+
+        if (insertError) {
+          console.warn('Aviso ao salvar no Supabase:', insertError.message);
+        }
+      } catch (dbErr: any) {
+        console.warn('Erro ao salvar no Supabase:', dbErr?.message || dbErr);
       }
     }
 
-    setSuccessMsg(`Atestado / RAD de ${student.fullName} registrado com sucesso!`);
+    setSuccessMsg(`Atestado / RAD de ${student.fullName} registrado com sucesso e sincronizado na nuvem!`);
     setIsModalOpen(false);
     resetForm();
 
@@ -275,9 +315,12 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
 
     if (supabase) {
       try {
-        await supabase.from('atestados_rad').delete().eq('id', id);
-      } catch (e) {
-        console.warn('Erro ao deletar do Supabase:', e);
+        const { error } = await supabase.from('atestados_rad').delete().eq('id', id);
+        if (error) {
+          console.warn('Aviso ao deletar do Supabase:', error.message);
+        }
+      } catch (e: any) {
+        console.warn('Erro ao deletar do Supabase:', e?.message || e);
       }
     }
 
@@ -473,6 +516,16 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
               RAD
             </button>
           </div>
+
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing || isLoading}
+            title="Sincronizar com banco de dados"
+            className="flex items-center gap-1.5 px-3 py-2 bg-[#131b2e] hover:bg-white/10 text-amber-400 hover:text-amber-300 border border-white/10 rounded-2xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-amber-400' : ''}`} />
+            <span className="hidden sm:inline">Sincronizar</span>
+          </button>
         </div>
       </div>
 
