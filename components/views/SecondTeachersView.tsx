@@ -13,23 +13,23 @@ import {
   Smartphone,
   CheckCircle2,
   Clock,
-  RotateCcw,
   Sparkles,
   Search,
-  Eye,
   PenTool,
   Gamepad2,
   Star,
-  ExternalLink,
-  Link2,
   Check,
-  AlertCircle,
   HelpCircle,
-  User,
   ArrowLeft,
   GraduationCap,
   KeyRound,
-  X
+  X,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  Layers,
+  ChevronRight,
+  Info
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import {
@@ -75,7 +75,6 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   onSubmitAnswer,
   onSaveStudent,
 }) => {
-  // Main view tab: 'atividades_alunos' (Alunos e Atividades Adaptadas) | 'professores_apoio' (Cadastro de 2º Professores)
   const isSecondTeacher = currentUserRole === 'second_teacher';
   const [activeTab, setActiveTab] = useState<'atividades_alunos' | 'professores_apoio'>('atividades_alunos');
 
@@ -86,13 +85,21 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Search & Filter for students
+  // Retractable / Collapsible Menus State for Main Screen
+  const [isMetricsRetractableOpen, setIsMetricsRetractableOpen] = useState(false); // Metrics bar collapsible
+  const [isStudentDossierOpen, setIsStudentDossierOpen] = useState(false); // Student PEI dossier collapsible
+  const [isPendingSectionOpen, setIsPendingSectionOpen] = useState(true); // Pending activities accordion
+  const [isAwaitingSectionOpen, setIsAwaitingSectionOpen] = useState(true); // Awaiting review accordion
+  const [isGradedSectionOpen, setIsGradedSectionOpen] = useState(false); // Graded activities accordion
+  const [expandedActivityNotes, setExpandedActivityNotes] = useState<{ [id: string]: boolean }>({});
+  const [isMobileSupportMaterialOpen, setIsMobileSupportMaterialOpen] = useState(false);
+
+  // Search & Selected Student
   const [studentSearch, setStudentSearch] = useState('');
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
 
   // Selected Activity for mobile assist solving
   const [executingActivityId, setExecutingActivityId] = useState<string | null>(null);
-  const [viewingActivityDetailId, setViewingActivityDetailId] = useState<string | null>(null);
 
   // Answers state while solving with the student
   const [essayInput, setEssayInput] = useState<string>('');
@@ -101,10 +108,12 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionFeedback, setSubmissionFeedback] = useState<string | null>(null);
 
+  // Tutela scope for regente/admin view
+  const [tutelaScope, setTutelaScope] = useState<'minha_tutela' | 'todos_pne'>('minha_tutela');
+
   // Fetch second teachers
   const fetchSecondTeachers = async () => {
     setIsLoadingTeachers(true);
-    // 1. Carregar do cache local primeiro
     if (typeof window !== 'undefined') {
       try {
         const cached = localStorage.getItem('local_second_teachers_data');
@@ -168,7 +177,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
     fetchSecondTeachers();
   }, []);
 
-  // Reset password requests state (chamados)
+  // Reset password requests state
   const [resetRequests, setResetRequests] = useState<string[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -189,21 +198,17 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
     try {
       if (supabase && st.email) {
         const cleanEmail = st.email.trim().toLowerCase();
-
-        // 1. Atualizar em second_teachers
         await supabase
           .from('second_teachers')
           .update({ password: '1234' })
           .ilike('email', cleanEmail);
 
-        // 2. Atualizar em teachers
         await supabase
           .from('teachers')
           .update({ password: '1234' })
           .ilike('email', cleanEmail);
       }
 
-      // Remover da lista de pendentes em localStorage
       if (typeof window !== 'undefined' && st.email) {
         const cleanEmail = st.email.trim().toLowerCase();
         const updated = resetRequests.filter((e) => e.toLowerCase() !== cleanEmail);
@@ -226,7 +231,6 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
     try {
       const { error } = await supabase.from('second_teachers').delete().eq('id', id);
-
       if (error) throw error;
 
       setSuccessMsg(`Professor ${name} removido com sucesso.`);
@@ -264,19 +268,16 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
     try {
       if (supabase && teacher.email) {
-        // 1. Update in second_teachers
         await supabase
           .from('second_teachers')
           .update({ password: changePasswordNewPass })
           .ilike('email', teacher.email.trim().toLowerCase());
 
-        // 2. Update in teachers if present
         await supabase
           .from('teachers')
           .update({ password: changePasswordNewPass })
           .ilike('email', teacher.email.trim().toLowerCase());
 
-        // 3. Update Supabase Auth user password
         try {
           await supabase.auth.updateUser({ password: changePasswordNewPass });
         } catch (authErr) {
@@ -304,9 +305,6 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
     }
   };
 
-  // Tutelage scope filter: 'minha_tutela' (Apenas alunos sob minha tutela direta) | 'todos_pne' (Todos os alunos AEE/Inclusão)
-  const [tutelaScope, setTutelaScope] = useState<'minha_tutela' | 'todos_pne'>('minha_tutela');
-
   // Helper to resolve bound 2nd teacher name for any student
   const getStudentBoundTeacherName = (s: StudentUser): string | undefined => {
     if (s.secondTeacherName?.trim()) return s.secondTeacherName.trim();
@@ -314,7 +312,6 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
     if (s.secondTeacherId) {
       const stId = s.secondTeacherId.toString().trim().toLowerCase();
 
-      // Match current logged in teacher
       if (
         (teacher.id && stId === teacher.id.toString().trim().toLowerCase()) ||
         (teacher.email && stId === teacher.email.trim().toLowerCase())
@@ -322,7 +319,6 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
         return teacher.name;
       }
 
-      // Match in list of second teachers
       const found = secondTeachers.find(
         (t) =>
           (t.id && t.id.toString().trim().toLowerCase() === stId) ||
@@ -363,7 +359,6 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
     }
   };
 
-  // Filter inclusion/PNE students
   // 1. Students bound to this second teacher
   const myTutelageStudents = useMemo(() => {
     return students.filter((s) => {
@@ -388,23 +383,23 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
     });
   }, [students, teacher.id, teacher.name, teacher.email, secondTeachers]);
 
-  // 2. All PNE/Inclusão students in the school
+  // 2. All PNE/Inclusão students in the school (for regente view)
   const boundOrPneStudents = useMemo(() => {
     return students.filter((s) => {
       const isPne = isStudentPNE(s) || (s.pneConditions && s.pneConditions.length > 0) || s.tag === 'PNE';
       const isBound = Boolean(getStudentBoundTeacherName(s) || s.secondTeacherId);
-
       return isPne || isBound;
     });
   }, [students, secondTeachers, teacher.id, teacher.name, teacher.email]);
 
-  // Selected base scope for student list
+  // Selected base scope for student list:
+  // "Faça com que o segundo professor veja somente os alunos dele" -> isSecondTeacher ALWAYS sees only myTutelageStudents!
   const activeScopeStudents = useMemo(() => {
-    if (tutelaScope === 'minha_tutela') {
+    if (isSecondTeacher || tutelaScope === 'minha_tutela') {
       return myTutelageStudents;
     }
     return boundOrPneStudents;
-  }, [tutelaScope, myTutelageStudents, boundOrPneStudents]);
+  }, [isSecondTeacher, tutelaScope, myTutelageStudents, boundOrPneStudents]);
 
   // Filtered by search query
   const filteredStudents = useMemo(() => {
@@ -422,9 +417,6 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   // Tutelage overall metrics
   const tutelageMetrics = useMemo(() => {
     const targetStudents = myTutelageStudents.length > 0 ? myTutelageStudents : boundOrPneStudents;
-    const studentIds = new Set(targetStudents.map((s) => s.id));
-    const studentMatriculas = new Set(targetStudents.map((s) => s.matricula));
-
     let totalPending = 0;
     let totalToCorrect = 0;
     let totalGraded = 0;
@@ -440,7 +432,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
           (Boolean(st.matricula) && parentAct.includedPneStudentIds.includes(st.matricula)) ||
           (Boolean(st.fullName) && parentAct.includedPneStudentIds.includes(st.fullName))
         );
-        if (isIncludedInNormal) return; // PNE student taking normal activity
+        if (isIncludedInNormal) return;
 
         const sub = act.submissions?.find(
           (s) => s.studentId === st.id || s.matricula === st.matricula || s.studentName === st.fullName
@@ -474,20 +466,16 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   }, [students, selectedStudentId, filteredStudents]);
 
   // Adapted activities available for the active student
-  // "2 professor também só vê PNE (atividades adaptadas)"
   const studentAdaptedActivities = useMemo(() => {
     if (!activeStudent) return [];
 
     return activities.filter((act) => {
-      // 1. Must be accessible by student's class (turma)
       if (!canStudentAccessActivity(act.turma, activeStudent.turma)) {
         return false;
       }
-      // 2. 2º professor só vê adaptações PNE
       const isActivityAdapted = Boolean(act.isAdapted || act.adaptationType);
       
       if (isActivityAdapted) {
-        // Se esta é a adaptação de uma atividade onde o aluno foi selecionado para fazer a normal, oculta a adaptação
         const parentAct = activities.find((parent) => parent.id === act.adaptedFromId);
         const isIncludedInNormal = parentAct?.includedPneStudentIds && (
           parentAct.includedPneStudentIds.includes(activeStudent.id) ||
@@ -503,10 +491,42 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
     });
   }, [activities, activeStudent]);
 
-  // 2º Professor só vê atividades adaptadas PNE
-  const displayedActivities = useMemo(() => {
-    return studentAdaptedActivities;
-  }, [studentAdaptedActivities]);
+  // Partition activities by status for retractable accordions
+  const pendingActivities = useMemo(() => {
+    return studentAdaptedActivities.filter((act) => {
+      const sub = act.submissions?.find(
+        (s) =>
+          s.studentId === activeStudent?.id ||
+          s.matricula === activeStudent?.matricula ||
+          s.studentName === activeStudent?.fullName
+      );
+      return !sub || sub.status === 'returned' || sub.status === 'draft';
+    });
+  }, [studentAdaptedActivities, activeStudent]);
+
+  const awaitingCorrectionActivities = useMemo(() => {
+    return studentAdaptedActivities.filter((act) => {
+      const sub = act.submissions?.find(
+        (s) =>
+          s.studentId === activeStudent?.id ||
+          s.matricula === activeStudent?.matricula ||
+          s.studentName === activeStudent?.fullName
+      );
+      return sub && sub.status === 'pending';
+    });
+  }, [studentAdaptedActivities, activeStudent]);
+
+  const gradedActivities = useMemo(() => {
+    return studentAdaptedActivities.filter((act) => {
+      const sub = act.submissions?.find(
+        (s) =>
+          s.studentId === activeStudent?.id ||
+          s.matricula === activeStudent?.matricula ||
+          s.studentName === activeStudent?.fullName
+      );
+      return sub && sub.status === 'graded';
+    });
+  }, [studentAdaptedActivities, activeStudent]);
 
   // Listen to playful game events from iframe
   useEffect(() => {
@@ -534,10 +554,9 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   const handleStartSolving = (act: Activity) => {
     if (!activeStudent) return;
     setExecutingActivityId(act.id);
-    setViewingActivityDetailId(null);
     setPlayfulScore(null);
+    setIsMobileSupportMaterialOpen(false);
 
-    // Pre-populate if student already has a draft or submission
     const existingSub = act.submissions?.find(
       (s) => s.studentId === activeStudent.id || s.matricula === activeStudent.matricula
     );
@@ -556,7 +575,6 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
       const isPlayful = Boolean(act.playfulGameHtml || act.adaptationType === 'severe_playful');
 
       let calculatedObjectiveScore = 0;
-      let calculatedEssayScore = 0;
 
       if (isPlayful) {
         const finalScore = playfulScore?.grade || act.maxGrade || 10;
@@ -573,7 +591,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
           undefined
         );
 
-        setSubmissionFeedback(`🎉 Atividade lúdica concluída com o(a) aluno(a) ${activeStudent.fullName}! Pontuação de ${finalScore.toFixed(1)} / ${maxScore} pts enviada para o ciclo de correção.`);
+        setSubmissionFeedback(`🎉 Atividade lúdica concluída com o(a) aluno(a) ${activeStudent.fullName}! Pontuação enviada para o professor regente.`);
       } else {
         const questions = act.questions || [];
         const objectiveQuestions = questions.filter((q) => q.type === 'multiple_choice') as (ActivityQuestion & MultipleChoiceQuestion)[];
@@ -603,11 +621,11 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
           undefined
         );
 
-        setSubmissionFeedback(`✅ Atividade enviada com sucesso para ${activeStudent.fullName}! A atividade já está registrada no portal do aluno e na fila de correções do professor regente.`);
+        setSubmissionFeedback(`✅ Atividade enviada com sucesso para ${activeStudent.fullName}! Registrada na fila do professor regente.`);
       }
 
       setExecutingActivityId(null);
-      setTimeout(() => setSubmissionFeedback(null), 6000);
+      setTimeout(() => setSubmissionFeedback(null), 5000);
     } catch (err: any) {
       console.error('Erro ao enviar atividade:', err);
       alert('Erro ao enviar atividade: ' + (err?.message || 'Tente novamente.'));
@@ -620,71 +638,81 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
     return activities.find((a) => a.id === executingActivityId) || null;
   }, [activities, executingActivityId]);
 
+  const toggleActivityNotes = (id: string) => {
+    setExpandedActivityNotes((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
   return (
-    <div className="space-y-8 animate-fadeIn max-w-7xl mx-auto pb-12">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <span className="text-xs font-bold text-amber-400 tracking-widest uppercase flex items-center gap-1.5">
-            <HeartHandshake className="w-4 h-4" />
-            Atendimento Educacional Especializado (AEE)
-          </span>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight mt-1">
-            {isSecondTeacher ? 'Ambiente do 2º Professor' : 'Inclusão & 2º Professores'}
-          </h1>
-          <p className="text-xs sm:text-sm text-[#bccabb] mt-1">
-            Acompanhe os estudantes de inclusão, execute atividades adaptadas em visão móvel e acompanhe o ciclo de correção.
-          </p>
+    <div className="space-y-5 animate-fadeIn max-w-7xl mx-auto pb-12">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#131b2e] p-4 sm:p-5 rounded-3xl border border-white/10 shadow-lg">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-amber-400/20 border border-amber-400/30 flex items-center justify-center text-amber-300 shrink-0">
+            <HeartHandshake className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+              {isSecondTeacher ? 'Ambiente do 2º Professor' : 'Inclusão & 2º Professores'}
+            </h1>
+            <p className="text-xs text-[#bccabb]">
+              {isSecondTeacher
+                ? `Professor(a) ${teacher.name} • Acompanhamento direto dos seus alunos tutelados`
+                : 'Acompanhe os estudantes de inclusão e execute atividades adaptadas.'}
+            </p>
+          </div>
         </div>
 
-        {/* Tab switcher for regente or quick actions */}
-        <div className="flex items-center gap-2">
+        {/* Header Actions */}
+        <div className="flex items-center gap-2 self-start sm:self-center">
           {isSecondTeacher && (
             <button
               onClick={() => {
                 setChangePasswordMsg(null);
                 setIsChangePasswordOpen(true);
               }}
-              className="py-2 px-4 bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 font-bold rounded-full transition-all border border-amber-400/30 flex items-center gap-1.5 cursor-pointer text-xs shrink-0 shadow-md"
+              className="py-2 px-3.5 bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 font-bold rounded-xl transition-all border border-amber-400/30 flex items-center gap-1.5 cursor-pointer text-xs shrink-0 shadow-sm active:scale-95"
             >
-              <KeyRound className="w-4 h-4 text-amber-400" />
+              <KeyRound className="w-3.5 h-3.5 text-amber-400" />
               <span>Trocar Senha</span>
             </button>
           )}
 
           {!isSecondTeacher && (
-            <div className="flex bg-[#131b2e] p-1 rounded-2xl border border-white/10">
+            <div className="flex bg-[#0b1326] p-1 rounded-2xl border border-white/10">
               <button
                 onClick={() => setActiveTab('atividades_alunos')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                   activeTab === 'atividades_alunos'
                     ? 'bg-amber-400 text-black shadow-md'
                     : 'text-[#bccabb] hover:text-white'
                 }`}
               >
-                <Smartphone className="w-4 h-4" />
+                <Smartphone className="w-3.5 h-3.5" />
                 <span>Alunos & Atividades</span>
               </button>
               <button
                 onClick={() => setActiveTab('professores_apoio')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                   activeTab === 'professores_apoio'
                     ? 'bg-amber-400 text-black shadow-md'
                     : 'text-[#bccabb] hover:text-white'
                 }`}
               >
-                <ShieldCheck className="w-4 h-4" />
+                <ShieldCheck className="w-3.5 h-3.5" />
                 <span>Professores AEE ({secondTeachers.length})</span>
               </button>
             </div>
           )}
 
-          {activeTab === 'professores_apoio' && (
+          {activeTab === 'professores_apoio' && !isSecondTeacher && (
             <button
               onClick={() => setIsNewModalOpen(true)}
-              className="py-2.5 px-5 bg-amber-400 hover:bg-amber-300 text-black font-bold rounded-full transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-amber-400/20 cursor-pointer text-xs"
+              className="py-2 px-4 bg-amber-400 hover:bg-amber-300 text-black font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-md cursor-pointer text-xs"
             >
-              <UserPlus className="w-4 h-4 stroke-[2.5]" />
+              <UserPlus className="w-3.5 h-3.5" />
               <span>Novo 2º Professor</span>
             </button>
           )}
@@ -693,113 +721,145 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
       {/* Global Status messages */}
       {errorMsg && (
-        <div className="p-4 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-2xl text-sm font-medium">
+        <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-2xl text-xs font-semibold">
           {errorMsg}
         </div>
       )}
 
       {successMsg && (
-        <div className="p-4 bg-[#4ade80]/20 border border-[#4ade80]/40 text-[#4ade80] rounded-2xl text-sm font-medium">
+        <div className="p-3.5 bg-[#4ade80]/20 border border-[#4ade80]/40 text-[#4ade80] rounded-2xl text-xs font-semibold">
           {successMsg}
         </div>
       )}
 
       {submissionFeedback && (
-        <div className="p-4 bg-[#4ade80]/20 border border-[#4ade80]/40 text-[#4ade80] rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-3 shadow-xl animate-fadeIn">
-          <CheckCircle2 className="w-5 h-5 shrink-0 text-[#4ade80]" />
+        <div className="p-3.5 bg-[#4ade80]/20 border border-[#4ade80]/40 text-[#4ade80] rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2.5 shadow-lg animate-fadeIn">
+          <CheckCircle2 className="w-4 h-4 shrink-0 text-[#4ade80]" />
           <span>{submissionFeedback}</span>
         </div>
       )}
 
-      {/* TAB 1: ALUNOS & ATIVIDADES ADAPTADAS (AEE WORKSPACE) */}
+      {/* TAB 1: ALUNOS & ATIVIDADES ADAPTADAS */}
       {activeTab === 'atividades_alunos' && (
-        <div className="space-y-6">
-          {/* Painel de Tutela e Métricas Rápidas AEE */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-            <div className="glass-panel p-4 rounded-3xl border border-amber-400/30 bg-amber-500/5 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-400/20 border border-amber-400/30 flex items-center justify-center text-amber-300 shrink-0">
-                <GraduationCap className="w-5 h-5" />
+        <div className="space-y-5">
+          {/* MENU RETRÁTIL 1: PAINEL DE MÉTRICAS & RESUMO */}
+          <div className="glass-panel rounded-3xl border border-white/10 bg-[#131b2e] overflow-hidden transition-all shadow-md">
+            <button
+              onClick={() => setIsMetricsRetractableOpen(!isMetricsRetractableOpen)}
+              className="w-full p-3.5 sm:p-4 flex items-center justify-between gap-3 text-left hover:bg-white/5 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                  <Layers className="w-3.5 h-3.5" />
+                </div>
+                <span className="font-bold text-white text-xs sm:text-sm">Resumo da Tutela AEE</span>
+                <div className="hidden sm:flex items-center gap-2 text-[11px] text-[#bccabb] border-l border-white/10 pl-3">
+                  <span className="bg-amber-400/10 text-amber-300 border border-amber-400/20 px-2 py-0.5 rounded-full font-bold">
+                    {tutelageMetrics.totalTutelageStudents} {tutelageMetrics.totalTutelageStudents === 1 ? 'Aluno' : 'Alunos'}
+                  </span>
+                  <span className="bg-white/5 text-[#bccabb] px-2 py-0.5 rounded-full">
+                    {tutelageMetrics.totalPending} Pendentes
+                  </span>
+                  <span className="bg-emerald-500/10 text-[#4ade80] border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                    {tutelageMetrics.totalGraded} Concluídas
+                  </span>
+                </div>
               </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase text-amber-300 tracking-wider">Sob Sua Tutela</p>
-                <p className="text-xl font-black text-white">{tutelageMetrics.totalTutelageStudents} <span className="text-xs font-normal text-[#bccabb]">Alunos</span></p>
-              </div>
-            </div>
 
-            <div className="glass-panel p-4 rounded-3xl border border-white/10 bg-[#131b2e] flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
-                <Clock className="w-5 h-5" />
+              <div className="flex items-center gap-1.5 text-xs text-amber-400 font-bold shrink-0">
+                <span>{isMetricsRetractableOpen ? 'Recolher' : 'Expandir'}</span>
+                {isMetricsRetractableOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase text-[#bccabb] tracking-wider">A Fazer com Suporte</p>
-                <p className="text-xl font-black text-white">{tutelageMetrics.totalPending} <span className="text-xs font-normal text-[#bccabb]">Atividades</span></p>
-              </div>
-            </div>
+            </button>
 
-            <div className="glass-panel p-4 rounded-3xl border border-white/10 bg-[#131b2e] flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 shrink-0">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase text-[#bccabb] tracking-wider">Enviadas p/ Regente</p>
-                <p className="text-xl font-black text-white">{tutelageMetrics.totalToCorrect} <span className="text-xs font-normal text-[#bccabb]">Em Análise</span></p>
-              </div>
-            </div>
+            {/* Expanded Metrics Content */}
+            {isMetricsRetractableOpen && (
+              <div className="p-4 pt-1 border-t border-white/10 grid grid-cols-2 md:grid-cols-4 gap-3 animate-fadeIn">
+                <div className="p-3.5 rounded-2xl border border-amber-400/30 bg-amber-500/10 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-400/20 border border-amber-400/30 flex items-center justify-center text-amber-300 shrink-0">
+                    <GraduationCap className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-bold uppercase text-amber-300 tracking-wider">Sob Sua Tutela</p>
+                    <p className="text-lg font-black text-white">{tutelageMetrics.totalTutelageStudents} <span className="text-[10px] font-normal text-[#bccabb]">Alunos</span></p>
+                  </div>
+                </div>
 
-            <div className="glass-panel p-4 rounded-3xl border border-white/10 bg-[#131b2e] flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-[#4ade80] shrink-0">
-                <CheckCircle2 className="w-5 h-5" />
+                <div className="p-3.5 rounded-2xl border border-white/10 bg-[#0b1326] flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-bold uppercase text-[#bccabb] tracking-wider">A Fazer com Apoio</p>
+                    <p className="text-lg font-black text-white">{tutelageMetrics.totalPending} <span className="text-[10px] font-normal text-[#bccabb]">Atividades</span></p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl border border-white/10 bg-[#0b1326] flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 shrink-0">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-bold uppercase text-[#bccabb] tracking-wider">Em Análise (Regente)</p>
+                    <p className="text-lg font-black text-white">{tutelageMetrics.totalToCorrect} <span className="text-[10px] font-normal text-[#bccabb]">Enviadas</span></p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl border border-white/10 bg-[#0b1326] flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-[#4ade80] shrink-0">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-bold uppercase text-[#bccabb] tracking-wider">Concluídas / Avaliadas</p>
+                    <p className="text-lg font-black text-white">{tutelageMetrics.totalGraded} <span className="text-[10px] font-normal text-[#bccabb]">Finalizadas</span></p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase text-[#bccabb] tracking-wider">Avaliado / Corrigido</p>
-                <p className="text-xl font-black text-white">{tutelageMetrics.totalGraded} <span className="text-xs font-normal text-[#bccabb]">Concluídas</span></p>
-              </div>
-            </div>
+            )}
           </div>
 
-          {/* Main Layout: Left Column (Student selector) + Right Column (Activities & Cellphone runner) */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Left Column: Lista de Alunos de Inclusão */}
+          {/* Main Layout: Left Column (Student List) + Right Column (Activities) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            {/* Left Column: Lista de Alunos */}
             <div className="lg:col-span-4 space-y-4">
-              <div className="glass-panel p-5 rounded-3xl border border-white/10 space-y-4">
+              <div className="glass-panel p-4 rounded-3xl border border-white/10 bg-[#131b2e] space-y-3 shadow-md">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                      <GraduationCap className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-white text-sm">Painel de Tutela</h3>
-                      <p className="text-[11px] text-[#bccabb]">Estudantes sob acompanhamento</p>
-                    </div>
+                    <GraduationCap className="w-4 h-4 text-amber-400" />
+                    <h3 className="font-bold text-white text-xs sm:text-sm">
+                      {isSecondTeacher ? 'Meus Alunos Tutelados' : 'Estudantes AEE'}
+                    </h3>
                   </div>
                   <span className="px-2 py-0.5 bg-amber-400/10 text-amber-400 border border-amber-400/20 rounded-full text-[10px] font-bold">
                     {filteredStudents.length} {filteredStudents.length === 1 ? 'Aluno' : 'Alunos'}
                   </span>
                 </div>
 
-                {/* Tutelage Scope Switcher */}
-                <div className="grid grid-cols-2 p-1 bg-[#131b2e] rounded-2xl border border-white/10 text-xs">
-                  <button
-                    onClick={() => setTutelaScope('minha_tutela')}
-                    className={`py-1.5 px-2 rounded-xl font-bold transition-all cursor-pointer text-center text-[11px] ${
-                      tutelaScope === 'minha_tutela'
-                        ? 'bg-amber-400 text-black shadow'
-                        : 'text-[#bccabb] hover:text-white'
-                    }`}
-                  >
-                    Minha Tutela ({myTutelageStudents.length})
-                  </button>
-                  <button
-                    onClick={() => setTutelaScope('todos_pne')}
-                    className={`py-1.5 px-2 rounded-xl font-bold transition-all cursor-pointer text-center text-[11px] ${
-                      tutelaScope === 'todos_pne'
-                        ? 'bg-amber-400 text-black shadow'
-                        : 'text-[#bccabb] hover:text-white'
-                    }`}
-                  >
-                    Todos AEE ({boundOrPneStudents.length})
-                  </button>
-                </div>
+                {/* Se for Professor Regente, permite alternar escopo */}
+                {!isSecondTeacher && (
+                  <div className="grid grid-cols-2 p-1 bg-[#0b1326] rounded-2xl border border-white/10 text-xs">
+                    <button
+                      onClick={() => setTutelaScope('minha_tutela')}
+                      className={`py-1 px-2 rounded-xl font-bold transition-all cursor-pointer text-center text-[10px] ${
+                        tutelaScope === 'minha_tutela'
+                          ? 'bg-amber-400 text-black shadow'
+                          : 'text-[#bccabb] hover:text-white'
+                      }`}
+                    >
+                      Minha Tutela ({myTutelageStudents.length})
+                    </button>
+                    <button
+                      onClick={() => setTutelaScope('todos_pne')}
+                      className={`py-1 px-2 rounded-xl font-bold transition-all cursor-pointer text-center text-[10px] ${
+                        tutelaScope === 'todos_pne'
+                          ? 'bg-amber-400 text-black shadow'
+                          : 'text-[#bccabb] hover:text-white'
+                      }`}
+                    >
+                      Todos AEE ({boundOrPneStudents.length})
+                    </button>
+                  </div>
+                )}
 
                 {/* Search */}
                 <div className="relative">
@@ -808,23 +868,20 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                     type="text"
                     value={studentSearch}
                     onChange={(e) => setStudentSearch(e.target.value)}
-                    placeholder="Buscar por nome, turma, CID..."
-                    className="w-full bg-[#131b2e] border border-white/10 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder:text-[#bccabb]/60 focus:outline-none focus:border-amber-400"
+                    placeholder="Buscar aluno por nome, turma..."
+                    className="w-full bg-[#0b1326] border border-white/10 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder:text-[#bccabb]/50 focus:outline-none focus:border-amber-400"
                   />
                 </div>
 
                 {/* Student list */}
-                <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                <div className="space-y-1.5 max-h-[480px] overflow-y-auto pr-1">
                   {filteredStudents.length === 0 ? (
                     <div className="py-8 text-center text-xs text-[#bccabb] space-y-2">
                       <p>Nenhum aluno encontrado para este filtro.</p>
-                      {tutelaScope === 'minha_tutela' && (
-                        <button
-                          onClick={() => setTutelaScope('todos_pne')}
-                          className="px-3 py-1 bg-amber-400/20 text-amber-300 rounded-full text-[11px] font-bold border border-amber-400/30"
-                        >
-                          Ver Todos os Alunos AEE ({boundOrPneStudents.length})
-                        </button>
+                      {isSecondTeacher && (
+                        <p className="text-[11px] text-[#bccabb]/70">
+                          Apenas os alunos vinculados a você ({teacher.name}) são exibidos aqui.
+                        </p>
                       )}
                     </div>
                   ) : (
@@ -844,222 +901,68 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                           onClick={() => {
                             setSelectedStudentId(s.id);
                             setExecutingActivityId(null);
-                            setViewingActivityDetailId(null);
                           }}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
                               setSelectedStudentId(s.id);
                               setExecutingActivityId(null);
-                              setViewingActivityDetailId(null);
                             }
                           }}
-                          className={`w-full text-left p-3 rounded-2xl border transition-all cursor-pointer flex flex-col gap-2 ${
+                          className={`w-full text-left p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2.5 ${
                             isSelected
-                              ? 'bg-amber-400/15 border-amber-400/50 shadow-md ring-1 ring-amber-400/30'
-                              : 'bg-[#131b2e] border-white/5 hover:border-white/20 hover:bg-[#171f33]'
+                              ? 'bg-amber-400/20 border-amber-400/60 shadow-md ring-1 ring-amber-400/40'
+                              : 'bg-[#0b1326] border-white/5 hover:border-white/20 hover:bg-[#141e33]'
                           }`}
                         >
-                          <div className="flex items-start gap-3 w-full">
-                            <div className="relative shrink-0">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={s.avatarUrl}
-                                alt={s.fullName}
-                                className="w-10 h-10 rounded-full object-cover border border-amber-400/40"
-                              />
-                              <span className="absolute -bottom-1 -right-1 px-1.5 py-0.2 bg-amber-400 text-black font-extrabold text-[8px] rounded-full">
-                                PNE
-                              </span>
-                            </div>
-
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={s.avatarUrl}
+                              alt={s.fullName}
+                              className="w-9 h-9 rounded-full object-cover border border-amber-400/40 shrink-0"
+                            />
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center justify-between gap-1">
-                                <h4 className="font-bold text-white text-xs truncate">{s.fullName}</h4>
-                                <span className="text-[10px] text-amber-300 font-semibold shrink-0">
-                                  T: {s.turma}
-                                </span>
-                              </div>
-
-                              {/* Conditions tags */}
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {s.pneConditions && s.pneConditions.length > 0 ? (
-                                  s.pneConditions.slice(0, 2).map((c, i) => (
-                                    <span
-                                      key={i}
-                                      className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-[9px] text-[#dae2fd] truncate max-w-[120px]"
-                                    >
-                                      {c}
-                                    </span>
-                                  ))
-                                ) : (
-                                  <span className="text-[9px] text-[#bccabb]">Atendimento AEE</span>
-                                )}
-                                {isBoundToMe && (
-                                  <span className="px-1.5 py-0.5 bg-emerald-500/20 border border-emerald-500/30 text-[#4ade80] rounded text-[8px] font-bold">
-                                    Sob Sua Tutela
-                                  </span>
-                                )}
-                              </div>
-
-                              {/* 2º Professor Vinculado Info (Oculto em Minha Tutela para o 2º Professor) */}
-                              {(!isSecondTeacher || tutelaScope === 'todos_pne') && (
-                                <div className="mt-2 flex items-center gap-1.5 text-[10px] bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded-lg text-amber-300 w-fit max-w-full">
-                                  <HeartHandshake className="w-3 h-3 text-amber-400 shrink-0" />
-                                  <span className="truncate">
-                                    2º Prof: <strong className="text-white font-bold">{boundTeacherName || 'Não vinculado'}</strong>
-                                  </span>
-                                </div>
-                              )}
+                              <h4 className="font-bold text-white text-xs truncate leading-tight">{s.fullName}</h4>
+                              <p className="text-[10px] text-amber-300 font-medium truncate mt-0.5">
+                                Turma {s.turma} {s.matricula ? `• Matrícula ${s.matricula}` : ''}
+                              </p>
                             </div>
                           </div>
 
-                          {/* Botão para vincular aluno à minha tutela (exibido na aba 'Todos AEE' se desvinculado) */}
-                          {isSecondTeacher && !isBoundToMe && (
-                            <button
-                              onClick={(e) => handleBindStudentToMe(s, e)}
-                              className="w-full py-1.5 px-2 bg-amber-400 hover:bg-amber-300 text-black font-extrabold text-[10px] rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 shadow hover:scale-[1.01] active:scale-[0.99]"
-                              title="Vincular este estudante à minha tutela AEE"
-                            >
-                              <UserPlus className="w-3.5 h-3.5" />
-                              <span>Vincular à Minha Tutela</span>
-                            </button>
-                          )}
+                          <ChevronRight className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-amber-400' : 'text-[#bccabb]/40'}`} />
                         </div>
                       );
                     })
                   )}
                 </div>
               </div>
-
-              {/* Active student info summary */}
-              {activeStudent && (
-                <div className="glass-panel p-4.5 rounded-3xl border border-amber-400/30 bg-[#131b2e] space-y-3 text-xs shadow-xl">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                      <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                      Ficha do Estudante AEE
-                    </span>
-                    {activeStudent.secondTeacherId === teacher.id ||
-                    activeStudent.secondTeacherName === teacher.name ||
-                    getStudentBoundTeacherName(activeStudent) === teacher.name ? (
-                      <span className="px-2 py-0.5 bg-emerald-500/20 text-[#4ade80] border border-emerald-500/30 rounded-full text-[9px] font-bold">
-                        Sob Sua Tutela Direta
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded-full text-[9px] font-bold">
-                        Acompanhamento Geral
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={activeStudent.avatarUrl}
-                      alt={activeStudent.fullName}
-                      className="w-11 h-11 rounded-full object-cover border-2 border-amber-400/60 shrink-0"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-white font-bold text-sm truncate">{activeStudent.fullName}</p>
-                      <p className="text-[11px] text-[#bccabb] font-medium mt-0.5">
-                        Matrícula: <strong className="text-white">{activeStudent.matricula}</strong> | Turma: <strong className="text-white">{activeStudent.turma}</strong>
-                      </p>
-                      {(!isSecondTeacher || tutelaScope === 'todos_pne') && (
-                        <p className="text-[11px] text-amber-300 font-semibold mt-1 flex items-center gap-1">
-                          <HeartHandshake className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                          <span>2º Professor: <strong className="text-white font-bold">{getStudentBoundTeacherName(activeStudent) || 'Não vinculado'}</strong></span>
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Botão de Controle de Vinculação na Ficha do Estudante */}
-                  {isSecondTeacher && (
-                    <div className="pt-2 border-t border-white/10">
-                      {getStudentBoundTeacherName(activeStudent) === teacher.name ||
-                      activeStudent.secondTeacherId === teacher.id ||
-                      activeStudent.secondTeacherName === teacher.name ? (
-                        <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-2xl">
-                          <span className="text-emerald-400 text-xs font-bold flex items-center gap-1.5">
-                            <CheckCircle2 className="w-4 h-4" />
-                            Aluno vinculado à sua tutela
-                          </span>
-                          <button
-                            onClick={() => handleUnbindStudent(activeStudent)}
-                            className="text-[10px] text-rose-400 hover:text-rose-300 font-bold underline cursor-pointer"
-                          >
-                            Desvincular
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => handleBindStudentToMe(activeStudent)}
-                          className="w-full py-2.5 px-4 bg-amber-400 hover:bg-amber-300 text-black font-black text-xs rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg hover:scale-[1.01] active:scale-[0.99]"
-                        >
-                          <UserPlus className="w-4 h-4" />
-                          <span>Vincular Este Aluno à Minha Tutela</span>
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Conditions Pills */}
-                  {activeStudent.pneConditions && activeStudent.pneConditions.length > 0 && (
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-[#bccabb] uppercase">Necessidades & Laudos:</p>
-                      <div className="flex flex-wrap gap-1">
-                        {activeStudent.pneConditions.map((cond, i) => (
-                          <span
-                            key={i}
-                            className="px-2 py-0.5 bg-amber-400/15 text-amber-300 border border-amber-400/30 rounded-lg text-[10px] font-semibold"
-                          >
-                            {cond}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {activeStudent.pedagogicalNotes ? (
-                    <div className="p-2.5 bg-[#0b1326] rounded-xl border border-white/10 text-[11px] text-[#dae2fd] leading-relaxed space-y-1">
-                      <p className="font-bold text-amber-300 text-[10px] uppercase flex items-center gap-1">
-                        <BookOpen className="w-3 h-3" /> Observações do PEI / Laudo
-                      </p>
-                      <p className="whitespace-pre-wrap">{activeStudent.pedagogicalNotes}</p>
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-[#bccabb] italic">Sem observações de PEI cadastradas para este aluno.</p>
-                  )}
-                </div>
-              )}
             </div>
 
-            {/* Right Column: Atividades Adaptadas e Execução com o Aluno */}
-            <div className="lg:col-span-8 space-y-6">
-              {/* If a playful activity is being executed with the student -> Fullscreen Window */}
+            {/* Right Column: Work Area & Activities */}
+            <div className="lg:col-span-8 space-y-4">
+              {/* If solving activity in fullscreen playful mode */}
               {executingActivity && (executingActivity.playfulGameHtml || executingActivity.adaptationType === 'severe_playful') ? (
                 <div className="fixed inset-0 z-50 w-screen h-screen bg-[#070d19] flex flex-col p-2 sm:p-4 animate-fadeIn">
-                  {/* Top Control Bar */}
-                  <div className="flex items-center justify-between gap-3 pb-2.5 px-2 border-b border-white/10">
+                  <div className="flex items-center justify-between gap-3 pb-2 px-2 border-b border-white/10">
                     <button
                       onClick={() => setExecutingActivityId(null)}
-                      className="px-4 py-2.5 bg-[#171f33] hover:bg-[#222c42] text-white font-bold text-xs sm:text-sm rounded-xl border border-white/10 transition-all flex items-center gap-2 cursor-pointer shadow active:scale-95 shrink-0"
+                      className="px-3.5 py-2 bg-[#171f33] hover:bg-[#222c42] text-white font-bold text-xs rounded-xl border border-white/10 transition-all flex items-center gap-1.5 cursor-pointer shadow active:scale-95 shrink-0"
                     >
-                      <ArrowLeft className="w-4 h-4 text-amber-400" />
+                      <ArrowLeft className="w-3.5 h-3.5 text-amber-400" />
                       <span>Voltar</span>
                     </button>
 
                     <div className="flex items-center gap-2 min-w-0">
-                      <Gamepad2 className="w-5 h-5 text-amber-400 shrink-0" />
-                      <span className="font-extrabold text-white text-sm sm:text-base truncate max-w-xs sm:max-w-md">
+                      <Gamepad2 className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span className="font-bold text-white text-xs sm:text-sm truncate">
                         {executingActivity.title}
                       </span>
-                      <span className="text-xs text-amber-300 font-semibold bg-[#171f33] px-2.5 py-1 rounded-full border border-amber-500/30 hidden sm:inline">
+                      <span className="text-[11px] text-amber-300 font-semibold bg-[#171f33] px-2 py-0.5 rounded-full border border-amber-500/30 hidden sm:inline">
                         Aluno: {activeStudent?.fullName}
                       </span>
                       {playfulScore && (
-                        <span className="px-3 py-1 bg-[#4ade80]/20 text-[#4ade80] font-bold text-xs rounded-full border border-[#4ade80]/30 hidden sm:flex items-center gap-1.5 shrink-0">
-                          <Star className="w-3.5 h-3.5 fill-[#4ade80]" />
+                        <span className="px-2.5 py-0.5 bg-[#4ade80]/20 text-[#4ade80] font-bold text-xs rounded-full border border-[#4ade80]/30 hidden sm:flex items-center gap-1 shrink-0">
+                          <Star className="w-3 h-3 fill-[#4ade80]" />
                           {playfulScore.grade} / {executingActivity.maxGrade || 10} pts
                         </span>
                       )}
@@ -1068,14 +971,13 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                     <button
                       disabled={isSubmitting}
                       onClick={() => handleConfirmSubmit(executingActivity)}
-                      className="px-5 py-2.5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-black text-xs sm:text-sm rounded-xl transition-all shadow-lg shadow-[#4ade80]/20 cursor-pointer flex items-center gap-2 active:scale-95 shrink-0 disabled:opacity-50"
+                      className="px-4 py-2 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-black text-xs rounded-xl transition-all shadow-md cursor-pointer flex items-center gap-1.5 active:scale-95 shrink-0 disabled:opacity-50"
                     >
-                      <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                      <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>{isSubmitting ? 'Enviando...' : 'Enviar Atividade'}</span>
                     </button>
                   </div>
 
-                  {/* Container do Jogo em Tela Inteira com Borda Discreta */}
                   <div className="flex-1 w-full rounded-2xl overflow-hidden border border-white/10 bg-black shadow-2xl relative mt-2">
                     <iframe
                       srcDoc={
@@ -1083,7 +985,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                           ? extractCleanHtml(executingActivity.playfulGameHtml)
                           : '<div style="color:white;padding:20px;font-family:sans-serif;text-align:center;">Carregando jogo interativo...</div>'
                       }
-                      title={`Jogo Lúdico Fullscreen - ${executingActivity.title}`}
+                      title={`Jogo Lúdico - ${executingActivity.title}`}
                       className="w-full h-full border-0 block"
                       allow="autoplay; fullscreen"
                       sandbox="allow-scripts allow-same-origin allow-modals"
@@ -1091,231 +993,170 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                   </div>
                 </div>
               ) : executingActivity ? (
-                <div className="glass-panel p-4 sm:p-6 rounded-3xl border-2 border-amber-400/40 space-y-6 shadow-2xl bg-[#0e162a]">
-                  {/* Top Bar of Mobile Simulator */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/10">
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => setExecutingActivityId(null)}
-                        className="py-2 px-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-                      >
-                        <ArrowLeft className="w-4 h-4" />
-                        <span>Voltar</span>
-                      </button>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 bg-amber-400/20 text-amber-300 border border-amber-400/30 rounded-full text-[10px] font-extrabold flex items-center gap-1">
-                            <Smartphone className="w-3 h-3" />
-                            Modo Celular com Aluno
-                          </span>
-                          <span className="text-xs text-white font-semibold truncate">
-                            {activeStudent?.fullName}
-                          </span>
-                        </div>
-                        <h2 className="text-lg font-black text-white mt-0.5">{executingActivity.title}</h2>
-                      </div>
-                    </div>
+                /* Mobile Assist Simulator */
+                <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-amber-400/40 space-y-4 shadow-xl bg-[#0e162a]">
+                  <div className="flex items-center justify-between gap-3 pb-3 border-b border-white/10">
+                    <button
+                      onClick={() => setExecutingActivityId(null)}
+                      className="py-1.5 px-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Voltar</span>
+                    </button>
 
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-[#4ade80] bg-[#4ade80]/10 px-3 py-1 rounded-full border border-[#4ade80]/30">
-                        Valor: {getActivityGradeDistribution(executingActivity).maxGrade.toFixed(1)} pts
+                    <div className="flex items-center gap-2 truncate">
+                      <Smartphone className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span className="font-bold text-white text-xs sm:text-sm truncate">
+                        {executingActivity.title}
                       </span>
                     </div>
+
+                    <span className="text-[10px] font-bold text-[#4ade80] bg-[#4ade80]/10 px-2.5 py-1 rounded-full border border-[#4ade80]/30 shrink-0">
+                      {getActivityGradeDistribution(executingActivity).maxGrade.toFixed(1)} pts
+                    </span>
                   </div>
 
-                  {/* Simulator Screen Container (Responsive Mobile Frame) */}
-                  <div className="max-w-2xl mx-auto bg-[#131b2e] rounded-3xl border border-white/15 p-4 sm:p-6 space-y-6 shadow-inner">
-                    {/* Device Header Banner */}
-                    <div className="bg-[#171f33] p-3.5 rounded-2xl border border-white/10 flex items-center justify-between text-xs">
+                  {/* Simulator Screen Container */}
+                  <div className="max-w-2xl mx-auto bg-[#131b2e] rounded-2xl border border-white/15 p-4 sm:p-5 space-y-4 shadow-inner">
+                    <div className="bg-[#171f33] p-3 rounded-xl border border-white/10 flex items-center justify-between text-xs">
                       <div className="flex items-center gap-2">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={activeStudent?.avatarUrl}
                           alt={activeStudent?.fullName}
-                          className="w-8 h-8 rounded-full object-cover border border-amber-400"
+                          className="w-7 h-7 rounded-full object-cover border border-amber-400"
                         />
                         <div>
                           <p className="font-bold text-white leading-tight">{activeStudent?.fullName}</p>
-                          <p className="text-[10px] text-amber-400 font-semibold">
-                            Turma {activeStudent?.turma} • Atividade Adaptada PNE
-                          </p>
+                          <p className="text-[10px] text-amber-400">Turma {activeStudent?.turma}</p>
                         </div>
                       </div>
-                      <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold border border-amber-500/30">
-                        Apoio AEE
+                      <span className="text-[9px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold border border-amber-500/30">
+                        Resolução com Apoio AEE
                       </span>
                     </div>
 
-                    {/* Description & Support Material */}
-                    <div className="space-y-3">
-                      <div>
-                        <h4 className="text-[11px] font-bold text-[#bccabb] uppercase tracking-wider mb-1">
-                          Orientações da Atividade:
-                        </h4>
-                        <p className="text-xs text-white leading-relaxed bg-[#0b1326] p-3.5 rounded-xl border border-white/5">
-                          {executingActivity.description || 'Siga as orientações das questões abaixo com o estudante.'}
-                        </p>
-                      </div>
+                    {/* MENU RETRÁTIL NO SIMULADOR: Orientações & Material de Apoio */}
+                    {(executingActivity.description || executingActivity.supportMaterial) && (
+                      <div className="border border-white/10 rounded-xl bg-[#0b1326] overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setIsMobileSupportMaterialOpen(!isMobileSupportMaterialOpen)}
+                          className="w-full p-2.5 flex items-center justify-between text-left text-xs font-bold text-amber-300 hover:bg-white/5 cursor-pointer"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Orientações & Material de Apoio</span>
+                          </span>
+                          {isMobileSupportMaterialOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        </button>
 
-                      {executingActivity.supportMaterial && (
-                        <div className="bg-[#0b1326] p-3.5 rounded-xl border border-white/10 space-y-1.5 text-xs text-[#bccabb]">
-                          <h5 className="font-bold text-amber-300 flex items-center gap-1.5 text-xs">
-                            <BookOpen className="w-3.5 h-3.5" />
-                            <span>Material de Apoio e Leitura:</span>
-                          </h5>
-                          <p className="whitespace-pre-wrap leading-relaxed">{executingActivity.supportMaterial}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* JOGO LÚDICO INTERATIVO (Para Síndromes Severas) */}
-                    {(executingActivity.playfulGameHtml || executingActivity.adaptationType === 'severe_playful') && (
-                      <div className="space-y-4 pt-2 border-t border-amber-500/30">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h4 className="text-sm font-bold text-amber-300 flex items-center gap-1.5">
-                            <Gamepad2 className="w-4 h-4 text-amber-400" />
-                            <span>Jogo Lúdico Educativo Gamificado</span>
-                          </h4>
-                          {playfulScore ? (
-                            <span className="px-3 py-1 bg-[#4ade80]/20 text-[#4ade80] font-bold text-xs rounded-full border border-[#4ade80]/30 flex items-center gap-1 animate-bounce">
-                              <Star className="w-3.5 h-3.5 fill-[#4ade80]" />
-                              Nota: {playfulScore.grade} / {executingActivity.maxGrade || 10} pts
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 font-bold text-[10px] rounded-full border border-amber-500/30">
-                              🌟 Jogue na tela com o aluno para pontuar
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="w-full h-[460px] rounded-2xl overflow-hidden border-2 border-amber-500/40 shadow-xl bg-black relative">
-                          <iframe
-                            srcDoc={
-                              executingActivity.playfulGameHtml ||
-                              '<div style="color:white;padding:20px;font-family:sans-serif;">Carregando jogo...</div>'
-                            }
-                            title={`Jogo Lúdico - ${executingActivity.title}`}
-                            className="w-full h-full border-0"
-                            sandbox="allow-scripts allow-same-origin allow-modals"
-                          />
-                        </div>
+                        {isMobileSupportMaterialOpen && (
+                          <div className="p-3 pt-1 border-t border-white/5 text-xs text-[#bccabb] space-y-2">
+                            {executingActivity.description && (
+                              <p className="text-white leading-relaxed">{executingActivity.description}</p>
+                            )}
+                            {executingActivity.supportMaterial && (
+                              <div className="p-2.5 bg-black/30 rounded-lg text-[11px] whitespace-pre-wrap">
+                                {executingActivity.supportMaterial}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
 
-                    {/* QUESTÕES OBJETIVAS ADAPTADAS */}
+                    {/* Multiple Choice Questions */}
                     {executingActivity.questions &&
-                      executingActivity.questions.filter((q) => q.type === 'multiple_choice').length > 0 &&
-                      !(executingActivity.playfulGameHtml || executingActivity.adaptationType === 'severe_playful') && (
-                        <div className="space-y-4 pt-2 border-t border-white/10">
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                              <HelpCircle className="w-4 h-4 text-[#4ade80]" />
-                              <span>Questões Objetivas Adaptadas (Múltipla Escolha)</span>
-                            </h4>
-                            <span className="text-[10px] font-bold text-[#4ade80] bg-[#4ade80]/10 px-2 py-0.5 rounded-full border border-[#4ade80]/20">
-                              Correção Automática
-                            </span>
-                          </div>
+                      executingActivity.questions.filter((q) => q.type === 'multiple_choice').length > 0 && (
+                        <div className="space-y-3 pt-1">
+                          <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                            <HelpCircle className="w-3.5 h-3.5 text-[#4ade80]" />
+                            <span>Questões Objetivas Adaptadas</span>
+                          </h4>
 
-                          <div className="space-y-4">
-                            {executingActivity.questions
-                              .filter((q) => q.type === 'multiple_choice')
-                              .map((q: any, qIdx: number) => {
-                                const currentChoice = objectiveInputs[q.id];
+                          {executingActivity.questions
+                            .filter((q) => q.type === 'multiple_choice')
+                            .map((q: any, qIdx: number) => {
+                              const currentChoice = objectiveInputs[q.id];
 
-                                return (
-                                  <div
-                                    key={q.id || qIdx}
-                                    className="bg-[#0b1326] p-4 rounded-2xl border border-white/10 space-y-3"
-                                  >
-                                    <p className="text-xs font-bold text-white">
-                                      {qIdx + 1}. <span className="text-[#dae2fd] font-normal">{q.statement}</span>
-                                    </p>
+                              return (
+                                <div key={q.id || qIdx} className="bg-[#0b1326] p-3.5 rounded-xl border border-white/10 space-y-2.5">
+                                  <p className="text-xs font-bold text-white">
+                                    {qIdx + 1}. <span className="text-[#dae2fd] font-normal">{q.statement}</span>
+                                  </p>
 
-                                    <div className="space-y-2 pt-1">
-                                      {q.options?.map((optText: string, optIdx: number) => {
-                                        const isSelected = currentChoice === optIdx;
+                                  <div className="space-y-1.5 pt-1">
+                                    {q.options?.map((optText: string, optIdx: number) => {
+                                      const isSelected = currentChoice === optIdx;
 
-                                        return (
-                                          <button
-                                            key={optIdx}
-                                            type="button"
-                                            onClick={() =>
-                                              setObjectiveInputs((prev) => ({
-                                                ...prev,
-                                                [q.id]: optIdx,
-                                              }))
-                                            }
-                                            className={`w-full text-left p-3 rounded-xl text-xs transition-all flex items-center gap-3 border cursor-pointer ${
-                                              isSelected
-                                                ? 'bg-amber-400/20 border-amber-400 text-white font-bold shadow-md'
-                                                : 'bg-[#171f33] border-white/5 text-[#bccabb] hover:bg-[#222a3d] hover:text-white'
+                                      return (
+                                        <button
+                                          key={optIdx}
+                                          type="button"
+                                          onClick={() =>
+                                            setObjectiveInputs((prev) => ({
+                                              ...prev,
+                                              [q.id]: optIdx,
+                                            }))
+                                          }
+                                          className={`w-full text-left p-2.5 rounded-xl text-xs transition-all flex items-center gap-2.5 border cursor-pointer ${
+                                            isSelected
+                                              ? 'bg-amber-400/20 border-amber-400 text-white font-bold shadow'
+                                              : 'bg-[#171f33] border-white/5 text-[#bccabb] hover:bg-[#222a3d] hover:text-white'
+                                          }`}
+                                        >
+                                          <span
+                                            className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px] font-black ${
+                                              isSelected ? 'bg-amber-400 text-black' : 'bg-white/10 text-white'
                                             }`}
                                           >
-                                            <span
-                                              className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-black ${
-                                                isSelected
-                                                  ? 'bg-amber-400 text-black'
-                                                  : 'bg-white/10 text-white'
-                                              }`}
-                                            >
-                                              {String.fromCharCode(65 + optIdx)}
-                                            </span>
-                                            <span className="flex-1 text-xs">{optText}</span>
-                                            {isSelected && <Check className="w-4 h-4 text-amber-400 shrink-0" />}
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
+                                            {String.fromCharCode(65 + optIdx)}
+                                          </span>
+                                          <span className="flex-1 text-xs">{optText}</span>
+                                          {isSelected && <Check className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+                                        </button>
+                                      );
+                                    })}
                                   </div>
-                                );
-                              })}
-                          </div>
+                                </div>
+                              );
+                            })}
                         </div>
                       )}
 
-                    {/* QUESTÕES DISSERTATIVAS ADAPTADAS */}
+                    {/* Essay Questions */}
                     {executingActivity.questions &&
                       executingActivity.questions.filter((q) => q.type === 'essay').length > 0 && (
-                        <div className="space-y-4 pt-2 border-t border-white/10">
+                        <div className="space-y-3 pt-1">
                           <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                            <PenTool className="w-4 h-4 text-[#c0c1ff]" />
+                            <PenTool className="w-3.5 h-3.5 text-[#c0c1ff]" />
                             <span>Questão Dissertativa Adaptada</span>
                           </h4>
 
                           {executingActivity.questions
                             .filter((q) => q.type === 'essay')
                             .map((q: any, qIdx: number) => (
-                              <div
-                                key={q.id || qIdx}
-                                className="bg-[#0b1326] p-4 rounded-2xl border border-white/10 space-y-2"
-                              >
-                                <p className="text-xs font-bold text-white">
-                                  Enunciado: <span className="text-[#dae2fd] font-normal">{q.statement}</span>
-                                </p>
+                              <div key={q.id || qIdx} className="bg-[#0b1326] p-3 rounded-xl border border-white/10">
+                                <p className="text-xs text-[#dae2fd]">{q.statement}</p>
                               </div>
                             ))}
 
-                          <div className="space-y-1.5">
-                            <label className="block text-[11px] font-bold text-[#bccabb]">
-                              Resposta do Estudante (Digitada com auxílio do 2º Professor):
-                            </label>
-                            <textarea
-                              rows={4}
-                              value={essayInput}
-                              onChange={(e) => setEssayInput(e.target.value)}
-                              placeholder="Digite a resposta formulada com o estudante durante a mediação..."
-                              className="w-full bg-[#0b1326] border border-white/15 rounded-2xl p-4 text-xs text-white placeholder:text-[#bccabb]/50 focus:outline-none focus:border-amber-400 leading-relaxed resize-y"
-                            />
-                          </div>
+                          <textarea
+                            rows={4}
+                            value={essayInput}
+                            onChange={(e) => setEssayInput(e.target.value)}
+                            placeholder="Digite a resposta com o estudante durante a mediação..."
+                            className="w-full bg-[#0b1326] border border-white/15 rounded-xl p-3 text-xs text-white placeholder:text-[#bccabb]/50 focus:outline-none focus:border-amber-400 leading-relaxed"
+                          />
                         </div>
                       )}
 
-                    {/* Submit Actions */}
-                    <div className="pt-4 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    {/* Actions */}
+                    <div className="pt-3 border-t border-white/10 flex items-center justify-between gap-3">
                       <button
                         onClick={() => setExecutingActivityId(null)}
-                        className="w-full sm:w-auto py-2.5 px-5 bg-white/5 hover:bg-white/10 text-[#bccabb] hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-white/5"
+                        className="py-2 px-4 bg-white/5 hover:bg-white/10 text-[#bccabb] hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
                       >
                         Cancelar
                       </button>
@@ -1323,152 +1164,291 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                       <button
                         disabled={isSubmitting}
                         onClick={() => handleConfirmSubmit(executingActivity)}
-                        className="w-full sm:w-auto py-3 px-7 bg-amber-400 hover:bg-amber-300 text-black font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-amber-400/20 disabled:opacity-50"
+                        className="py-2.5 px-5 bg-amber-400 hover:bg-amber-300 text-black font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-md disabled:opacity-50"
                       >
                         <CheckCircle2 className="w-4 h-4" />
-                        <span>{isSubmitting ? 'Enviando...' : 'Concluir e Enviar Atividade com o Aluno'}</span>
+                        <span>{isSubmitting ? 'Enviando...' : 'Concluir Atividade'}</span>
                       </button>
                     </div>
                   </div>
                 </div>
               ) : (
-                /* Atividades listadas para o aluno selecionado */
+                /* Atividades listadas para o estudante selecionado */
                 <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                      <h3 className="text-xl font-extrabold text-white flex items-center gap-2">
-                        <Sparkles className="w-5 h-5 text-amber-400" />
-                        <span>Atividades Adaptadas para {activeStudent?.fullName}</span>
-                      </h3>
-                      <p className="text-xs text-[#bccabb] mt-0.5">
-                        Turma <strong className="text-white">{activeStudent?.turma}</strong> • Atividades disponíveis para resolução assistida
-                      </p>
-                    </div>
-                  </div>
+                  {/* Selected Student Banner + MENU RETRÁTIL 2: FICHA DO ESTUDANTE / PEI */}
+                  {activeStudent && (
+                    <div className="glass-panel p-4 rounded-3xl border border-amber-400/30 bg-[#131b2e] shadow-md space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={activeStudent.avatarUrl}
+                            alt={activeStudent.fullName}
+                            className="w-11 h-11 rounded-full object-cover border-2 border-amber-400/60 shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <h2 className="text-white font-extrabold text-sm sm:text-base truncate leading-tight">
+                              {activeStudent.fullName}
+                            </h2>
+                            <p className="text-[11px] text-[#bccabb] mt-0.5 truncate">
+                              Turma <strong className="text-white">{activeStudent.turma}</strong>
+                              {activeStudent.matricula && (
+                                <> • Matrícula: <strong className="text-white">{activeStudent.matricula}</strong></>
+                              )}
+                            </p>
+                          </div>
+                        </div>
 
-                  {displayedActivities.length === 0 ? (
-                    <div className="glass-panel p-12 rounded-3xl border border-white/10 text-center space-y-3">
-                      <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto text-amber-400">
-                        <Sparkles className="w-6 h-6" />
+                        {/* Botão Retrátil da Ficha do PEI */}
+                        <button
+                          onClick={() => setIsStudentDossierOpen(!isStudentDossierOpen)}
+                          className="py-1.5 px-3 bg-white/5 hover:bg-white/10 text-amber-300 font-bold rounded-xl border border-white/10 transition-all flex items-center gap-1.5 cursor-pointer text-[11px] shrink-0"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-amber-400" />
+                          <span>{isStudentDossierOpen ? 'Recolher Ficha' : 'Ficha & PEI'}</span>
+                          {isStudentDossierOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        </button>
                       </div>
-                      <h4 className="font-bold text-white text-base">Nenhuma Atividade Encontrada para esta Turma</h4>
-                      <p className="text-xs text-[#bccabb] max-w-md mx-auto">
-                        O professor regente ainda não publicou atividades para a turma {activeStudent?.turma}. Assim que forem disponibilizadas ou adaptadas pela IA, elas aparecerão aqui automaticamente.
+
+                      {/* Conteúdo Retrátil da Ficha & PEI */}
+                      {isStudentDossierOpen && (
+                        <div className="pt-3 border-t border-white/10 space-y-3 text-xs animate-fadeIn">
+                          {activeStudent.pneConditions && activeStudent.pneConditions.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-[10px] font-bold text-[#bccabb] uppercase">Necessidades & Diagnósticos:</p>
+                              <div className="flex flex-wrap gap-1">
+                                {activeStudent.pneConditions.map((cond, i) => (
+                                  <span
+                                    key={i}
+                                    className="px-2 py-0.5 bg-amber-400/15 text-amber-300 border border-amber-400/30 rounded-lg text-[10px] font-semibold"
+                                  >
+                                    {cond}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {activeStudent.pedagogicalNotes ? (
+                            <div className="p-3 bg-[#0b1326] rounded-xl border border-white/10 text-[11px] text-[#dae2fd] leading-relaxed space-y-1">
+                              <p className="font-bold text-amber-300 text-[10px] uppercase flex items-center gap-1">
+                                <BookOpen className="w-3 h-3" /> Observações do PEI / Laudo
+                              </p>
+                              <p className="whitespace-pre-wrap">{activeStudent.pedagogicalNotes}</p>
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-[#bccabb] italic">Sem observações de PEI cadastradas.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* MENUS RETRÁTEIS 3: ATIVIDADES POR STATUS (SANFONA / ACCORDION) */}
+                  {studentAdaptedActivities.length === 0 ? (
+                    <div className="glass-panel p-8 rounded-3xl border border-white/10 bg-[#131b2e] text-center space-y-2">
+                      <Sparkles className="w-8 h-8 text-amber-400 mx-auto opacity-70" />
+                      <h4 className="font-bold text-white text-sm">Nenhuma Atividade Adaptada para esta Turma</h4>
+                      <p className="text-xs text-[#bccabb] max-w-sm mx-auto">
+                        Quando o professor regente disponibilizar ou adaptar atividades para a turma {activeStudent?.turma}, elas aparecerão aqui.
                       </p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 gap-4">
-                      {displayedActivities.map((act) => {
-                        const sub = act.submissions?.find(
-                          (s) =>
-                            s.studentId === activeStudent?.id ||
-                            s.matricula === activeStudent?.matricula ||
-                            s.studentName === activeStudent?.fullName
-                        );
-
-                        const isPending = !sub || sub.status === 'returned' || sub.status === 'draft';
-                        const isToCorrect = sub && sub.status === 'pending';
-                        const isGraded = sub && sub.status === 'graded';
-                        const isReturned = sub && sub.status === 'returned';
-
-                        const totalScore = sub && isGraded ? (sub.objectiveScore || 0) + (sub.essayScore || 0) : null;
-                        const distribution = getActivityGradeDistribution(act);
-
-                        return (
-                          <div
-                            key={act.id}
-                            className="glass-panel p-5 sm:p-6 rounded-3xl border border-white/10 hover:border-amber-400/40 transition-all space-y-4 shadow-xl"
-                          >
-                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                              <div className="space-y-2 max-w-2xl">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-[10px] font-extrabold bg-amber-400/20 text-amber-300 px-3 py-0.5 rounded-full border border-amber-400/30 uppercase tracking-wide">
-                                    {act.isAdapted ? '✨ Adaptada PNE' : act.type}
-                                  </span>
-
-                                  {act.adaptationType === 'severe_playful' && (
-                                    <span className="text-[10px] font-extrabold bg-purple-500/20 text-purple-300 px-2.5 py-0.5 rounded-full border border-purple-500/30">
-                                      🎮 Jogo Gamificado
-                                    </span>
-                                  )}
-
-                                  <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1 bg-[#131b2e] px-3 py-0.5 rounded-full border border-amber-500/30">
-                                    <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                                    <span>Prazo: {act.deadline || 'Sem data'}</span>
-                                  </span>
-
-                                  {/* Status Badges */}
-                                  {isPending && (
-                                    <span className="text-[10px] font-extrabold bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/40">
-                                      📜 A Fazer
-                                    </span>
-                                  )}
-                                  {isToCorrect && (
-                                    <span className="text-[10px] font-extrabold bg-sky-500/20 text-sky-300 px-2.5 py-0.5 rounded-full border border-sky-500/40">
-                                      ⏳ Aguardando Correção do Professor Regente
-                                    </span>
-                                  )}
-                                  {isGraded && (
-                                    <span className="text-[10px] font-extrabold bg-emerald-500/20 text-[#4ade80] px-2.5 py-0.5 rounded-full border border-emerald-500/40">
-                                      ✅ Corrigida (Nota: {totalScore !== null ? totalScore.toFixed(1) : 0} / {distribution.maxGrade || 10} pts)
-                                    </span>
-                                  )}
-                                  {isReturned && (
-                                    <span className="text-[10px] font-extrabold bg-rose-500/20 text-rose-300 px-2.5 py-0.5 rounded-full border border-rose-500/40">
-                                      ↩️ Devolvida para Ajuste
-                                    </span>
-                                  )}
-                                </div>
-
-                                <h4 className="text-lg font-bold text-white tracking-tight">{act.title}</h4>
-                                {act.description && (
-                                  <p className="text-xs text-[#bccabb] line-clamp-2 leading-relaxed">{act.description}</p>
-                                )}
-
-                                <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#bccabb] pt-1">
-                                  <span>Turma: <strong className="text-white">{act.turma}</strong></span>
-                                  <span>•</span>
-                                  <span>Questões: <strong className="text-white">{act.questions?.length || 0}</strong></span>
-                                  <span>•</span>
-                                  <span>Valor: <strong className="text-white">{distribution.maxGrade.toFixed(1)} pts</strong></span>
-                                </div>
-
-                                {/* Feedback from teacher if graded or returned */}
-                                {sub && (sub.teacherFeedback || isGraded) && (
-                                  <div className="mt-3 p-3 bg-[#131b2e] rounded-2xl border border-white/10 space-y-1 text-xs">
-                                    <div className="flex items-center justify-between">
-                                      <span className="font-bold text-[#4ade80] text-[11px]">
-                                        Parecer do Professor Regente ({teacher.name}):
-                                      </span>
-                                      {isGraded && (
-                                        <span className="font-black text-white text-xs bg-[#4ade80]/20 px-2 py-0.5 rounded-full border border-[#4ade80]/30">
-                                          Nota: {totalScore !== null ? totalScore.toFixed(1) : 0} pts
-                                        </span>
-                                      )}
-                                    </div>
-                                    <p className="text-[#dae2fd] text-[11px] leading-relaxed italic">
-                                      &ldquo;{sub.teacherFeedback || 'Atividade avaliada e registrada no diário de classe.'}&rdquo;
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Action Buttons */}
-                              <div className="shrink-0 flex flex-col gap-2 pt-2 sm:pt-0">
-                                <button
-                                  onClick={() => handleStartSolving(act)}
-                                  className="py-3 px-5 bg-amber-400 hover:bg-amber-300 text-black font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-amber-400/20 active:scale-95"
-                                >
-                                  <Smartphone className="w-4 h-4" />
-                                  <span>
-                                    {isPending ? 'Fazer no Celular com o Aluno' : 'Refazer / Editar Resposta'}
-                                  </span>
-                                </button>
-                              </div>
-                            </div>
+                    <div className="space-y-3">
+                      {/* ACCORDION 1: ATIVIDADES A FAZER */}
+                      <div className="glass-panel rounded-3xl border border-white/10 bg-[#131b2e] overflow-hidden shadow-md">
+                        <button
+                          onClick={() => setIsPendingSectionOpen(!isPendingSectionOpen)}
+                          className="w-full p-3.5 flex items-center justify-between gap-3 text-left hover:bg-white/5 cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-amber-400" />
+                            <h3 className="font-bold text-white text-xs sm:text-sm">
+                              Atividades a Fazer com Suporte
+                            </h3>
+                            <span className="px-2 py-0.5 bg-amber-400/20 text-amber-300 border border-amber-400/30 rounded-full text-[10px] font-extrabold">
+                              {pendingActivities.length}
+                            </span>
                           </div>
-                        );
-                      })}
+                          <div className="text-xs text-amber-400 font-bold flex items-center gap-1">
+                            {isPendingSectionOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </div>
+                        </button>
+
+                        {isPendingSectionOpen && (
+                          <div className="p-3.5 pt-0 space-y-2.5 border-t border-white/5 animate-fadeIn">
+                            {pendingActivities.length === 0 ? (
+                              <p className="text-xs text-[#bccabb] italic py-2">Nenhuma atividade pendente a fazer para este aluno.</p>
+                            ) : (
+                              pendingActivities.map((act) => {
+                                const distribution = getActivityGradeDistribution(act);
+                                const isNotesOpen = Boolean(expandedActivityNotes[act.id]);
+
+                                return (
+                                  <div
+                                    key={act.id}
+                                    className="p-3.5 rounded-2xl border border-white/10 bg-[#0b1326] space-y-2.5 hover:border-amber-400/40 transition-all"
+                                  >
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                      <div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-[9px] font-extrabold bg-amber-400/20 text-amber-300 px-2 py-0.2 rounded-full border border-amber-400/30">
+                                            {act.isAdapted ? 'Adaptada PNE' : act.type}
+                                          </span>
+                                          {act.adaptationType === 'severe_playful' && (
+                                            <span className="text-[9px] font-extrabold bg-purple-500/20 text-purple-300 px-2 py-0.2 rounded-full border border-purple-500/30">
+                                              🎮 Lúdica
+                                            </span>
+                                          )}
+                                          <span className="text-[10px] text-[#bccabb]">
+                                            Prazo: {act.deadline || 'Sem data'}
+                                          </span>
+                                        </div>
+                                        <h4 className="text-sm font-bold text-white mt-1">{act.title}</h4>
+                                      </div>
+
+                                      <button
+                                        onClick={() => handleStartSolving(act)}
+                                        className="py-2 px-4 bg-amber-400 hover:bg-amber-300 text-black font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md shrink-0 active:scale-95"
+                                      >
+                                        <Smartphone className="w-3.5 h-3.5" />
+                                        <span>Fazer no Celular com o Aluno</span>
+                                      </button>
+                                    </div>
+
+                                    {/* Retractable activity description */}
+                                    {act.description && (
+                                      <div className="pt-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleActivityNotes(act.id)}
+                                          className="text-[10px] text-amber-300 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                                        >
+                                          <Info className="w-3 h-3" />
+                                          <span>{isNotesOpen ? 'Ocultar Orientações' : 'Ver Orientações'}</span>
+                                        </button>
+                                        {isNotesOpen && (
+                                          <p className="text-xs text-[#bccabb] mt-1.5 leading-relaxed bg-[#131b2e] p-2.5 rounded-xl border border-white/5 animate-fadeIn">
+                                            {act.description}
+                                          </p>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ACCORDION 2: AGUARDANDO CORREÇÃO DO REGENTE */}
+                      <div className="glass-panel rounded-3xl border border-white/10 bg-[#131b2e] overflow-hidden shadow-md">
+                        <button
+                          onClick={() => setIsAwaitingSectionOpen(!isAwaitingSectionOpen)}
+                          className="w-full p-3.5 flex items-center justify-between gap-3 text-left hover:bg-white/5 cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-sky-400" />
+                            <h3 className="font-bold text-white text-xs sm:text-sm">
+                              Enviadas / Aguardando Parecer do Regente
+                            </h3>
+                            <span className="px-2 py-0.5 bg-sky-500/20 text-sky-300 border border-sky-500/30 rounded-full text-[10px] font-extrabold">
+                              {awaitingCorrectionActivities.length}
+                            </span>
+                          </div>
+                          <div className="text-xs text-sky-400 font-bold flex items-center gap-1">
+                            {isAwaitingSectionOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </div>
+                        </button>
+
+                        {isAwaitingSectionOpen && (
+                          <div className="p-3.5 pt-0 space-y-2.5 border-t border-white/5 animate-fadeIn">
+                            {awaitingCorrectionActivities.length === 0 ? (
+                              <p className="text-xs text-[#bccabb] italic py-2">Nenhuma atividade aguardando correção.</p>
+                            ) : (
+                              awaitingCorrectionActivities.map((act) => (
+                                <div
+                                  key={act.id}
+                                  className="p-3.5 rounded-2xl border border-white/10 bg-[#0b1326] flex items-center justify-between gap-3"
+                                >
+                                  <div>
+                                    <span className="text-[9px] font-extrabold bg-sky-500/20 text-sky-300 px-2 py-0.2 rounded-full border border-sky-500/30">
+                                      ⏳ Em Análise
+                                    </span>
+                                    <h4 className="text-sm font-bold text-white mt-1">{act.title}</h4>
+                                  </div>
+
+                                  <button
+                                    onClick={() => handleStartSolving(act)}
+                                    className="py-1.5 px-3 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shrink-0"
+                                  >
+                                    Editar Resposta
+                                  </button>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ACCORDION 3: CONCLUÍDAS E AVALIADAS */}
+                      <div className="glass-panel rounded-3xl border border-white/10 bg-[#131b2e] overflow-hidden shadow-md">
+                        <button
+                          onClick={() => setIsGradedSectionOpen(!isGradedSectionOpen)}
+                          className="w-full p-3.5 flex items-center justify-between gap-3 text-left hover:bg-white/5 cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-[#4ade80]" />
+                            <h3 className="font-bold text-white text-xs sm:text-sm">
+                              Concluídas e Avaliadas
+                            </h3>
+                            <span className="px-2 py-0.5 bg-emerald-500/20 text-[#4ade80] border border-emerald-500/30 rounded-full text-[10px] font-extrabold">
+                              {gradedActivities.length}
+                            </span>
+                          </div>
+                          <div className="text-xs text-[#4ade80] font-bold flex items-center gap-1">
+                            {isGradedSectionOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </div>
+                        </button>
+
+                        {isGradedSectionOpen && (
+                          <div className="p-3.5 pt-0 space-y-2.5 border-t border-white/5 animate-fadeIn">
+                            {gradedActivities.length === 0 ? (
+                              <p className="text-xs text-[#bccabb] italic py-2">Nenhuma atividade avaliada ainda.</p>
+                            ) : (
+                              gradedActivities.map((act) => {
+                                const sub = act.submissions?.find(
+                                  (s) =>
+                                    s.studentId === activeStudent?.id ||
+                                    s.matricula === activeStudent?.matricula ||
+                                    s.studentName === activeStudent?.fullName
+                                );
+                                const totalScore = (sub?.objectiveScore || 0) + (sub?.essayScore || 0);
+
+                                return (
+                                  <div
+                                    key={act.id}
+                                    className="p-3.5 rounded-2xl border border-white/10 bg-[#0b1326] space-y-2"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <h4 className="text-sm font-bold text-white">{act.title}</h4>
+                                      <span className="font-extrabold text-xs text-[#4ade80] bg-[#4ade80]/15 px-2.5 py-0.5 rounded-full border border-[#4ade80]/30 shrink-0">
+                                        Nota: {totalScore.toFixed(1)} pts
+                                      </span>
+                                    </div>
+                                    {sub?.teacherFeedback && (
+                                      <p className="text-xs text-[#dae2fd] italic bg-[#131b2e] p-2 rounded-lg">
+                                        &ldquo;{sub.teacherFeedback}&rdquo;
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1479,27 +1459,25 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
       )}
 
       {/* TAB 2: CADASTRO DE 2º PROFESSORES (REGENTE / ADMIN) */}
-      {activeTab === 'professores_apoio' && (
-        <div className="space-y-6">
+      {activeTab === 'professores_apoio' && !isSecondTeacher && (
+        <div className="space-y-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-white">Professores de Apoio (AEE) Cadastrados</h2>
+            <h2 className="text-lg font-bold text-white">Professores de Apoio (AEE) Cadastrados</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {isLoadingTeachers ? (
-              <div className="col-span-full py-12 text-center text-[#bccabb]">Carregando profissionais...</div>
+              <div className="col-span-full py-8 text-center text-[#bccabb]">Carregando profissionais...</div>
             ) : secondTeachers.length === 0 ? (
               <div className="col-span-full glass-panel p-8 rounded-3xl border border-white/10 text-center flex flex-col items-center justify-center">
-                <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4 text-amber-400">
-                  <HeartHandshake className="w-8 h-8" />
-                </div>
-                <h3 className="text-lg font-bold text-white mb-2">Nenhum 2º Professor Cadastrado</h3>
-                <p className="text-sm text-[#bccabb] max-w-md mx-auto mb-6">
-                  Adicione profissionais de Atendimento Educacional Especializado (AEE) para auxiliarem no acompanhamento de alunos de inclusão.
+                <HeartHandshake className="w-8 h-8 text-amber-400 mb-2" />
+                <h3 className="text-base font-bold text-white mb-1">Nenhum 2º Professor Cadastrado</h3>
+                <p className="text-xs text-[#bccabb] max-w-md mx-auto mb-4">
+                  Cadastre profissionais de Atendimento Educacional Especializado (AEE) para auxiliarem no acompanhamento de alunos de inclusão.
                 </p>
                 <button
                   onClick={() => setIsNewModalOpen(true)}
-                  className="py-2.5 px-6 bg-white/5 hover:bg-white/10 text-white font-bold rounded-full border border-white/10 transition-all text-sm cursor-pointer"
+                  className="py-2 px-5 bg-amber-400 text-black font-bold rounded-xl text-xs cursor-pointer shadow"
                 >
                   Cadastrar Agora
                 </button>
@@ -1512,73 +1490,59 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                 return (
                   <div
                     key={st.id}
-                    className="glass-panel p-5 rounded-3xl border border-white/10 flex flex-col justify-between group"
+                    className="glass-panel p-4 rounded-3xl border border-white/10 bg-[#131b2e] flex flex-col justify-between"
                   >
                     <div>
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-amber-500/30 shadow-md">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={st.avatarUrl} alt={st.name} className="w-full h-full object-cover" />
-                        </div>
-                        <span className="flex items-center gap-1 bg-amber-500/10 text-amber-400 px-2.5 py-1 rounded-full text-[10px] font-bold border border-amber-500/20">
+                      <div className="flex items-start justify-between mb-3">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={st.avatarUrl} alt={st.name} className="w-10 h-10 rounded-full object-cover border border-amber-400" />
+                        <span className="flex items-center gap-1 bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full text-[9px] font-bold border border-amber-500/20">
                           <ShieldCheck className="w-3 h-3" /> AEE
                         </span>
                       </div>
-                      <h3 className="font-bold text-white text-lg mb-1 truncate">{st.name}</h3>
+                      <h3 className="font-bold text-white text-sm mb-1 truncate">{st.name}</h3>
 
                       {isPendingReset && (
-                        <div className="mt-2 text-[11px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/40 px-3 py-1.5 rounded-xl flex items-center gap-1.5 animate-pulse">
-                          <KeyRound className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <div className="mt-1 text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/40 px-2 py-1 rounded-lg flex items-center gap-1">
+                          <KeyRound className="w-3 h-3 text-amber-400 shrink-0" />
                           <span>Solicitação de Reset (Senha 1234)</span>
                         </div>
                       )}
 
-                      <div className="space-y-2 mt-4">
-                        <div className="flex items-center gap-2 text-xs text-[#bccabb]">
-                          <Mail className="w-3.5 h-3.5 shrink-0" />
+                      <div className="space-y-1 mt-3 text-xs text-[#bccabb]">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <Mail className="w-3 h-3 shrink-0" />
                           <span className="truncate">{st.email}</span>
                         </div>
                         {st.phone && (
-                          <div className="flex items-center gap-2 text-xs text-[#bccabb]">
-                            <Phone className="w-3.5 h-3.5 shrink-0" />
+                          <div className="flex items-center gap-1.5">
+                            <Phone className="w-3 h-3 shrink-0" />
                             <span>{st.phone}</span>
                           </div>
                         )}
                         {st.subject && (
-                          <div className="flex items-center gap-2 text-xs text-[#bccabb]">
-                            <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                          <div className="flex items-center gap-1.5 truncate">
+                            <BookOpen className="w-3 h-3 shrink-0" />
                             <span className="truncate">{st.subject}</span>
-                          </div>
-                        )}
-                        {st.school && (
-                          <div className="flex items-center gap-2 text-xs text-[#bccabb]">
-                            <School className="w-3.5 h-3.5 shrink-0" />
-                            <span className="truncate">{st.school}</span>
                           </div>
                         )}
                       </div>
                     </div>
 
-                    <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between gap-2">
+                    <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between gap-2">
                       <button
                         onClick={() => handleResetTeacherPassword(st)}
-                        className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
-                          isPendingReset
-                            ? 'bg-amber-400 text-black hover:bg-amber-300 border-amber-300 shadow-amber-400/30'
-                            : 'bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 hover:text-amber-200 border-amber-400/30'
-                        }`}
-                        title="Resetar senha deste professor para 1234"
+                        className="py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1 bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border-amber-400/30 cursor-pointer"
                       >
-                        <KeyRound className="w-3.5 h-3.5 shrink-0" />
-                        <span>Resetar Senha (1234)</span>
+                        <KeyRound className="w-3 h-3" />
+                        <span>Resetar Senha</span>
                       </button>
 
                       <button
                         onClick={() => handleDelete(st.id, st.name)}
-                        className="p-2 text-rose-400 hover:text-white hover:bg-rose-500 rounded-xl transition-all cursor-pointer"
-                        title="Remover acesso"
+                        className="p-1.5 text-rose-400 hover:text-white hover:bg-rose-500 rounded-xl transition-all cursor-pointer"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
@@ -1589,6 +1553,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
         </div>
       )}
 
+      {/* Modal Novo 2º Professor */}
       <NewSecondTeacherModal
         isOpen={isNewModalOpen}
         onClose={() => setIsNewModalOpen(false)}
@@ -1600,20 +1565,20 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
         }}
       />
 
-      {/* Modal Trocar Senha no Painel */}
+      {/* Modal Trocar Senha */}
       {isChangePasswordOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
-          <div className="glass-panel w-full max-w-md p-6 rounded-3xl border border-white/10 space-y-5 bg-[#0e172a] shadow-2xl relative">
+          <div className="glass-panel w-full max-w-md p-5 sm:p-6 rounded-3xl border border-white/10 space-y-4 bg-[#0e172a] shadow-2xl relative">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
-                <KeyRound className="w-5 h-5" />
+                <KeyRound className="w-4 h-4" />
                 <span>Trocar Minha Senha de Acesso</span>
               </div>
               <button
                 onClick={() => setIsChangePasswordOpen(false)}
                 className="text-[#bccabb] hover:text-white p-1 rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
@@ -1629,14 +1594,14 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
               </div>
             )}
 
-            <form onSubmit={handleChangePassword} className="space-y-4 text-xs">
+            <form onSubmit={handleChangePassword} className="space-y-3.5 text-xs">
               <div>
                 <label className="block text-[#bccabb] font-semibold mb-1">E-mail Cadastrado</label>
                 <input
                   type="email"
                   disabled
                   value={teacher.email || ''}
-                  className="w-full bg-[#131b2e]/60 border border-white/10 rounded-2xl px-4 py-3 text-white/70 cursor-not-allowed"
+                  className="w-full bg-[#131b2e]/60 border border-white/10 rounded-2xl px-4 py-2.5 text-white/70 cursor-not-allowed"
                 />
               </div>
 
@@ -1647,7 +1612,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                   required
                   value={changePasswordNewPass}
                   onChange={(e) => setChangePasswordNewPass(e.target.value)}
-                  className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-amber-400"
+                  className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-2.5 text-white focus:outline-none focus:border-amber-400"
                   placeholder="Digite sua nova senha"
                 />
               </div>
@@ -1659,7 +1624,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                   required
                   value={changePasswordConfirmPass}
                   onChange={(e) => setChangePasswordConfirmPass(e.target.value)}
-                  className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-amber-400"
+                  className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-2.5 text-white focus:outline-none focus:border-amber-400"
                   placeholder="Repita a nova senha"
                 />
               </div>
@@ -1668,14 +1633,14 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsChangePasswordOpen(false)}
-                  className="flex-1 py-3 bg-[#131b2e] hover:bg-[#1a243b] text-[#bccabb] font-bold rounded-2xl border border-white/10 transition-colors cursor-pointer"
+                  className="flex-1 py-2.5 bg-[#131b2e] hover:bg-[#1a243b] text-[#bccabb] font-bold rounded-2xl border border-white/10 transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={changePasswordLoading}
-                  className="flex-1 py-3 bg-amber-400 hover:bg-amber-300 text-black font-bold rounded-2xl transition-all shadow-lg shadow-amber-400/20 cursor-pointer"
+                  className="flex-1 py-2.5 bg-amber-400 hover:bg-amber-300 text-black font-bold rounded-2xl transition-all shadow-md cursor-pointer"
                 >
                   {changePasswordLoading ? 'Salvando...' : 'Atualizar Senha'}
                 </button>

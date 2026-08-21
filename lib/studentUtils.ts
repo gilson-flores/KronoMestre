@@ -10,12 +10,71 @@ export const DEFAULT_TURMAS = [
   '102',
   '104',
   '201',
-  '2001',
   '202',
+  '2001',
   '301',
-  '3001',
   '302',
+  '3001',
 ];
+
+/**
+ * Extracts school year (1º, 2º, 3º ano) from a turma string for strict ordering
+ */
+export function getYearFromTurma(turma: string): number {
+  if (!turma) return 999;
+  const t = turma.trim();
+  const match = t.match(/^([1-9])/);
+  if (match) {
+    return parseInt(match[1], 10);
+  }
+  return 999;
+}
+
+/**
+ * Sorts turmas strictly by school year: 1st years first (101, 102, 104...),
+ * then 2nd years (201, 202, 2001...), then 3rd years (301, 302, 3001...).
+ */
+export function sortTurmas(turmas: string[]): string[] {
+  return [...turmas].sort((a, b) => {
+    const yearA = getYearFromTurma(a);
+    const yearB = getYearFromTurma(b);
+    if (yearA !== yearB) {
+      return yearA - yearB;
+    }
+    // No mesmo ano: se um tem 3 dígitos (ex: 202) e o outro 4 dígitos (ex: 2001), 3 dígitos vem antes
+    if (a.length !== b.length) {
+      return a.length - b.length;
+    }
+    const numA = parseInt(a.replace(/\D/g, ''), 10);
+    const numB = parseInt(b.replace(/\D/g, ''), 10);
+    if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+      return numA - numB;
+    }
+    return a.localeCompare(b, undefined, { numeric: true });
+  });
+}
+
+/**
+ * Extracts only original school classes from registered students (ignoring composite activity strings like "101, 102, 104")
+ */
+export function getOriginalTurmas(students: StudentUser[] = []): string[] {
+  const set = new Set<string>();
+  students.forEach((s) => {
+    if (!s.turma) return;
+    const parts = s.turma.split(/[,;]+/).map((t) => t.trim()).filter(Boolean);
+    parts.forEach((t) => {
+      if (t && t.toLowerCase() !== 'todas' && t.toLowerCase() !== 'todas as turmas' && t.toLowerCase() !== 'branco' && !t.includes(',')) {
+        set.add(t);
+      }
+    });
+  });
+
+  if (set.size === 0) {
+    DEFAULT_TURMAS.forEach((t) => set.add(t));
+  }
+
+  return sortTurmas(Array.from(set));
+}
 
 /**
  * Validates whether a turma string follows the standard format:

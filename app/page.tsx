@@ -15,6 +15,9 @@ import { AuthView } from '@/components/AuthView';
 import { Sidebar } from '@/components/Sidebar';
 import { NavbarTop } from '@/components/NavbarTop';
 import { DashboardView } from '@/components/views/DashboardView';
+import { DashboardCentralView } from '@/components/views/DashboardCentralView';
+import { PostagemRcoView } from '@/components/views/PostagemRcoView';
+import { CorrectionsView } from '@/components/views/CorrectionsView';
 import { GradingView } from '@/components/views/GradingView';
 import { StudentsView } from '@/components/views/StudentsView';
 import { LibraryView } from '@/components/views/LibraryView';
@@ -115,7 +118,7 @@ export default function Home() {
   const [teacher, setTeacher] = useState<TeacherUser>(initialTeacher);
   const [currentStudent, setCurrentStudent] = useState<StudentUser | null>(null);
   const [inactivityTimeoutEnabled, setInactivityTimeoutEnabled] = useState<boolean>(true);
-  const [currentTab, setCurrentTab] = useState<string>('painel');
+  const [currentTab, setCurrentTab] = useState<string>('dashboard');
 
   // Restaurar sessão e preferências no cliente de forma segura para hidratação
   useEffect(() => {
@@ -2442,6 +2445,18 @@ export default function Home() {
     (m) => m.senderRole === 'student' && !m.read
   ).length;
 
+  const teacherPendingCorrectionsCount = React.useMemo(() => {
+    let count = 0;
+    activities.forEach((act) => {
+      (act.submissions || []).forEach((sub) => {
+        if (sub.status === 'pending' || sub.status === 'draft') {
+          count++;
+        }
+      });
+    });
+    return count;
+  }, [activities]);
+
   // 0. Server-side rendering / initial hydration shell
   if (!isMounted) {
     return (
@@ -2494,7 +2509,7 @@ export default function Home() {
         currentTab={currentTab}
         setCurrentTab={(tab) => {
           setCurrentTab(tab);
-          if (tab !== 'grading') setSelectedActivityForGrading(null);
+          if (tab !== 'grading' && tab !== 'correcoes') setSelectedActivityForGrading(null);
         }}
         teacher={teacher}
         onOpenNewContentModal={() => setIsNewActivityModalOpen(true)}
@@ -2502,6 +2517,7 @@ export default function Home() {
         isMobileOpen={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
         unreadMessagesCount={teacherUnreadMessagesCount}
+        pendingCorrectionsCount={teacherPendingCorrectionsCount}
         hiddenNavItems={role === 'second_teacher' ? hiddenSidebarItems : []}
       />
 
@@ -2544,120 +2560,131 @@ export default function Home() {
           </div>
         )}
 
-        <main className="flex-1 p-3 sm:p-6 md:p-8 max-w-7xl w-full mx-auto">
-          {currentTab === 'painel' && (
-            <DashboardView
-              activities={activities}
-              students={students}
-              title="Studio"
-              subtitle="Gerencie avaliações, redações e dinâmicas das suas turmas."
-              showStats={false}
-              onOpenNewActivityModal={() => setIsNewActivityModalOpen(true)}
-              onSelectActivityForGrading={handleSelectActivityForGrading}
-              onEditActivity={(act) => {
-                setEditingActivity(act);
-                setIsEditActivityModalOpen(true);
-              }}
-              onViewActivity={(act) => setViewingActivity(act)}
-              onGenerateDossier={handleGenerateDossier}
-              onDeleteActivity={handleDeleteActivity}
-              onSaveActivity={handleSaveActivity}
-              onCreateAdaptedActivity={handleCreateActivity}
-            />
-          )}
+        {(() => {
+          // Quando o usuário for 2º professor, apenas os estudantes vinculados a ele serão exibidos
+          const visibleStudentsForRole = role === 'second_teacher' && teacher
+            ? students.filter((s) => {
+                const tId = teacher.id?.toString().trim().toLowerCase();
+                const tName = teacher.name?.trim().toLowerCase();
+                const tEmail = teacher.email?.trim().toLowerCase();
 
-          {currentTab === 'atividades' && (
-            <DashboardView
-              activities={activities}
-              students={students}
-              title="Correções"
-              subtitle="Acompanhe o desempenho geral, estatísticas de entrega e pendências de correção."
-              showStats={true}
-              isCorrecoesTab={true}
-              onOpenNewActivityModal={() => setIsNewActivityModalOpen(true)}
-              onSelectActivityForGrading={handleSelectActivityForGrading}
-              onEditActivity={(act) => {
-                setEditingActivity(act);
-                setIsEditActivityModalOpen(true);
-              }}
-              onViewActivity={(act) => setViewingActivity(act)}
-              onGenerateDossier={handleGenerateDossier}
-              onDeleteActivity={handleDeleteActivity}
-              onSaveActivity={handleSaveActivity}
-              onCreateAdaptedActivity={handleCreateActivity}
-            />
-          )}
+                const stId = s.secondTeacherId?.toString().trim().toLowerCase();
+                const stName = s.secondTeacherName?.trim().toLowerCase();
 
-          {currentTab === 'grading' && (
-            selectedActivityForGrading || activities[0] ? (
-              <GradingView
-                activity={selectedActivityForGrading || activities[0]}
-                allActivities={activities}
-                students={students}
-                onSelectActivity={(act) => setSelectedActivityForGrading(act)}
-                onBack={() => setCurrentTab('atividades')}
-                onUpdateSubmission={handleUpdateSubmission}
-              />
-            ) : (
-              <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb]">
-                Nenhuma atividade selecionada para correção.
-              </div>
-            )
-          )}
+                const matchId = Boolean(stId && tId && stId === tId);
+                const matchEmail = Boolean(stId && tEmail && stId === tEmail);
+                const matchName = Boolean(
+                  stName &&
+                    ((tName && (stName === tName || stName.includes(tName) || tName.includes(stName))) ||
+                      (tEmail && stName === tEmail))
+                );
 
-          {currentTab === 'mensagens' && (
-            <MessagesView
-              currentUserRole="teacher"
-              teacher={teacher}
-              students={students}
-              activities={activities}
-              messages={chatMessages}
-              isAiAutoReplyEnabled={isAiAutoReplyEnabled}
-              onToggleAiAutoReply={handleToggleAiAutoReply}
-              onSendMessage={handleSendMessage}
-              onMarkThreadAsRead={handleMarkThreadAsRead}
-            />
-          )}
+                return matchId || matchEmail || matchName;
+              })
+            : students;
 
-          {currentTab === 'alunos' && (
+          return (
+            <main className="flex-1 p-3 sm:p-6 md:p-8 max-w-7xl w-full mx-auto">
+              {(currentTab === 'dashboard' || currentTab === 'painel') && (
+                <DashboardCentralView
+                  activities={activities}
+                  students={visibleStudentsForRole}
+                  onNavigateToTab={(tab) => setCurrentTab(tab)}
+                  onOpenNewActivityModal={() => setIsNewActivityModalOpen(true)}
+                  onOpenNewStudentModal={() => setIsNewStudentModalOpen(true)}
+                />
+              )}
 
-            <StudentsView
-              students={students}
-              onOpenNewStudentModal={() => setIsNewStudentModalOpen(true)}
-              onEditStudent={(s) => setEditingStudent(s)}
-              onDeleteStudent={handleDeleteStudent}
-              onSuperviseStudent={handleSuperviseStudent}
-              onImportStudents={handleImportStudents}
-            />
-          )}
+              {currentTab === 'atividades' && (
+                <DashboardView
+                  activities={activities}
+                  students={visibleStudentsForRole}
+                  title="Atividades"
+                  subtitle="Gerencie e acompanhe avaliações, redações e dinâmicas das suas turmas."
+                  isCorrecoesTab={false}
+                  onOpenNewActivityModal={() => setIsNewActivityModalOpen(true)}
+                  onSelectActivityForGrading={handleSelectActivityForGrading}
+                  onEditActivity={(act) => {
+                    setEditingActivity(act);
+                    setIsEditActivityModalOpen(true);
+                  }}
+                  onViewActivity={(act) => setViewingActivity(act)}
+                  onGenerateDossier={handleGenerateDossier}
+                  onDeleteActivity={handleDeleteActivity}
+                  onSaveActivity={handleSaveActivity}
+                  onCreateAdaptedActivity={handleCreateActivity}
+                />
+              )}
 
-          {currentTab === 'atestados_rad' && (
-            <AtestadosRadView students={students} />
-          )}
+              {(currentTab === 'correcoes' || currentTab === 'grading') && (
+                <CorrectionsView
+                  activities={activities}
+                  students={visibleStudentsForRole}
+                  onUpdateSubmission={handleUpdateSubmission}
+                  initialSelectedActivityId={selectedActivityForGrading?.id || null}
+                />
+              )}
 
-          {currentTab === '2_professor' && (
-            <SecondTeachersView
-              teacher={teacher}
-              currentUserRole={role}
-              students={students}
-              activities={activities}
-              onSubmitAnswer={handleStudentSubmitAnswer}
-              onSaveStudent={handleSaveStudent}
-            />
-          )}
+              {currentTab === 'postagem_rco' && (
+                <PostagemRcoView
+                  activities={activities}
+                  students={visibleStudentsForRole}
+                  onSelectActivityForGrading={handleSelectActivityForGrading}
+                />
+              )}
 
-          {currentTab === 'arquivos' && (
-            <LibraryView
-              files={library}
-              driveFolderUrl={teacher.driveFolderUrl}
-              onSaveDriveFolderUrl={handleSaveDriveFolderUrl}
-              onAddFile={handleAddLibraryFile}
-              onDeleteFile={handleDeleteLibraryFile}
-            />
-          )}
+              {currentTab === 'mensagens' && (
+                <MessagesView
+                  currentUserRole="teacher"
+                  teacher={teacher}
+                  students={visibleStudentsForRole}
+                  activities={activities}
+                  messages={chatMessages}
+                  isAiAutoReplyEnabled={isAiAutoReplyEnabled}
+                  onToggleAiAutoReply={handleToggleAiAutoReply}
+                  onSendMessage={handleSendMessage}
+                  onMarkThreadAsRead={handleMarkThreadAsRead}
+                />
+              )}
 
-          {currentTab === 'configuracoes' && (
-            <div className="glass-panel p-8 rounded-3xl border border-white/10 max-w-2xl space-y-6">
+              {currentTab === 'alunos' && (
+                <StudentsView
+                  students={visibleStudentsForRole}
+                  onOpenNewStudentModal={() => setIsNewStudentModalOpen(true)}
+                  onEditStudent={(s) => setEditingStudent(s)}
+                  onDeleteStudent={handleDeleteStudent}
+                  onSuperviseStudent={handleSuperviseStudent}
+                  onImportStudents={handleImportStudents}
+                />
+              )}
+
+              {currentTab === 'atestados_rad' && (
+                <AtestadosRadView students={visibleStudentsForRole} />
+              )}
+
+              {currentTab === '2_professor' && (
+                <SecondTeachersView
+                  teacher={teacher}
+                  currentUserRole={role}
+                  students={students}
+                  activities={activities}
+                  onSubmitAnswer={handleStudentSubmitAnswer}
+                  onSaveStudent={handleSaveStudent}
+                />
+              )}
+
+              {currentTab === 'arquivos' && (
+                <LibraryView
+                  files={library}
+                  driveFolderUrl={teacher.driveFolderUrl}
+                  onSaveDriveFolderUrl={handleSaveDriveFolderUrl}
+                  onAddFile={handleAddLibraryFile}
+                  onDeleteFile={handleDeleteLibraryFile}
+                />
+              )}
+
+              {currentTab === 'configuracoes' && (
+                <div className="glass-panel p-8 rounded-3xl border border-white/10 max-w-2xl space-y-6">
               <h1 className="text-2xl font-bold text-white">Configurações da Conta</h1>
 
               {teacherSaveStatus && (
@@ -2758,8 +2785,10 @@ export default function Home() {
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                         {[
-                          { id: 'painel', label: 'Studio (Painel)' },
-                          { id: 'atividades', label: 'Correções' },
+                          { id: 'dashboard', label: 'Dashboard' },
+                          { id: 'atividades', label: 'Atividades' },
+                          { id: 'correcoes', label: 'Correções' },
+                          { id: 'postagem_rco', label: 'Postagem RCO' },
                           { id: 'mensagens', label: 'Mensagens' },
                           { id: 'alunos', label: 'Alunos' },
                           { id: 'atestados_rad', label: 'Atestados e RAD' },
@@ -2991,6 +3020,8 @@ export default function Home() {
             </div>
           )}
         </main>
+          );
+        })()}
       </div>
 
       {/* Global Modals */}

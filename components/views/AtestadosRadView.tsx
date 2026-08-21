@@ -410,49 +410,6 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
         </div>
       )}
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="glass-panel p-4 rounded-3xl border border-white/10 bg-[#0e172a]/80 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
-            <FileText className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-[11px] font-medium text-[#bccabb] block">Total Registrados</span>
-            <span className="text-xl font-black text-white">{stats.total}</span>
-          </div>
-        </div>
-
-        <div className="glass-panel p-4 rounded-3xl border border-white/10 bg-[#0e172a]/80 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-[11px] font-medium text-[#bccabb] block">Atestados Curtos</span>
-            <span className="text-xl font-black text-emerald-400">{stats.atestadoCount}</span>
-          </div>
-        </div>
-
-        <div className="glass-panel p-4 rounded-3xl border border-white/10 bg-[#0e172a]/80 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
-            <Building2 className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-[11px] font-medium text-[#bccabb] block">Alunos em RAD (≥15d)</span>
-            <span className="text-xl font-black text-purple-300">{stats.radCount}</span>
-          </div>
-        </div>
-
-        <div className="glass-panel p-4 rounded-3xl border border-white/10 bg-[#0e172a]/80 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
-            <Clock className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-[11px] font-medium text-[#bccabb] block">Afastados Hoje</span>
-            <span className="text-xl font-black text-amber-300">{stats.activeNow}</span>
-          </div>
-        </div>
-      </div>
-
       {/* Search & Filters Toolbar */}
       <div className="glass-panel p-4 rounded-3xl border border-white/10 bg-[#0e172a] flex flex-col md:flex-row gap-3 items-center justify-between">
         <div className="relative w-full md:w-80">

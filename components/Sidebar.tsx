@@ -8,6 +8,7 @@ import {
   Settings,
   LogOut,
   FileCheck,
+  FileCheck2,
   X,
   BookOpen,
   MessageSquare,
@@ -26,6 +27,7 @@ interface SidebarProps {
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
   unreadMessagesCount?: number;
+  pendingCorrectionsCount?: number;
   hiddenNavItems?: string[];
 }
 
@@ -37,14 +39,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isMobileOpen = false,
   onCloseMobile,
   unreadMessagesCount = 0,
+  pendingCorrectionsCount = 0,
   hiddenNavItems = [],
 }) => {
   const navItems = [
-    { id: 'painel', label: 'Studio', icon: LayoutDashboard },
-    { id: 'atividades', label: 'Correções', icon: FileCheck },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'atividades', label: 'Atividades', icon: FileCheck },
+    { id: 'correcoes', label: 'Correções', icon: FileCheck2, badge: pendingCorrectionsCount },
+    { id: 'postagem_rco', label: 'Postagem RCO', icon: FileSpreadsheet },
     { id: 'mensagens', label: 'Mensagens', icon: MessageSquare, badge: unreadMessagesCount },
     { id: 'alunos', label: 'Alunos', icon: Users },
-    { id: 'atestados_rad', label: 'Atestados e RAD', icon: FileSpreadsheet },
+    { id: 'atestados_rad', label: 'Atestados e RAD', icon: BookOpen },
     { id: 'arquivos', label: 'Arquivos', icon: FolderOpen },
     { id: '2_professor', label: '2º Professor', icon: HeartHandshake },
   ].filter((item) => !hiddenNavItems.includes(item.id));
