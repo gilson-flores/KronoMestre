@@ -303,39 +303,41 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
     const rawInput = studentFullName.trim();
     const normalizedInputName = normalizeStudentName(rawInput);
-    const passwordToTest = studentPassword.trim() || '1234';
+    const enteredPassword = studentPassword.trim();
 
     if (!rawInput && !normalizedInputName) {
       setStudentError('Por favor, informe o seu Nome Completo ou Matrícula.');
       return;
     }
 
-    // 1. Procurar no estado local de alunos
+    if (!studentTurma) {
+      setStudentError('Por favor, selecione a sua Turma.');
+      return;
+    }
+
+    if (!enteredPassword) {
+      setStudentError('Por favor, digite a sua Senha de Acesso.');
+      return;
+    }
+
+    // 1. Procurar no estado local de alunos obrigatoriamente na turma selecionada
     let matched = students.find((s) => {
       const matchName = normalizeStudentName(s.fullName) === normalizedInputName;
       const matchMatricula = s.matricula && s.matricula.trim().toLowerCase() === rawInput.toLowerCase();
-      const matchTurma = !studentTurma || s.turma === studentTurma;
+      const matchTurma = s.turma === studentTurma;
       return (matchName || matchMatricula) && matchTurma;
     });
 
-    // Se não encontrou restrito à turma selecionada, tentar procurar por nome/matrícula independentemente de turma
-    if (!matched) {
-      matched = students.find((s) => {
-        const matchName = normalizeStudentName(s.fullName) === normalizedInputName;
-        const matchMatricula = s.matricula && s.matricula.trim().toLowerCase() === rawInput.toLowerCase();
-        return matchName || matchMatricula;
-      });
-    }
-
-    // Se ainda não encontrou, tentar busca por primeiro/último nome contido
+    // Se ainda não encontrou na turma, tentar busca por primeiro/último nome contido dentro da mesma turma
     if (!matched && normalizedInputName.length >= 4) {
       matched = students.find((s) => {
         const studentNorm = normalizeStudentName(s.fullName);
-        return studentNorm.includes(normalizedInputName) || normalizedInputName.includes(studentNorm);
+        const matchNamePartial = studentNorm.includes(normalizedInputName) || normalizedInputName.includes(studentNorm);
+        return matchNamePartial && s.turma === studentTurma;
       });
     }
 
-    // 2. Se o Supabase estiver configurado, buscar/atualizar com o registro mais recente do Supabase
+    // 2. Se o Supabase estiver configurado, buscar/atualizar com o registro mais recente do Supabase para a turma selecionada
     if (isSupabaseConfigured && supabase) {
       try {
         const { data: dbStudents } = await supabase
@@ -347,7 +349,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
             const matchName = normalizeStudentName(s.full_name) === normalizedInputName;
             const matchMatricula = s.matricula && s.matricula.trim().toLowerCase() === rawInput.toLowerCase();
             const matchId = matched && s.id === matched.id;
-            return matchName || matchMatricula || matchId;
+            const matchTurma = s.turma === studentTurma;
+            return (matchName || matchMatricula || matchId) && matchTurma;
           });
 
           if (dbMatched) {
@@ -386,14 +389,14 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
     if (!matched) {
       setStudentError(
-        `Aluno não encontrado para "${rawInput}". Verifique se o nome ou a matrícula estão digitados corretamente.`
+        `Aluno não encontrado na Turma ${getTurmaLabel(studentTurma)} para "${rawInput}". Verifique se o nome/matrícula e a turma selecionada estão corretos.`
       );
       return;
     }
 
-    // Verificar senha (padrão 1234 ou matched hash)
+    // Verificar senha digitada obrigatoriamente (padrão 1234 ou matched hash)
     const expectedPassword = matched.passwordHash || '1234';
-    if (passwordToTest === '1234' || passwordToTest === expectedPassword) {
+    if (enteredPassword === expectedPassword || (expectedPassword === '1234' && enteredPassword === '1234')) {
       onLoginStudent(matched);
     } else {
       setStudentError('Senha incorreta. A senha padrão cadastrada para alunos é 1234.');
@@ -518,7 +521,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           <form onSubmit={handleStudentSubmit} className="space-y-4">
             <div className="flex items-center gap-2 text-xs text-[#c0c1ff] bg-indigo-500/10 p-3 rounded-2xl border border-indigo-500/20 mb-2">
               <CheckCircle2 className="w-4 h-4 shrink-0 text-[#4ade80]" />
-              <span>Acesso rápido: Informe seu Nome Completo ou Matrícula (Senha padrão: 1234).</span>
+              <span>Acesso do Aluno: Informe seu Nome ou Matrícula, sua Turma e Senha de Acesso.</span>
             </div>
 
             {studentError && (
@@ -529,7 +532,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">
-                Nome Completo do Aluno ou Matrícula
+                Nome Completo do Aluno ou Matrícula <span className="text-rose-400">*</span>
               </label>
               <input
                 type="text"
@@ -543,14 +546,15 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">
-                Turma (Opcional)
+                Turma <span className="text-rose-400">*</span>
               </label>
               <select
+                required
                 value={studentTurma}
                 onChange={(e) => setStudentTurma(e.target.value)}
                 className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#4ade80]"
               >
-                <option value="">Todas / Identificar automaticamente</option>
+                <option value="">Selecione sua Turma...</option>
                 {availableTurmas.map((t) => (
                   <option key={t} value={t} className="bg-[#0b1326] text-white">
                     Turma {getTurmaLabel(t)}
@@ -561,20 +565,21 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">
-                Senha (Padrão: 1234)
+                Senha de Acesso <span className="text-rose-400">*</span>
               </label>
               <div className="relative">
                 <input
                   type="password"
+                  required
                   value={studentPassword}
                   onChange={(e) => setStudentPassword(e.target.value)}
                   className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
-                  placeholder="Deixe em branco ou digite 1234"
+                  placeholder="Digite sua senha de acesso"
                 />
                 <Lock className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-[#869486]" />
               </div>
               <p className="text-[11px] text-[#bccabb] mt-1 ml-1">
-                A senha padrão cadastrada para todos os alunos é <span className="font-bold text-white">1234</span>
+                A senha padrão inicial cadastrada para alunos é <span className="font-bold text-white">1234</span>
               </p>
             </div>
 

@@ -30,7 +30,8 @@ import {
   getNotificationPermission,
   requestNotificationPermission,
   isNotificationSupported,
-  playNotificationSound
+  playNotificationSound,
+  sendBrowserNotification
 } from '@/lib/notificationUtils';
 
 interface MessagesViewProps {
@@ -94,6 +95,10 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
     setNotifPermission(perm);
     if (perm === 'granted') {
       playNotificationSound();
+      sendBrowserNotification('🔔 Notificações Ativadas com Sucesso!', {
+        body: 'Você receberá avisos em tempo real de novas mensagens, novas atividades e prazos de entrega.',
+        tag: 'welcome-notification',
+      });
     }
   };
 

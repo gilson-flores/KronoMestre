@@ -25,7 +25,13 @@ import { AtestadosRadView } from '@/components/views/AtestadosRadView';
 
 
 import { normalizeStudentName, getActivityGradeDistribution } from '@/lib/studentUtils';
-import { sendBrowserNotification } from '@/lib/notificationUtils';
+import {
+  sendBrowserNotification,
+  checkAndNotifyApproachingDeadlines,
+  notifyNewActivityForStudent,
+  notifyDeadlineExtendedForStudent,
+  requestNotificationPermission,
+} from '@/lib/notificationUtils';
 import { NewActivityModal } from '@/components/modals/NewActivityModal';
 import { EditActivityModal } from '@/components/modals/EditActivityModal';
 import { ViewActivityModal } from '@/components/modals/ViewActivityModal';
@@ -34,6 +40,71 @@ import { EditStudentModal } from '@/components/modals/EditStudentModal';
 import { StudentSupervisionModal } from '@/components/modals/StudentSupervisionModal';
 import { NewSecondTeacherModal } from '@/components/modals/NewSecondTeacherModal';
 import { CheckCircle2, AlertTriangle, HeartHandshake, UserPlus } from 'lucide-react';
+
+// Helper de unificação e desduplicação atômica de mensagens de chat
+const mergeChatMessage = (
+  prev: ChatMessage[],
+  incoming: ChatMessage
+): { updated: ChatMessage[]; isNew: boolean } => {
+  // 1. Verificação por ID exato
+  const exactIndex = prev.findIndex((m) => m.id === incoming.id);
+  if (exactIndex !== -1) {
+    return { updated: prev, isNew: false };
+  }
+
+  // 2. Verificação de mensagem otimista local vs banco Supabase (mesmo remetente, mesmo destinatário/thread e mesmo conteúdo)
+  const optimisticMatchIndex = prev.findIndex((m) => {
+    const isSameSender = m.senderId === incoming.senderId;
+    const isSameThread =
+      m.threadId === incoming.threadId ||
+      m.recipientId === incoming.recipientId ||
+      m.threadId === incoming.recipientId ||
+      m.recipientId === incoming.threadId;
+    const isSameContent = m.content.trim() === incoming.content.trim();
+    const isOptimisticOrExtension =
+      m.id.startsWith('msg-') ||
+      incoming.id.startsWith('msg-') ||
+      m.id.startsWith('msg-ext-') ||
+      incoming.id.startsWith('msg-ext-');
+
+    return isSameSender && isSameThread && isSameContent && isOptimisticOrExtension;
+  });
+
+  if (optimisticMatchIndex !== -1) {
+    const clone = [...prev];
+    // Se a mensagem que chegou do banco possui ID persistido, atualiza o ID temporário local
+    if (!incoming.id.startsWith('msg-') && clone[optimisticMatchIndex].id.startsWith('msg-')) {
+      clone[optimisticMatchIndex] = {
+        ...clone[optimisticMatchIndex],
+        ...incoming,
+        id: incoming.id,
+      };
+    }
+    return { updated: clone, isNew: false };
+  }
+
+  // 3. Verificação de segurança contra duplicatas idênticas no mesmo canal
+  const duplicateContentIndex = prev.findIndex((m) => {
+    const isSameSender = m.senderId === incoming.senderId;
+    const isSameThread = m.threadId === incoming.threadId;
+    const isSameContent = m.content.trim() === incoming.content.trim();
+    return isSameSender && isSameThread && isSameContent;
+  });
+
+  if (duplicateContentIndex !== -1) {
+    const clone = [...prev];
+    if (!incoming.id.startsWith('msg-') && clone[duplicateContentIndex].id.startsWith('msg-')) {
+      clone[duplicateContentIndex] = {
+        ...clone[duplicateContentIndex],
+        ...incoming,
+        id: incoming.id,
+      };
+    }
+    return { updated: clone, isNew: false };
+  }
+
+  return { updated: [...prev, incoming], isNew: true };
+};
 
 export default function Home() {
   // Mounting state to prevent SSR/hydration mismatch
@@ -187,12 +258,12 @@ export default function Home() {
     });
   };
 
-  const showGlobalStatus = (type: 'success' | 'error', message: string) => {
-    setGlobalDbStatus({ type, message });
+  const showGlobalStatus = useCallback((type: 'success' | 'error' | 'info', message: string) => {
+    setGlobalDbStatus({ type: type === 'info' ? 'success' : type, message });
     setTimeout(() => {
       setGlobalDbStatus((current) => (current?.message === message ? null : current));
     }, 6000);
-  };
+  }, []);
 
   const handleSaveDriveFolderUrl = async (url: string) => {
     const cleanUrl = url.trim();
@@ -655,6 +726,7 @@ export default function Home() {
     setCurrentTab('painel');
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('active_session', JSON.stringify({ role: 'teacher', teacherData: loggedTeacher }));
+      requestNotificationPermission().catch(() => {});
     }
   };
 
@@ -664,6 +736,7 @@ export default function Home() {
     setCurrentTab('2_professor');
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('active_session', JSON.stringify({ role: 'second_teacher', teacherData: loggedTeacher }));
+      requestNotificationPermission().catch(() => {});
     }
   };
 
@@ -679,7 +752,12 @@ export default function Home() {
           studentData: loggedStudent,
         })
       );
+      requestNotificationPermission().catch(() => {});
     }
+    // Verificar prazos imediatamente no login do aluno
+    setTimeout(() => {
+      checkAndNotifyApproachingDeadlines(activities, loggedStudent, showGlobalStatus);
+    }, 1200);
   };
 
   const handleLogout = useCallback((reason?: string) => {
@@ -720,6 +798,246 @@ export default function Home() {
       events.forEach((evt) => window.removeEventListener(evt, resetTimer));
     };
   }, [role, inactivityTimeoutEnabled, handleLogout]);
+
+  // Monitoramento e Notificações Periódicas de Prazos de Atividades para Alunos
+  useEffect(() => {
+    if (!role || role !== 'student' || !currentStudent) return;
+
+    checkAndNotifyApproachingDeadlines(activities, currentStudent, showGlobalStatus);
+    const deadlineInterval = setInterval(() => {
+      checkAndNotifyApproachingDeadlines(activities, currentStudent, showGlobalStatus);
+    }, 60 * 1000); // Verifica a cada 1 minuto
+
+    return () => clearInterval(deadlineInterval);
+  }, [role, currentStudent, activities, showGlobalStatus]);
+
+  // Sincronização em Tempo Real de Mensagens e Novas Atividades via Supabase (Realtime Channel + Polling)
+  useEffect(() => {
+    if (!role || !isSupabaseConfigured || !supabase) return;
+
+    const client = supabase;
+    const currentUserId = role === 'student' ? currentStudent?.id : (role === 'teacher' ? teacher.id || 'teacher-1' : 'second-teacher');
+
+    // Realtime Channel para Mensagens de Chat e Atividades
+    const realtimeChannel = client
+      .channel('realtime_app_feed')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+        (payload) => {
+          const newMsgRow = payload.new;
+          if (!newMsgRow) return;
+
+          const newMsg: ChatMessage = {
+            id: newMsgRow.id || `msg-${newMsgRow.created_at}`,
+            threadId: newMsgRow.thread_id,
+            senderId: newMsgRow.sender_id,
+            senderName: newMsgRow.sender_name,
+            senderRole: newMsgRow.sender_role,
+            senderAvatar: newMsgRow.sender_avatar,
+            recipientId: newMsgRow.recipient_id,
+            recipientName: newMsgRow.recipient_name,
+            content: newMsgRow.content,
+            createdAt: newMsgRow.created_at
+              ? new Date(newMsgRow.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+              : '',
+            read: Boolean(newMsgRow.read),
+            activityId: newMsgRow.activity_id,
+            activityTitle: newMsgRow.activity_title,
+          };
+
+          setChatMessages((prev) => {
+            const { updated, isNew } = mergeChatMessage(prev, newMsg);
+
+            // Disparar Notificação Sonora e Visual Nativas se a mensagem for nova e de outro usuário
+            if (isNew && newMsg.senderId !== currentUserId) {
+              if (role === 'student' && currentStudent) {
+                const isForMe = newMsg.threadId === currentStudent.id || newMsg.recipientId === currentStudent.id || newMsg.threadId === 'broadcast';
+                if (isForMe) {
+                  sendBrowserNotification(`Mensagem de ${newMsg.senderName || 'Prof. Gilson Flores'}:`, {
+                    body: newMsg.content,
+                    icon: newMsg.senderAvatar || teacher.avatarUrl,
+                    tag: `msg-${newMsg.id}`,
+                  });
+                  showGlobalStatus('info', `💬 Nova mensagem de ${newMsg.senderName || 'Prof. Gilson Flores'}`);
+                }
+              } else if (role === 'teacher') {
+                sendBrowserNotification(`Mensagem de ${newMsg.senderName}:`, {
+                  body: newMsg.content,
+                  icon: newMsg.senderAvatar,
+                  tag: `msg-${newMsg.id}`,
+                });
+                showGlobalStatus('info', `💬 Nova mensagem de ${newMsg.senderName}`);
+              } else if (role === 'second_teacher') {
+                if (newMsg.recipientId === 'second-teacher' || newMsg.recipientName?.includes('2º')) {
+                  sendBrowserNotification(`Mensagem de ${newMsg.senderName}:`, {
+                    body: newMsg.content,
+                    icon: newMsg.senderAvatar,
+                    tag: `msg-${newMsg.id}`,
+                  });
+                }
+              }
+            }
+
+            return updated;
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'activities' },
+        (payload) => {
+          const newActRow = payload.new;
+          if (!newActRow) return;
+
+          if (role === 'student' && currentStudent) {
+            notifyNewActivityForStudent(
+              {
+                id: newActRow.id,
+                title: newActRow.title,
+                subject: newActRow.subject || 'Sociologia',
+                description: newActRow.description || '',
+                turma: newActRow.turma || '',
+                type: newActRow.type || 'Avaliação',
+                status: newActRow.status || 'Ativo',
+                deadline: newActRow.deadline || '',
+                maxGrade: Number(newActRow.max_grade || 10),
+                isAdapted: Boolean(newActRow.is_adapted),
+                questions: [],
+                totalSubmissions: 0,
+                totalStudents: 0,
+                pendingCorrection: 0,
+                submissions: [],
+              },
+              currentStudent,
+              showGlobalStatus
+            );
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'activities' },
+        (payload) => {
+          const updatedActRow = payload.new;
+          const oldActRow = payload.old;
+          if (!updatedActRow) return;
+
+          // Atualiza lista de atividades no estado local
+          setActivities((prev) => {
+            const exists = prev.some((a) => a.id === updatedActRow.id);
+            if (!exists) return prev;
+            return prev.map((a) =>
+              a.id === updatedActRow.id
+                ? {
+                    ...a,
+                    title: updatedActRow.title || a.title,
+                    description: updatedActRow.description ?? a.description,
+                    turma: updatedActRow.turma || a.turma,
+                    status: updatedActRow.status || a.status,
+                    deadline: updatedActRow.deadline || a.deadline,
+                    maxGrade: Number(updatedActRow.max_grade ?? a.maxGrade),
+                  }
+                : a
+            );
+          });
+
+          if (role === 'student' && currentStudent) {
+            const hasNewDeadline = updatedActRow.deadline && (!oldActRow || oldActRow.deadline !== updatedActRow.deadline);
+            if (hasNewDeadline) {
+              notifyDeadlineExtendedForStudent(
+                {
+                  id: updatedActRow.id,
+                  title: updatedActRow.title,
+                  subject: updatedActRow.subject || 'Sociologia',
+                  description: updatedActRow.description || '',
+                  turma: updatedActRow.turma || '',
+                  type: updatedActRow.type || 'Avaliação',
+                  status: updatedActRow.status || 'Ativo',
+                  deadline: updatedActRow.deadline || '',
+                  maxGrade: Number(updatedActRow.max_grade || 10),
+                  isAdapted: Boolean(updatedActRow.is_adapted),
+                  questions: [],
+                  totalSubmissions: 0,
+                  totalStudents: 0,
+                  pendingCorrection: 0,
+                  submissions: [],
+                },
+                currentStudent,
+                showGlobalStatus
+              );
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    // Fallback polling a cada 8 segundos para garantir sincronização caso o websocket oscile
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data: latestMsgs } = await client
+          .from('chat_messages')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (latestMsgs && latestMsgs.length > 0) {
+          setChatMessages((prev) => {
+            let currentList = prev;
+            latestMsgs.reverse().forEach((m) => {
+              const mapped: ChatMessage = {
+                id: m.id || `msg-${m.created_at}`,
+                threadId: m.thread_id,
+                senderId: m.sender_id,
+                senderName: m.sender_name,
+                senderRole: m.sender_role,
+                senderAvatar: m.sender_avatar,
+                recipientId: m.recipient_id,
+                recipientName: m.recipient_name,
+                content: m.content,
+                createdAt: m.created_at
+                  ? new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                  : '',
+                read: Boolean(m.read),
+                activityId: m.activity_id,
+                activityTitle: m.activity_title,
+              };
+
+              const { updated, isNew } = mergeChatMessage(currentList, mapped);
+              currentList = updated;
+
+              if (isNew && mapped.senderId !== currentUserId) {
+                if (role === 'student' && currentStudent) {
+                  const isForMe = mapped.threadId === currentStudent.id || mapped.recipientId === currentStudent.id || mapped.threadId === 'broadcast';
+                  if (isForMe) {
+                    sendBrowserNotification(`Mensagem de ${mapped.senderName || 'Prof. Gilson Flores'}:`, {
+                      body: mapped.content,
+                      icon: mapped.senderAvatar || teacher.avatarUrl,
+                      tag: `msg-${mapped.id}`,
+                    });
+                  }
+                } else if (role === 'teacher' && mapped.senderRole === 'student') {
+                  sendBrowserNotification(`Mensagem de ${mapped.senderName}:`, {
+                    body: mapped.content,
+                    icon: mapped.senderAvatar,
+                    tag: `msg-${mapped.id}`,
+                  });
+                }
+              }
+            });
+            return currentList;
+          });
+        }
+      } catch (pollErr) {
+        // Silently handle polling errors
+      }
+    }, 8000);
+
+    return () => {
+      client.removeChannel(realtimeChannel);
+      clearInterval(pollInterval);
+    };
+  }, [role, currentStudent, teacher.avatarUrl, teacher.id, showGlobalStatus]);
 
   // Activity Handlers
   const sanitizeTypeForDb = (rawType: string): string => {
@@ -843,6 +1161,10 @@ export default function Home() {
         return next;
       });
       showGlobalStatus('success', `Atividade "${newAct.title}" criada e confirmada no Supabase com sucesso!`);
+      sendBrowserNotification(`📢 Nova Atividade Publicada: ${newAct.title}`, {
+        body: `Turma ${newAct.turma} • Prazo: ${newAct.deadline || 'A definir'} • Valor: ${newAct.maxGrade || 10} pts`,
+        tag: `new-act-${newAct.id}`,
+      });
     } catch (err: any) {
       const catchedMsg = err?.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
       console.error('Erro ao salvar atividade no Supabase:', catchedMsg, err);
@@ -997,6 +1319,33 @@ export default function Home() {
       if (selectedActivityForGrading?.id === updatedAct.id) {
         setSelectedActivityForGrading(updatedAct);
       }
+
+      // Se o prazo da atividade foi prorrogado/alterado, avisar a turma e enviar no chat
+      const prevAct = activities.find((a) => a.id === updatedAct.id);
+      const isDeadlineProrrogated = prevAct && updatedAct.deadline && prevAct.deadline !== updatedAct.deadline;
+      if (isDeadlineProrrogated) {
+        try {
+          const extensionMsg = {
+            id: `msg-ext-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+            thread_id: 'broadcast',
+            sender_id: teacher.id || 'teacher-1',
+            sender_name: teacher.name || 'Prof. Gilson Flores',
+            sender_role: 'teacher',
+            sender_avatar: teacher.avatarUrl || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
+            recipient_id: 'broadcast',
+            recipient_name: updatedAct.turma ? `Turma ${updatedAct.turma}` : 'Todas as Turmas',
+            content: `⏳ Atenção: O prazo de entrega da atividade "${updatedAct.title}" foi PRORROGADO para: ${updatedAct.deadline}.`,
+            created_at: new Date().toISOString(),
+            read: false,
+            activity_id: updatedAct.id,
+            activity_title: updatedAct.title,
+          };
+          await supabase.from('chat_messages').insert(extensionMsg);
+        } catch (chatErr) {
+          console.warn('Erro ao disparar aviso automático de prorrogação no chat:', chatErr);
+        }
+      }
+
       showGlobalStatus('success', `Alterações da atividade "${updatedAct.title}" salvas e confirmadas no Supabase!`);
     } catch (err: any) {
       const catchedMsg = err?.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
@@ -1952,20 +2301,7 @@ export default function Home() {
       activityTitle: msgData.activityTitle,
     };
 
-    setChatMessages((prev) => [...prev, newMsg]);
-
-    // Disparar notificação nativa no navegador / celular
-    if (msgData.senderRole === 'student') {
-      sendBrowserNotification(`Mensagem de ${msgData.senderName}`, {
-        body: msgData.content,
-        icon: msgData.senderAvatar,
-      });
-    } else {
-      sendBrowserNotification(`${msgData.senderName} enviou uma mensagem:`, {
-        body: msgData.content,
-        icon: msgData.senderAvatar,
-      });
-    }
+    setChatMessages((prev) => mergeChatMessage(prev, newMsg).updated);
 
     if (isSupabaseConfigured && supabase) {
       supabase.from('chat_messages').insert({
@@ -2026,7 +2362,7 @@ export default function Home() {
               read: false,
             };
 
-            setChatMessages((prev) => [...prev, botMsg]);
+            setChatMessages((prev) => mergeChatMessage(prev, botMsg).updated);
 
             sendBrowserNotification(`${teacher.name || 'Prof. Gilson Flores'} respondeu:`, {
               body: data.reply,
