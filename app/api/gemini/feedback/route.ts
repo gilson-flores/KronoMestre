@@ -24,19 +24,47 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const {
-      studentName = "Ninja",
+      studentName = "Estudante",
       activityTitle = "Atividade de Sociologia",
       grade = null,
       statusAction = "graded",
       essayAnswer = "",
       objectiveSummary = { total: 0, correct: 0 },
       customInstructions = "",
+      feedbackType = "ninja",
     } = body;
 
     const isReturned = statusAction === "returned";
+    const isSerious = feedbackType === "serious";
 
-    const prompt = `Você é o Sensei de Sociologia da Vila da Folha (no consagrado universo de Naruto Shippuden, combinando a sabedoria pedagógica, acolhimento e humor de mestres como Kakashi e Jiraiya Sensei).
-Sua missão é gerar um feedback pedagógico, motivador e instrutivo para a atividade de Sociologia entregue pelo aluno.
+    let prompt = "";
+
+    if (isSerious) {
+      prompt = `Você é um Professor de Sociologia do Ensino Médio sério, altamente pedagógico, formal e construtivo.
+Sua missão é gerar um feedback formal, acadêmico e acolhedor para a atividade de Sociologia entregue pelo aluno.
+
+DADOS DA ENTREGA:
+- Nome do Estudante: ${studentName}
+- Atividade / Avaliação: ${activityTitle}
+- Situação da Avaliação: ${isReturned ? "Devolvendo para o aluno REFAZER e aprimorar a fundamentação" : "Atividade Concluída e Aprovada"}
+- Nota atribuída: ${grade !== null ? `${grade}/10` : "Em análise"}
+- Questões Objetivas: ${objectiveSummary.correct} de ${objectiveSummary.total} acertos
+- Resposta Dissertativa enviada pelo estudante: "${essayAnswer || "Não houve resposta escrita dissertativa"}"
+${customInstructions ? `- Instrução extra do Docente: ${customInstructions}` : ""}
+
+DIRETRIZES DE ESTILO E CONTEÚDO (FEEDBACK SÉRIO):
+1. Mantenha tom formal, ético, respeitoso e profissional.
+2. Foque no rigor conceitual da Sociologia, capacidade crítica, argumentação e clareza textual.
+3. ${
+        isReturned
+          ? "Como a atividade está sendo DEVOLVIDA para refazer, aponte de forma clara e técnica onde o estudante deve aprofundar os conceitos sociológicos e a argumentação antes de reenviar."
+          : "Como a atividade foi APROVADA, elogie com sobriedade a consistência reflexiva, o empenho e a compreensão dos temas trabalhados."
+      }
+4. REGRA OBRIGATÓRIA DE TAMANHO: O feedback gerado DEVE ter no MÁXIMO 400 caracteres no total (incluindo espaços). Seja extremamente conciso, direto e preciso.
+5. Responda estritamente em Português do Brasil, sem gírias.`;
+    } else {
+      prompt = `Você é o Sensei de Sociologia da Vila da Folha (universo de Naruto Shippuden, combinando sabedoria pedagógica, acolhimento e humor de mestres como Kakashi e Jiraiya Sensei).
+Sua missão é gerar um feedback pedagógico ninja, motivador e instrutivo para a atividade de Sociologia entregue pelo aluno.
 
 DADOS DA ENTREGA:
 - Aluno Shinobi: ${studentName}
@@ -47,16 +75,17 @@ DADOS DA ENTREGA:
 - Resposta Dissertativa enviada pelo aluno: "${essayAnswer || "Não houve resposta escrita dissertativa"}"
 ${customInstructions ? `- Instrução extra do Professor: ${customInstructions}` : ""}
 
-DIRETRIZES DE ESTILO E CONTEÚDO:
+DIRETRIZES DE ESTILO E CONTEÚDO (FEEDBACK NINJA):
 1. Mantenha o tom de um Sensei sábio e encorajador da Vila da Folha.
-2. Integre termos de Naruto (Chakra, Vontade do Fogo, Jutsu, Treino no Monte Myoboku, Ichiraku, Pergaminhos Shinobi, Exame) com conceitos sociológicos de forma divertida e pedagógica.
+2. Integre termos de Naruto (Chakra, Vontade do Fogo, Jutsu, Treino, Ichiraku, Pergaminhos) com conceitos sociológicos de forma divertida e pedagógica.
 3. ${
-      isReturned
-        ? "Como a atividade está sendo DEVOLVIDA para refazer, aponte com gentileza e clareza onde o aluno precisa focar seu chakra para lapidar o raciocínio sociológico antes de reenviar."
-        : "Como a atividade foi APROVADA, elogie a dedicação, a reflexão crítica e a força da Vontade do Fogo demonstradas na resposta."
-    }
-4. Escreva uma mensagem concisa e inspiradora (entre 2 e 4 parágrafos pequenos), formatada em texto puro legível (pode usar pontuações ou emojis temáticos como 🍃, ⚡, 📜, 🍥).
+        isReturned
+          ? "Como a atividade está sendo DEVOLVIDA para refazer, aponte com gentileza e clareza onde o aluno precisa focar seu chakra para lapidar o raciocínio sociológico antes de reenviar."
+          : "Como a atividade foi APROVADA, elogie a dedicação, a reflexão crítica e a força da Vontade do Fogo demonstradas na resposta."
+      }
+4. REGRA OBRIGATÓRIA DE TAMANHO: O feedback gerado DEVE ter no MÁXIMO 400 caracteres no total (incluindo espaços e emojis como 🍃, ⚡, 📜). Seja extremamente conciso, direto e dinâmico.
 5. Responda estritamente em Português do Brasil.`;
+    }
 
     const ai = new GoogleGenAI({ apiKey });
 
@@ -111,7 +140,12 @@ DIRETRIZES DE ESTILO E CONTEÚDO:
       throw new Error("Nenhum modelo do Gemini respondeu à solicitação de feedback.");
     }
 
-    const generatedFeedback = response.text || "Sensei: Excelente esforço na missão! Continue concentrando seu chakra nos estudos de Sociologia. Dattebayo!";
+    const generatedFeedback = (
+      response.text ||
+      (isSerious
+        ? "Excelente desempenho e dedicação na atividade! Continue aprofundando suas leituras e reflexões críticas."
+        : "Sensei: Excelente esforço na missão! Continue concentrando seu chakra nos estudos de Sociologia. Dattebayo!")
+    ).trim().slice(0, 400);
 
     return NextResponse.json({ feedback: generatedFeedback });
   } catch (error: any) {

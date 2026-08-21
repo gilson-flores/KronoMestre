@@ -19,7 +19,9 @@ import {
   Check,
   Send,
   Loader2,
-  Filter
+  Filter,
+  GraduationCap,
+  Zap
 } from 'lucide-react';
 import { Activity, ActivitySubmission, StudentUser, EssayQuestion } from '@/lib/types';
 import { canStudentAccessActivity, normalizeStudentName, getActivityGradeDistribution, isStudentPNE } from '@/lib/studentUtils';
@@ -79,12 +81,16 @@ export const GradingView: React.FC<GradingViewProps> = ({
   const [aiDiagnosticMap, setAiDiagnosticMap] = useState<Record<string, AIDiagnostic>>({});
   const [aiErrorMessage, setAiErrorMessage] = useState<string | null>(null);
 
-  // Naruto-themed Gemini AI Feedback state
-  const [generatingFeedbackStudentId, setGeneratingFeedbackStudentId] = useState<string | null>(null);
+  // Gemini AI Feedback state (Ninja / Serious)
+  const [generatingFeedbackState, setGeneratingFeedbackState] = useState<{ studentId: string; type: 'ninja' | 'serious' } | null>(null);
 
-  const handleGenerateAiFeedback = async (sub: ActivitySubmission, statusAction: 'graded' | 'returned') => {
+  const handleGenerateAiFeedback = async (
+    sub: ActivitySubmission,
+    statusAction: 'graded' | 'returned',
+    feedbackType: 'ninja' | 'serious' = 'ninja'
+  ) => {
     try {
-      setGeneratingFeedbackStudentId(sub.studentId);
+      setGeneratingFeedbackState({ studentId: sub.studentId, type: feedbackType });
       
       const objTotal = activity.questions ? activity.questions.filter(q => q.type === 'multiple_choice').length : 0;
       const objCorrect = sub.objectiveScore ? Math.round(sub.objectiveScore) : 0;
@@ -100,6 +106,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
           statusAction,
           essayAnswer: sub.essayAnswer || '',
           objectiveSummary: { total: objTotal, correct: objCorrect },
+          feedbackType,
         }),
       });
 
@@ -110,9 +117,9 @@ export const GradingView: React.FC<GradingViewProps> = ({
         handleFeedbackChange(sub.studentId, data.feedback);
       }
     } catch (err) {
-      console.error('Erro ao gerar feedback do Sensei com Gemini:', err);
+      console.error('Erro ao gerar feedback com Gemini:', err);
     } finally {
-      setGeneratingFeedbackStudentId(null);
+      setGeneratingFeedbackState(null);
     }
   };
 
@@ -1001,29 +1008,52 @@ export const GradingView: React.FC<GradingViewProps> = ({
         <div>
           <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
             <label className="block text-[11px] font-bold text-[#bccabb] uppercase tracking-wider">
-              Feedback Pedagógico do Sensei ao Aluno
+              Feedback Pedagógico ao Aluno
             </label>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {/* Botão Feedback Ninja (400 chars) */}
               <button
                 type="button"
-                onClick={() => handleGenerateAiFeedback(sub, 'graded')}
-                disabled={generatingFeedbackStudentId === sub.studentId}
+                onClick={() => handleGenerateAiFeedback(sub, sub.status === 'returned' ? 'returned' : 'graded', 'ninja')}
+                disabled={Boolean(generatingFeedbackState?.studentId === sub.studentId)}
                 className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold rounded-lg text-[10px] flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
-                title="Gerar feedback pedagógico temático de Naruto com o Gemini"
+                title="Gerar feedback temático Ninja (Naruto) limitado a 400 caracteres com Gemini"
               >
-                {generatingFeedbackStudentId === sub.studentId ? (
+                {generatingFeedbackState?.studentId === sub.studentId && generatingFeedbackState?.type === 'ninja' ? (
                   <>
                     <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
-                    <span>Invocando Sensei Gemini... 🍃</span>
+                    <span>Invocando Ninja... 🍃</span>
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Feedback Ninja (Gemini) ⚡</span>
+                    <Zap className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Feedback Ninja ⚡</span>
                   </>
                 )}
               </button>
-              <span className="text-[10px] text-[#869486]">
+
+              {/* Botão Feedback Sério (400 chars) */}
+              <button
+                type="button"
+                onClick={() => handleGenerateAiFeedback(sub, sub.status === 'returned' ? 'returned' : 'graded', 'serious')}
+                disabled={Boolean(generatingFeedbackState?.studentId === sub.studentId)}
+                className="px-2.5 py-1 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 text-blue-300 font-bold rounded-lg text-[10px] flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                title="Gerar feedback pedagógico formal e sério limitado a 400 caracteres com Gemini"
+              >
+                {generatingFeedbackState?.studentId === sub.studentId && generatingFeedbackState?.type === 'serious' ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin text-blue-400" />
+                    <span>Gerando Sério... 🎓</span>
+                  </>
+                ) : (
+                  <>
+                    <GraduationCap className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Feedback Sério 🎓</span>
+                  </>
+                )}
+              </button>
+
+              <span className="text-[10px] text-[#869486] font-medium ml-1">
                 {(sub.teacherFeedback || '').length}/400
               </span>
             </div>
@@ -1033,7 +1063,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
             maxLength={400}
             value={sub.teacherFeedback || ''}
             onChange={(e) => handleFeedbackChange(sub.studentId, e.target.value)}
-            placeholder="Feedback motivacional do Sensei, observações sobre a resposta e recomendações de estudo..."
+            placeholder="Feedback motivacional ou formal, observações sobre a resposta e recomendações de estudo..."
             className="w-full bg-[#131b2e] border border-white/10 rounded-2xl p-3.5 text-xs text-[#dae2fd] placeholder-[#869486] focus:outline-none focus:border-[#4ade80] transition-all resize-none"
           />
         </div>
