@@ -8,6 +8,7 @@ import {
   CheckCheck,
   BarChart3,
   AlertTriangle,
+  AlertCircle,
   FileQuestion,
   FileText,
   Users2,
@@ -735,47 +736,82 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* Custom Delete Confirmation Modal */}
-      {activityToDelete && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-[#0e172a] border border-white/15 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
-            <div className="flex items-center gap-3 text-rose-400">
-              <div className="p-3 bg-rose-500/10 rounded-2xl border border-rose-500/20">
-                <Trash2 className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-white">Excluir Atividade</h3>
-                <p className="text-xs text-[#bccabb]">Esta ação é irreversível.</p>
-              </div>
-            </div>
+      {activityToDelete && (() => {
+        const toDeleteSubs = activityToDelete.submissions || [];
+        const hasAppliedGradesOrWork = toDeleteSubs.length > 0 && toDeleteSubs.some(
+          (s) =>
+            s.status === 'graded' ||
+            s.status === 'pending' ||
+            s.status === 'returned' ||
+            s.status === 'draft' ||
+            (s.essayScore !== undefined && s.essayScore !== null) ||
+            (s.objectiveScore !== undefined && s.objectiveScore > 0) ||
+            Boolean(s.essayAnswer) ||
+            Boolean(s.submittedAt)
+        );
+        const allRcoSigned = toDeleteSubs.length > 0 && toDeleteSubs.every((s) => Boolean(s.registeredInStateSystem));
+        const isDeleteBlocked = hasAppliedGradesOrWork && !allRcoSigned;
 
-            <p className="text-xs text-[#dae2fd] bg-[#131b2e] p-4 rounded-2xl border border-white/5 leading-relaxed">
-              Tem certeza que deseja excluir a atividade <strong className="text-white">&quot;{activityToDelete.title}&quot;</strong>? Todas as entregas e correções associadas a ela serão removidas.
-            </p>
+        return (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+            <div className="bg-[#0e172a] border border-white/15 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+              <div className="flex items-center gap-3 text-rose-400">
+                <div className="p-3 bg-rose-500/10 rounded-2xl border border-rose-500/20">
+                  <Trash2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Excluir Atividade</h3>
+                  <p className="text-xs text-[#bccabb]">Esta ação é irreversível.</p>
+                </div>
+              </div>
 
-            <div className="flex items-center justify-end gap-2.5 pt-2">
-              <button
-                type="button"
-                onClick={() => setActivityToDelete(null)}
-                className="px-4 py-2.5 bg-white/10 hover:bg-white/15 text-white rounded-full text-xs font-bold transition-all cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (onDeleteActivity) {
-                    onDeleteActivity(activityToDelete);
-                  }
-                  setActivityToDelete(null);
-                }}
-                className="px-5 py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-full text-xs transition-all shadow-md shadow-rose-500/20 cursor-pointer"
-              >
-                Sim, Excluir Atividade
-              </button>
+              <p className="text-xs text-[#dae2fd] bg-[#131b2e] p-4 rounded-2xl border border-white/5 leading-relaxed">
+                Tem certeza que deseja excluir a atividade <strong className="text-white">&quot;{activityToDelete.title}&quot;</strong>? Todas as entregas e correções associadas a ela serão removidas.
+              </p>
+
+              {isDeleteBlocked && (
+                <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-300 text-xs flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                  <div className="space-y-1">
+                    <strong className="block text-white font-bold">Exclusão Bloqueada (RCO Pendente)</strong>
+                    <p className="text-[#dae2fd] text-[11px] leading-relaxed">
+                      Esta atividade contém notas aplicadas ou atividades realizadas pelos alunos. A exclusão só é permitida se o botão RCO estiver assinado em todas as entregas.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setActivityToDelete(null)}
+                  className="px-4 py-2.5 bg-white/10 hover:bg-white/15 text-white rounded-full text-xs font-bold transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleteBlocked}
+                  onClick={() => {
+                    if (isDeleteBlocked) return;
+                    if (onDeleteActivity) {
+                      onDeleteActivity(activityToDelete);
+                    }
+                    setActivityToDelete(null);
+                  }}
+                  className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all shadow-md ${
+                    isDeleteBlocked
+                      ? 'bg-rose-500/40 text-white/50 cursor-not-allowed border border-rose-500/20'
+                      : 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/20 cursor-pointer'
+                  }`}
+                >
+                  {isDeleteBlocked ? 'Exclusão Bloqueada (RCO Pendente)' : 'Sim, Excluir Atividade'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Anti-Cola Security Configuration Modal */}
       {securityModalActivity && (

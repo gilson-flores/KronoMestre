@@ -1367,6 +1367,32 @@ export default function Home() {
   };
 
   const handleDeleteActivity = async (activity: Activity) => {
+    // Validação de segurança pedagógica:
+    // Se a atividade contiver notas aplicadas ou atividades feitas, só permita a exclusão se o botão RCO estiver assinado em todas as entregas.
+    const subs = activity.submissions || [];
+    const hasAppliedGradesOrWork = subs.length > 0 && subs.some(
+      (s) =>
+        s.status === 'graded' ||
+        s.status === 'pending' ||
+        s.status === 'returned' ||
+        s.status === 'draft' ||
+        (s.essayScore !== undefined && s.essayScore !== null) ||
+        (s.objectiveScore !== undefined && s.objectiveScore > 0) ||
+        Boolean(s.essayAnswer) ||
+        Boolean(s.submittedAt)
+    );
+
+    if (hasAppliedGradesOrWork) {
+      const allRcoSigned = subs.length > 0 && subs.every((s) => Boolean(s.registeredInStateSystem));
+      if (!allRcoSigned) {
+        showGlobalStatus(
+          'error',
+          `Bloqueio de Segurança: A atividade "${activity.title}" possui notas aplicadas ou entregas de alunos com pendência no RCO. Só é permitida a exclusão quando o botão RCO estiver assinado em todas as entregas.`
+        );
+        return;
+      }
+    }
+
     if (!isSupabaseConfigured || !supabase) {
       showGlobalStatus('error', 'ARMADILHA DE BUG DISPARADA: Supabase não está configurado. Atividade NÃO foi excluída.');
       return;
@@ -1382,7 +1408,15 @@ export default function Home() {
         return;
       }
 
-      setActivities((prev) => prev.filter((a) => a.id !== activity.id));
+      setActivities((prev) => {
+        const next = prev.filter((a) => a.id !== activity.id);
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('local_activities_data', JSON.stringify(next));
+          } catch (e) {}
+        }
+        return next;
+      });
       if (selectedActivityForGrading?.id === activity.id) {
         setSelectedActivityForGrading(null);
       }
