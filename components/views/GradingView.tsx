@@ -50,6 +50,8 @@ interface AIDiagnostic {
   keywordsCheck: string;
   structureCheck: string;
   grammarCheck: string;
+  aiUsagePercentage?: number;
+  aiUsageAnalysis?: string;
 }
 
 export const GradingView: React.FC<GradingViewProps> = ({
@@ -340,6 +342,8 @@ export const GradingView: React.FC<GradingViewProps> = ({
           keywordsCheck: data.keywordsCheck,
           structureCheck: data.structureCheck,
           grammarCheck: data.grammarCheck,
+          aiUsagePercentage: data.aiUsagePercentage,
+          aiUsageAnalysis: data.aiUsageAnalysis,
         },
       }));
     } catch (err: any) {
@@ -908,10 +912,30 @@ export const GradingView: React.FC<GradingViewProps> = ({
 
         {/* AI Diagnostic Results Accordion / Card */}
         {aiDiag && (
-          <div className="bg-[#1e1b4b]/60 border border-purple-500/30 rounded-2xl p-4 space-y-2 text-xs text-[#dae2fd] animate-fadeIn">
-            <div className="flex items-center gap-2 text-purple-300 font-bold border-b border-purple-500/20 pb-2">
-              <Sparkles className="w-4 h-4 text-purple-400" />
-              <span>Diagnóstico IA - Google Gemini</span>
+          <div className="bg-[#1e1b4b]/60 border border-purple-500/30 rounded-2xl p-4 space-y-2.5 text-xs text-[#dae2fd] animate-fadeIn">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-500/20 pb-2">
+              <div className="flex items-center gap-2 text-purple-300 font-bold">
+                <Sparkles className="w-4 h-4 text-purple-400" />
+                <span>Diagnóstico IA - Google Gemini</span>
+              </div>
+              {typeof aiDiag.aiUsagePercentage === 'number' && (
+                <div
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold border ${
+                    aiDiag.aiUsagePercentage <= 25
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : aiDiag.aiUsagePercentage <= 60
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                      : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                  }`}
+                >
+                  <span>🤖 Uso Estimado de IA: {Math.round(aiDiag.aiUsagePercentage)}%</span>
+                  {aiDiag.aiUsagePercentage <= 25 ? (
+                    <span className="text-[10px] font-normal text-emerald-200">(Autoria & Pesquisa Recompensada ✨)</span>
+                  ) : aiDiag.aiUsagePercentage > 60 ? (
+                    <span className="text-[10px] font-normal text-rose-200">(Suspeita de Cópia Integral)</span>
+                  ) : null}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-1">
@@ -934,6 +958,17 @@ export const GradingView: React.FC<GradingViewProps> = ({
                 <span className="text-purple-300 font-bold block mb-0.5">✍️ Gramática e Ortografia:</span>
                 <p className="text-[#bccabb]">{aiDiag.grammarCheck}</p>
               </div>
+
+              {aiDiag.aiUsageAnalysis && (
+                <div className="sm:col-span-2 bg-[#0f172a]/90 p-2.5 rounded-xl border border-purple-500/20 flex flex-col gap-1">
+                  <span className="text-purple-300 font-bold flex items-center gap-1.5">
+                    <span>🔬 Análise de Autoria, Pesquisa e Uso de IA:</span>
+                  </span>
+                  <p className="text-[#dae2fd] text-[11px] leading-relaxed">
+                    {aiDiag.aiUsageAnalysis}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}

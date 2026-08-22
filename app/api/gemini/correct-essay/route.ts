@@ -83,12 +83,17 @@ INSTRUÇÕES E PARÂMETROS OBRIGATÓRIOS DE CORREÇÃO:
 2. Atenção às Palavras-Chave: Verifique se o aluno usou corretamente e contextualizou as palavras-chave informadas (${keywords || 'gerais'}).
 3. Coerência com o Ano Escolar: Aplique a exigência do ano escolar -> ${gradeLevelRule}.
 4. Estrutura Textual Completa: Analise se a resposta contém Introdução, Desenvolvimento e Conclusão (independente da quantidade de caracteres).
-5. Feedback Pedagógico do Professor:
+5. Análise de Autoria e Porcentagem de Uso de IA:
+   - Estime uma porcentagem de 0% a 100% quanto à probabilidade de o texto ter sido gerado integralmente por Inteligência Artificial (ex: ChatGPT, Gemini).
+   - Considere que a trava de copiar/colar estava ativa no portal. No entanto, o aluno pode ter copiado na íntegra o texto gerado por IA digitando manualmente letra por letra.
+   - RECOMPENSA PEDAGÓGICA: Se o aluno pesquisou fontes e redigiu uma produção autoral própria com suas próprias palavras e reflexões críticas baseadas na pesquisa, ele DEVE SER RECOMPENSADO com valorização na nota sugerida e no feedback.
+   - Se for identificado texto com traços robóticos e vocabulário artificial característico de IA copiada integralmente, aponte a alta porcentagem de IA e penalize a nota sugerida na proporção devida.
+6. Feedback Pedagógico do Professor:
    - Escreva um feedback simpático e construtivo com NO MÁXIMO 300 CARACTERES.
-   - Inclua um elogio ou alerta motivacional simpático.
+   - Inclua um elogio ou alerta motivacional simpático (recompensando a pesquisa/autoria ou alertando com gentileza sobre texto copiado de IA).
    - Inclua uma breve observação/correção de gramática e ortografia.
    - ATENÇÃO: NÃO mencione no feedback as palavras-chave que foram utilizadas como critério de avaliação.
-6. Nota Sugerida: Atribua uma nota numérica de 0 a ${maxEssayScore} proporcional ao desempenho do aluno.
+7. Nota Sugerida: Atribua uma nota numérica de 0 a ${maxEssayScore} proporcional ao desempenho do aluno, recompensando o esforço autoral e de pesquisa.
 
 Retorne obrigatoriamente um objeto JSON com o formato:
 {
@@ -97,7 +102,9 @@ Retorne obrigatoriamente um objeto JSON com o formato:
   "themeFidelity": string,
   "keywordsCheck": string,
   "structureCheck": string,
-  "grammarCheck": string
+  "grammarCheck": string,
+  "aiUsagePercentage": number,
+  "aiUsageAnalysis": string
 }
 `;
 
@@ -145,8 +152,16 @@ Retorne obrigatoriamente um objeto JSON com o formato:
                     type: Type.STRING,
                     description: 'Análise sintética de gramática e ortografia',
                   },
+                  aiUsagePercentage: {
+                    type: Type.NUMBER,
+                    description: 'Estimativa de porcentagem de uso/geração de IA de 0 a 100.',
+                  },
+                  aiUsageAnalysis: {
+                    type: Type.STRING,
+                    description: 'Breve análise sobre a autoria autêntica com pesquisa (recompensada) ou indícios de texto gerado por IA.',
+                  },
                 },
-                required: ['suggestedScore', 'feedback', 'themeFidelity', 'keywordsCheck', 'structureCheck', 'grammarCheck'],
+                required: ['suggestedScore', 'feedback', 'themeFidelity', 'keywordsCheck', 'structureCheck', 'grammarCheck', 'aiUsagePercentage', 'aiUsageAnalysis'],
               },
             },
           });
