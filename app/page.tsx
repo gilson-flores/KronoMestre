@@ -42,6 +42,7 @@ import { NewStudentModal } from '@/components/modals/NewStudentModal';
 import { EditStudentModal } from '@/components/modals/EditStudentModal';
 import { StudentSupervisionModal } from '@/components/modals/StudentSupervisionModal';
 import { NewSecondTeacherModal } from '@/components/modals/NewSecondTeacherModal';
+import { ParallelRecoveryModal } from '@/components/modals/ParallelRecoveryModal';
 import { CheckCircle2, AlertTriangle, HeartHandshake, UserPlus } from 'lucide-react';
 
 // Helper de unificação e desduplicação atômica de mensagens de chat
@@ -215,6 +216,7 @@ export default function Home() {
   const [supervisingStudent, setSupervisingStudent] = useState<StudentUser | null>(null);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [isEditActivityModalOpen, setIsEditActivityModalOpen] = useState(false);
+  const [parallelRecoveryParentActivity, setParallelRecoveryParentActivity] = useState<Activity | null>(null);
   const [viewingActivity, setViewingActivity] = useState<Activity | null>(null);
   const [teacherSaveStatus, setTeacherSaveStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [globalDbStatus, setGlobalDbStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -651,6 +653,9 @@ export default function Home() {
               adaptationType: act.adaptation_type || act.adaptationType || (act.title?.startsWith('[PNE Lúdica]') ? 'severe_playful' : ((act.title?.startsWith('[PNE Leve/Mod]') || act.title?.startsWith('[Adaptada PNE]')) ? 'mild_moderate' : undefined)),
               playfulGameHtml: act.playful_game_html || act.playfulGameHtml || undefined,
               adaptedFromId: act.adapted_from_id || act.adaptedFromId || undefined,
+              isRecovery: Boolean(act.is_recovery || act.isRecovery || act.title?.startsWith('[Recuperação Paralela]') || act.title?.startsWith('[Recuperação]')),
+              recoveryFromId: act.recovery_from_id || act.recoveryFromId || undefined,
+              recoveryApproach: act.recovery_approach || act.recoveryApproach || undefined,
               questions: parsedQuestions,
               totalSubmissions: act.total_submissions || subs.length,
               totalStudents: act.total_students || 0,
@@ -1077,6 +1082,9 @@ export default function Home() {
         adaptation_type: newAct.adaptationType || null,
         playful_game_html: newAct.playfulGameHtml || null,
         adapted_from_id: newAct.adaptedFromId || null,
+        is_recovery: newAct.isRecovery || false,
+        recovery_from_id: newAct.recoveryFromId || null,
+        recovery_approach: newAct.recoveryApproach || null,
         questions: newAct.questions || [],
         total_submissions: newAct.totalSubmissions || 0,
         total_students: newAct.totalStudents || 0,
@@ -1238,6 +1246,9 @@ export default function Home() {
         adaptation_type: updatedAct.adaptationType || null,
         playful_game_html: updatedAct.playfulGameHtml || null,
         adapted_from_id: updatedAct.adaptedFromId || null,
+        is_recovery: updatedAct.isRecovery || false,
+        recovery_from_id: updatedAct.recoveryFromId || null,
+        recovery_approach: updatedAct.recoveryApproach || null,
         questions: updatedAct.questions || [],
         total_submissions: updatedAct.totalSubmissions,
         total_students: updatedAct.totalStudents,
@@ -2647,6 +2658,7 @@ export default function Home() {
                   onDeleteActivity={handleDeleteActivity}
                   onSaveActivity={handleSaveActivity}
                   onCreateAdaptedActivity={handleCreateActivity}
+                  onOpenParallelRecoveryModal={(act) => setParallelRecoveryParentActivity(act)}
                 />
               )}
 
@@ -3075,6 +3087,13 @@ export default function Home() {
         activity={editingActivity}
         onSaveActivity={handleSaveActivity}
         students={students}
+      />
+
+      <ParallelRecoveryModal
+        isOpen={Boolean(parallelRecoveryParentActivity)}
+        onClose={() => setParallelRecoveryParentActivity(null)}
+        parentActivity={parallelRecoveryParentActivity}
+        onCreateActivity={handleCreateActivity}
       />
 
       <ViewActivityModal

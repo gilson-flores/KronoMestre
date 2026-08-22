@@ -1,4 +1,4 @@
-import { StudentUser, Activity, ActivitySubmission } from './types';
+import { StudentUser, Activity, ActivitySubmission, ActivityQuestion } from './types';
 
 // Utility functions for student name normalization and standardized class (turma) management
 
@@ -528,30 +528,39 @@ export function getActivityStudentAndSubmissionCounts(
 }
 
 /**
- * Retorna as atividades principais/canônicas (desconsiderando atividades adaptadas filhas como itens separados).
- * Uma atividade central e suas adaptações PNE são tratadas pedagogicamente como uma só.
+ * Retorna as atividades principais/canônicas (desconsiderando atividades adaptadas e recuperações filhas como itens separados).
+ * Uma atividade central, suas recuperações e suas adaptações PNE são tratadas pedagogicamente como uma só no painel geral.
  */
 export function getCanonicalActivities(activities: Activity[]): Activity[] {
   if (!activities || activities.length === 0) return [];
   
   return activities.filter((act) => {
-    // Se não tem flag de adaptada nem adaptedFromId, é uma atividade central/canônica
-    if (!act.isAdapted && !act.adaptedFromId) return true;
+    // Se não tem flag de adaptada nem de recuperação nem pai vinculado, é canônica
+    if (!act.isAdapted && !act.adaptedFromId && !act.isRecovery && !act.recoveryFromId) return true;
     
-    // Se tem flag de adaptada, verifica se ela é filha de outra atividade existente
+    // Se tem flag de adaptada ou recuperação, verifica se ela é filha de outra atividade existente na lista
     const hasParent = activities.some((parent) => 
       parent.id !== act.id && 
       !parent.isAdapted && 
       !parent.adaptedFromId &&
-      (act.adaptedFromId === parent.id || (
-        canStudentAccessActivity(parent.turma, act.turma) &&
-        act.title &&
-        parent.title &&
-        act.title.toLowerCase().includes(parent.title.toLowerCase().slice(0, 15))
-      ))
+      !parent.isRecovery &&
+      !parent.recoveryFromId &&
+      (
+        (act.adaptedFromId && act.adaptedFromId === parent.id) ||
+        (act.recoveryFromId && act.recoveryFromId === parent.id) ||
+        (
+          canStudentAccessActivity(parent.turma, act.turma) &&
+          act.title &&
+          parent.title &&
+          (
+            act.title.toLowerCase().includes(parent.title.toLowerCase().slice(0, 15)) ||
+            (act.title.toLowerCase().startsWith('[recuperação') && act.title.toLowerCase().includes(parent.title.toLowerCase().slice(0, 10)))
+          )
+        )
+      )
     );
     
-    // Se não tem pai na lista, é uma atividade adaptada autônoma (canônica)
+    // Se não encontrou o pai na lista, ela se comporta como canônica autônoma
     return !hasParent;
   });
 }
@@ -566,6 +575,7 @@ export function getChildAdaptations(canonicalAct: Activity, allActivities: Activ
     child.id !== canonicalAct.id &&
     (child.adaptedFromId === canonicalAct.id || (
       Boolean(child.isAdapted) &&
+      !child.isRecovery &&
       canStudentAccessActivity(child.turma, canonicalAct.turma) &&
       child.title &&
       canonicalAct.title &&
@@ -575,11 +585,78 @@ export function getChildAdaptations(canonicalAct: Activity, allActivities: Activ
 }
 
 /**
- * Calcula as métricas unificadas (Central + Adaptada) para uma atividade canônica em um grupo de alunos.
- * Trata atividade central e adaptação como uma só:
- * - Cada aluno elegível da turma é esperado responder 1 vez (ou na central ou na adaptada).
- * - Cada submissão é associada a um aluno único do grupo.
- * - Taxa de conclusão sempre fica entre 0% e 100%.
+ * Retorna todas as atividades de recuperação paralela filhas associadas a uma atividade central.
+ */
+export function getChildRecoveryActivities(canonicalAct: Activity, allActivities: Activity[]): Activity[] {
+  if (!canonicalAct || !allActivities || allActivities.length === 0) return [];
+  
+  return allActivities.filter((child) => 
+    child.id !== canonicalAct.id &&
+    (child.recoveryFromId === canonicalAct.id || (
+      Boolean(child.isRecovery) &&
+      canStudentAccessActivity(child.turma, canonicalAct.turma) &&
+      child.title &&
+      canonicalAct.title &&
+      (
+        child.title.toLowerCase().includes(canonicalAct.title.toLowerCase().slice(0, 15)) ||
+        (child.title.toLowerCase().startsWith('[recuperação') && child.title.toLowerCase().includes(canonicalAct.title.toLowerCase().slice(0, 10)))
+      )
+    ))
+  );
+}
+
+/**
+ * Cria uma nova atividade de Recuperação Paralela vinculada pedagogicamente à atividade raiz
+ */
+export function createParallelRecoveryActivity(
+  parentActivity: Activity,
+  options: {
+    recoveryTitle?: string;
+    recoveryDescription?: string;
+    recoveryApproach?: string;
+    deadline?: string;
+    questions?: ActivityQuestion[];
+  }
+): Activity {
+  const cleanParentTitle = parentActivity.title.replace(/^\[(PNE.*?|Recuperação.*?)\]\s*/i, '');
+  const title = options.recoveryTitle || `[Recuperação Paralela] ${cleanParentTitle}`;
+  const description =
+    options.recoveryDescription ||
+    `Avaliação de Recuperação Paralela vinculada à atividade "${cleanParentTitle}". Abordagem pedagógica focada em reavaliação de competências essenciais.`;
+
+  return {
+    id: `act-rec-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    title,
+    subject: parentActivity.subject || 'Sociologia',
+    description,
+    supportMaterial: parentActivity.supportMaterial || '',
+    turma: parentActivity.turma,
+    type: parentActivity.type || 'Avaliação',
+    status: 'Ativo',
+    deadline: options.deadline || parentActivity.deadline,
+    maxGrade: parentActivity.maxGrade || 10,
+    allowGroupWork: false,
+    securityFocusLock: parentActivity.securityFocusLock ?? true,
+    securityBlockCopyStatement: parentActivity.securityBlockCopyStatement ?? true,
+    securityBlockPasteEssay: parentActivity.securityBlockPasteEssay ?? true,
+    isRecovery: true,
+    recoveryFromId: parentActivity.id,
+    recoveryApproach: options.recoveryApproach || 'Estudos de caso e aplicações práticas do cotidiano',
+    questions: options.questions && options.questions.length > 0 ? options.questions : parentActivity.questions || [],
+    totalSubmissions: 0,
+    totalStudents: parentActivity.totalStudents || 35,
+    pendingCorrection: 0,
+    submissions: [],
+  };
+}
+
+/**
+ * Calcula as métricas unificadas (Central + Recuperação Paralela + Adaptação PNE) para uma atividade canônica.
+ * Trata atividade central, recuperações e adaptações como uma só:
+ * - Cada aluno elegível da turma é esperado responder (seja na 1ª chamada ou na recuperação).
+ * - Aluno que não fez a primeira e fez a recuperação CONTA para o engajamento geral da turma.
+ * - Fornece também detalhamento analítico (quantos fizeram a 1ª chamada, quantos fizeram a recuperação, quantos adaptada).
+ * - Taxa de conclusão sempre fica estritamente entre 0% e 100%.
  */
 export function getUnifiedActivityMetrics(
   canonicalAct: Activity,
@@ -587,6 +664,7 @@ export function getUnifiedActivityMetrics(
   targetStudents: StudentUser[]
 ) {
   const childAdaptations = getChildAdaptations(canonicalAct, allActivities);
+  const childRecoveries = getChildRecoveryActivities(canonicalAct, allActivities);
   
   // Alunos do grupo-alvo matriculados/elegíveis para esta atividade
   const enrolledStudents = (targetStudents || []).filter((st) => 
@@ -594,22 +672,67 @@ export function getUnifiedActivityMetrics(
   );
   
   const expectedStudentsCount = enrolledStudents.length;
-  
-  // Coleta todas as submissões da atividade central e de todas as suas versões adaptadas
+
+  // Submissões específicas de cada modalidade
+  const mainSubmissions = canonicalAct.submissions || [];
+  const recoverySubmissions = childRecoveries.flatMap((r) => r.submissions || []);
+  const adaptedSubmissions = childAdaptations.flatMap((c) => c.submissions || []);
+
+  // Coleta todas as submissões
   const allSubmissions = [
-    ...(canonicalAct.submissions || []),
-    ...childAdaptations.flatMap((c) => c.submissions || []),
+    ...mainSubmissions,
+    ...recoverySubmissions,
+    ...adaptedSubmissions,
   ];
   
-  // Identifica quais alunos matriculados já submeteram (garantindo 1 submissão por aluno)
+  // Identifica quais alunos matriculados já submeteram (garantindo 1 aluno único contabilizado no engajamento geral)
   const submittedStudentMap = new Map<string, ActivitySubmission>();
   
-  allSubmissions.forEach((s) => {
+  // Mapa para classificar quem fez cada modalidade
+  const mainStudentIds = new Set<string>();
+  const recoveryStudentIds = new Set<string>();
+  const adaptedStudentIds = new Set<string>();
+
+  mainSubmissions.forEach((s) => {
     const st = enrolledStudents.find(
       (x) => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula)
     );
-    if (st && !submittedStudentMap.has(st.id)) {
-      submittedStudentMap.set(st.id, s);
+    if (st) {
+      mainStudentIds.add(st.id);
+      if (!submittedStudentMap.has(st.id)) {
+        submittedStudentMap.set(st.id, s);
+      }
+    }
+  });
+
+  recoverySubmissions.forEach((s) => {
+    const st = enrolledStudents.find(
+      (x) => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula)
+    );
+    if (st) {
+      recoveryStudentIds.add(st.id);
+      // Se não havia submetido na principal, ou se a recuperação é a submissão mais recente/prioritária
+      if (!submittedStudentMap.has(st.id)) {
+        submittedStudentMap.set(st.id, s);
+      } else {
+        // Se submeteu em ambas, podemos manter a de melhor nota ou a recuperação
+        const existing = submittedStudentMap.get(st.id)!;
+        if (getSubmissionTotalGrade(s) > getSubmissionTotalGrade(existing)) {
+          submittedStudentMap.set(st.id, s);
+        }
+      }
+    }
+  });
+
+  adaptedSubmissions.forEach((s) => {
+    const st = enrolledStudents.find(
+      (x) => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula)
+    );
+    if (st) {
+      adaptedStudentIds.add(st.id);
+      if (!submittedStudentMap.has(st.id)) {
+        submittedStudentMap.set(st.id, s);
+      }
     }
   });
   
@@ -621,6 +744,24 @@ export function getUnifiedActivityMetrics(
     ? Math.min(100, Math.round((subCount / expectedStudentsCount) * 100))
     : 0;
 
+  // Contagens específicas por modalidade
+  const mainCount = mainStudentIds.size;
+  const recoveryCount = recoveryStudentIds.size;
+  const adaptedCount = adaptedStudentIds.size;
+  // Quantos alunos fizeram exclusivamente a recuperação (não fizeram a primeira)
+  const recoveryOnlyCount = Array.from(recoveryStudentIds).filter((id) => !mainStudentIds.has(id)).length;
+
+  // Médias
+  const mainGraded = mainSubmissions.filter((s) => s.status === 'graded');
+  const mainAvg = mainGraded.length > 0
+    ? Number((mainGraded.reduce((acc, s) => acc + getSubmissionTotalGrade(s), 0) / mainGraded.length).toFixed(1))
+    : null;
+
+  const recoveryGraded = recoverySubmissions.filter((s) => s.status === 'graded');
+  const recoveryAvg = recoveryGraded.length > 0
+    ? Number((recoveryGraded.reduce((acc, s) => acc + getSubmissionTotalGrade(s), 0) / recoveryGraded.length).toFixed(1))
+    : null;
+
   return {
     expectedStudentsCount,
     subCount,
@@ -629,6 +770,16 @@ export function getUnifiedActivityMetrics(
     completionRate,
     submissionsList,
     childAdaptations,
+    childRecoveries,
+    hasRecovery: childRecoveries.length > 0,
+    breakdown: {
+      mainCount,
+      recoveryCount,
+      adaptedCount,
+      recoveryOnlyCount,
+      mainAvg,
+      recoveryAvg,
+    },
   };
 }
 

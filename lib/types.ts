@@ -107,6 +107,9 @@ export interface Activity {
   playfulGameHtml?: string; // Código HTML do jogo interativo lúdico para síndromes severas
   playfulGameScoreMax?: number; // Pontuação máxima do jogo lúdico
   adaptedFromId?: string; // ID da atividade original
+  isRecovery?: boolean; // Indica se esta atividade é uma Recuperação Paralela vinculada
+  recoveryFromId?: string; // ID da atividade raiz da qual esta é a recuperação paralela
+  recoveryApproach?: string; // Abordagem pedagógica diferenciada aplicada na recuperação
   includedPneStudentIds?: string[]; // IDs dos alunos PNE selecionados por proficiência para fazer a atividade normal
   questions?: ActivityQuestion[];
   totalSubmissions: number;

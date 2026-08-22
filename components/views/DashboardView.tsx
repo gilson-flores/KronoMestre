@@ -55,6 +55,7 @@ interface DashboardViewProps {
   onDeleteActivity?: (act: Activity) => void;
   onSaveActivity?: (act: Activity) => void;
   onCreateAdaptedActivity?: (act: Activity) => void;
+  onOpenParallelRecoveryModal?: (act: Activity) => void;
   title?: string;
   subtitle?: string;
   showStats?: boolean;
@@ -72,6 +73,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onDeleteActivity,
   onSaveActivity,
   onCreateAdaptedActivity,
+  onOpenParallelRecoveryModal,
   title = 'Studio',
   subtitle = 'Gerencie avaliações, redações e dinâmicas das suas turmas.',
   showStats = true,
@@ -145,10 +147,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return true;
   });
 
-  // Organize by 1º Ano -> 2º Ano -> 3º Ano, with adaptations placed directly after their parent activity
+  // Organize by 1º Ano -> 2º Ano -> 3º Ano, with adaptations and parallel recoveries placed directly after their parent activity
   const buildOrderedActivities = (list: Activity[]) => {
-    const parents = list.filter((a) => !a.adaptedFromId && !a.isAdapted);
-    const adaptedList = list.filter((a) => Boolean(a.adaptedFromId) || Boolean(a.isAdapted));
+    const parents = list.filter((a) => !a.adaptedFromId && !a.isAdapted && !a.recoveryFromId && !a.isRecovery);
+    const childrenList = list.filter((a) => Boolean(a.adaptedFromId) || Boolean(a.isAdapted) || Boolean(a.recoveryFromId) || Boolean(a.isRecovery));
     const visitedIds = new Set<string>();
 
     const sortedParents = [...parents].sort((a, b) => {
@@ -158,22 +160,34 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       return (a.turma || '').localeCompare(b.turma || '');
     });
 
-    const result: { activity: Activity; isChild: boolean; parentTitle?: string }[] = [];
+    const result: {
+      activity: Activity;
+      isChild: boolean;
+      childType?: 'adaptation' | 'recovery';
+      parentTitle?: string;
+    }[] = [];
 
     sortedParents.forEach((parent) => {
       visitedIds.add(parent.id);
       result.push({ activity: parent, isChild: false });
 
-      const children = adaptedList.filter(
+      const children = childrenList.filter(
         (child) =>
           child.adaptedFromId === parent.id ||
-          (child.title && parent.title && child.title.toLowerCase().startsWith(parent.title.toLowerCase().slice(0, 15)))
+          child.recoveryFromId === parent.id ||
+          (child.title && parent.title && child.title.toLowerCase().includes(parent.title.toLowerCase().slice(0, 15)))
       );
 
       children.forEach((child) => {
         if (!visitedIds.has(child.id)) {
           visitedIds.add(child.id);
-          result.push({ activity: child, isChild: true, parentTitle: parent.title });
+          const isRec = Boolean(child.isRecovery || child.recoveryFromId || child.title?.startsWith('[Recuperação'));
+          result.push({
+            activity: child,
+            isChild: true,
+            childType: isRec ? 'recovery' : 'adaptation',
+            parentTitle: parent.title,
+          });
         }
       });
     });
@@ -187,7 +201,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     });
 
     sortedRemaining.forEach((rem) => {
-      result.push({ activity: rem, isChild: Boolean(rem.isAdapted || rem.adaptedFromId) });
+      const isChild = Boolean(rem.isAdapted || rem.adaptedFromId || rem.isRecovery || rem.recoveryFromId);
+      const isRec = Boolean(rem.isRecovery || rem.recoveryFromId || rem.title?.startsWith('[Recuperação'));
+      result.push({
+        activity: rem,
+        isChild,
+        childType: isChild ? (isRec ? 'recovery' : 'adaptation') : undefined,
+      });
     });
 
     return result;
@@ -442,13 +462,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </p>
             </div>
           ) : (
-            orderedActivityItems.map(({ activity: act, isChild, parentTitle }) => {
+            orderedActivityItems.map(({ activity: act, isChild, childType, parentTitle }) => {
               let Icon = FileText;
               if (act.type === 'Simulado') Icon = FileQuestion;
               if (act.type === 'Dinâmica' || act.type === 'Trabalho em grupo') Icon = Users2;
               if (act.type === 'Projeto de pesquisa') Icon = BookOpen;
 
               const isExpanded = Boolean(expandedActivityIds[act.id]);
+
+              // Calculate unified and breakdown metrics
+              const unifiedMetrics = getUnifiedActivityMetrics(act, activities, students || []);
 
               // Calculate submission and status breakdowns using PNE deduction helper
               const {
@@ -461,9 +484,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 ret3x,
               } = getActivityStudentAndSubmissionCounts(act, activities, students || []);
 
+              const isRecoveryChild = isChild && childType === 'recovery';
+              const isAdaptationChild = isChild && childType === 'adaptation';
+
               return (
-                <div key={act.id} className={isChild ? 'ml-3 sm:ml-6 md:ml-8 pl-2.5 sm:pl-4 border-l-2 border-amber-500/40 relative' : ''}>
-                  {isChild && (
+                <div key={act.id} className={isChild ? (isRecoveryChild ? 'ml-3 sm:ml-6 md:ml-8 pl-2.5 sm:pl-4 border-l-2 border-indigo-500/50 relative' : 'ml-3 sm:ml-6 md:ml-8 pl-2.5 sm:pl-4 border-l-2 border-amber-500/40 relative') : ''}>
+                  {isRecoveryChild && (
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 px-3 py-0.5 rounded-xl w-fit mb-1.5 shadow-sm">
+                      <RotateCcw className="w-3 h-3 text-indigo-400" />
+                      <span>└── Recuperação Paralela {act.recoveryApproach ? `(${act.recoveryApproach})` : ''}</span>
+                      {parentTitle && <span className="text-[#bccabb]">vinculada à avaliação &quot;{parentTitle}&quot;</span>}
+                    </div>
+                  )}
+
+                  {isAdaptationChild && (
                     <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/20 px-3 py-0.5 rounded-xl w-fit mb-1.5 shadow-sm">
                       <span>└── Adaptação Pedagógica</span>
                       {parentTitle && <span className="text-[#bccabb]">da atividade &quot;{parentTitle}&quot;</span>}
@@ -473,7 +507,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <div
                     className={`glass-panel rounded-2xl md:rounded-3xl transition-all duration-200 border border-white/10 hover:border-[#4ade80]/40 ${
                       pendingCount > 0 ? 'ring-1 ring-[#4ade80]/30' : ''
-                    } ${isChild ? 'bg-amber-500/[0.03]' : ''} ${
+                    } ${isRecoveryChild ? 'bg-indigo-500/[0.03]' : isAdaptationChild ? 'bg-amber-500/[0.03]' : ''} ${
                       isExpanded ? 'p-4 sm:p-5 md:p-6 shadow-xl' : 'p-3 sm:p-4 hover:bg-[#131b2e]/70'
                     }`}
                   >
@@ -670,6 +704,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                           {!isCorrecoes && (
                             <>
+                              {onOpenParallelRecoveryModal && !isChild && !unifiedMetrics.hasRecovery && (
+                                <button
+                                  onClick={() => onOpenParallelRecoveryModal(act)}
+                                  className="flex-1 sm:flex-none px-4 py-2.5 bg-[#171f33] hover:bg-[#222a3d] text-indigo-300 hover:text-indigo-200 rounded-full text-xs font-bold border border-indigo-500/30 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[42px]"
+                                  title="Criar Recuperação Paralela com abordagem diferente vinculada a esta atividade"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                                  <span>Criar Recuperação Paralela</span>
+                                </button>
+                              )}
+
                               <button
                                 onClick={() => handleOpenSecurityModal(act)}
                                 className="flex-1 sm:flex-none px-4 py-2.5 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] hover:text-white rounded-full text-xs font-bold border border-white/10 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[42px]"

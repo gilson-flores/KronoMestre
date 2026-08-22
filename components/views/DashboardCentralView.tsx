@@ -17,7 +17,8 @@ import {
   FileText,
   Building2,
   CheckCheck,
-  AlertCircle
+  AlertCircle,
+  RotateCcw,
 } from 'lucide-react';
 import { Activity, StudentUser } from '@/lib/types';
 import {
@@ -186,6 +187,55 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
   const pneTotal = students.filter((s) => s.tag?.toUpperCase() === 'PNE').length;
   const radTotal = students.filter((s) => s.tag?.toUpperCase() === 'RAD').length;
 
+  // Análise de Adesão e Recuperação Paralela
+  const adherenceAnalytics = useMemo(() => {
+    let mainCount = 0;
+    let recoveryCount = 0;
+    let adaptedCount = 0;
+    const recoveryActivitiesList: {
+      parentTitle: string;
+      turma: string;
+      approach?: string;
+      mainCount: number;
+      recoveryCount: number;
+      adaptedCount: number;
+      total: number;
+      expected: number;
+      rate: number;
+    }[] = [];
+
+    canonicalActivities.forEach((parent) => {
+      const metrics = getUnifiedActivityMetrics(parent, activities, students);
+      mainCount += metrics.breakdown.mainCount;
+      recoveryCount += metrics.breakdown.recoveryCount;
+      adaptedCount += metrics.breakdown.adaptedCount;
+
+      if (metrics.hasRecovery) {
+        const recAct = activities.find(
+          (a) => a.recoveryFromId === parent.id || (a.isRecovery && a.turma === parent.turma)
+        );
+        recoveryActivitiesList.push({
+          parentTitle: parent.title,
+          turma: parent.turma || '',
+          approach: recAct?.recoveryApproach,
+          mainCount: metrics.breakdown.mainCount,
+          recoveryCount: metrics.breakdown.recoveryCount,
+          adaptedCount: metrics.breakdown.adaptedCount,
+          total: metrics.subCount,
+          expected: metrics.expectedStudentsCount,
+          rate: metrics.completionRate,
+        });
+      }
+    });
+
+    return {
+      mainCount,
+      recoveryCount,
+      adaptedCount,
+      recoveryActivitiesList,
+    };
+  }, [canonicalActivities, activities, students]);
+
   return (
     <div className="space-y-8 animate-fadeIn pb-12">
       {/* Header */}
@@ -298,6 +348,121 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
             )}
           </div>
         </div>
+      </div>
+
+      {/* Análise de Adesão da Turma (1ª Chamada vs. Recuperação Paralela) */}
+      <div className="glass-panel p-6 rounded-3xl border border-white/10 bg-[#131b2e] space-y-4 shadow-md">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-2xl bg-emerald-500/10 text-[#4ade80] flex items-center justify-center">
+              <BarChart3 className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                <span>Análise de Adesão & Engajamento Unificado</span>
+              </h2>
+              <p className="text-xs text-[#bccabb]">
+                Consolidação das entregas de 1ª chamada, recuperações paralelas e adaptações pedagógicas.
+              </p>
+            </div>
+          </div>
+          <span className="text-xs font-bold text-[#4ade80] bg-[#4ade80]/10 border border-[#4ade80]/20 px-3 py-1.5 rounded-xl self-start sm:self-center">
+            {completionRate}% de engajamento geral ({totalSubmissions}/{totalExpected} esperadas)
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+          <div className="p-4 rounded-2xl bg-[#0b1326] border border-white/5 flex flex-col justify-between">
+            <span className="text-[11px] text-[#bccabb] font-semibold uppercase tracking-wider">
+              1ª Chamada (Original)
+            </span>
+            <div className="mt-2 flex items-baseline justify-between">
+              <span className="text-2xl font-black text-white">{adherenceAnalytics.mainCount}</span>
+              <span className="text-[10px] text-[#bccabb] font-medium">
+                {totalSubmissions > 0
+                  ? `${Math.round((adherenceAnalytics.mainCount / totalSubmissions) * 100)}%`
+                  : '0%'}
+              </span>
+            </div>
+            <span className="text-[10px] text-[#bccabb]/70 mt-1">Avaliações regulares</span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-indigo-300 font-semibold uppercase tracking-wider">
+                Recuperação Paralela
+              </span>
+              <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
+            </div>
+            <div className="mt-2 flex items-baseline justify-between">
+              <span className="text-2xl font-black text-indigo-200">{adherenceAnalytics.recoveryCount}</span>
+              <span className="text-[10px] text-indigo-300 font-medium">
+                {totalSubmissions > 0
+                  ? `${Math.round((adherenceAnalytics.recoveryCount / totalSubmissions) * 100)}%`
+                  : '0%'}
+              </span>
+            </div>
+            <span className="text-[10px] text-indigo-300/70 mt-1">Reavaliações pedagógicas</span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col justify-between">
+            <span className="text-[11px] text-amber-300 font-semibold uppercase tracking-wider">
+              Adaptação PNE
+            </span>
+            <div className="mt-2 flex items-baseline justify-between">
+              <span className="text-2xl font-black text-amber-200">{adherenceAnalytics.adaptedCount}</span>
+              <span className="text-[10px] text-amber-300 font-medium">
+                {totalSubmissions > 0
+                  ? `${Math.round((adherenceAnalytics.adaptedCount / totalSubmissions) * 100)}%`
+                  : '0%'}
+              </span>
+            </div>
+            <span className="text-[10px] text-amber-300/70 mt-1">Inclusão especializada</span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col justify-between">
+            <span className="text-[11px] text-emerald-300 font-semibold uppercase tracking-wider">
+              Total Geral Turma
+            </span>
+            <div className="mt-2 flex items-baseline justify-between">
+              <span className="text-2xl font-black text-emerald-300">
+                {totalSubmissions}
+                <span className="text-sm font-normal text-emerald-300/70">/{totalExpected}</span>
+              </span>
+              <span className="text-[10px] text-emerald-300 font-bold">{completionRate}%</span>
+            </div>
+            <span className="text-[10px] text-emerald-300/70 mt-1">Alunos únicos atendidos</span>
+          </div>
+        </div>
+
+        {adherenceAnalytics.recoveryActivitiesList.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-white/5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-bold text-white uppercase tracking-wider">
+                Atividades com Ciclo de Recuperação Ativo ({adherenceAnalytics.recoveryActivitiesList.length})
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {adherenceAnalytics.recoveryActivitiesList.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="p-2.5 rounded-xl bg-[#0b1326] border border-white/5 flex items-center justify-between text-xs"
+                >
+                  <div className="truncate pr-2">
+                    <span className="font-bold text-white truncate block">{item.parentTitle}</span>
+                    <span className="text-[10px] text-[#bccabb]">
+                      Turma {item.turma} {item.approach ? `• ${item.approach}` : ''}
+                    </span>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="font-bold text-indigo-300 text-xs block">{item.recoveryCount} recup.</span>
+                    <span className="text-[10px] text-[#4ade80] font-semibold">{item.rate}% engajamento</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Production Types & Inclusion Distribution */}
