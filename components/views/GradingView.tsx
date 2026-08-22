@@ -1032,23 +1032,23 @@ export const GradingView: React.FC<GradingViewProps> = ({
                 )}
               </button>
 
-              {/* Botão Feedback Sério (400 chars) */}
+              {/* Botão Feedback do Professor (400 chars) */}
               <button
                 type="button"
                 onClick={() => handleGenerateAiFeedback(sub, sub.status === 'returned' ? 'returned' : 'graded', 'serious')}
                 disabled={Boolean(generatingFeedbackState?.studentId === sub.studentId)}
                 className="px-2.5 py-1 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 text-blue-300 font-bold rounded-lg text-[10px] flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
-                title="Gerar feedback pedagógico formal e sério limitado a 400 caracteres com Gemini"
+                title="Gerar feedback pedagógico do professor (acolhedor e motivador, limitado a 400 caracteres) com Gemini"
               >
                 {generatingFeedbackState?.studentId === sub.studentId && generatingFeedbackState?.type === 'serious' ? (
                   <>
                     <Loader2 className="w-3 h-3 animate-spin text-blue-400" />
-                    <span>Gerando Sério... 🎓</span>
+                    <span>Gerando Feedback... 🎓</span>
                   </>
                 ) : (
                   <>
                     <GraduationCap className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Feedback Sério 🎓</span>
+                    <span>Feedback Professor 🎓</span>
                   </>
                 )}
               </button>

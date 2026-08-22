@@ -20,7 +20,15 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { Activity, StudentUser } from '@/lib/types';
-import { getActivityStudentAndSubmissionCounts, canStudentAccessActivity } from '@/lib/studentUtils';
+import {
+  getActivityStudentAndSubmissionCounts,
+  getCanonicalActivities,
+  getUnifiedActivityMetrics,
+  canStudentAccessActivity,
+  getOriginalTurmas,
+  isStudentPNE,
+  getSubmissionTotalGrade,
+} from '@/lib/studentUtils';
 
 interface DashboardCentralViewProps {
   activities: Activity[];
@@ -37,98 +45,142 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
   onOpenNewActivityModal,
   onOpenNewStudentModal,
 }) => {
-  // Global Calculations
-  const totalActivities = activities.length;
+  // Atividades canônicas/pedagógicas (atividades centrais + suas adaptações contam como 1 só)
+  const canonicalActivities = useMemo(() => getCanonicalActivities(activities), [activities]);
+  const totalActivities = canonicalActivities.length;
   const totalStudents = students.length;
 
   const totalSubmissions = useMemo(() => {
-    return activities.reduce((acc, a) => {
-      const { subCount } = getActivityStudentAndSubmissionCounts(a, activities, students);
+    return canonicalActivities.reduce((acc, a) => {
+      const { subCount } = getUnifiedActivityMetrics(a, activities, students);
       return acc + subCount;
     }, 0);
-  }, [activities, students]);
+  }, [canonicalActivities, activities, students]);
 
   const totalExpected = useMemo(() => {
-    return activities.reduce((acc, a) => {
-      const { expectedStudentsCount } = getActivityStudentAndSubmissionCounts(a, activities, students);
+    return canonicalActivities.reduce((acc, a) => {
+      const { expectedStudentsCount } = getUnifiedActivityMetrics(a, activities, students);
       return acc + expectedStudentsCount;
     }, 0);
-  }, [activities, students]);
+  }, [canonicalActivities, activities, students]);
 
-  const completionRate = totalExpected > 0 ? Math.round((totalSubmissions / totalExpected) * 100) : 0;
+  const completionRate = totalExpected > 0 ? Math.min(100, Math.round((totalSubmissions / totalExpected) * 100)) : 0;
 
   const pendingCorrections = useMemo(() => {
-    return activities.reduce((acc, a) => {
-      const { pendingCount } = getActivityStudentAndSubmissionCounts(a, activities, students);
+    return canonicalActivities.reduce((acc, a) => {
+      const { pendingCount } = getUnifiedActivityMetrics(a, activities, students);
       return acc + pendingCount;
     }, 0);
-  }, [activities, students]);
+  }, [canonicalActivities, activities, students]);
 
-  const activitiesWithGrades = useMemo(() => {
-    return activities.filter((a) => a.averageGrade !== undefined && a.averageGrade > 0);
-  }, [activities]);
+  // Cálculo preciso da Média Geral a partir de todas as notas avaliadas/lançadas
+  const gradesCalculation = useMemo(() => {
+    let totalScoreSum = 0;
+    let totalGradedCount = 0;
+    let activitiesWithGradesCount = 0;
 
-  const overallAverage = activitiesWithGrades.length > 0
-    ? (activitiesWithGrades.reduce((acc, a) => acc + (a.averageGrade || 0), 0) / activitiesWithGrades.length).toFixed(1)
-    : '0.0';
+    activities.forEach((act) => {
+      let actHasGraded = false;
+      const subs = act.submissions || [];
+      subs.forEach((s) => {
+        if (s.status === 'graded' || (s.essayScore !== undefined && s.essayScore !== null) || Number(s.objectiveScore) > 0) {
+          totalScoreSum += getSubmissionTotalGrade(s);
+          totalGradedCount += 1;
+          actHasGraded = true;
+        }
+      });
 
-  // Stats by Activity Type
-  const statsByType = useMemo(() => {
+      if (actHasGraded || (act.averageGrade !== undefined && act.averageGrade !== null && act.averageGrade > 0)) {
+        activitiesWithGradesCount += 1;
+      }
+    });
+
+    const average = totalGradedCount > 0 ? (totalScoreSum / totalGradedCount).toFixed(1) : '0.0';
+
     return {
-      Avaliação: activities.filter((a) => a.type === 'Avaliação').length,
-      Simulado: activities.filter((a) => a.type === 'Simulado').length,
-      Redação: activities.filter((a) => a.type === 'Redação').length,
-      Dinâmica: activities.filter((a) => a.type === 'Dinâmica').length,
-      'Trabalho em grupo': activities.filter((a) => a.type === 'Trabalho em grupo').length,
-      'Projeto de pesquisa': activities.filter((a) => a.type === 'Projeto de pesquisa').length,
+      overallAverage: average,
+      totalGradedCount,
+      activitiesWithGradesCount,
     };
   }, [activities]);
 
+  const overallAverage = gradesCalculation.overallAverage;
+
+  // Stats by Activity Type: Contagem estrita por tipo de atividade canônica
+  const statsByType = useMemo(() => {
+    const counts = {
+      Avaliação: 0,
+      Simulado: 0,
+      Redação: 0,
+      Dinâmica: 0,
+      'Trabalho em grupo': 0,
+      'Projeto de pesquisa': 0,
+    };
+
+    canonicalActivities.forEach((act) => {
+      const t = (act.type || '').trim().toLowerCase();
+      if (t.includes('simulado')) {
+        counts.Simulado += 1;
+      } else if (t.includes('redação') || t.includes('redacao')) {
+        counts.Redação += 1;
+      } else if (t.includes('dinâmica') || t.includes('dinamica')) {
+        counts.Dinâmica += 1;
+      } else if (t.includes('grupo') || t.includes('trabalho')) {
+        counts['Trabalho em grupo'] += 1;
+      } else if (t.includes('pesquisa') || t.includes('projeto')) {
+        counts['Projeto de pesquisa'] += 1;
+      } else {
+        counts.Avaliação += 1;
+      }
+    });
+
+    return counts;
+  }, [canonicalActivities]);
+
   // Breakdown by Turma
   const turmasBreakdown = useMemo(() => {
-    const set = new Set<string>();
-    students.forEach((s) => {
-      if (s.turma?.trim()) set.add(s.turma.trim());
-    });
-    activities.forEach((a) => {
-      if (a.turma?.trim() && a.turma.toLowerCase() !== 'todas') set.add(a.turma.trim());
-    });
-
-    const list = Array.from(set).sort((a, b) => a.localeCompare(b));
+    const list = getOriginalTurmas(students);
 
     return list.map((turma) => {
-      const turmaStudents = students.filter((s) => s.turma === turma);
-      const turmaActivities = activities.filter((a) => canStudentAccessActivity(a.turma, turma));
+      const turmaStudents = students.filter((s) => {
+        if (!s.turma) return false;
+        const parts = s.turma.split(/[,;]+/).map((t) => t.trim().toLowerCase());
+        return parts.includes(turma.toLowerCase());
+      });
+      const turmaCanonicalActivities = canonicalActivities.filter((a) => canStudentAccessActivity(a.turma, turma));
       
       let turmaExpected = 0;
       let turmaSubmitted = 0;
       let turmaGradeSum = 0;
       let turmaGradedCount = 0;
 
-      turmaActivities.forEach((act) => {
-        const { subCount, expectedStudentsCount } = getActivityStudentAndSubmissionCounts(act, activities, students);
+      turmaCanonicalActivities.forEach((act) => {
+        const { subCount, expectedStudentsCount, submissionsList } = getUnifiedActivityMetrics(act, activities, turmaStudents);
         turmaExpected += expectedStudentsCount;
         turmaSubmitted += subCount;
-        if (act.averageGrade && act.averageGrade > 0) {
-          turmaGradeSum += act.averageGrade;
-          turmaGradedCount += 1;
-        }
+        
+        submissionsList.forEach((s) => {
+          if (s.status === 'graded' || (s.essayScore !== undefined && s.essayScore !== null) || Number(s.objectiveScore) > 0) {
+            turmaGradeSum += getSubmissionTotalGrade(s);
+            turmaGradedCount += 1;
+          }
+        });
       });
 
-      const rate = turmaExpected > 0 ? Math.round((turmaSubmitted / turmaExpected) * 100) : 0;
+      const rate = turmaExpected > 0 ? Math.min(100, Math.round((turmaSubmitted / turmaExpected) * 100)) : 0;
       const avg = turmaGradedCount > 0 ? (turmaGradeSum / turmaGradedCount).toFixed(1) : '-';
 
       return {
         turma,
         studentsCount: turmaStudents.length,
-        activitiesCount: turmaActivities.length,
+        activitiesCount: turmaCanonicalActivities.length,
         completionRate: rate,
         averageGrade: avg,
-        pneCount: turmaStudents.filter((s) => s.tag?.toUpperCase() === 'PNE').length,
+        pneCount: turmaStudents.filter((s) => isStudentPNE(s)).length,
         radCount: turmaStudents.filter((s) => s.tag?.toUpperCase() === 'RAD').length,
       };
     });
-  }, [students, activities]);
+  }, [students, activities, canonicalActivities]);
 
   // Inclusion & Support Stats
   const pneTotal = students.filter((s) => s.tag?.toUpperCase() === 'PNE').length;
@@ -216,7 +268,9 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
           </div>
           <div className="text-3xl font-extrabold text-white mb-1">{overallAverage}</div>
           <div className="text-xs text-[#bccabb]">
-            {activitiesWithGrades.length > 0 ? `${activitiesWithGrades.length} atividades avaliadas` : 'Sem notas ainda'}
+            {gradesCalculation.totalGradedCount > 0
+              ? `${gradesCalculation.totalGradedCount} ${gradesCalculation.totalGradedCount === 1 ? 'nota lançada' : 'notas lançadas'}`
+              : 'Sem notas ainda'}
           </div>
         </div>
 

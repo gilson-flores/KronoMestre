@@ -34,7 +34,14 @@ import {
   Cpu,
 } from 'lucide-react';
 import { Activity, StudentUser } from '@/lib/types';
-import { canStudentAccessActivity, doesTurmaHavePNEStudent, getActivityStudentAndSubmissionCounts } from '@/lib/studentUtils';
+import {
+  canStudentAccessActivity,
+  doesTurmaHavePNEStudent,
+  getActivityStudentAndSubmissionCounts,
+  getCanonicalActivities,
+  getUnifiedActivityMetrics,
+  getSubmissionTotalGrade,
+} from '@/lib/studentUtils';
 import { AdaptActivityModal } from '@/components/modals/AdaptActivityModal';
 
 interface DashboardViewProps {
@@ -240,35 +247,43 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     setSecurityModalActivity(null);
   };
 
-  // Calculate top KPI stats from real state
-  const totalActivities = activities.length;
-  const totalSubmissions = activities.reduce((acc, a) => {
-    const { subCount } = getActivityStudentAndSubmissionCounts(a, activities, students || []);
+  // Calculate top KPI stats from real state (Central + Adapted unified)
+  const canonicalActivities = getCanonicalActivities(activities);
+  const totalActivities = canonicalActivities.length;
+  const totalSubmissions = canonicalActivities.reduce((acc, a) => {
+    const { subCount } = getUnifiedActivityMetrics(a, activities, students || []);
     return acc + subCount;
   }, 0);
-  const totalExpected = activities.reduce((acc, a) => {
-    const { expectedStudentsCount } = getActivityStudentAndSubmissionCounts(a, activities, students || []);
+  const totalExpected = canonicalActivities.reduce((acc, a) => {
+    const { expectedStudentsCount } = getUnifiedActivityMetrics(a, activities, students || []);
     return acc + expectedStudentsCount;
   }, 0);
-  const completionRate = totalExpected > 0 ? Math.round((totalSubmissions / totalExpected) * 100) : 0;
-  const pendingCorrections = activities.reduce((acc, a) => {
-    const { pendingCount } = getActivityStudentAndSubmissionCounts(a, activities, students || []);
+  const completionRate = totalExpected > 0 ? Math.min(100, Math.round((totalSubmissions / totalExpected) * 100)) : 0;
+  const pendingCorrections = canonicalActivities.reduce((acc, a) => {
+    const { pendingCount } = getUnifiedActivityMetrics(a, activities, students || []);
     return acc + pendingCount;
   }, 0);
 
-  const activitiesWithGrades = activities.filter((a) => a.averageGrade !== undefined && a.averageGrade > 0);
-  const overallAverage = activitiesWithGrades.length > 0
-    ? (activitiesWithGrades.reduce((acc, a) => acc + (a.averageGrade || 0), 0) / activitiesWithGrades.length).toFixed(1)
-    : '0.0';
+  let totalScoreSum = 0;
+  let totalGradedCount = 0;
+  activities.forEach((act) => {
+    (act.submissions || []).forEach((s) => {
+      if (s.status === 'graded' || (s.essayScore !== undefined && s.essayScore !== null) || Number(s.objectiveScore) > 0) {
+        totalScoreSum += getSubmissionTotalGrade(s);
+        totalGradedCount += 1;
+      }
+    });
+  });
+  const overallAverage = totalGradedCount > 0 ? (totalScoreSum / totalGradedCount).toFixed(1) : '0.0';
 
   // Stats grouped by type (Production per type)
   const statsByType = {
-    Avaliação: activities.filter((a) => a.type === 'Avaliação'),
-    Simulado: activities.filter((a) => a.type === 'Simulado'),
-    Redação: activities.filter((a) => a.type === 'Redação'),
-    Dinâmica: activities.filter((a) => a.type === 'Dinâmica'),
-    'Trabalho em grupo': activities.filter((a) => a.type === 'Trabalho em grupo'),
-    'Projeto de pesquisa': activities.filter((a) => a.type === 'Projeto de pesquisa'),
+    Avaliação: canonicalActivities.filter((a) => a.type === 'Avaliação'),
+    Simulado: canonicalActivities.filter((a) => a.type === 'Simulado'),
+    Redação: canonicalActivities.filter((a) => a.type === 'Redação'),
+    Dinâmica: canonicalActivities.filter((a) => a.type === 'Dinâmica'),
+    'Trabalho em grupo': canonicalActivities.filter((a) => a.type === 'Trabalho em grupo'),
+    'Projeto de pesquisa': canonicalActivities.filter((a) => a.type === 'Projeto de pesquisa'),
   };
 
   return (

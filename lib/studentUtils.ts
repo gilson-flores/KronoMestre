@@ -1,4 +1,4 @@
-import { StudentUser, Activity } from './types';
+import { StudentUser, Activity, ActivitySubmission } from './types';
 
 // Utility functions for student name normalization and standardized class (turma) management
 
@@ -459,7 +459,7 @@ export function getActivityStudentAndSubmissionCounts(
   );
 
   let expectedStudentsCount = 0;
-  let submissionsList = act.submissions || [];
+  let submissionsList: ActivitySubmission[] = [];
 
   if (isAdaptedAct) {
     // 1. ADAPTED ACTIVITY: ONLY count PNE students who take the adaptation (not proficient in normal)
@@ -467,8 +467,12 @@ export function getActivityStudentAndSubmissionCounts(
 
     if (act.submissions && act.submissions.length > 0) {
       submissionsList = act.submissions.filter((s) => {
-        const st = students.find((x) => x.id === s.studentId || x.matricula === s.matricula);
-        return (st && isStudentPNE(st) && !isProficientPne(st)) || s.tag === 'PNE';
+        if (students && students.length > 0) {
+          const st = enrolledStudents.find((x) => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
+          if (!st) return false;
+          return isStudentPNE(st) && !isProficientPne(st);
+        }
+        return s.tag === 'PNE';
       });
     }
   } else if (hasAdaptationChild) {
@@ -479,8 +483,9 @@ export function getActivityStudentAndSubmissionCounts(
 
     if (act.submissions && act.submissions.length > 0) {
       submissionsList = act.submissions.filter((s) => {
-        const st = students.find((x) => x.id === s.studentId || x.matricula === s.matricula);
-        if (st) {
+        if (students && students.length > 0) {
+          const st = enrolledStudents.find((x) => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
+          if (!st) return false;
           return !isStudentPNE(st) || isProficientPne(st);
         }
         return s.tag !== 'PNE';
@@ -491,6 +496,16 @@ export function getActivityStudentAndSubmissionCounts(
     expectedStudentsCount = students && students.length > 0
       ? enrolledStudents.length
       : (act.totalStudents || 35);
+
+    if (act.submissions && act.submissions.length > 0) {
+      submissionsList = act.submissions.filter((s) => {
+        if (students && students.length > 0) {
+          const st = enrolledStudents.find((x) => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
+          return Boolean(st);
+        }
+        return true;
+      });
+    }
   }
 
   const subCount = submissionsList.length;
@@ -510,4 +525,140 @@ export function getActivityStudentAndSubmissionCounts(
     ret3x,
     submissionsList,
   };
+}
+
+/**
+ * Retorna as atividades principais/canônicas (desconsiderando atividades adaptadas filhas como itens separados).
+ * Uma atividade central e suas adaptações PNE são tratadas pedagogicamente como uma só.
+ */
+export function getCanonicalActivities(activities: Activity[]): Activity[] {
+  if (!activities || activities.length === 0) return [];
+  
+  return activities.filter((act) => {
+    // Se não tem flag de adaptada nem adaptedFromId, é uma atividade central/canônica
+    if (!act.isAdapted && !act.adaptedFromId) return true;
+    
+    // Se tem flag de adaptada, verifica se ela é filha de outra atividade existente
+    const hasParent = activities.some((parent) => 
+      parent.id !== act.id && 
+      !parent.isAdapted && 
+      !parent.adaptedFromId &&
+      (act.adaptedFromId === parent.id || (
+        canStudentAccessActivity(parent.turma, act.turma) &&
+        act.title &&
+        parent.title &&
+        act.title.toLowerCase().includes(parent.title.toLowerCase().slice(0, 15))
+      ))
+    );
+    
+    // Se não tem pai na lista, é uma atividade adaptada autônoma (canônica)
+    return !hasParent;
+  });
+}
+
+/**
+ * Retorna todas as adaptações filhas associadas a uma atividade central.
+ */
+export function getChildAdaptations(canonicalAct: Activity, allActivities: Activity[]): Activity[] {
+  if (!canonicalAct || !allActivities || allActivities.length === 0) return [];
+  
+  return allActivities.filter((child) => 
+    child.id !== canonicalAct.id &&
+    (child.adaptedFromId === canonicalAct.id || (
+      Boolean(child.isAdapted) &&
+      canStudentAccessActivity(child.turma, canonicalAct.turma) &&
+      child.title &&
+      canonicalAct.title &&
+      child.title.toLowerCase().includes(canonicalAct.title.toLowerCase().slice(0, 15))
+    ))
+  );
+}
+
+/**
+ * Calcula as métricas unificadas (Central + Adaptada) para uma atividade canônica em um grupo de alunos.
+ * Trata atividade central e adaptação como uma só:
+ * - Cada aluno elegível da turma é esperado responder 1 vez (ou na central ou na adaptada).
+ * - Cada submissão é associada a um aluno único do grupo.
+ * - Taxa de conclusão sempre fica entre 0% e 100%.
+ */
+export function getUnifiedActivityMetrics(
+  canonicalAct: Activity,
+  allActivities: Activity[],
+  targetStudents: StudentUser[]
+) {
+  const childAdaptations = getChildAdaptations(canonicalAct, allActivities);
+  
+  // Alunos do grupo-alvo matriculados/elegíveis para esta atividade
+  const enrolledStudents = (targetStudents || []).filter((st) => 
+    canStudentAccessActivity(canonicalAct.turma, st.turma)
+  );
+  
+  const expectedStudentsCount = enrolledStudents.length;
+  
+  // Coleta todas as submissões da atividade central e de todas as suas versões adaptadas
+  const allSubmissions = [
+    ...(canonicalAct.submissions || []),
+    ...childAdaptations.flatMap((c) => c.submissions || []),
+  ];
+  
+  // Identifica quais alunos matriculados já submeteram (garantindo 1 submissão por aluno)
+  const submittedStudentMap = new Map<string, ActivitySubmission>();
+  
+  allSubmissions.forEach((s) => {
+    const st = enrolledStudents.find(
+      (x) => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula)
+    );
+    if (st && !submittedStudentMap.has(st.id)) {
+      submittedStudentMap.set(st.id, s);
+    }
+  });
+  
+  const submissionsList = Array.from(submittedStudentMap.values());
+  const subCount = submissionsList.length;
+  const gradedCount = submissionsList.filter((s) => s.status === 'graded').length;
+  const pendingCount = submissionsList.filter((s) => s.status === 'pending' || s.status === 'draft').length;
+  const completionRate = expectedStudentsCount > 0 
+    ? Math.min(100, Math.round((subCount / expectedStudentsCount) * 100))
+    : 0;
+
+  return {
+    expectedStudentsCount,
+    subCount,
+    gradedCount,
+    pendingCount,
+    completionRate,
+    submissionsList,
+    childAdaptations,
+  };
+}
+
+/**
+ * Calculates the total grade of a single submission (objective + essay + extraPoints)
+ */
+export function getSubmissionTotalGrade(sub: ActivitySubmission): number {
+  const obj = Number(sub.objectiveScore) || 0;
+  const ess = Number(sub.essayScore) || 0;
+  const ext = Number(sub.extraPoints) || 0;
+  return Number((obj + ess + ext).toFixed(1));
+}
+
+/**
+ * Calculates the average grade for an activity from its submissions or averageGrade property
+ */
+export function getActivityAverageGrade(act: Activity): number | null {
+  if (act.averageGrade !== undefined && act.averageGrade !== null && act.averageGrade > 0) {
+    return act.averageGrade;
+  }
+
+  const subs = act.submissions || [];
+  if (subs.length === 0) return null;
+
+  const gradedSubs = subs.filter(
+    (s) => s.status === 'graded' || (s.essayScore !== undefined && s.essayScore !== null) || Number(s.objectiveScore) > 0
+  );
+
+  if (gradedSubs.length === 0) return null;
+
+  const sum = gradedSubs.reduce((acc, s) => acc + getSubmissionTotalGrade(s), 0);
+  return Number((sum / gradedSubs.length).toFixed(1));
 }
