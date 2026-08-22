@@ -3076,6 +3076,7 @@ export default function Home() {
         onClose={() => setIsNewActivityModalOpen(false)}
         onCreateActivity={handleCreateActivity}
         students={students}
+        activities={activities}
       />
 
       <EditActivityModal
@@ -3087,6 +3088,7 @@ export default function Home() {
         activity={editingActivity}
         onSaveActivity={handleSaveActivity}
         students={students}
+        activities={activities}
       />
 
       <ParallelRecoveryModal

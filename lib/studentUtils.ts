@@ -535,33 +535,27 @@ export function getCanonicalActivities(activities: Activity[]): Activity[] {
   if (!activities || activities.length === 0) return [];
   
   return activities.filter((act) => {
-    // Se não tem flag de adaptada nem de recuperação nem pai vinculado, é canônica
-    if (!act.isAdapted && !act.adaptedFromId && !act.isRecovery && !act.recoveryFromId) return true;
+    // Se é recuperação paralela (flag, tipo, recoveryFromId ou título), é subordinada e NÃO conta como canônica independente
+    if (
+      act.isRecovery ||
+      Boolean(act.recoveryFromId) ||
+      act.type === 'Recuperação Paralela' ||
+      act.title?.toLowerCase().startsWith('[recuperação')
+    ) {
+      return false;
+    }
+
+    // Se é adaptação PNE (flag, tipo, adaptedFromId ou título), NÃO conta como canônica independente
+    if (
+      act.isAdapted ||
+      Boolean(act.adaptedFromId) ||
+      act.adaptationType ||
+      act.title?.toLowerCase().startsWith('[pne')
+    ) {
+      return false;
+    }
     
-    // Se tem flag de adaptada ou recuperação, verifica se ela é filha de outra atividade existente na lista
-    const hasParent = activities.some((parent) => 
-      parent.id !== act.id && 
-      !parent.isAdapted && 
-      !parent.adaptedFromId &&
-      !parent.isRecovery &&
-      !parent.recoveryFromId &&
-      (
-        (act.adaptedFromId && act.adaptedFromId === parent.id) ||
-        (act.recoveryFromId && act.recoveryFromId === parent.id) ||
-        (
-          canStudentAccessActivity(parent.turma, act.turma) &&
-          act.title &&
-          parent.title &&
-          (
-            act.title.toLowerCase().includes(parent.title.toLowerCase().slice(0, 15)) ||
-            (act.title.toLowerCase().startsWith('[recuperação') && act.title.toLowerCase().includes(parent.title.toLowerCase().slice(0, 10)))
-          )
-        )
-      )
-    );
-    
-    // Se não encontrou o pai na lista, ela se comporta como canônica autônoma
-    return !hasParent;
+    return true;
   });
 }
 
@@ -592,16 +586,25 @@ export function getChildRecoveryActivities(canonicalAct: Activity, allActivities
   
   return allActivities.filter((child) => 
     child.id !== canonicalAct.id &&
-    (child.recoveryFromId === canonicalAct.id || (
-      Boolean(child.isRecovery) &&
-      canStudentAccessActivity(child.turma, canonicalAct.turma) &&
-      child.title &&
-      canonicalAct.title &&
+    (
+      child.recoveryFromId === canonicalAct.id || 
       (
-        child.title.toLowerCase().includes(canonicalAct.title.toLowerCase().slice(0, 15)) ||
-        (child.title.toLowerCase().startsWith('[recuperação') && child.title.toLowerCase().includes(canonicalAct.title.toLowerCase().slice(0, 10)))
+        (Boolean(child.isRecovery) || child.type === 'Recuperação Paralela' || child.title?.toLowerCase().startsWith('[recuperação')) &&
+        canStudentAccessActivity(child.turma, canonicalAct.turma) &&
+        (
+          !child.recoveryFromId ||
+          child.recoveryFromId === canonicalAct.id ||
+          (
+            child.title &&
+            canonicalAct.title &&
+            (
+              child.title.toLowerCase().includes(canonicalAct.title.toLowerCase().slice(0, 15)) ||
+              child.title.toLowerCase().includes(canonicalAct.title.toLowerCase().replace(/^\[.*?\]\s*/i, '').slice(0, 10))
+            )
+          )
+        )
       )
-    ))
+    )
   );
 }
 
@@ -631,7 +634,7 @@ export function createParallelRecoveryActivity(
     description,
     supportMaterial: parentActivity.supportMaterial || '',
     turma: parentActivity.turma,
-    type: parentActivity.type || 'Avaliação',
+    type: 'Recuperação Paralela',
     status: 'Ativo',
     deadline: options.deadline || parentActivity.deadline,
     maxGrade: parentActivity.maxGrade || 10,

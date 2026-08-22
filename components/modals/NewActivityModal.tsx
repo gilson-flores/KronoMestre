@@ -19,8 +19,9 @@ import {
   ArrowRight,
   ChevronDown,
   ChevronUp,
+  RotateCcw,
 } from 'lucide-react';
-import { Activity, ActivityQuestion, StudentUser } from '@/lib/types';
+import { Activity, ActivityQuestion, ActivityType, StudentUser } from '@/lib/types';
 import { DEFAULT_TURMAS, doesTurmaHavePNEStudent, canStudentAccessActivity, isStudentPNE } from '@/lib/studentUtils';
 import { TurmaMultiSelect } from '@/components/TurmaMultiSelect';
 import {
@@ -33,6 +34,7 @@ interface NewActivityModalProps {
   onClose: () => void;
   onCreateActivity: (newAct: Activity) => void;
   students?: StudentUser[];
+  activities?: Activity[];
 }
 
 const getTomorrowString = () => {
@@ -54,6 +56,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   onClose,
   onCreateActivity,
   students = [],
+  activities = [],
 }) => {
   const [title, setTitle] = useState('');
   const [subject, setSubject] = useState('Sociologia');
@@ -61,12 +64,20 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   const [supportMaterial, setSupportMaterial] = useState('');
   const [supportLinkInput, setSupportLinkInput] = useState('');
   const [selectedTurmas, setSelectedTurmas] = useState<string[]>([DEFAULT_TURMAS[0] || '101']);
-  const [type, setType] = useState<'Simulado' | 'Redação' | 'Dinâmica' | 'Avaliação' | 'Trabalho em grupo' | 'Projeto de pesquisa'>('Avaliação');
+  const [type, setType] = useState<ActivityType>('Avaliação');
+  const [recoveryFromId, setRecoveryFromId] = useState<string>('');
   
   const [deadlineDateTime, setDeadlineDateTime] = useState(() => getTomorrowString());
   const [maxGrade, setMaxGrade] = useState<number>(10);
   const [allowGroupWork, setAllowGroupWork] = useState<boolean>(false);
   
+  // Available non-recovery parent evaluations for subordination
+  const availableParentActivities = React.useMemo(() => {
+    return (activities || []).filter(
+      (a) => !a.isRecovery && !a.recoveryFromId && a.type !== 'Recuperação Paralela' && !a.isAdapted
+    );
+  }, [activities]);
+
   // PNE Proficiency Override: Selected PNE students to receive the normal/regular activity
   const [includedPneStudentIds, setIncludedPneStudentIds] = useState<string[]>([]);
   const [isPneDropdownOpen, setIsPneDropdownOpen] = useState<boolean>(true);
@@ -183,6 +194,8 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
 
     const activityId = generateActivityId();
 
+    const isParallelRecovery = type === 'Recuperação Paralela';
+
     const newActivity: Activity = {
       id: activityId,
       title: title.trim(),
@@ -194,10 +207,13 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
       status: 'Ativo',
       deadline: formattedDeadline,
       maxGrade,
-      allowGroupWork,
+      allowGroupWork: isParallelRecovery ? false : allowGroupWork,
       securityFocusLock,
       securityBlockCopyStatement,
       securityBlockPasteEssay,
+      isRecovery: isParallelRecovery || Boolean(recoveryFromId),
+      recoveryFromId: isParallelRecovery && recoveryFromId ? recoveryFromId : undefined,
+      recoveryApproach: isParallelRecovery ? 'Estudos de caso e aplicações práticas do cotidiano' : undefined,
       includedPneStudentIds,
       questions,
       totalSubmissions: 0,
@@ -205,6 +221,13 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
       pendingCorrection: 0,
       submissions: [],
     };
+
+    // Parallel recovery skips the PNE adaptation modal since it is already a subordinate second-chance activity
+    if (isParallelRecovery) {
+      onCreateActivity(newActivity);
+      resetFormAndClose();
+      return;
+    }
 
     // Only open adaptation decision if selected turma has at least one PNE student
     const hasPneStudents = doesTurmaHavePNEStudent(resolvedTurma, students);
@@ -220,6 +243,8 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
     setTitle('');
     setDescription('');
     setSupportMaterial('');
+    setType('Avaliação');
+    setRecoveryFromId('');
     setQuestions([]);
     setIncludedPneStudentIds([]);
     setIsPneDropdownOpen(false);
@@ -603,10 +628,28 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
               <select
                 value={type}
                 onChange={(e) => {
-                  const selectedType = e.target.value as any;
+                  const selectedType = e.target.value as ActivityType;
                   setType(selectedType);
                   if (selectedType === 'Trabalho em grupo') {
                     setAllowGroupWork(true);
+                  } else if (selectedType === 'Recuperação Paralela') {
+                    setAllowGroupWork(false);
+                    // Pre-select first parent activity if available and none selected yet
+                    if (!recoveryFromId && availableParentActivities.length > 0) {
+                      const firstParent = availableParentActivities[0];
+                      setRecoveryFromId(firstParent.id);
+                      if (firstParent.turma) {
+                        const parsed = firstParent.turma.split(/[,;]+/).map((t) => t.trim()).filter(Boolean);
+                        if (parsed.length > 0) setSelectedTurmas(parsed);
+                      }
+                      if (firstParent.subject) setSubject(firstParent.subject);
+                      if (firstParent.maxGrade) setMaxGrade(firstParent.maxGrade);
+                      const cleanTitle = firstParent.title.replace(/^\[.*?\]\s*/i, '');
+                      setTitle(`[Recuperação Paralela] ${cleanTitle}`);
+                      if (!description) {
+                        setDescription(`Recuperação Paralela com abordagem diferenciada subordinada à avaliação "${cleanTitle}".`);
+                      }
+                    }
                   }
                 }}
                 className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-3 py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
@@ -617,9 +660,75 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                 <option value="Dinâmica" className="bg-[#0b1326]">Dinâmica</option>
                 <option value="Trabalho em grupo" className="bg-[#0b1326]">Trabalho em grupo</option>
                 <option value="Projeto de pesquisa" className="bg-[#0b1326]">Projeto de pesquisa</option>
+                <option value="Recuperação Paralela" className="bg-[#0b1326]">Recuperação Paralela</option>
               </select>
             </div>
           </div>
+
+          {/* Campo de Subordinação à Avaliação Original (Exibido quando Tipo = Recuperação Paralela) */}
+          {type === 'Recuperação Paralela' && (
+            <div className="bg-[#131b2e] border border-indigo-500/40 rounded-2xl p-4 space-y-3 shadow-lg animate-fadeIn">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-500/20 text-indigo-300 rounded-xl border border-indigo-500/30">
+                  <RotateCcw className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-indigo-300">
+                    Avaliação à qual esta Recuperação será subordinada *
+                  </h4>
+                  <p className="text-[11px] text-[#bccabb]">
+                    A recuperação paralela é uma segunda chance para quem não aproveitou a 1ª atividade. Não gera pendência nem espera entrega de quem já entregou a original.
+                  </p>
+                </div>
+              </div>
+
+              {availableParentActivities.length === 0 ? (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-300">
+                  Nenhuma avaliação base encontrada para vincular. Crie primeiro uma Avaliação ou Simulado principal antes de criar a recuperação paralela.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <select
+                    value={recoveryFromId}
+                    onChange={(e) => {
+                      const selectedId = e.target.value;
+                      setRecoveryFromId(selectedId);
+                      const parent = availableParentActivities.find((a) => a.id === selectedId);
+                      if (parent) {
+                        if (parent.turma) {
+                          const parsed = parent.turma.split(/[,;]+/).map((t) => t.trim()).filter(Boolean);
+                          if (parsed.length > 0) setSelectedTurmas(parsed);
+                        }
+                        if (parent.subject) setSubject(parent.subject);
+                        if (parent.maxGrade) setMaxGrade(parent.maxGrade);
+                        const cleanTitle = parent.title.replace(/^\[.*?\]\s*/i, '');
+                        setTitle(`[Recuperação Paralela] ${cleanTitle}`);
+                        setDescription(`Recuperação Paralela com abordagem diferenciada subordinada à avaliação "${cleanTitle}".`);
+                      }
+                    }}
+                    required
+                    className="w-full bg-[#0e172a] border border-indigo-500/40 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-400"
+                  >
+                    <option value="" disabled className="bg-[#0b1326]">
+                      -- Selecione a atividade original correspondente --
+                    </option>
+                    {availableParentActivities.map((parent) => (
+                      <option key={parent.id} value={parent.id} className="bg-[#0b1326]">
+                        {parent.title} • Turma: {parent.turma} {parent.subject ? `• ${parent.subject}` : ''}
+                      </option>
+                    ))}
+                  </select>
+
+                  {recoveryFromId && (
+                    <div className="flex items-center gap-2 text-[11px] text-emerald-400 bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>Subordinação vinculada: As turmas e métricas foram sincronizadas automaticamente com a atividade raiz.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Janela / Lista Suspensa com Caixas de Seleção para Alunos PNE com Proficiência */}
           {pneStudentsInSelectedTurmas.length > 0 && (

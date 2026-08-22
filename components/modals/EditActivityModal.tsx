@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Save, Pencil, Plus, Trash2, HelpCircle, FileText, Users, CheckCircle2, Link2, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
-import { Activity, ActivityQuestion, StudentUser } from '@/lib/types';
+import { X, Save, Pencil, Plus, Trash2, HelpCircle, FileText, Users, CheckCircle2, Link2, Sparkles, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
+import { Activity, ActivityQuestion, ActivityType, StudentUser } from '@/lib/types';
 import { DEFAULT_TURMAS, getTurmaLabel, canStudentAccessActivity, isStudentPNE } from '@/lib/studentUtils';
 import { TurmaMultiSelect } from '@/components/TurmaMultiSelect';
 
@@ -12,6 +12,7 @@ interface EditActivityModalProps {
   activity: Activity | null;
   onSaveActivity: (updatedActivity: Activity) => void;
   students?: StudentUser[];
+  activities?: Activity[];
 }
 
 export const EditActivityModal: React.FC<EditActivityModalProps> = ({
@@ -20,6 +21,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   activity,
   onSaveActivity,
   students = [],
+  activities = [],
 }) => {
   const [prevActivityId, setPrevActivityId] = useState<string | null>(activity?.id || null);
   const [title, setTitle] = useState('');
@@ -28,7 +30,8 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   const [supportMaterial, setSupportMaterial] = useState('');
   const [supportLinkInput, setSupportLinkInput] = useState('');
   const [selectedTurmas, setSelectedTurmas] = useState<string[]>(['101']);
-  const [type, setType] = useState<'Simulado' | 'Redação' | 'Dinâmica' | 'Avaliação' | 'Trabalho em grupo' | 'Projeto de pesquisa'>('Avaliação');
+  const [type, setType] = useState<ActivityType>('Avaliação');
+  const [recoveryFromId, setRecoveryFromId] = useState<string>('');
   const [status, setStatus] = useState<'Ativo' | 'Prazo Encerrado' | 'Inativo'>('Ativo');
   const [deadline, setDeadline] = useState('');
   const [maxGrade, setMaxGrade] = useState<number>(10);
@@ -51,6 +54,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       : ['101'];
     setSelectedTurmas(parsedTurmas.length > 0 ? parsedTurmas : ['101']);
     setType(activity.type || 'Avaliação');
+    setRecoveryFromId(activity.recoveryFromId || '');
     setStatus(activity.status || 'Ativo');
     setDeadline(activity.deadline || '');
     setMaxGrade(activity.maxGrade ?? 10);
@@ -61,6 +65,13 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
     setIncludedPneStudentIds(activity.includedPneStudentIds || []);
     setQuestions(activity.questions ? JSON.parse(JSON.stringify(activity.questions)) : []);
   }
+
+  // Filter available parent activities for subordination
+  const availableParentActivities = React.useMemo(() => {
+    return (activities || []).filter(
+      (a) => a.id !== activity?.id && !a.isRecovery && !a.recoveryFromId && a.type !== 'Recuperação Paralela' && !a.isAdapted
+    );
+  }, [activities, activity?.id]);
 
   // Filter PNE students enrolled in the currently selected turmas
   const pneStudentsInSelectedTurmas = React.useMemo(() => {
@@ -175,6 +186,8 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       }
     }
 
+    const isParallelRecovery = type === 'Recuperação Paralela';
+
     const updatedActivity: Activity = {
       ...activity,
       title: title.trim(),
@@ -186,10 +199,13 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       status: finalStatus,
       deadline: deadline.trim() || 'Amanhã, 23:59',
       maxGrade,
-      allowGroupWork,
+      allowGroupWork: isParallelRecovery ? false : allowGroupWork,
       securityFocusLock,
       securityBlockCopyStatement,
       securityBlockPasteEssay,
+      isRecovery: isParallelRecovery || Boolean(recoveryFromId) || Boolean(activity.isRecovery),
+      recoveryFromId: isParallelRecovery && recoveryFromId ? recoveryFromId : (activity.recoveryFromId || undefined),
+      recoveryApproach: isParallelRecovery ? (activity.recoveryApproach || 'Estudos de caso e aplicações práticas do cotidiano') : activity.recoveryApproach,
       includedPneStudentIds,
       questions,
     };
@@ -257,10 +273,15 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
               <select
                 value={type}
                 onChange={(e) => {
-                  const selectedType = e.target.value as any;
+                  const selectedType = e.target.value as ActivityType;
                   setType(selectedType);
                   if (selectedType === 'Trabalho em grupo') {
                     setAllowGroupWork(true);
+                  } else if (selectedType === 'Recuperação Paralela') {
+                    setAllowGroupWork(false);
+                    if (!recoveryFromId && availableParentActivities.length > 0) {
+                      setRecoveryFromId(availableParentActivities[0].id);
+                    }
                   }
                 }}
                 className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-3 py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
@@ -271,6 +292,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                 <option value="Dinâmica" className="bg-[#0b1326]">Dinâmica</option>
                 <option value="Trabalho em grupo" className="bg-[#0b1326]">Trabalho em grupo</option>
                 <option value="Projeto de pesquisa" className="bg-[#0b1326]">Projeto de pesquisa</option>
+                <option value="Recuperação Paralela" className="bg-[#0b1326]">Recuperação Paralela</option>
               </select>
             </div>
 
@@ -308,6 +330,46 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
               />
             </div>
           </div>
+
+          {/* Subordinação à Avaliação Base (quando Tipo = Recuperação Paralela) */}
+          {type === 'Recuperação Paralela' && (
+            <div className="bg-[#131b2e] border border-indigo-500/40 rounded-2xl p-4 space-y-3 shadow-lg animate-fadeIn">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-500/20 text-indigo-300 rounded-xl border border-indigo-500/30">
+                  <RotateCcw className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-indigo-300">
+                    Avaliação à qual esta Recuperação é subordinada
+                  </h4>
+                  <p className="text-[11px] text-[#bccabb]">
+                    Não conta como entrega esperada para quem já entregou a 1ª atividade original.
+                  </p>
+                </div>
+              </div>
+
+              {availableParentActivities.length > 0 ? (
+                <select
+                  value={recoveryFromId}
+                  onChange={(e) => setRecoveryFromId(e.target.value)}
+                  className="w-full bg-[#0e172a] border border-indigo-500/40 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-400"
+                >
+                  <option value="" disabled className="bg-[#0b1326]">
+                    -- Selecione a atividade original correspondente --
+                  </option>
+                  {availableParentActivities.map((parent) => (
+                    <option key={parent.id} value={parent.id} className="bg-[#0b1326]">
+                      {parent.title} • Turma: {parent.turma} {parent.subject ? `• ${parent.subject}` : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="p-2.5 bg-white/5 rounded-xl text-xs text-[#bccabb]">
+                  Nenhuma outra atividade principal disponível no sistema para vincular.
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Deadline */}
           <div>

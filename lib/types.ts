@@ -87,6 +87,8 @@ export type ActivityQuestion =
   | ({ type: 'multiple_choice' } & MultipleChoiceQuestion)
   | ({ type: 'essay' } & EssayQuestion);
 
+export type ActivityType = 'Simulado' | 'Redação' | 'Dinâmica' | 'Avaliação' | 'Trabalho em grupo' | 'Projeto de pesquisa' | 'Recuperação Paralela';
+
 export interface Activity {
   id: string;
   title: string;
@@ -94,7 +96,7 @@ export interface Activity {
   description: string;
   supportMaterial?: string;
   turma: string;
-  type: 'Simulado' | 'Redação' | 'Dinâmica' | 'Avaliação' | 'Trabalho em grupo' | 'Projeto de pesquisa';
+  type: ActivityType;
   status: 'Ativo' | 'Prazo Encerrado' | 'Inativo';
   deadline: string;
   maxGrade?: number;
