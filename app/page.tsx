@@ -34,6 +34,7 @@ import {
   notifyNewActivityForStudent,
   notifyDeadlineExtendedForStudent,
   requestNotificationPermission,
+  registerServiceWorker,
 } from '@/lib/notificationUtils';
 import { NewActivityModal } from '@/components/modals/NewActivityModal';
 import { EditActivityModal } from '@/components/modals/EditActivityModal';
@@ -152,6 +153,11 @@ export default function Home() {
         const savedTimeout = localStorage.getItem('inactivity_timeout_enabled');
         if (savedTimeout !== null) {
           setInactivityTimeoutEnabled(savedTimeout === 'true');
+        }
+
+        // Registrar Service Worker para Push Notifications no Celular e Navegador
+        if ('serviceWorker' in navigator) {
+          registerServiceWorker().catch(() => {});
         }
       } catch (e) {
         console.warn('Erro ao restaurar sessão no cliente:', e);

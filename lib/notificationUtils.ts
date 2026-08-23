@@ -1,23 +1,61 @@
 /**
- * Utilitários para Notificações Nativas do Navegador (Chrome Desktop & Mobile), feedback sonoro e monitoramento de prazos/mensagens.
+ * Utilitários para Notificações Nativas do Navegador e Push em Smartphones (Chrome Mobile & Desktop), feedback sonoro e monitoramento de prazos/mensagens.
  */
 
 import { Activity, StudentUser } from '@/lib/types';
 import { canStudentAccessActivity, isStudentPNE } from '@/lib/studentUtils';
 
+let swRegistration: ServiceWorkerRegistration | null = null;
+
+/**
+ * Registra o Service Worker para habilitar Notificações Push no Smartphone e Desktop.
+ */
+export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration | null> => {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+    return null;
+  }
+
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    swRegistration = reg;
+    return reg;
+  } catch (err) {
+    console.warn('Não foi possível registrar o Service Worker para Push Notifications:', err);
+    return null;
+  }
+};
+
 export const isNotificationSupported = (): boolean => {
-  return typeof window !== 'undefined' && 'Notification' in window;
+  return typeof window !== 'undefined' && ('Notification' in window || 'serviceWorker' in navigator);
 };
 
 export const getNotificationPermission = (): NotificationPermission => {
   if (!isNotificationSupported()) return 'denied';
-  return Notification.permission;
+  return typeof Notification !== 'undefined' ? Notification.permission : 'default';
 };
 
 export const requestNotificationPermission = async (): Promise<NotificationPermission> => {
-  if (!isNotificationSupported()) return 'denied';
+  if (typeof window === 'undefined') return 'denied';
+
+  // Pré-registrar Service Worker no smartphone para garantir compatibilidade
+  if ('serviceWorker' in navigator) {
+    try {
+      await registerServiceWorker();
+    } catch (e) {
+      console.warn('Erro ao inicializar SW antes da permissão:', e);
+    }
+  }
+
+  if (!('Notification' in window)) {
+    return 'denied';
+  }
+
   try {
     const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      // Pequeno toque sonoro de confirmação
+      playNotificationSound();
+    }
     return permission;
   } catch (error) {
     console.warn('Erro ao solicitar permissão de notificação no navegador:', error);
@@ -52,10 +90,10 @@ export const playNotificationSound = () => {
     // Silently handle if audio context is blocked prior to user gesture
   }
 
-  // Tentar vibração em dispositivos móveis (Android Chrome)
+  // Vibração nativa em smartphones (Android)
   if (typeof window !== 'undefined' && 'navigator' in window && navigator.vibrate) {
     try {
-      navigator.vibrate([100, 50, 100]);
+      navigator.vibrate([150, 80, 150]);
     } catch (e) {}
   }
 };
@@ -73,27 +111,56 @@ export const sendBrowserNotification = (
   // Sempre tocar som e vibração para alertar o usuário
   playNotificationSound();
 
-  if (!isNotificationSupported()) return;
+  if (typeof window === 'undefined' || !('Notification' in window)) return;
 
   if (Notification.permission === 'granted') {
-    try {
-      const notif = new Notification(title, {
-        body: options?.body || '',
-        icon: options?.icon || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
-        badge: options?.icon || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
-        tag: options?.tag || `notif-${Date.now()}`,
-      });
+    const defaultIcon = 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250';
+    const notifOptions: any = {
+      body: options?.body || '',
+      icon: options?.icon || defaultIcon,
+      badge: options?.icon || defaultIcon,
+      tag: options?.tag || `notif-${Date.now()}`,
+      vibrate: [200, 100, 200],
+      data: options?.data || { url: '/' },
+    };
 
-      notif.onclick = () => {
-        window.focus();
-        if (options?.onClick) {
-          options.onClick();
+    // 1. Tentar exibir via ServiceWorkerRegistration (Padrão obrigatório no Android / Smartphones)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistration().then((reg) => {
+        if (reg && reg.showNotification) {
+          reg.showNotification(title, notifOptions).catch(() => {
+            // Fallback para construtor padrão
+            tryShowStandardNotification(title, notifOptions, options?.onClick);
+          });
+        } else {
+          tryShowStandardNotification(title, notifOptions, options?.onClick);
         }
-        notif.close();
-      };
-    } catch (e) {
-      console.warn('Erro ao disparar notificação nativa do navegador:', e);
+      }).catch(() => {
+        tryShowStandardNotification(title, notifOptions, options?.onClick);
+      });
+    } else {
+      tryShowStandardNotification(title, notifOptions, options?.onClick);
     }
+  }
+};
+
+const tryShowStandardNotification = (
+  title: string,
+  notifOptions: any,
+  onClick?: () => void
+) => {
+  try {
+    const notif = new Notification(title, notifOptions);
+    notif.onclick = () => {
+      window.focus();
+      if (onClick) {
+        onClick();
+      }
+      notif.close();
+    };
+  } catch (e) {
+    // Alguns navegadores móveis desativam o construtor direto new Notification
+    console.warn('Notificação de navegador direta não suportada:', e);
   }
 };
 
@@ -270,4 +337,34 @@ export const notifyDeadlineExtendedForStudent = (
     showGlobalStatus('info', `⏳ Prazo da atividade "${activity.title}" prorrogado para ${activity.deadline}!`);
   }
 };
+
+/**
+ * Dispara notificação de correção/nota lançada ou feedback devolvido pelo Professor ADM para o aluno.
+ */
+export const notifyGradeOrFeedbackForStudent = (
+  activityTitle: string,
+  grade: number,
+  maxGrade: number = 10,
+  feedback?: string,
+  isReturned?: boolean,
+  showGlobalStatus?: (type: 'success' | 'error' | 'info', msg: string) => void
+) => {
+  const title = isReturned
+    ? `↩️ Atividade Devolvida para Revisão: ${activityTitle}`
+    : `⭐ Nota Lançada pelo Prof. Gilson: ${activityTitle}`;
+
+  const body = isReturned
+    ? `O professor solicitou ajustes na sua resposta. Feedback: "${feedback || 'Verifique as observações no portal.'}"`
+    : `Sua nota foi ${grade} de ${maxGrade} pts! ${feedback ? `Feedback: "${feedback}"` : 'Confira a correção no portal.'}`;
+
+  sendBrowserNotification(title, {
+    body,
+    tag: `grade-${activityTitle}-${Date.now()}`,
+  });
+
+  if (showGlobalStatus) {
+    showGlobalStatus('info', title);
+  }
+};
+
 

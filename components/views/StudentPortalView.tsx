@@ -4,6 +4,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { StudentUser, TeacherUser, Activity, LibraryFile, ChatMessage, ActivityQuestion, MultipleChoiceQuestion, EssayQuestion } from '@/lib/types';
 import { canStudentAccessActivity, getActivityGradeDistribution, isStudentPNE } from '@/lib/studentUtils';
 import { extractCleanHtml } from '@/lib/adaptationUtils';
+import {
+  getNotificationPermission,
+  requestNotificationPermission,
+  sendBrowserNotification,
+  registerServiceWorker,
+} from '@/lib/notificationUtils';
 import { MessagesView } from './MessagesView';
 import {
   LogOut,
@@ -40,6 +46,10 @@ import {
   RefreshCw,
   Maximize2,
   Minimize2,
+  Smartphone,
+  Bell,
+  BellRing,
+  BellOff,
 } from 'lucide-react';
 
 interface StudentPortalViewProps {
@@ -134,6 +144,54 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   // Fullscreen / Immersive Mode for PNE Severe Playful Activities
   const [fullscreenGameActivityId, setFullscreenGameActivityId] = useState<string | null>(null);
 
+  // Smartphone Push Notifications State
+  const [pushStatus, setPushStatus] = useState<NotificationPermission>(() => {
+    if (typeof window !== 'undefined') {
+      return getNotificationPermission();
+    }
+    return 'default';
+  });
+  const [pushToast, setPushToast] = useState<string | null>(null);
+  const [isActivatingPush, setIsActivatingPush] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && pushStatus === 'granted') {
+      registerServiceWorker().catch(() => {});
+    }
+  }, [pushStatus]);
+
+  const handleActivatePush = async () => {
+    setIsActivatingPush(true);
+    try {
+      const perm = await requestNotificationPermission();
+      setPushStatus(perm);
+      if (perm === 'granted') {
+        await registerServiceWorker();
+        sendBrowserNotification('📲 Notificações Push Ativadas!', {
+          body: `Olá, ${student.fullName.split(' ')[0]}! Seu celular agora receberá mensagens, avisos e notas do Prof. Gilson Flores.`,
+          tag: 'push-activated-welcome',
+        });
+        setPushToast('✅ Notificações Push no smartphone ativadas com sucesso!');
+        setTimeout(() => setPushToast(null), 5000);
+      } else {
+        setPushToast('⚠️ Permissão de notificações não concedida. Por favor, permita notificações nas configurações do seu navegador.');
+        setTimeout(() => setPushToast(null), 6000);
+      }
+    } catch (err) {
+      console.warn('Erro ao ativar push:', err);
+    } finally {
+      setIsActivatingPush(false);
+    }
+  };
+
+  const handleTestPush = () => {
+    sendBrowserNotification('🔔 Teste de Push no Celular', {
+      body: `Prof. Gilson Flores: Notificação de teste recebida no seu smartphone! O canal de alertas está funcionando perfeitamente.`,
+      tag: `test-push-${Date.now()}`,
+    });
+    setPushToast('📲 Notificação enviada para a barra de avisos do seu celular!');
+    setTimeout(() => setPushToast(null), 4000);
+  };
 
   // Interactive student answers per activity
   // essayInputs[activityId] -> string
@@ -579,6 +637,73 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           <span>Sair da Conta</span>
         </button>
       </div>
+
+      {/* Push Notification Bar on Smartphone / Browser */}
+      <div className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md ${
+        pushStatus === 'granted'
+          ? 'bg-[#131b2e]/80 border-[#4ade80]/30 text-[#dae2fd]'
+          : 'bg-gradient-to-r from-[#172554]/60 to-[#1e1b4b]/60 border-blue-500/30 text-blue-100'
+      }`}>
+        <div className="flex items-start sm:items-center gap-3">
+          <div className={`p-2.5 rounded-xl shrink-0 ${
+            pushStatus === 'granted' ? 'bg-[#4ade80]/15 text-[#4ade80]' : 'bg-blue-500/20 text-blue-400 animate-pulse'
+          }`}>
+            {pushStatus === 'granted' ? (
+              <Smartphone className="w-5 h-5" />
+            ) : (
+              <BellRing className="w-5 h-5" />
+            )}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-white">
+                {pushStatus === 'granted'
+                  ? 'Notificações Push do Professor Conectadas no Smartphone'
+                  : 'Receber Notificações do Professor no Smartphone'}
+              </span>
+              {pushStatus === 'granted' && (
+                <span className="bg-[#4ade80]/20 text-[#4ade80] text-[10px] font-bold px-2 py-0.5 rounded-full border border-[#4ade80]/30">
+                  Ativo
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-[#bccabb] mt-0.5">
+              {pushStatus === 'granted'
+                ? 'Seu navegador e celular receberão avisos em tempo real de novas atividades, prazos e recados do Prof. Gilson.'
+                : 'Ative o push do navegador para receber mensagens, notas e alertas do Prof. Gilson na tela do seu celular.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {pushStatus === 'granted' ? (
+            <button
+              onClick={handleTestPush}
+              className="py-2 px-4 bg-[#171f33] hover:bg-[#222f4c] text-[#4ade80] border border-[#4ade80]/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+            >
+              <Bell className="w-3.5 h-3.5" />
+              <span>Testar Push no Celular</span>
+            </button>
+          ) : (
+            <button
+              onClick={handleActivatePush}
+              disabled={isActivatingPush}
+              className="py-2 px-4 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-md transition-all cursor-pointer active:scale-95"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>{isActivatingPush ? 'Ativando...' : '📲 Ativar Notificações no Celular'}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Push Feedback Toast */}
+      {pushToast && (
+        <div className="p-3.5 bg-blue-950/80 border border-blue-500/40 rounded-2xl text-xs text-blue-200 font-semibold flex items-center gap-3 shadow-lg animate-fadeIn">
+          <Smartphone className="w-4 h-4 text-blue-400 shrink-0" />
+          <span>{pushToast}</span>
+        </div>
+      )}
 
       {/* Toast Banner on Submission */}
       {submissionSuccessMsg && (
