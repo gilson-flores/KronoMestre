@@ -94,9 +94,46 @@ export const GradingView: React.FC<GradingViewProps> = ({
     try {
       setGeneratingFeedbackState({ studentId: sub.studentId, type: feedbackType });
       
-      const objTotal = activity.questions ? activity.questions.filter(q => q.type === 'multiple_choice').length : 0;
-      const objCorrect = sub.objectiveScore ? Math.round(sub.objectiveScore) : 0;
-      const currentScore = (sub.objectiveScore || 0) + (sub.essayScore || 0) + (sub.extraPoints || 0);
+      const distribution = getActivityGradeDistribution(activity);
+      const objQuestions = activity.questions ? activity.questions.filter((q) => q.type === 'multiple_choice') : [];
+      const essayQuestions = activity.questions ? activity.questions.filter((q) => q.type === 'essay') : [];
+
+      const objTotal = objQuestions.length;
+      const essayTotal = essayQuestions.length;
+
+      let evaluationFormat: 'objective_only' | 'essay_only' | 'mixed' = 'mixed';
+      if (distribution.hasObjective && !distribution.hasEssay) {
+        evaluationFormat = 'objective_only';
+      } else if (!distribution.hasObjective && distribution.hasEssay) {
+        evaluationFormat = 'essay_only';
+      } else if (distribution.hasObjective && distribution.hasEssay) {
+        evaluationFormat = 'mixed';
+      } else {
+        if (objTotal > 0 && essayTotal === 0) {
+          evaluationFormat = 'objective_only';
+        } else if (objTotal === 0 && essayTotal > 0) {
+          evaluationFormat = 'essay_only';
+        }
+      }
+
+      // Count correct objective answers
+      let objCorrect = 0;
+      if (sub.selectedObjectiveAnswers && objQuestions.length > 0) {
+        objQuestions.forEach((q) => {
+          const selected = sub.selectedObjectiveAnswers?.[q.id];
+          if (typeof selected === 'number' && selected === q.correctOptionIndex) {
+            objCorrect++;
+          }
+        });
+      } else if (sub.objectiveScore !== undefined && distribution.maxObjectiveGrade > 0 && objTotal > 0) {
+        objCorrect = Math.round((sub.objectiveScore / distribution.maxObjectiveGrade) * objTotal);
+      } else if (sub.objectiveScore) {
+        objCorrect = Math.round(sub.objectiveScore);
+      }
+
+      const totalObjectiveScore = distribution.hasObjective ? (sub.objectiveScore || 0) : 0;
+      const totalEssayScore = distribution.hasEssay ? (sub.essayScore || 0) : 0;
+      const currentScore = totalObjectiveScore + totalEssayScore + (sub.extraPoints || 0);
 
       const res = await fetch('/api/gemini/feedback', {
         method: 'POST',
@@ -105,9 +142,20 @@ export const GradingView: React.FC<GradingViewProps> = ({
           studentName: sub.studentName,
           activityTitle: activity.title,
           grade: currentScore,
+          maxGrade: distribution.maxGrade,
+          maxObjectiveGrade: distribution.maxObjectiveGrade,
+          maxEssayGrade: distribution.maxEssayGrade,
           statusAction,
-          essayAnswer: sub.essayAnswer || '',
-          objectiveSummary: { total: objTotal, correct: objCorrect },
+          evaluationFormat,
+          hasObjective: distribution.hasObjective,
+          hasEssay: distribution.hasEssay,
+          essayAnswer: distribution.hasEssay ? (sub.essayAnswer || '') : '',
+          objectiveSummary: {
+            total: objTotal,
+            correct: objCorrect,
+            score: totalObjectiveScore,
+          },
+          essayScore: totalEssayScore,
           feedbackType,
         }),
       });
