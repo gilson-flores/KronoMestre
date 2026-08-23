@@ -631,16 +631,43 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             )}
                           </div>
 
-                          {/* Prazo e Desglose de Entregas */}
+                          {/* Prazo e Desglose de Entregas com distinção de Recuperação */}
                           <div className="flex flex-wrap items-center gap-2 text-xs">
                             <span className="px-3 py-1 rounded-xl text-xs font-bold bg-[#131b2e] text-amber-300 border border-amber-500/30 flex items-center gap-1.5 shadow-sm">
                               <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                               <span>Prazo Limite: {act.deadline || 'Sem data'}</span>
                             </span>
 
-                            {subCount > 0 ? (
+                            {unifiedMetrics.hasRecovery ? (
+                              <>
+                                <span className="px-3 py-1 rounded-xl text-xs font-bold bg-[#131b2e] text-white border border-white/10 flex items-center gap-1.5" title="Alunos que entregaram na 1ª chamada regular">
+                                  <span>👥 1ª Chamada:</span>
+                                  <strong className="text-white">{unifiedMetrics.breakdown.mainCount}/{unifiedMetrics.expectedStudentsCount}</strong>
+                                  <span className="text-[10px] text-[#4ade80]">({unifiedMetrics.breakdown.mainRate}%)</span>
+                                </span>
+
+                                <span className="px-3 py-1 rounded-xl text-xs font-bold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 flex items-center gap-1.5" title="Entregas na Recuperação Paralela">
+                                  <RotateCcw className="w-3 h-3 text-indigo-400" />
+                                  <span>Recuperação:</span>
+                                  <strong className="text-indigo-200">{unifiedMetrics.breakdown.recoveryCount}</strong>
+                                  {unifiedMetrics.breakdown.recoveryOnlyCount > 0 && (
+                                    <span className="text-[10px] text-indigo-300">({unifiedMetrics.breakdown.recoveryOnlyCount} novas pós-prazo)</span>
+                                  )}
+                                </span>
+
+                                <span className="px-3 py-1 rounded-xl text-xs font-extrabold bg-[#4ade80]/15 text-[#4ade80] border border-[#4ade80]/30 flex items-center gap-1.5" title="Engajamento Total Consolidado (sem duplicidade)">
+                                  <span>🎯 Total Unificado: {unifiedMetrics.subCount}/{unifiedMetrics.expectedStudentsCount} ({unifiedMetrics.completionRate}%)</span>
+                                </span>
+                              </>
+                            ) : isRecoveryChild ? (
+                              <span className="px-3 py-1 rounded-xl text-xs font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 flex items-center gap-1.5">
+                                <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
+                                <span>Entregas nesta Recuperação: {subCount}</span>
+                                <span className="text-[10px] text-indigo-300/80">(integradas ao total da avaliação)</span>
+                              </span>
+                            ) : subCount > 0 ? (
                               <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-[#131b2e] text-white border border-white/10 flex items-center gap-1.5">
-                                👥 {subCount}/{expectedStudentsCount} Entregas
+                                👥 {subCount}/{expectedStudentsCount} Entregas ({unifiedMetrics.completionRate}%)
                               </span>
                             ) : (
                               <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-[#131b2e] text-[#bccabb] border border-white/5">

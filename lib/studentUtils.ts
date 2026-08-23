@@ -404,8 +404,38 @@ export function validateStudentName(rawName: string): {
 }
 
 /**
+ * Verifica se uma atividade é uma Recuperação Paralela vinculada/subordinada.
+ */
+export function isActivityRecovery(act?: Activity | null): boolean {
+  if (!act) return false;
+  if (act.isRecovery) return true;
+  if (Boolean(act.recoveryFromId)) return true;
+  if (act.type === 'Recuperação Paralela') return true;
+  const title = (act.title || '').trim().toLowerCase();
+  if (title.startsWith('[recuperação') || title.startsWith('[recuperacao')) return true;
+  if (title.includes('recuperação paralela') || title.includes('recuperacao paralela')) return true;
+  if (title.startsWith('recuperação') || title.startsWith('recuperacao')) return true;
+  return false;
+}
+
+/**
+ * Verifica se uma atividade é uma Adaptação Pedagógica PNE vinculada/subordinada.
+ */
+export function isActivityAdapted(act?: Activity | null): boolean {
+  if (!act) return false;
+  if (act.isAdapted) return true;
+  if (Boolean(act.adaptedFromId)) return true;
+  if (Boolean(act.adaptationType)) return true;
+  const title = (act.title || '').trim().toLowerCase();
+  if (title.startsWith('[pne') || title.startsWith('pne')) return true;
+  if (title.includes('adaptação pedagógica') || title.includes('adaptacao pedagogica')) return true;
+  return false;
+}
+
+/**
  * Calculates expected student count and submission metrics for an activity:
  * - Adapted activities ONLY count PNE students and PNE submissions.
+ * - Recovery activities ONLY count students who still owe/need the main activity (never expecting double class delivery).
  * - Principal activities with adaptations DEDUCT PNE students and PNE submissions to avoid duplicate data.
  * - Principal activities without adaptations count all students in the turma.
  */
@@ -414,7 +444,8 @@ export function getActivityStudentAndSubmissionCounts(
   allActivities: Activity[],
   students: StudentUser[]
 ) {
-  const isAdaptedAct = Boolean(act.isAdapted || act.adaptedFromId);
+  const isAdaptedAct = isActivityAdapted(act);
+  const isRecoveryAct = isActivityRecovery(act);
 
   // Filter students for this turma
   const enrolledStudents = students.filter((st) =>
@@ -424,7 +455,20 @@ export function getActivityStudentAndSubmissionCounts(
   // PNE students who are proficient and assigned to the normal/regular activity
   const parentAct = isAdaptedAct
     ? allActivities.find((a) => a.id === act.adaptedFromId)
+    : isRecoveryAct
+    ? allActivities.find((a) => a.id === act.recoveryFromId) ||
+      allActivities.find(
+        (a) =>
+          !isActivityRecovery(a) &&
+          !isActivityAdapted(a) &&
+          canStudentAccessActivity(a.turma, act.turma) &&
+          a.title &&
+          act.title &&
+          (a.title.toLowerCase().includes(act.title.toLowerCase().replace(/^\[.*?\]\s*/i, '').slice(0, 10)) ||
+            act.title.toLowerCase().includes(a.title.toLowerCase().replace(/^\[.*?\]\s*/i, '').slice(0, 10)))
+      )
     : null;
+
   const includedProficientPneIds = new Set(
     isAdaptedAct
       ? (parentAct?.includedPneStudentIds || [])
@@ -447,11 +491,11 @@ export function getActivityStudentAndSubmissionCounts(
   );
 
   // Check if this principal activity has an adapted version created for it
-  const hasAdaptationChild = !isAdaptedAct && allActivities.some(
+  const hasAdaptationChild = !isAdaptedAct && !isRecoveryAct && allActivities.some(
     (a) =>
       a.id !== act.id &&
       (a.adaptedFromId === act.id ||
-        (Boolean(a.isAdapted) &&
+        (isActivityAdapted(a) &&
           canStudentAccessActivity(a.turma, act.turma) &&
           a.title &&
           act.title &&
@@ -475,8 +519,36 @@ export function getActivityStudentAndSubmissionCounts(
         return s.tag === 'PNE';
       });
     }
+  } else if (isRecoveryAct) {
+    // 2. PARALLEL RECOVERY ACTIVITY: ONLY expects students who have NOT completed the principal activity
+    if (act.submissions && act.submissions.length > 0) {
+      submissionsList = act.submissions.filter((s) => {
+        if (students && students.length > 0) {
+          const st = enrolledStudents.find((x) => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
+          return Boolean(st);
+        }
+        return true;
+      });
+    }
+
+    const parentSubmittedIds = new Set(
+      (parentAct?.submissions || []).map((s) => s.studentId || s.matricula)
+    );
+
+    const studentsNotSubmittedParent = enrolledStudents.filter(
+      (st) => !parentSubmittedIds.has(st.id) && (!st.matricula || !parentSubmittedIds.has(st.matricula))
+    );
+
+    // Expected for recovery is ONLY the pending cohort (or at least those who already submitted recovery)
+    expectedStudentsCount = Math.max(
+      submissionsList.length,
+      students && students.length > 0 ? studentsNotSubmittedParent.length : 0
+    );
+    if (expectedStudentsCount === 0 && submissionsList.length === 0) {
+      expectedStudentsCount = 0;
+    }
   } else if (hasAdaptationChild) {
-    // 2. PRINCIPAL ACTIVITY WITH ADAPTATION: Regular students + proficient PNE students!
+    // 3. PRINCIPAL ACTIVITY WITH ADAPTATION: Regular students + proficient PNE students!
     expectedStudentsCount = students && students.length > 0
       ? studentsTakingNormal.length
       : Math.max(1, (act.totalStudents || 35) - pneEnrolledTakingAdaptation.length);
@@ -492,7 +564,7 @@ export function getActivityStudentAndSubmissionCounts(
       });
     }
   } else {
-    // 3. PRINCIPAL ACTIVITY WITHOUT ADAPTATION: All enrolled students
+    // 4. PRINCIPAL ACTIVITY WITHOUT ADAPTATION: All enrolled students
     expectedStudentsCount = students && students.length > 0
       ? enrolledStudents.length
       : (act.totalStudents || 35);
@@ -535,23 +607,13 @@ export function getCanonicalActivities(activities: Activity[]): Activity[] {
   if (!activities || activities.length === 0) return [];
   
   return activities.filter((act) => {
-    // Se é recuperação paralela (flag, tipo, recoveryFromId ou título), é subordinada e NÃO conta como canônica independente
-    if (
-      act.isRecovery ||
-      Boolean(act.recoveryFromId) ||
-      act.type === 'Recuperação Paralela' ||
-      act.title?.toLowerCase().startsWith('[recuperação')
-    ) {
+    // Se é recuperação paralela, é subordinada e NÃO conta como canônica independente
+    if (isActivityRecovery(act)) {
       return false;
     }
 
-    // Se é adaptação PNE (flag, tipo, adaptedFromId ou título), NÃO conta como canônica independente
-    if (
-      act.isAdapted ||
-      Boolean(act.adaptedFromId) ||
-      act.adaptationType ||
-      act.title?.toLowerCase().startsWith('[pne')
-    ) {
+    // Se é adaptação PNE, é subordinada e NÃO conta como canônica independente
+    if (isActivityAdapted(act)) {
       return false;
     }
     
@@ -568,8 +630,8 @@ export function getChildAdaptations(canonicalAct: Activity, allActivities: Activ
   return allActivities.filter((child) => 
     child.id !== canonicalAct.id &&
     (child.adaptedFromId === canonicalAct.id || (
-      Boolean(child.isAdapted) &&
-      !child.isRecovery &&
+      isActivityAdapted(child) &&
+      !isActivityRecovery(child) &&
       canStudentAccessActivity(child.turma, canonicalAct.turma) &&
       child.title &&
       canonicalAct.title &&
@@ -589,7 +651,7 @@ export function getChildRecoveryActivities(canonicalAct: Activity, allActivities
     (
       child.recoveryFromId === canonicalAct.id || 
       (
-        (Boolean(child.isRecovery) || child.type === 'Recuperação Paralela' || child.title?.toLowerCase().startsWith('[recuperação')) &&
+        isActivityRecovery(child) &&
         canStudentAccessActivity(child.turma, canonicalAct.turma) &&
         (
           !child.recoveryFromId ||
@@ -765,6 +827,18 @@ export function getUnifiedActivityMetrics(
     ? Number((recoveryGraded.reduce((acc, s) => acc + getSubmissionTotalGrade(s), 0) / recoveryGraded.length).toFixed(1))
     : null;
 
+  // Taxas individuais de engajamento
+  const mainRate = expectedStudentsCount > 0
+    ? Math.min(100, Math.round((mainCount / expectedStudentsCount) * 100))
+    : 0;
+
+  const recoveryRate = expectedStudentsCount > 0
+    ? Math.min(100, Math.round((recoveryCount / expectedStudentsCount) * 100))
+    : 0;
+
+  // Alunos que fizeram tanto a principal quanto a recuperação (recuperação de nota)
+  const recoveredCount = Array.from(recoveryStudentIds).filter((id) => mainStudentIds.has(id)).length;
+
   return {
     expectedStudentsCount,
     subCount,
@@ -777,9 +851,12 @@ export function getUnifiedActivityMetrics(
     hasRecovery: childRecoveries.length > 0,
     breakdown: {
       mainCount,
+      mainRate,
       recoveryCount,
+      recoveryRate,
       adaptedCount,
       recoveryOnlyCount,
+      recoveredCount,
       mainAvg,
       recoveryAvg,
     },

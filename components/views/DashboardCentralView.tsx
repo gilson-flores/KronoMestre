@@ -152,13 +152,17 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
       
       let turmaExpected = 0;
       let turmaSubmitted = 0;
+      let turmaMainCount = 0;
+      let turmaRecoveryCount = 0;
       let turmaGradeSum = 0;
       let turmaGradedCount = 0;
 
       turmaCanonicalActivities.forEach((act) => {
-        const { subCount, expectedStudentsCount, submissionsList } = getUnifiedActivityMetrics(act, activities, turmaStudents);
+        const { subCount, expectedStudentsCount, submissionsList, breakdown } = getUnifiedActivityMetrics(act, activities, turmaStudents);
         turmaExpected += expectedStudentsCount;
         turmaSubmitted += subCount;
+        turmaMainCount += breakdown.mainCount;
+        turmaRecoveryCount += breakdown.recoveryCount;
         
         submissionsList.forEach((s) => {
           if (s.status === 'graded' || (s.essayScore !== undefined && s.essayScore !== null) || Number(s.objectiveScore) > 0) {
@@ -169,6 +173,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
       });
 
       const rate = turmaExpected > 0 ? Math.min(100, Math.round((turmaSubmitted / turmaExpected) * 100)) : 0;
+      const mainRate = turmaExpected > 0 ? Math.min(100, Math.round((turmaMainCount / turmaExpected) * 100)) : 0;
       const avg = turmaGradedCount > 0 ? (turmaGradeSum / turmaGradedCount).toFixed(1) : '-';
 
       return {
@@ -176,6 +181,9 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
         studentsCount: turmaStudents.length,
         activitiesCount: turmaCanonicalActivities.length,
         completionRate: rate,
+        mainCount: turmaMainCount,
+        recoveryCount: turmaRecoveryCount,
+        mainRate,
         averageGrade: avg,
         pneCount: turmaStudents.filter((s) => isStudentPNE(s)).length,
         radCount: turmaStudents.filter((s) => s.tag?.toUpperCase() === 'RAD').length,
@@ -191,13 +199,18 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
   const adherenceAnalytics = useMemo(() => {
     let mainCount = 0;
     let recoveryCount = 0;
+    let recoveryOnlyCount = 0;
+    let recoveredCount = 0;
     let adaptedCount = 0;
     const recoveryActivitiesList: {
       parentTitle: string;
       turma: string;
       approach?: string;
       mainCount: number;
+      mainRate: number;
       recoveryCount: number;
+      recoveryRate: number;
+      recoveryOnlyCount: number;
       adaptedCount: number;
       total: number;
       expected: number;
@@ -208,6 +221,8 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
       const metrics = getUnifiedActivityMetrics(parent, activities, students);
       mainCount += metrics.breakdown.mainCount;
       recoveryCount += metrics.breakdown.recoveryCount;
+      recoveryOnlyCount += metrics.breakdown.recoveryOnlyCount;
+      recoveredCount += (metrics.breakdown.recoveredCount || 0);
       adaptedCount += metrics.breakdown.adaptedCount;
 
       if (metrics.hasRecovery) {
@@ -219,7 +234,10 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
           turma: parent.turma || '',
           approach: recAct?.recoveryApproach,
           mainCount: metrics.breakdown.mainCount,
+          mainRate: metrics.breakdown.mainRate,
           recoveryCount: metrics.breakdown.recoveryCount,
+          recoveryRate: metrics.breakdown.recoveryRate,
+          recoveryOnlyCount: metrics.breakdown.recoveryOnlyCount,
           adaptedCount: metrics.breakdown.adaptedCount,
           total: metrics.subCount,
           expected: metrics.expectedStudentsCount,
@@ -228,13 +246,20 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
       }
     });
 
+    const mainRate = totalExpected > 0 ? Math.min(100, Math.round((mainCount / totalExpected) * 100)) : 0;
+    const recoveryRate = totalExpected > 0 ? Math.min(100, Math.round((recoveryCount / totalExpected) * 100)) : 0;
+
     return {
       mainCount,
+      mainRate,
       recoveryCount,
+      recoveryRate,
+      recoveryOnlyCount,
+      recoveredCount,
       adaptedCount,
       recoveryActivitiesList,
     };
-  }, [canonicalActivities, activities, students]);
+  }, [canonicalActivities, activities, students, totalExpected]);
 
   return (
     <div className="space-y-8 animate-fadeIn pb-12">
@@ -294,15 +319,21 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
         <div className="glass-panel p-5 rounded-3xl border border-white/10 bg-[#131b2e] relative overflow-hidden group">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold tracking-wider text-[#bccabb] uppercase">
-              Entregas de Alunos
+              Entregas & Engajamento
             </span>
             <div className="w-9 h-9 rounded-2xl bg-indigo-500/20 text-[#c0c1ff] flex items-center justify-center">
               <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-3xl font-extrabold text-white mb-1">{totalSubmissions}</div>
-          <div className="text-xs text-[#4ade80] font-semibold">
-            {completionRate}% de engajamento ({totalExpected} esperadas)
+          <div className="text-3xl font-extrabold text-white mb-1">
+            {totalSubmissions}
+            <span className="text-sm font-normal text-[#bccabb] ml-1.5">/ {totalExpected}</span>
+          </div>
+          <div className="text-xs text-[#4ade80] font-semibold flex items-center gap-1.5 flex-wrap">
+            <span>{completionRate}% total consolidado</span>
+            <span className="text-[10px] text-[#bccabb] font-normal">
+              (1ª Cham: {adherenceAnalytics.mainRate}% • Recup: {adherenceAnalytics.recoveryRate}%)
+            </span>
           </div>
         </div>
 
@@ -378,13 +409,11 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
             </span>
             <div className="mt-2 flex items-baseline justify-between">
               <span className="text-2xl font-black text-white">{adherenceAnalytics.mainCount}</span>
-              <span className="text-[10px] text-[#bccabb] font-medium">
-                {totalSubmissions > 0
-                  ? `${Math.round((adherenceAnalytics.mainCount / totalSubmissions) * 100)}%`
-                  : '0%'}
+              <span className="text-[10px] text-[#4ade80] font-bold">
+                {adherenceAnalytics.mainRate}% engaj.
               </span>
             </div>
-            <span className="text-[10px] text-[#bccabb]/70 mt-1">Avaliações regulares</span>
+            <span className="text-[10px] text-[#bccabb]/70 mt-1">Avaliações regulares no prazo</span>
           </div>
 
           <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex flex-col justify-between">
@@ -396,13 +425,15 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
             </div>
             <div className="mt-2 flex items-baseline justify-between">
               <span className="text-2xl font-black text-indigo-200">{adherenceAnalytics.recoveryCount}</span>
-              <span className="text-[10px] text-indigo-300 font-medium">
-                {totalSubmissions > 0
-                  ? `${Math.round((adherenceAnalytics.recoveryCount / totalSubmissions) * 100)}%`
-                  : '0%'}
+              <span className="text-[10px] text-indigo-300 font-bold">
+                {adherenceAnalytics.recoveryRate}% adesão
               </span>
             </div>
-            <span className="text-[10px] text-indigo-300/70 mt-1">Reavaliações pedagógicas</span>
+            <span className="text-[10px] text-indigo-300/70 mt-1">
+              {adherenceAnalytics.recoveryOnlyCount > 0
+                ? `${adherenceAnalytics.recoveryOnlyCount} novas pós-prazo • ${adherenceAnalytics.recoveredCount} reavaliações`
+                : `${adherenceAnalytics.recoveredCount} reavaliações pedagógicas`}
+            </span>
           </div>
 
           <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col justify-between">
@@ -422,16 +453,16 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
 
           <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col justify-between">
             <span className="text-[11px] text-emerald-300 font-semibold uppercase tracking-wider">
-              Total Geral Turma
+              Total Unificado
             </span>
             <div className="mt-2 flex items-baseline justify-between">
               <span className="text-2xl font-black text-emerald-300">
                 {totalSubmissions}
                 <span className="text-sm font-normal text-emerald-300/70">/{totalExpected}</span>
               </span>
-              <span className="text-[10px] text-emerald-300 font-bold">{completionRate}%</span>
+              <span className="text-[10px] text-emerald-300 font-bold">{completionRate}% total</span>
             </div>
-            <span className="text-[10px] text-emerald-300/70 mt-1">Alunos únicos atendidos</span>
+            <span className="text-[10px] text-emerald-300/70 mt-1">Alunos únicos com meta cumprida</span>
           </div>
         </div>
 
@@ -446,17 +477,22 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
               {adherenceAnalytics.recoveryActivitiesList.map((item, idx) => (
                 <div
                   key={idx}
-                  className="p-2.5 rounded-xl bg-[#0b1326] border border-white/5 flex items-center justify-between text-xs"
+                  className="p-3 rounded-xl bg-[#0b1326] border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
                 >
                   <div className="truncate pr-2">
                     <span className="font-bold text-white truncate block">{item.parentTitle}</span>
                     <span className="text-[10px] text-[#bccabb]">
                       Turma {item.turma} {item.approach ? `• ${item.approach}` : ''}
                     </span>
+                    <div className="flex items-center gap-2 text-[10px] mt-1 text-[#bccabb]">
+                      <span>1ª Chamada: <strong className="text-white">{item.mainCount}</strong> ({item.mainRate}%)</span>
+                      <span>•</span>
+                      <span className="text-indigo-300">Recup: <strong className="text-indigo-200">{item.recoveryCount}</strong> ({item.recoveryRate}%)</span>
+                    </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <span className="font-bold text-indigo-300 text-xs block">{item.recoveryCount} recup.</span>
-                    <span className="text-[10px] text-[#4ade80] font-semibold">{item.rate}% engajamento</span>
+                  <div className="text-right shrink-0 self-end sm:self-center">
+                    <span className="font-bold text-[#4ade80] text-xs block">{item.rate}% total</span>
+                    <span className="text-[10px] text-[#bccabb] font-medium">{item.total}/{item.expected} alunos</span>
                   </div>
                 </div>
               ))}
@@ -595,16 +631,27 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                       {t.activitiesCount}
                     </td>
                     <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 bg-[#0b1326] h-2 rounded-full overflow-hidden max-w-[140px]">
-                          <div
-                            className="bg-[#4ade80] h-full rounded-full transition-all duration-500"
-                            style={{ width: `${t.completionRate}%` }}
-                          />
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 bg-[#0b1326] h-2 rounded-full overflow-hidden max-w-[140px]">
+                            <div
+                              className="bg-[#4ade80] h-full rounded-full transition-all duration-500"
+                              style={{ width: `${t.completionRate}%` }}
+                            />
+                          </div>
+                          <span className="font-bold text-white text-[11px] min-w-[32px]">
+                            {t.completionRate}%
+                          </span>
                         </div>
-                        <span className="font-bold text-white text-[11px] min-w-[32px]">
-                          {t.completionRate}%
-                        </span>
+                        <div className="flex items-center gap-2 text-[10px] text-[#bccabb]">
+                          <span>1ª Cham: <strong className="text-white">{t.mainCount}</strong> ({t.mainRate}%)</span>
+                          {t.recoveryCount > 0 && (
+                            <>
+                              <span>•</span>
+                              <span className="text-indigo-300">Recup: <strong className="text-indigo-200">{t.recoveryCount}</strong></span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="py-3.5 px-4 text-center font-bold text-[#4ade80]">

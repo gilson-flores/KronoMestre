@@ -23,7 +23,14 @@ import {
   HeartHandshake,
 } from 'lucide-react';
 import { StudentUser, Activity, ActivitySubmission } from '@/lib/types';
-import { canStudentAccessActivity, getTurmaLabel } from '@/lib/studentUtils';
+import {
+  canStudentAccessActivity,
+  getTurmaLabel,
+  getCanonicalActivities,
+  getChildRecoveryActivities,
+  getChildAdaptations,
+  getSubmissionTotalGrade,
+} from '@/lib/studentUtils';
 import {
   canEmitDossier,
   emitNewDossier,
@@ -65,22 +72,48 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
 
   if (!isOpen || !student) return null;
 
-  // Filter activities assigned to this student's turma
-  const studentActivities = activities.filter((act) =>
+  // Canonical activities assigned to this student's turma (treats main + parallel recovery + PNE as 1 single learning milestone)
+  const canonicalStudentActivities = getCanonicalActivities(activities).filter((act) =>
     canStudentAccessActivity(act.turma, student.turma)
   );
 
-  // Submissions breakdown
-  const studentSubmissions = studentActivities.map((act) => {
-    const sub = act.submissions?.find(
-      (s) => s.studentId === student.id || s.matricula === student.matricula || s.studentName === student.fullName
-    );
+  // Submissions breakdown per canonical activity (takes student submission from main, recovery, or adapted)
+  const studentSubmissions = canonicalStudentActivities.map((canonicalAct) => {
+    const childRecoveries = getChildRecoveryActivities(canonicalAct, activities);
+    const childAdaptations = getChildAdaptations(canonicalAct, activities);
+    const allRelatedActs = [canonicalAct, ...childRecoveries, ...childAdaptations];
+
+    let bestSub: ActivitySubmission | undefined;
+    let selectedAct: Activity = canonicalAct;
+
+    for (const act of allRelatedActs) {
+      const foundSub = act.submissions?.find(
+        (s) =>
+          s.studentId === student.id ||
+          (Boolean(student.matricula) && s.matricula === student.matricula) ||
+          s.studentName?.trim().toLowerCase() === student.fullName?.trim().toLowerCase()
+      );
+
+      if (foundSub) {
+        if (
+          !bestSub ||
+          (foundSub.status === 'graded' && bestSub.status !== 'graded') ||
+          getSubmissionTotalGrade(foundSub) > getSubmissionTotalGrade(bestSub)
+        ) {
+          bestSub = foundSub;
+          selectedAct = act;
+        }
+      }
+    }
+
     return {
-      activity: act,
-      submission: sub,
+      activity: selectedAct,
+      canonicalActivity: canonicalAct,
+      submission: bestSub,
     };
   });
 
+  const studentActivities = canonicalStudentActivities;
   const completedCount = studentSubmissions.filter((item) => item.submission && item.submission.status !== 'draft').length;
   const gradedSubmissions = studentSubmissions.filter((item) => item.submission && item.submission.status === 'graded');
   const returnedCount = studentSubmissions.reduce(
