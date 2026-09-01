@@ -77,57 +77,90 @@ body {
   background: rgba(74, 222, 128, 0.75);
 }
 
-/* Print CSS for Dossier Official Exam Proof Document */
+/* Print CSS for Dossier & Official RCO Documents */
 @media print {
   @page {
     size: A4 portrait;
-    margin: 10mm;
+    margin: 8mm 10mm;
   }
 
+  html,
   body {
     background: white !important;
-    color: black !important;
+    color: #0f172a !important;
     font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
     margin: 0 !important;
     padding: 0 !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  body * {
-    visibility: hidden;
+  /* Reset fixed modal overlay for print */
+  .fixed.inset-0.z-50 {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    overflow: visible !important;
+    height: auto !important;
   }
 
-  .dossier-printable-area,
-  .dossier-printable-area *,
-  .rco-printable-area,
-  .rco-printable-area * {
-    visibility: visible !important;
+  .rco-modal-dialog {
+    background: white !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .rco-scroll-container {
+    overflow: visible !important;
+    height: auto !important;
+    padding: 0 !important;
+    background: white !important;
   }
 
   .dossier-printable-area,
   .rco-printable-area {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
+    position: static !important;
     width: 100% !important;
     max-width: 100% !important;
     background: white !important;
-    color: black !important;
+    color: #0f172a !important;
     padding: 0 !important;
     box-shadow: none !important;
     border: none !important;
     margin: 0 !important;
+    overflow: visible !important;
   }
 
   .rco-page-break {
     page-break-before: always !important;
     break-before: page !important;
+    margin-top: 0 !important;
+    padding-top: 10mm !important;
   }
 
   .rco-avoid-break {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  thead {
+    display: table-header-group !important;
   }
 
   .no-print {

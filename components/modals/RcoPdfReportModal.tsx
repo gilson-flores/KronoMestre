@@ -10,15 +10,16 @@ import {
   X,
   Building2,
   Users,
-  BookOpen,
-  Award,
   ShieldCheck,
-  Sparkles,
   Info,
   Calendar,
   Layers,
   GraduationCap,
-  FileSpreadsheet,
+  ClipboardList,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  PenLine,
 } from 'lucide-react';
 import { Activity, StudentUser, TeacherUser, RcoEmissionRecord } from '@/lib/types';
 import { canStudentAccessActivity, isStudentPNE, getOriginalTurmas } from '@/lib/studentUtils';
@@ -50,9 +51,9 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
   // Configurações do Relatório
   const [scope, setScope] = useState<'all' | 'single'>(selectedTurmaInitial ? 'single' : 'all');
   const [activeTurma, setActiveTurma] = useState<string>(selectedTurmaInitial || allTurmas[0] || '');
-  const [includeTransitionTerm, setIncludeTransitionTerm] = useState<boolean>(true);
   const [includeActivityDetails, setIncludeActivityDetails] = useState<boolean>(true);
   const [includeSpecialNeeds, setIncludeSpecialNeeds] = useState<boolean>(true);
+  const [includeTeacherNotesColumn, setIncludeTeacherNotesColumn] = useState<boolean>(true);
   const [includeSignatures, setIncludeSignatures] = useState<boolean>(true);
   const [copiedState, setCopiedState] = useState<boolean>(false);
 
@@ -64,7 +65,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
     return allTurmas.length > 0 ? allTurmas : ['Geral'];
   }, [scope, activeTurma, allTurmas]);
 
-  // Processamento e consolidação de dados por turma
+  // Processamento e consolidação de dados por turma focado em CONTROLE DE ATIVIDADES E ENTREGAS
   const turmasReportData = useMemo(() => {
     return targetTurmas.map((turmaName) => {
       // Alunos da turma
@@ -86,16 +87,18 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
         code: `A${idx + 1}`,
         activity: act,
         maxGrade: act.maxGrade || 10,
+        deadlineFormatted: act.deadline
+          ? new Date(act.deadline).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+          : '-',
       }));
 
-      // Processar notas de cada aluno
-      let sumTurmaAverages = 0;
-      let studentsWithGradeCount = 0;
+      const totalActivitiesCount = activityMap.length;
+      let studentsWithAtLeastOneSubmission = 0;
+      let studentsWithAllSubmissions = 0;
 
       const studentRows = turmaStudents.map((st, sIndex) => {
-        let totalPointsObtained = 0;
-        let totalMaxPossible = 0;
-        let gradedActivitiesCount = 0;
+        let completedActivitiesCount = 0;
+        const missingActivitiesCodes: string[] = [];
 
         const gradesPerAct = activityMap.map((item) => {
           const act = item.activity;
@@ -115,47 +118,55 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
           );
 
           let grade: number | null = null;
-          let status: 'graded' | 'pending' | 'returned' | 'not_submitted' = 'not_submitted';
+          let hasSubmitted = false;
 
           if (sub) {
+            hasSubmitted = true;
             const obj = Number(sub.objectiveScore) || 0;
             const ess = Number(sub.essayScore) || 0;
             const ext = Number(sub.extraPoints) || 0;
             grade = Number((obj + ess + ext).toFixed(1));
-            status = (sub.status as any) || 'graded';
-
-            if (sub.status === 'graded') {
-              gradedActivitiesCount++;
-            }
+            completedActivitiesCount++;
+          } else {
+            missingActivitiesCodes.push(item.code);
           }
-
-          if (grade !== null) {
-            totalPointsObtained += grade;
-          }
-          totalMaxPossible += item.maxGrade;
 
           return {
             code: item.code,
             activityId: act.id,
             grade,
             maxGrade: item.maxGrade,
-            status,
+            hasSubmitted,
           };
         });
 
-        // Média do aluno na escala de 0 a 10
-        const calculatedAverage =
-          totalMaxPossible > 0 && gradedActivitiesCount > 0
-            ? Number(((totalPointsObtained / totalMaxPossible) * 10).toFixed(1))
-            : null;
-
-        if (calculatedAverage !== null) {
-          sumTurmaAverages += calculatedAverage;
-          studentsWithGradeCount++;
+        if (completedActivitiesCount > 0) {
+          studentsWithAtLeastOneSubmission++;
+        }
+        if (totalActivitiesCount > 0 && completedActivitiesCount === totalActivitiesCount) {
+          studentsWithAllSubmissions++;
         }
 
         const isPne = isStudentPNE(st);
         const isRad = st.tag?.toUpperCase() === 'RAD';
+
+        // Status pedagógico de entrega
+        let deliveryStatusLabel = 'Sem Entregas';
+        let deliveryStatusType: 'complete' | 'partial' | 'none' = 'none';
+
+        if (totalActivitiesCount === 0) {
+          deliveryStatusLabel = 'Sem atividades';
+          deliveryStatusType = 'none';
+        } else if (completedActivitiesCount === totalActivitiesCount) {
+          deliveryStatusLabel = '✓ Completo';
+          deliveryStatusType = 'complete';
+        } else if (completedActivitiesCount > 0) {
+          deliveryStatusLabel = `${totalActivitiesCount - completedActivitiesCount} Pendência(s)`;
+          deliveryStatusType = 'partial';
+        } else {
+          deliveryStatusLabel = 'Pendente';
+          deliveryStatusType = 'none';
+        }
 
         return {
           index: sIndex + 1,
@@ -163,25 +174,20 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
           isPne,
           isRad,
           gradesPerAct,
-          calculatedAverage,
-          gradedCount: gradedActivitiesCount,
-          totalActivities: activityMap.length,
-          statusText:
-            calculatedAverage !== null
-              ? calculatedAverage >= 6.0
-                ? 'Apto / Regular'
-                : 'Atenção / Recuperação'
-              : 'Sem Entregas',
+          completedCount: completedActivitiesCount,
+          totalActivities: totalActivitiesCount,
+          missingCodes: missingActivitiesCodes,
+          deliveryStatusLabel,
+          deliveryStatusType,
         };
       });
 
-      const turmaAverageGrade =
-        studentsWithGradeCount > 0
-          ? Number((sumTurmaAverages / studentsWithGradeCount).toFixed(1))
-          : 0;
-
       const pneCount = turmaStudents.filter((s) => isStudentPNE(s)).length;
       const radCount = turmaStudents.filter((s) => s.tag?.toUpperCase() === 'RAD').length;
+      const engagementPercent =
+        turmaStudents.length > 0
+          ? Math.round((studentsWithAtLeastOneSubmission / turmaStudents.length) * 100)
+          : 0;
 
       return {
         turmaName,
@@ -189,9 +195,11 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
         activitiesCount: turmaActivities.length,
         activityMap,
         studentRows,
-        turmaAverageGrade,
         pneCount,
         radCount,
+        studentsWithAtLeastOneSubmission,
+        studentsWithAllSubmissions,
+        engagementPercent,
       };
     });
   }, [targetTurmas, students, activities]);
@@ -211,16 +219,29 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
     return `RCO-2026-SED-${timestamp}`;
   });
 
-  // Copiar dados formatados para colar no RCO
-  const handleCopyForRco = () => {
+  // Copiar Lista de Pendências para repassar à coordenação ou bloco de notas
+  const handleCopyPendingList = () => {
     const lines: string[] = [];
+    lines.push(`=== MAPA DE CONTROLE DOCENTE • ATIVIDADES E PENDÊNCIAS ===`);
+    lines.push(`Escola: ${teacher.school || "EEB Prof. Jandira D'Ávila"}`);
+    lines.push(`Professor(a): ${teacher.name || 'Prof. Gilson Flores'} • Disciplina: ${teacher.subject || 'Sociologia'}`);
+    lines.push(`Data: ${currentDateFormatted}`);
+    lines.push('');
+
     turmasReportData.forEach((tData) => {
-      lines.push(`=== TURMA ${tData.turmaName} - REGISTRO DE NOTAS RCO ===`);
-      lines.push(`Aluno\tMatrícula\tMédia RCO\tSituação`);
-      tData.studentRows.forEach((row) => {
-        const avg = row.calculatedAverage !== null ? row.calculatedAverage.toFixed(1).replace('.', ',') : '-';
-        lines.push(`${row.student.fullName}\t${row.student.matricula || '-'}\t${avg}\t${row.statusText}`);
-      });
+      lines.push(`--- TURMA ${tData.turmaName} (${tData.studentsCount} alunos • ${tData.activitiesCount} atividades) ---`);
+      
+      const pendingStudents = tData.studentRows.filter((r) => r.completedCount < r.totalActivities);
+      
+      if (pendingStudents.length === 0) {
+        lines.push(`✓ Parabéns! Todos os estudantes estão com as atividades entregues em dia.`);
+      } else {
+        pendingStudents.forEach((r) => {
+          const miss = r.missingCodes.length > 0 ? `[Faltando: ${r.missingCodes.join(', ')}]` : '';
+          const tag = r.isPne ? '(PNE)' : r.isRad ? '(RAD)' : '';
+          lines.push(`• ${r.student.fullName} ${tag}: ${r.completedCount}/${r.totalActivities} entregues ${miss}`);
+        });
+      }
       lines.push('');
     });
 
@@ -229,16 +250,16 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
     setTimeout(() => setCopiedState(false), 3000);
   };
 
-  // Exportar CSV consolidado
-  const handleExportCsvConsolidated = () => {
+  // Exportar CSV de Controle de Entregas
+  const handleExportCsv = () => {
     let csvContent = '\uFEFF';
-    csvContent += 'Turma,Nº,Nome do Aluno,Matrícula,Atendimento,Média RCO (0-10),Situação\n';
+    csvContent += 'Turma,Nº,Nome do Aluno,Matrícula,Atendimento,Entregas,Total Atividades,Status Entrega,Pendências\n';
 
     turmasReportData.forEach((tData) => {
       tData.studentRows.forEach((row) => {
-        const avg = row.calculatedAverage !== null ? row.calculatedAverage.toFixed(1).replace('.', ',') : '';
         const attend = row.isPne ? 'PNE' : row.isRad ? 'RAD' : 'Regular';
-        csvContent += `"${tData.turmaName}","${row.index}","${row.student.fullName}","${row.student.matricula || ''}","${attend}","${avg}","${row.statusText}"\n`;
+        const pend = row.missingCodes.join('; ') || 'Nenhuma';
+        csvContent += `"${tData.turmaName}","${row.index}","${row.student.fullName}","${row.student.matricula || ''}","${attend}","${row.completedCount}","${row.totalActivities}","${row.deliveryStatusLabel}","${pend}"\n`;
       });
     });
 
@@ -248,7 +269,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
     link.setAttribute('href', url);
     link.setAttribute(
       'download',
-      `Livro_Registro_RCO_Consolidado_${scope === 'single' ? `Turma_${activeTurma}` : 'Todas_Turmas'}_${new Date().toISOString().slice(0, 10)}.csv`
+      `Mapa_Controle_Docente_${scope === 'single' ? `Turma_${activeTurma}` : 'Todas_Turmas'}_${new Date().toISOString().slice(0, 10)}.csv`
     );
     document.body.appendChild(link);
     link.click();
@@ -266,7 +287,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
         turmaName: td.turmaName,
         studentsCount: td.studentsCount,
         activitiesCount: td.activitiesCount,
-        averageGrade: td.turmaAverageGrade,
+        averageGrade: 0,
         pneCount: td.pneCount,
         radCount: td.radCount,
       }));
@@ -296,8 +317,9 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
             name: sr.student.fullName,
             matricula: sr.student.matricula,
             tag: sr.student.tag,
-            calculatedAverage: sr.calculatedAverage,
-            status: sr.statusText,
+            completedCount: sr.completedCount,
+            totalActivities: sr.totalActivities,
+            status: sr.deliveryStatusLabel,
           })),
         })),
       };
@@ -321,20 +343,17 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
 
       await saveRcoEmission(record);
       setPersistedSuccessNotice(true);
-      setTimeout(() => setPersistedSuccessNotice(false), 6000);
+      setTimeout(() => setPersistedSuccessNotice(false), 5000);
     } catch (err) {
-      console.warn('Erro ao salvar auditoria de emissão RCO:', err);
+      console.warn('Aviso ao registrar auditoria:', err);
     } finally {
       setIsPersistingEmission(false);
     }
   };
 
-  // Disparar Impressão / Salvar em PDF
+  // Disparar Impressão nativa
   const handlePrint = async () => {
-    // 1. Gravar no banco de auditoria
     await persistEmissionAuditTrail();
-
-    // 2. Abrir diálogo nativo de impressão
     if (typeof window !== 'undefined') {
       window.print();
     }
@@ -344,25 +363,25 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
-      {/* Container Principal do Modal (com barra de ferramentas no topo e preview com scroll) */}
-      <div className="bg-[#0b1326] border border-white/15 rounded-3xl w-full max-w-5xl max-h-[95vh] flex flex-col shadow-2xl overflow-hidden">
+      {/* Container Principal do Modal */}
+      <div className="rco-modal-dialog bg-[#0b1326] border border-white/15 rounded-3xl w-full max-w-5xl max-h-[95vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Modal Header & Toolbar (oculto na impressão com .no-print) */}
         <div className="no-print p-4 sm:p-5 bg-[#131b2e] border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-[#4ade80]/20 border border-[#4ade80]/30 flex items-center justify-center text-[#4ade80] shrink-0">
-              <FileText className="w-5 h-5" />
+              <ClipboardList className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base sm:text-lg font-black text-white tracking-tight">
-                  Livro de Registro RCO • Transição Docente
+                  Mapa de Controle Docente • Lançamento de Atividades
                 </h2>
                 <span className="bg-[#4ade80]/20 text-[#4ade80] text-[10px] font-bold px-2 py-0.5 rounded-full border border-[#4ade80]/30">
-                  Timbrado Oficial
+                  Pronto para Impressão
                 </span>
               </div>
               <p className="text-xs text-[#bccabb] mt-0.5">
-                Relatório pedagógico completo com notas, turmas e atividades para transição de cargo.
+                Organização do dia a dia do professor: conferência de entregas, notas de atividades e controle de pendências.
               </p>
             </div>
           </div>
@@ -377,18 +396,18 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
             </button>
 
             <button
-              onClick={handleCopyForRco}
+              onClick={handleCopyPendingList}
               className="py-2.5 px-3 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] font-bold rounded-2xl border border-white/10 transition-all text-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
-              title="Copiar texto para colar no RCO"
+              title="Copiar lista de pendências para WhatsApp ou bloco de notas"
             >
               {copiedState ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-              <span className="hidden md:inline">{copiedState ? 'Copiado!' : 'Copiar'}</span>
+              <span className="hidden md:inline">{copiedState ? 'Copiado!' : 'Copiar Pendências'}</span>
             </button>
 
             <button
-              onClick={handleExportCsvConsolidated}
+              onClick={handleExportCsv}
               className="py-2.5 px-3 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] font-bold rounded-2xl border border-white/10 transition-all text-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
-              title="Exportar CSV Consolidado"
+              title="Exportar Planilha de Entregas (CSV)"
             >
               <Download className="w-4 h-4" />
               <span className="hidden md:inline">CSV</span>
@@ -404,13 +423,13 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
           </div>
         </div>
 
-        {/* Options Toolbar (no-print) */}
+        {/* Notificação de Persistência */}
         {persistedSuccessNotice && (
           <div className="no-print bg-emerald-500/20 border-b border-emerald-500/40 px-5 py-2 text-xs text-emerald-300 flex items-center justify-between animate-fadeIn">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
               <span>
-                <strong>Emissão Registrada Eternamente:</strong> Hash de autenticidade gravado no histórico imutável com sucesso!
+                <strong>Registro de Auditoria Salvo:</strong> Código de autenticidade gravado com sucesso!
               </span>
             </div>
             <button
@@ -422,6 +441,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
           </div>
         )}
 
+        {/* Options Toolbar (no-print) */}
         <div className="no-print px-5 py-3.5 bg-[#0f172a] border-b border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-3 flex-wrap">
             <span className="text-[#bccabb] font-bold flex items-center gap-1">
@@ -472,21 +492,31 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
             <label className="flex items-center gap-1.5 cursor-pointer hover:text-white">
               <input
                 type="checkbox"
-                checked={includeTransitionTerm}
-                onChange={(e) => setIncludeTransitionTerm(e.target.checked)}
-                className="rounded text-[#4ade80] focus:ring-[#4ade80] cursor-pointer"
-              />
-              <span>Termo de Transição</span>
-            </label>
-
-            <label className="flex items-center gap-1.5 cursor-pointer hover:text-white">
-              <input
-                type="checkbox"
                 checked={includeActivityDetails}
                 onChange={(e) => setIncludeActivityDetails(e.target.checked)}
                 className="rounded text-[#4ade80] focus:ring-[#4ade80] cursor-pointer"
               />
               <span>Quadro de Atividades</span>
+            </label>
+
+            <label className="flex items-center gap-1.5 cursor-pointer hover:text-white">
+              <input
+                type="checkbox"
+                checked={includeTeacherNotesColumn}
+                onChange={(e) => setIncludeTeacherNotesColumn(e.target.checked)}
+                className="rounded text-[#4ade80] focus:ring-[#4ade80] cursor-pointer"
+              />
+              <span>Espaço para Visto / Anotações</span>
+            </label>
+
+            <label className="flex items-center gap-1.5 cursor-pointer hover:text-white">
+              <input
+                type="checkbox"
+                checked={includeSpecialNeeds}
+                onChange={(e) => setIncludeSpecialNeeds(e.target.checked)}
+                className="rounded text-[#4ade80] focus:ring-[#4ade80] cursor-pointer"
+              />
+              <span>Notas de Inclusão (PNE / RAD)</span>
             </label>
 
             <label className="flex items-center gap-1.5 cursor-pointer hover:text-white">
@@ -501,225 +531,131 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
           </div>
         </div>
 
-        {/* Visualizador de Folha / Área de Impressão (Scrollável no modal e perfeito no print) */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-[#090e1a] custom-scrollbar">
-          {/* Documento A4 Timbrado */}
+        {/* Visualizador de Folha / Área de Impressão */}
+        <div className="rco-scroll-container flex-1 overflow-y-auto p-4 sm:p-8 bg-[#090e1a] custom-scrollbar">
+          {/* Documento A4 Timbrado Limpo */}
           <div className="rco-printable-area bg-white text-slate-900 mx-auto max-w-[210mm] shadow-2xl p-6 sm:p-10 font-sans border border-slate-200 rounded-xl print:rounded-none print:border-none print:shadow-none print:p-0">
-            {/* CABEÇALHO OFICIAL INSTITUCIONAL TIMBRADO */}
-            <div className="border-b-2 border-slate-900 pb-4 mb-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-center gap-3.5">
-                  {/* Brasão / Identificação Institucional */}
-                  <div className="w-14 h-14 rounded-xl border-2 border-slate-800 bg-slate-100 flex flex-col items-center justify-center p-1 text-center shrink-0">
-                    <span className="text-[9px] font-black text-slate-900 tracking-tighter leading-none">
-                      ESTADO DE
-                    </span>
-                    <span className="text-[11px] font-black text-emerald-800 tracking-tighter leading-none mt-0.5">
-                      SANTA
-                    </span>
-                    <span className="text-[11px] font-black text-emerald-800 tracking-tighter leading-none">
-                      CATARINA
-                    </span>
-                  </div>
-
-                  <div>
-                    <h1 className="text-xs sm:text-sm font-black uppercase text-slate-900 tracking-wider">
-                      GOVERNO DO ESTADO DE SANTA CATARINA
-                    </h1>
-                    <h2 className="text-[11px] sm:text-xs font-bold text-slate-700 uppercase">
-                      SECRETARIA DE ESTADO DA EDUCAÇÃO • SED
-                    </h2>
-                    <h3 className="text-sm sm:text-base font-black text-emerald-900 mt-0.5">
-                      {teacher.school || "EEB Prof. Jandira D'Ávila"} • Coordenadoria Regional de Educação
-                    </h3>
-                  </div>
-                </div>
-
-                <div className="text-right shrink-0">
-                  <div className="inline-block bg-slate-100 border border-slate-300 rounded px-2.5 py-1 text-[10px] font-mono font-bold text-slate-800">
-                    REGISTRO RCO • SED
-                  </div>
-                  <div className="text-[10px] text-slate-500 font-semibold mt-1">
-                    Emissão: {currentDateFormatted}
-                  </div>
-                  <div className="text-[9px] text-slate-400 font-mono">
-                    Autenticidade: {emissionHash}
-                  </div>
-                </div>
-              </div>
-
-              {/* Faixa com Dados da Disciplina e Regência */}
-              <div className="mt-4 pt-3 border-t border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-lg border">
-                <div>
-                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Disciplina:</span>
-                  <strong className="text-slate-900 text-xs font-black">{teacher.subject || 'Sociologia'}</strong>
-                </div>
-                <div>
-                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Professor Titular:</span>
-                  <strong className="text-slate-900 text-xs font-bold">{teacher.name || 'Prof. Gilson Flores'}</strong>
-                  {teacher.matriculaFuncional && (
-                    <span className="text-[9px] text-slate-500 block">Matrícula: {teacher.matriculaFuncional}</span>
-                  )}
-                </div>
-                <div>
-                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Vigência de Contrato:</span>
-                  <strong className="text-slate-900 text-[11px] font-bold block">
-                    {teacher.contractStartDate && teacher.contractEndDate
-                      ? `${new Date(teacher.contractStartDate + 'T00:00:00').toLocaleDateString('pt-BR')} a ${new Date(teacher.contractEndDate + 'T00:00:00').toLocaleDateString('pt-BR')}`
-                      : 'Ano Letivo 2026 • Regular'}
-                  </strong>
-                  <span className="text-[9px] text-emerald-800 font-semibold uppercase">{teacher.contractType || 'ACT / Contratado'}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Contato Institucional:</span>
-                  <strong className="text-slate-900 text-[10px] font-medium block truncate">{teacher.email || 'gilson.flores@escola.edu.br'}</strong>
-                </div>
-              </div>
-            </div>
-
-            {/* TÍTULO PRINCIPAL DO DOCUMENTO */}
-            <div className="text-center my-5 pb-3 border-b border-slate-300">
-              <h2 className="text-base sm:text-lg font-black uppercase tracking-tight text-slate-900">
-                LIVRO DE REGISTRO DE CLASSE ONLINE (RCO)
-              </h2>
-              <p className="text-xs font-bold text-slate-600 uppercase tracking-widest mt-0.5">
-                CONSOLIDAÇÃO GERAL DE ATIVIDADES, NOTAS E TRANSIÇÃO DE REGÊNCIA DOCENTE
-              </p>
-            </div>
-
-            {/* TERMO DE TRANSIÇÃO E DIRETRIZES PEDAGÓGICAS */}
-            {includeTransitionTerm && (
-              <div className="mb-6 bg-emerald-50/70 border border-emerald-300 p-4 rounded-xl text-xs text-slate-800 space-y-2 rco-avoid-break">
-                <div className="flex items-center gap-2 font-black text-emerald-950 uppercase text-[11px]">
-                  <Building2 className="w-4 h-4 text-emerald-800 shrink-0" />
-                  <span>Termo de Transição Pedagógica • Para o Sucessor e Coordenação</span>
-                </div>
-                <p className="text-[11px] leading-relaxed text-slate-700">
-                  O presente documento tem por finalidade registrar e oficializar todo o histórico de avaliações, redações dissertativas, dinâmicas e notas parciais acumuladas pelos estudantes das turmas sob minha regência na disciplina de <strong>{teacher.subject || 'Sociologia'}</strong>.
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-[10px]">
-                  <div className="bg-white p-2 rounded border border-emerald-200">
-                    <strong className="block text-emerald-900 font-bold mb-0.5">1. Critérios de Avaliação</strong>
-                    <span>Atividades objetivas com correção automatizada + questões dissertativas com rubrica analítica (Escala 0 a 10).</span>
-                  </div>
-                  <div className="bg-white p-2 rounded border border-emerald-200">
-                    <strong className="block text-emerald-900 font-bold mb-0.5">2. Recuperação Paralela</strong>
-                    <span>Direito contínuo de recuperação após o vencimento, integrado à nota consolidada da turma.</span>
-                  </div>
-                  <div className="bg-white p-2 rounded border border-emerald-200">
-                    <strong className="block text-emerald-900 font-bold mb-0.5">3. Inclusão (PNE / RAD)</strong>
-                    <span>Adaptações curriculares específicas registradas para estudantes com necessidades especiais e atestados.</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* RESUMO GERAL DAS TURMAS (SE FOR LIVRO COMPLETO) */}
-            {scope === 'all' && turmasReportData.length > 1 && (
-              <div className="mb-6 rco-avoid-break">
-                <h3 className="text-xs font-black uppercase text-slate-900 mb-2 flex items-center gap-1.5">
-                  <GraduationCap className="w-3.5 h-3.5 text-emerald-800" />
-                  <span>Quadro Resumo Consolidado das Turmas</span>
-                </h3>
-                <div className="border border-slate-300 rounded-lg overflow-hidden">
-                  <table className="w-full text-left text-[11px]">
-                    <thead className="bg-slate-100 font-bold text-slate-800 border-b border-slate-300">
-                      <tr>
-                        <th className="py-2 px-3">Turma</th>
-                        <th className="py-2 px-3 text-center">Nº Alunos</th>
-                        <th className="py-2 px-3 text-center">Atividades Aplicadas</th>
-                        <th className="py-2 px-3 text-center">PNE / RAD</th>
-                        <th className="py-2 px-3 text-right">Média Geral da Turma</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {turmasReportData.map((tItem) => (
-                        <tr key={tItem.turmaName} className="hover:bg-slate-50">
-                          <td className="py-2 px-3 font-bold text-slate-900">
-                            Turma {tItem.turmaName}
-                          </td>
-                          <td className="py-2 px-3 text-center text-slate-700">
-                            {tItem.studentsCount}
-                          </td>
-                          <td className="py-2 px-3 text-center text-slate-700">
-                            {tItem.activitiesCount}
-                          </td>
-                          <td className="py-2 px-3 text-center">
-                            {tItem.pneCount > 0 || tItem.radCount > 0 ? (
-                              <span className="text-[10px] font-bold text-slate-800">
-                                {tItem.pneCount} PNE {tItem.radCount > 0 ? `• ${tItem.radCount} RAD` : ''}
-                              </span>
-                            ) : (
-                              <span className="text-slate-400">-</span>
-                            )}
-                          </td>
-                          <td className="py-2 px-3 text-right font-black text-emerald-800">
-                            {tItem.turmaAverageGrade.toFixed(1).replace('.', ',')} pts
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* SEÇÕES POR TURMA (COM QUEBRA DE PÁGINA) */}
+            
+            {/* SEÇÕES POR TURMA (Uma turma por página na impressão) */}
             {turmasReportData.map((turmaData, tIndex) => {
               const isFirstTurma = tIndex === 0;
 
               return (
                 <div
                   key={turmaData.turmaName}
-                  className={`mt-8 ${!isFirstTurma ? 'rco-page-break pt-6' : ''}`}
+                  className={`turma-print-block ${!isFirstTurma ? 'rco-page-break' : ''}`}
                 >
-                  {/* Cabeçalho da Turma */}
-                  <div className="bg-slate-900 text-white p-3.5 rounded-t-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  {/* CABEÇALHO OFICIAL INSTITUCIONAL LIMPO */}
+                  <div className="border-b-2 border-slate-900 pb-3 mb-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        {/* Brasão / Identificação Estadual */}
+                        <div className="w-12 h-12 rounded-lg border border-slate-800 bg-slate-100 flex flex-col items-center justify-center p-1 text-center shrink-0">
+                          <span className="text-[8px] font-black text-slate-900 tracking-tighter leading-none">
+                            ESTADO DE
+                          </span>
+                          <span className="text-[10px] font-black text-emerald-800 tracking-tighter leading-none mt-0.5">
+                            SANTA
+                          </span>
+                          <span className="text-[10px] font-black text-emerald-800 tracking-tighter leading-none">
+                            CATARINA
+                          </span>
+                        </div>
+
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h1 className="text-xs font-black uppercase text-slate-900 tracking-wide">
+                              GOVERNO DO ESTADO DE SANTA CATARINA • SED
+                            </h1>
+                          </div>
+                          <h2 className="text-xs sm:text-sm font-black text-emerald-950 mt-0.5">
+                            {teacher.school || "EEB Prof. Jandira D'Ávila"} • Coordenadoria Regional de Educação
+                          </h2>
+                          <div className="text-[10px] text-slate-600 font-semibold mt-0.5 flex items-center gap-2">
+                            <span>Disciplina: <strong className="text-slate-900">{teacher.subject || 'Sociologia'}</strong></span>
+                            <span>•</span>
+                            <span>Professor: <strong className="text-slate-900">{teacher.name || 'Prof. Gilson Flores'}</strong></span>
+                            {teacher.matriculaFuncional && (
+                              <>
+                                <span>•</span>
+                                <span>Matrícula: <strong className="text-slate-900">{teacher.matriculaFuncional}</strong></span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <div className="inline-block bg-slate-900 text-white rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider">
+                          Mapa de Lançamento
+                        </div>
+                        <div className="text-[9px] text-slate-500 font-medium mt-1">
+                          Data: {currentDateFormatted}
+                        </div>
+                        <div className="text-[8px] text-slate-400 font-mono">
+                          Ref: {emissionHash}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* IDENTIFICAÇÃO DA TURMA E RESUMO OPERACIONAL */}
+                  <div className="bg-slate-900 text-white p-3 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-lg bg-emerald-400 text-slate-950 font-black flex items-center justify-center text-xs shrink-0">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-400 text-slate-950 font-black flex items-center justify-center text-xs shrink-0 shadow-sm">
                         {turmaData.turmaName.slice(0, 3)}
                       </div>
                       <div>
                         <h3 className="text-sm font-black uppercase tracking-tight">
-                          TURMA {turmaData.turmaName} • DIÁRIO E NOTAS RCO
+                          TURMA {turmaData.turmaName} • CONTROLE DE ATIVIDADES E ENTREGAS
                         </h3>
                         <span className="text-[10px] text-slate-300">
-                          {turmaData.studentsCount} alunos matriculados • {turmaData.activitiesCount} atividades registradas
+                          Ano Letivo 2026 • Acompanhamento e Visto de Sala
                         </span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 text-xs self-start sm:self-center">
-                      <span className="text-slate-300 text-[11px]">
-                        Média da Turma:
-                      </span>
-                      <strong className="text-sm font-black text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-500/40">
-                        {turmaData.turmaAverageGrade.toFixed(1).replace('.', ',')} / 10
-                      </strong>
+                    <div className="flex items-center gap-2 flex-wrap text-[10px]">
+                      <div className="bg-white/10 px-2 py-1 rounded text-slate-200">
+                        <strong>{turmaData.studentsCount}</strong> alunos
+                      </div>
+                      <div className="bg-white/10 px-2 py-1 rounded text-slate-200">
+                        <strong>{turmaData.activitiesCount}</strong> atividades
+                      </div>
+                      <div className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-1 rounded font-bold">
+                        {turmaData.studentsWithAtLeastOneSubmission}/{turmaData.studentsCount} com entregas ({turmaData.engagementPercent}%)
+                      </div>
+                      {(turmaData.pneCount > 0 || turmaData.radCount > 0) && (
+                        <div className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-1 rounded font-bold">
+                          {turmaData.pneCount > 0 ? `${turmaData.pneCount} PNE` : ''}
+                          {turmaData.pneCount > 0 && turmaData.radCount > 0 ? ' • ' : ''}
+                          {turmaData.radCount > 0 ? `${turmaData.radCount} RAD` : ''}
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Quadro de Atividades Realizadas na Turma */}
+                  {/* QUADRO DE ATIVIDADES AVALIATIVAS APLICADAS */}
                   {includeActivityDetails && turmaData.activityMap.length > 0 && (
-                    <div className="p-3 bg-slate-50 border-x border-b border-slate-300 text-[10px] text-slate-700 space-y-1.5 rco-avoid-break">
-                      <strong className="text-[11px] font-bold text-slate-900 block uppercase">
-                        Quadro de Atividades Avaliativas Aplicadas:
+                    <div className="mb-3 p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-[10px] rco-avoid-break">
+                      <strong className="text-[10px] font-black text-slate-900 block uppercase tracking-wider mb-1.5">
+                        Quadro de Atividades Lançadas no Período:
                       </strong>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5">
                         {turmaData.activityMap.map((actItem) => (
                           <div
                             key={actItem.code}
-                            className="bg-white p-2 rounded border border-slate-200 flex items-start gap-2 shadow-xs"
+                            className="bg-white p-1.5 rounded border border-slate-200 flex items-start gap-2 text-[10px]"
                           >
-                            <span className="w-5 h-5 rounded bg-emerald-800 text-white font-black text-[10px] flex items-center justify-center shrink-0">
+                            <span className="w-5 h-5 rounded bg-slate-900 text-white font-black text-[9px] flex items-center justify-center shrink-0">
                               {actItem.code}
                             </span>
-                            <div className="min-w-0">
-                              <span className="font-bold text-slate-900 block truncate text-[11px]">
+                            <div className="min-w-0 flex-1">
+                              <span className="font-bold text-slate-900 block truncate text-[10px]">
                                 {actItem.activity.title}
                               </span>
-                              <span className="text-[9px] text-slate-500 block">
-                                Tipo: {actItem.activity.type} • Valor: {actItem.maxGrade} pts
+                              <span className="text-[8px] text-slate-500 block">
+                                Tipo: {actItem.activity.type || 'Avaliação'} • Valor: {actItem.maxGrade} pts • Prazo: {actItem.deadlineFormatted}
                               </span>
                             </div>
                           </div>
@@ -728,38 +664,50 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                     </div>
                   )}
 
-                  {/* Tabela Matriz de Alunos e Notas RCO */}
-                  <div className="border border-slate-300 rounded-b-xl overflow-hidden mt-0">
+                  {/* TABELA DE ALUNOS, NOTAS E CONTROLE DE ENTREGAS */}
+                  <div className="border border-slate-300 rounded-lg overflow-hidden mb-3">
                     <table className="w-full text-left text-[10px]">
-                      <thead className="bg-slate-200 text-slate-900 font-bold border-b border-slate-300 uppercase text-[9px] tracking-wider">
+                      <thead className="bg-slate-100 text-slate-900 font-bold border-b border-slate-300 uppercase text-[9px] tracking-wider">
                         <tr>
-                          <th className="py-2 px-2 w-8 text-center">Nº</th>
-                          <th className="py-2 px-3">Aluno</th>
-                          <th className="py-2 px-2 text-center">Matrícula</th>
-                          <th className="py-2 px-2 text-center">Atend.</th>
+                          <th className="py-1.5 px-2 w-7 text-center">Nº</th>
+                          <th className="py-1.5 px-2.5">Nome do Aluno</th>
+                          <th className="py-1.5 px-2 w-20 text-center">Matrícula</th>
+                          <th className="py-1.5 px-1.5 w-12 text-center">Atend.</th>
 
                           {/* Colunas de Atividades (A1, A2, A3...) */}
                           {turmaData.activityMap.map((actItem) => (
                             <th
                               key={actItem.code}
-                              className="py-2 px-2 text-center font-black text-slate-900 border-l border-slate-300"
-                              title={`${actItem.code}: ${actItem.activity.title}`}
+                              className="py-1.5 px-2 w-10 text-center font-black text-slate-900 border-l border-slate-200"
+                              title={`${actItem.code}: ${actItem.activity.title} (Valor: ${actItem.maxGrade} pts)`}
                             >
                               {actItem.code}
                             </th>
                           ))}
 
-                          <th className="py-2 px-3 text-right font-black text-slate-950 bg-slate-300 border-l border-slate-400">
-                            Média RCO
+                          {/* Coluna de Entregas */}
+                          <th className="py-1.5 px-2 w-16 text-center font-black text-slate-900 bg-slate-200 border-l border-slate-300">
+                            Entregas
                           </th>
-                          <th className="py-2 px-2 text-center">Situação</th>
+
+                          {/* Coluna de Status */}
+                          <th className="py-1.5 px-2 w-24 text-center border-l border-slate-200">
+                            Status
+                          </th>
+
+                          {/* Coluna de Observações do Professor / Visto Manual */}
+                          {includeTeacherNotesColumn && (
+                            <th className="py-1.5 px-2 text-left border-l border-slate-200 w-36">
+                              Anotações / Visto
+                            </th>
+                          )}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
                         {turmaData.studentRows.length === 0 ? (
                           <tr>
                             <td
-                              colSpan={6 + turmaData.activityMap.length}
+                              colSpan={7 + turmaData.activityMap.length}
                               className="p-4 text-center text-slate-500 italic"
                             >
                               Nenhum aluno cadastrado nesta turma.
@@ -769,35 +717,41 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                           turmaData.studentRows.map((row) => (
                             <tr
                               key={row.student.id}
-                              className="hover:bg-slate-50 transition-colors"
+                              className={`hover:bg-slate-50 transition-colors ${
+                                row.deliveryStatusType === 'complete'
+                                  ? 'bg-emerald-50/20'
+                                  : row.deliveryStatusType === 'none'
+                                  ? 'bg-slate-50/60'
+                                  : ''
+                              }`}
                             >
                               {/* Nº */}
-                              <td className="py-1.5 px-2 text-center font-bold text-slate-500 text-[10px]">
+                              <td className="py-1 px-2 text-center font-bold text-slate-500 text-[10px]">
                                 {String(row.index).padStart(2, '0')}
                               </td>
 
                               {/* Nome Completo */}
-                              <td className="py-1.5 px-3 font-bold text-slate-900 text-[11px]">
+                              <td className="py-1 px-2.5 font-bold text-slate-900 text-[10px]">
                                 {row.student.fullName}
                               </td>
 
                               {/* Matrícula */}
-                              <td className="py-1.5 px-2 text-center font-mono text-slate-600 text-[10px]">
-                                {row.student.matricula || '-'}
+                              <td className="py-1 px-2 text-center font-mono text-slate-600 text-[9px]">
+                                {row.student.matricula || '—'}
                               </td>
 
                               {/* Atendimento */}
-                              <td className="py-1.5 px-2 text-center">
+                              <td className="py-1 px-1.5 text-center">
                                 {row.isPne ? (
-                                  <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-rose-100 text-rose-800 border border-rose-300">
+                                  <span className="px-1 py-0.2 rounded text-[7px] font-black bg-rose-100 text-rose-800 border border-rose-300">
                                     PNE
                                   </span>
                                 ) : row.isRad ? (
-                                  <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-amber-100 text-amber-800 border border-amber-300">
+                                  <span className="px-1 py-0.2 rounded text-[7px] font-black bg-amber-100 text-amber-800 border border-amber-300">
                                     RAD
                                   </span>
                                 ) : (
-                                  <span className="text-slate-400 text-[9px]">Reg.</span>
+                                  <span className="text-slate-400 text-[8px]">Reg.</span>
                                 )}
                               </td>
 
@@ -805,47 +759,56 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                               {row.gradesPerAct.map((gItem) => (
                                 <td
                                   key={gItem.code}
-                                  className="py-1.5 px-2 text-center font-mono font-bold text-[10px] border-l border-slate-200"
+                                  className="py-1 px-2 text-center font-mono font-bold text-[10px] border-l border-slate-200"
                                 >
                                   {gItem.grade !== null ? (
-                                    <span className="text-slate-900 font-black">
+                                    <span className="text-slate-900 font-bold">
                                       {gItem.grade.toFixed(1).replace('.', ',')}
                                     </span>
                                   ) : (
-                                    <span className="text-slate-300 font-normal">-</span>
+                                    <span className="text-slate-300 font-normal">—</span>
                                   )}
                                 </td>
                               ))}
 
-                              {/* Média Final RCO */}
-                              <td className="py-1.5 px-3 text-right font-mono font-black text-xs bg-slate-100 border-l border-slate-300">
-                                {row.calculatedAverage !== null ? (
-                                  <span
-                                    className={
-                                      row.calculatedAverage >= 6.0
-                                        ? 'text-emerald-900'
-                                        : 'text-rose-900'
-                                    }
-                                  >
-                                    {row.calculatedAverage.toFixed(1).replace('.', ',')}
+                              {/* Entregas Feitas / Total */}
+                              <td className="py-1 px-2 text-center font-mono font-bold text-[10px] bg-slate-100 border-l border-slate-300">
+                                <span
+                                  className={
+                                    row.completedCount === row.totalActivities && row.totalActivities > 0
+                                      ? 'text-emerald-900 font-black'
+                                      : row.completedCount > 0
+                                      ? 'text-amber-800 font-bold'
+                                      : 'text-slate-400'
+                                  }
+                                >
+                                  {row.completedCount}/{row.totalActivities}
+                                </span>
+                              </td>
+
+                              {/* Status de Entrega / Pendência */}
+                              <td className="py-1 px-2 text-center text-[9px] border-l border-slate-200">
+                                {row.deliveryStatusType === 'complete' ? (
+                                  <span className="text-emerald-800 font-bold">
+                                    ✓ Entregue
+                                  </span>
+                                ) : row.deliveryStatusType === 'partial' ? (
+                                  <span className="text-amber-800 font-semibold" title={`Faltam: ${row.missingCodes.join(', ')}`}>
+                                    {row.missingCodes.length} pendente(s)
                                   </span>
                                 ) : (
-                                  <span className="text-slate-400 italic text-[10px]">Sem nota</span>
+                                  <span className="text-slate-400 italic">
+                                    Não entregou
+                                  </span>
                                 )}
                               </td>
 
-                              {/* Situação */}
-                              <td className="py-1.5 px-2 text-center text-[9px] font-bold">
-                                {row.calculatedAverage !== null ? (
-                                  row.calculatedAverage >= 6.0 ? (
-                                    <span className="text-emerald-800">Apto</span>
-                                  ) : (
-                                    <span className="text-rose-800">Recup.</span>
-                                  )
-                                ) : (
-                                  <span className="text-slate-400">Pendente</span>
-                                )}
-                              </td>
+                              {/* Campo de Anotações do Professor / Visto Manual */}
+                              {includeTeacherNotesColumn && (
+                                <td className="py-1 px-2 border-l border-slate-200 text-[8px] text-slate-400">
+                                  <div className="h-4 border-b border-dashed border-slate-300 w-full"></div>
+                                </td>
+                              )}
                             </tr>
                           ))
                         )}
@@ -855,79 +818,60 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
 
                   {/* Informações Especiais de Inclusão da Turma (PNE e RAD) */}
                   {includeSpecialNeeds && (turmaData.pneCount > 0 || turmaData.radCount > 0) && (
-                    <div className="mt-3 p-3 bg-amber-50/70 border border-amber-300 rounded-lg text-[10px] text-slate-800 space-y-1 rco-avoid-break">
-                      <strong className="font-bold text-amber-950 block uppercase text-[10px]">
-                        Observações Pedagógicas de Atendimento Inclusivo da Turma:
+                    <div className="mb-4 p-2.5 bg-amber-50/60 border border-amber-300 rounded-lg text-[9px] text-slate-800 space-y-1 rco-avoid-break">
+                      <strong className="font-bold text-amber-950 block uppercase text-[9px]">
+                        Atendimento Educacional Especializado (Inclusão & RAD):
                       </strong>
                       <div className="space-y-0.5">
                         {turmaData.studentRows
                           .filter((r) => r.isPne || r.isRad)
                           .map((r) => (
-                            <div key={r.student.id} className="flex items-center gap-2">
+                            <div key={r.student.id} className="flex items-start gap-1.5">
                               <span className="font-bold text-slate-900">• {r.student.fullName}:</span>
                               <span className="text-slate-700">
                                 {r.isPne
-                                  ? `Estudante PNE (Inclusão) ${r.student.pneConditions ? `- Laudo: ${r.student.pneConditions}` : ''} ${r.student.secondTeacherName ? `(Acompanhamento: ${r.student.secondTeacherName})` : ''}`
-                                  : 'Estudante em Regime de Atividades Domiciliares (RAD / Atestados)'}
+                                  ? `Estudante com Plano de Ensino Individualizado (PEI) ${r.student.pneConditions ? `- Diagnóstico: ${r.student.pneConditions}` : ''} ${r.student.secondTeacherName ? `| Segundo(a) Professor(a): ${r.student.secondTeacherName}` : ''}`
+                                  : 'Estudante em Regime de Atividades Domiciliares (RAD / Atestado Médico registrado)'}
                               </span>
                             </div>
                           ))}
                       </div>
                     </div>
                   )}
+
+                  {/* ASSINATURA COMPACTA NO FINAL DE CADA TURMA */}
+                  {includeSignatures && (
+                    <div className="mt-4 pt-3 border-t border-slate-300 rco-avoid-break">
+                      <div className="grid grid-cols-2 gap-8 text-center text-[9px]">
+                        <div>
+                          <div className="border-b border-slate-400 pb-0.5 mb-0.5">
+                            <strong className="block text-slate-900 font-bold">
+                              {teacher.name || 'Prof. Gilson Flores'}
+                            </strong>
+                            <span className="text-[8px] text-slate-600">
+                              Professor(a) de {teacher.subject || 'Sociologia'}
+                            </span>
+                          </div>
+                          <span className="text-[7px] text-slate-400">Visto do Docente Responsável</span>
+                        </div>
+
+                        <div>
+                          <div className="border-b border-slate-400 pb-0.5 mb-0.5">
+                            <span className="block text-slate-400 font-bold">
+                              __________________________________________
+                            </span>
+                            <span className="text-[8px] text-slate-600 font-bold">
+                              Especialista Pedagógico / Direção Escolar
+                            </span>
+                          </div>
+                          <span className="text-[7px] text-slate-400">Visto da Coordenação</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
-
-            {/* TERMO DE ENCERRAMENTO E ASSINATURAS OFICIAIS */}
-            {includeSignatures && (
-              <div className="mt-10 pt-6 border-t-2 border-slate-800 rco-avoid-break">
-                <div className="text-center text-[11px] text-slate-600 mb-8">
-                  Documento lavrado e consolidado na EEB Prof. Jandira D&apos;Ávila em <strong>{currentDateFormatted}</strong> para fins de registro oficial no RCO e continuidade do ano letivo.
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center text-xs">
-                  {/* Assinatura 1: Professor Titular */}
-                  <div className="space-y-1">
-                    <div className="border-b border-slate-900 pb-1 mb-1">
-                      <strong className="block text-slate-900 font-black text-[11px]">
-                        {teacher.name || 'Prof. Gilson Flores'}
-                      </strong>
-                      <span className="text-[10px] text-slate-600 block">
-                        Professor Titular de {teacher.subject || 'Sociologia'}
-                      </span>
-                    </div>
-                    <span className="text-[9px] text-slate-400">Responsável pelos Lançamentos</span>
-                  </div>
-
-                  {/* Assinatura 2: Professor Sucessor */}
-                  <div className="space-y-1">
-                    <div className="border-b border-slate-900 pb-1 mb-1">
-                      <span className="block text-slate-400 font-bold text-[11px]">
-                        __________________________________
-                      </span>
-                      <span className="text-[10px] text-slate-600 block font-bold">
-                        Professor(a) Sucessor(a)
-                      </span>
-                    </div>
-                    <span className="text-[9px] text-slate-400">Assumindo a Regência das Turmas</span>
-                  </div>
-
-                  {/* Assinatura 3: Direção / Especialista Pedagógico */}
-                  <div className="space-y-1">
-                    <div className="border-b border-slate-900 pb-1 mb-1">
-                      <span className="block text-slate-400 font-bold text-[11px]">
-                        __________________________________
-                      </span>
-                      <span className="text-[10px] text-slate-600 block font-bold">
-                        Especialista / Direção Escolar
-                      </span>
-                    </div>
-                    <span className="text-[9px] text-slate-400">Visto e Homologação Pedagógica</span>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
@@ -936,7 +880,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
           <div className="flex items-center gap-2 text-xs text-[#bccabb]">
             <Info className="w-4 h-4 text-[#4ade80]" />
             <span>
-              Para gerar o PDF físico, selecione <strong>Salvar como PDF</strong> no diálogo de impressão do seu navegador.
+              Para gerar o PDF físico sem margens cortadas, utilize o comando <strong>Imprimir / Salvar em PDF</strong>.
             </span>
           </div>
 
@@ -952,7 +896,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
               className="py-2 px-6 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-black rounded-full text-xs transition-all shadow-md cursor-pointer flex items-center gap-2"
             >
               <Printer className="w-4 h-4" />
-              <span>Gerar PDF Timbrado Agora</span>
+              <span>Gerar PDF Agora</span>
             </button>
           </div>
         </div>
