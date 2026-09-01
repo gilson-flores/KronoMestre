@@ -14,22 +14,29 @@ import {
   Download,
   Filter,
   GraduationCap,
-  Sparkles
+  Sparkles,
+  FileText,
+  Printer,
 } from 'lucide-react';
-import { Activity, StudentUser } from '@/lib/types';
+import { Activity, StudentUser, TeacherUser } from '@/lib/types';
 import { canStudentAccessActivity, isStudentPNE, getOriginalTurmas } from '@/lib/studentUtils';
 import { formatAvatarUrl } from '@/lib/utils';
+import { initialTeacher } from '@/lib/initialData';
+import { RcoPdfReportModal } from '@/components/modals/RcoPdfReportModal';
+import { RcoEmissionsHistory } from '@/components/RcoEmissionsHistory';
 
 interface PostagemRcoViewProps {
   activities: Activity[];
   students: StudentUser[];
   onSelectActivityForGrading?: (act: Activity) => void;
+  teacher?: TeacherUser;
 }
 
 export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
   activities = [],
   students = [],
   onSelectActivityForGrading,
+  teacher = initialTeacher,
 }) => {
   // Extrair apenas as turmas originais dos alunos (101, 102, 104, 201, 202, 2001, 301, 302, 3001)
   const allTurmas = useMemo(() => {
@@ -41,6 +48,7 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
   const [selectedActivityId, setSelectedActivityId] = useState<string>('all');
   const [searchStudent, setSearchStudent] = useState<string>('');
   const [copiedNotification, setCopiedNotification] = useState<boolean>(false);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState<boolean>(false);
 
   // Filter activities available for the selected turma
   const activitiesForTurma = useMemo(() => {
@@ -279,6 +287,15 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
         {/* Action buttons */}
         <div className="flex items-center gap-2.5 self-start sm:self-center flex-wrap">
           <button
+            onClick={() => setIsPdfModalOpen(true)}
+            className="py-2.5 px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black rounded-2xl transition-all text-xs flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/25 active:scale-95 border border-emerald-300/40"
+            title="Gerar Livro de Registro RCO oficial timbrado em PDF para transição docente"
+          >
+            <FileText className="w-4 h-4 text-slate-950" />
+            <span>📄 Gerar PDF Timbrado RCO</span>
+          </button>
+
+          <button
             onClick={handleCopyGradesForRco}
             disabled={studentGradesList.length === 0}
             className="py-2.5 px-4 bg-[#171f33] hover:bg-[#222a3d] text-[#4ade80] font-bold rounded-2xl border border-[#4ade80]/30 transition-all text-xs flex items-center gap-2 cursor-pointer shadow-sm active:scale-95 disabled:opacity-40"
@@ -294,7 +311,7 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
             className="py-2.5 px-4 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-2xl transition-all text-xs flex items-center gap-2 cursor-pointer shadow-md shadow-[#4ade80]/20 active:scale-95 disabled:opacity-40"
           >
             <Download className="w-4 h-4" />
-            <span>Exportar Planilha (CSV)</span>
+            <span>Exportar CSV</span>
           </button>
         </div>
       </div>
@@ -521,6 +538,19 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Histórico Eterno de Emissões e Comprovantes RCO */}
+      <RcoEmissionsHistory teacher={teacher} />
+
+      {/* Modal de Geração e Emissão de PDF Timbrado RCO */}
+      <RcoPdfReportModal
+        isOpen={isPdfModalOpen}
+        onClose={() => setIsPdfModalOpen(false)}
+        activities={activities}
+        students={students}
+        teacher={teacher}
+        selectedTurmaInitial={selectedTurma}
+      />
     </div>
   );
 };

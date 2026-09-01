@@ -9,6 +9,11 @@ export interface TeacherUser {
   phone?: string;
   school?: string;
   driveFolderUrl?: string;
+  matriculaFuncional?: string;
+  contractStartDate?: string; // YYYY-MM-DD
+  contractEndDate?: string; // YYYY-MM-DD
+  contractType?: 'ACT / Contratado' | 'Efetivo' | 'Substituto' | string;
+  contractStatus?: 'ativo' | 'encerrado' | 'afastado' | string;
 }
 
 export interface StudentUser {
@@ -202,6 +207,30 @@ export interface AtestadoRadRecord {
   dataFinal: string; // Data final calculada automaticamente (YYYY-MM-DD)
   motivo?: string; // Motivo para justificar (opcional)
   tipo: 'Atestado' | 'RAD'; // RAD se diasAtestado >= 15 ou Atestado
+  createdAt: string;
+}
+
+export interface RcoEmissionRecord {
+  id: string;
+  emissionHash: string;
+  teacherId: string;
+  teacherName: string;
+  subject: string;
+  school: string;
+  scope: 'all' | 'single';
+  turma?: string;
+  totalStudents: number;
+  totalActivities: number;
+  turmasSummary: Array<{
+    turmaName: string;
+    studentsCount: number;
+    activitiesCount: number;
+    averageGrade: number;
+    pneCount: number;
+    radCount: number;
+  }>;
+  fullSnapshot: any;
+  emittedAt: string;
   createdAt: string;
 }
 

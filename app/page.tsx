@@ -449,6 +449,11 @@ export default function Home() {
               phone: teacherRow.phone || '',
               school: teacherRow.school || '',
               driveFolderUrl: teacherRow.drive_folder_url || prev.driveFolderUrl || '',
+              matriculaFuncional: teacherRow.matricula_funcional || prev.matriculaFuncional || '',
+              contractStartDate: teacherRow.contract_start_date || prev.contractStartDate || '',
+              contractEndDate: teacherRow.contract_end_date || prev.contractEndDate || '',
+              contractType: teacherRow.contract_type || prev.contractType || 'ACT / Contratado',
+              contractStatus: teacherRow.contract_status || prev.contractStatus || 'ativo',
             }));
           }
         }
@@ -2682,6 +2687,7 @@ export default function Home() {
                   activities={activities}
                   students={visibleStudentsForRole}
                   onSelectActivityForGrading={handleSelectActivityForGrading}
+                  teacher={teacher}
                 />
               )}
 
@@ -2813,6 +2819,49 @@ export default function Home() {
                     onChange={(e) => setTeacher({ ...teacher, school: e.target.value })}
                     className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-[#4ade80]"
                   />
+                </div>
+                <div>
+                  <label className="block text-[#bccabb] font-semibold mb-1">Matrícula Funcional / Vínculo</label>
+                  <input
+                    type="text"
+                    value={teacher.matriculaFuncional || ''}
+                    onChange={(e) => setTeacher({ ...teacher, matriculaFuncional: e.target.value })}
+                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-[#4ade80]"
+                    placeholder="Ex: 654.982-1"
+                  />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-[#0b1326] border border-white/10">
+                  <div>
+                    <label className="block text-[#bccabb] font-semibold mb-1">Início da Vigência do Contrato</label>
+                    <input
+                      type="date"
+                      value={teacher.contractStartDate || ''}
+                      onChange={(e) => setTeacher({ ...teacher, contractStartDate: e.target.value })}
+                      className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-2.5 text-white focus:outline-none focus:border-[#4ade80]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[#bccabb] font-semibold mb-1">Término / Encerramento do Contrato</label>
+                    <input
+                      type="date"
+                      value={teacher.contractEndDate || ''}
+                      onChange={(e) => setTeacher({ ...teacher, contractEndDate: e.target.value })}
+                      className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-2.5 text-white focus:outline-none focus:border-[#4ade80]"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-[#bccabb] font-semibold mb-1">Tipo de Vínculo Contratual</label>
+                    <select
+                      value={teacher.contractType || 'ACT / Contratado'}
+                      onChange={(e) => setTeacher({ ...teacher, contractType: e.target.value })}
+                      className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-2.5 text-white focus:outline-none focus:border-[#4ade80]"
+                    >
+                      <option value="ACT / Contratado" className="bg-[#131b2e] text-white">ACT / Admitido em Caráter Temporário</option>
+                      <option value="Efetivo" className="bg-[#131b2e] text-white">Professor Efetivo / Concursado</option>
+                      <option value="Substituto" className="bg-[#131b2e] text-white">Professor Substituto</option>
+                      <option value="Outro" className="bg-[#131b2e] text-white">Outro Vínculo</option>
+                    </select>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-[#bccabb] font-semibold mb-1">Nova Senha de Acesso</label>
@@ -2956,6 +3005,11 @@ export default function Home() {
                         phone: teacher.phone || null,
                         school: teacher.school || null,
                         drive_folder_url: teacher.driveFolderUrl || '',
+                        matricula_funcional: teacher.matriculaFuncional || null,
+                        contract_start_date: teacher.contractStartDate || null,
+                        contract_end_date: teacher.contractEndDate || null,
+                        contract_type: teacher.contractType || 'ACT / Contratado',
+                        contract_status: teacher.contractStatus || 'ativo',
                       };
 
                       if (teacher.id && isValidUUID(teacher.id)) {
@@ -3041,6 +3095,11 @@ export default function Home() {
                         phone: savedRow?.phone || teacher.phone || '',
                         school: savedRow?.school || teacher.school || '',
                         driveFolderUrl: savedRow?.drive_folder_url || teacher.driveFolderUrl || '',
+                        matriculaFuncional: savedRow?.matricula_funcional || teacher.matriculaFuncional || '',
+                        contractStartDate: savedRow?.contract_start_date || teacher.contractStartDate || '',
+                        contractEndDate: savedRow?.contract_end_date || teacher.contractEndDate || '',
+                        contractType: savedRow?.contract_type || teacher.contractType || 'ACT / Contratado',
+                        contractStatus: savedRow?.contract_status || teacher.contractStatus || 'ativo',
                       };
                       setTeacher(updatedTeacher);
 
