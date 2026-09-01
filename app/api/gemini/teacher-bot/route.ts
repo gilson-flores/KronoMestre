@@ -1,27 +1,11 @@
-import { GoogleGenAI } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
+import { getGeminiClient } from "@/lib/gemini";
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    const apiKey =
-      process.env.GEMINI_API_KEY ||
-      process.env.GOOGLE_API_KEY ||
-      process.env.GOOGLE_GENAI_API_KEY ||
-      process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-
-    if (!apiKey) {
-      return NextResponse.json(
-        {
-          error:
-            "Chave GEMINI_API_KEY não configurada no servidor. Adicione a variável de ambiente GEMINI_API_KEY.",
-        },
-        { status: 500 }
-      );
-    }
-
     const body = await req.json();
     const {
       studentName = "Aluno",
@@ -35,7 +19,15 @@ export async function POST(req: NextRequest) {
       currentMessage = "",
     } = body;
 
-    const ai = new GoogleGenAI({ apiKey });
+    const defaultReply = `Olá, ${studentName}! Aqui é o ${teacherName}. Recebi sua mensagem com muita atenção! Estou acompanhando de perto seu progresso e suas atividades de ${teacherSubject}. Se tiver qualquer dúvida sobre o conteúdo ou os prazos do portal, pode contar comigo. Bons estudos e um grande abraço!`;
+
+    const ai = getGeminiClient();
+    if (!ai) {
+      return NextResponse.json({
+        reply: defaultReply,
+        teacherName,
+      });
+    }
 
     // Resumo do histórico recente de mensagens
     const recentHistory = messages
@@ -72,28 +64,41 @@ Nova mensagem enviada por ${studentName}:
 
 Responda diretamente ao aluno como ${teacherName}:`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
-      contents: prompt,
-      config: {
-        systemInstruction,
-        temperature: 0.7,
-      },
-    });
+    const candidateModels = ['gemini-3.7-flash', 'gemini-3.1-flash-lite'];
+    let response: any = null;
 
-    const replyText = response.text?.trim() || "Olá! Recebi sua mensagem e já estou acompanhando suas atividades. Qualquer dúvida estou por aqui!";
+    for (const modelName of candidateModels) {
+      try {
+        response = await ai.models.generateContent({
+          model: modelName,
+          contents: prompt,
+          config: {
+            systemInstruction,
+            temperature: 0.7,
+          },
+        });
+        if (response && response.text) break;
+      } catch (err: any) {
+        const errMsg = String(err?.message || '');
+        console.warn(`Aviso na rota teacher-bot com ${modelName}:`, errMsg);
+        if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid')) {
+          break;
+        }
+      }
+    }
+
+    const replyText = response?.text?.trim() || defaultReply;
 
     return NextResponse.json({
       reply: replyText,
       teacherName,
     });
   } catch (error: any) {
-    console.error("Erro na rota teacher-bot:", error);
-    return NextResponse.json(
-      {
-        error: error?.message || "Erro ao gerar resposta automática do professor.",
-      },
-      { status: 500 }
-    );
+    console.error("Erro na rota teacher-bot, aplicando resposta de segurança:", error);
+    return NextResponse.json({
+      reply: "Olá! Recebi sua mensagem com carinho e já estou acompanhando suas atividades. Qualquer dúvida estou por aqui!",
+      teacherName: "Prof. Gilson Flores",
+    });
   }
 }
+

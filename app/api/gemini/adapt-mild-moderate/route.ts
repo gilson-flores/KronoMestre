@@ -1,27 +1,12 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
+import { getGeminiClient } from '@/lib/gemini';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    const apiKey =
-      process.env.GEMINI_API_KEY ||
-      process.env.GOOGLE_API_KEY ||
-      process.env.GOOGLE_GENAI_API_KEY ||
-      process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-
-    if (!apiKey) {
-      return NextResponse.json(
-        {
-          error:
-            'Chave GEMINI_API_KEY não configurada no servidor. Adicione a variável de ambiente GEMINI_API_KEY.',
-        },
-        { status: 500 }
-      );
-    }
-
     const {
       title,
       subject = 'Sociologia',
@@ -32,14 +17,7 @@ export async function POST(req: NextRequest) {
       customPrompt = '',
     } = await req.json();
 
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        },
-      },
-    });
+    const ai = getGeminiClient();
 
     const questionsContext = Array.isArray(questions) && questions.length > 0
       ? JSON.stringify(questions, null, 2)
@@ -95,70 +73,75 @@ Retorne um objeto JSON contendo:
     let response: any = null;
     let lastError: any = null;
 
-    for (const modelName of candidateModels) {
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-          response = await ai.models.generateContent({
-            model: modelName,
-            contents: prompt,
-            config: {
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  adaptedTitle: { type: Type.STRING },
-                  adaptedDescription: { type: Type.STRING },
-                  questions: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        id: { type: Type.STRING },
-                        type: { type: Type.STRING, enum: ['multiple_choice', 'essay'] },
-                        statement: { type: Type.STRING },
-                        options: {
-                          type: Type.ARRAY,
-                          items: { type: Type.STRING },
+    if (ai) {
+      for (const modelName of candidateModels) {
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            response = await ai.models.generateContent({
+              model: modelName,
+              contents: prompt,
+              config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    adaptedTitle: { type: Type.STRING },
+                    adaptedDescription: { type: Type.STRING },
+                    questions: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          id: { type: Type.STRING },
+                          type: { type: Type.STRING, enum: ['multiple_choice', 'essay'] },
+                          statement: { type: Type.STRING },
+                          options: {
+                            type: Type.ARRAY,
+                            items: { type: Type.STRING },
+                          },
+                          correctOptionIndex: { type: Type.INTEGER },
+                          minCharacters: { type: Type.INTEGER },
+                          keywords: { type: Type.STRING },
                         },
-                        correctOptionIndex: { type: Type.INTEGER },
-                        minCharacters: { type: Type.INTEGER },
-                        keywords: { type: Type.STRING },
+                        required: ['id', 'type', 'statement'],
                       },
-                      required: ['id', 'type', 'statement'],
                     },
                   },
+                  required: ['adaptedTitle', 'adaptedDescription', 'questions'],
                 },
-                required: ['adaptedTitle', 'adaptedDescription', 'questions'],
               },
-            },
-          });
+            });
 
-          if (response && response.text) {
+            if (response && response.text) {
+              break;
+            }
+          } catch (err: any) {
+            lastError = err;
+            const status = err?.status || err?.code;
+            const errMsg = String(err?.message || '');
+            const isQuotaExhausted = status === 429 || errMsg.includes('Quota exceeded') || errMsg.includes('RESOURCE_EXHAUSTED');
+            const isHighDemand = status === 503 || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE');
+
+            console.warn(`Tentativa ${attempt} com ${modelName} na adaptação leve:`, errMsg || err);
+
+            if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid')) {
+              break;
+            }
+
+            if (isQuotaExhausted) {
+              break;
+            }
+
+            if (isHighDemand && attempt < 2) {
+              await new Promise((r) => setTimeout(r, 600));
+              continue;
+            }
             break;
           }
-        } catch (err: any) {
-          lastError = err;
-          const status = err?.status || err?.code;
-          const errMsg = String(err?.message || '');
-          const isQuotaExhausted = status === 429 || errMsg.includes('Quota exceeded') || errMsg.includes('RESOURCE_EXHAUSTED');
-          const isHighDemand = status === 503 || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE');
-
-          console.warn(`Tentativa ${attempt} com ${modelName} na adaptação leve:`, errMsg || err);
-
-          // Se a cota do modelo esgotou, pula imediatamente para o próximo modelo sem re-tentar o mesmo
-          if (isQuotaExhausted) {
-            break;
-          }
-
-          if (isHighDemand && attempt < 2) {
-            await new Promise((r) => setTimeout(r, 600));
-            continue;
-          }
+        }
+        if (response && response.text) {
           break;
         }
-      }
-      if (response && response.text) {
-        break;
       }
     }
 

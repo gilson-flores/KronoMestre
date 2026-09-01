@@ -73,24 +73,51 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
         .filter((s) => s.turma?.trim().toLowerCase() === turmaName.trim().toLowerCase())
         .sort((a, b) => a.fullName.localeCompare(b.fullName));
 
-      // Atividades da turma
+      // Atividades da turma: filtrar APENAS atividades regulares e de recuperação paralela (excluindo as adaptadas como colunas separadas)
       const turmaActivities = activities
-        .filter((act) => canStudentAccessActivity(act.turma, turmaName))
+        .filter((act) => canStudentAccessActivity(act.turma, turmaName) && !act.isAdapted)
         .sort((a, b) => {
           const dateA = new Date(a.deadline || '').getTime() || 0;
           const dateB = new Date(b.deadline || '').getTime() || 0;
           return dateA - dateB;
         });
 
-      // Mapear código curto para cada atividade (A1, A2, A3...)
-      const activityMap = turmaActivities.map((act, idx) => ({
-        code: `A${idx + 1}`,
-        activity: act,
-        maxGrade: act.maxGrade || 10,
-        deadlineFormatted: act.deadline
-          ? new Date(act.deadline).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-          : '-',
-      }));
+      // Mapear código curto para cada atividade (A1, A2, A3... ou REC1, REC2... se for Recuperação)
+      let actCounter = 0;
+      let recCounter = 0;
+      const activityMap = turmaActivities.map((act) => {
+        const isRec = act.isRecovery || act.type === 'Recuperação Paralela';
+        let code = '';
+        if (isRec) {
+          recCounter++;
+          code = `REC${recCounter}`;
+        } else {
+          actCounter++;
+          code = `A${actCounter}`;
+        }
+
+        let formattedDeadline = 'Sem prazo';
+        if (act.deadline && act.deadline.trim()) {
+          try {
+            const dt = new Date(act.deadline);
+            if (!isNaN(dt.getTime())) {
+              formattedDeadline = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            } else {
+              formattedDeadline = act.deadline;
+            }
+          } catch {
+            formattedDeadline = act.deadline;
+          }
+        }
+
+        return {
+          code,
+          activity: act,
+          isRecovery: isRec,
+          maxGrade: act.maxGrade || 10,
+          deadlineFormatted: formattedDeadline,
+        };
+      });
 
       const totalActivitiesCount = activityMap.length;
       let studentsWithAtLeastOneSubmission = 0;
@@ -99,10 +126,11 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
       const studentRows = turmaStudents.map((st, sIndex) => {
         let completedActivitiesCount = 0;
         const missingActivitiesCodes: string[] = [];
+        let usedAdaptationCount = 0;
 
         const gradesPerAct = activityMap.map((item) => {
           const act = item.activity;
-          // Buscar atividade adaptada ou principal
+          // Buscar atividade adaptada ou principal correspondente
           const related = activities.filter(
             (a) =>
               a.id === act.id ||
@@ -119,9 +147,17 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
 
           let grade: number | null = null;
           let hasSubmitted = false;
+          let isAdaptedSubmission = false;
 
           if (sub) {
             hasSubmitted = true;
+            // Verificar se a entrega foi feita na versão adaptada
+            const submittedAct = activities.find((a) => (a.submissions || []).includes(sub));
+            if (submittedAct?.isAdapted) {
+              isAdaptedSubmission = true;
+              usedAdaptationCount++;
+            }
+
             const obj = Number(sub.objectiveScore) || 0;
             const ess = Number(sub.essayScore) || 0;
             const ext = Number(sub.extraPoints) || 0;
@@ -137,6 +173,8 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
             grade,
             maxGrade: item.maxGrade,
             hasSubmitted,
+            isAdaptedSubmission,
+            isRecovery: item.isRecovery,
           };
         });
 
@@ -149,6 +187,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
 
         const isPne = isStudentPNE(st);
         const isRad = st.tag?.toUpperCase() === 'RAD';
+        const hasUsedAdaptation = usedAdaptationCount > 0;
 
         // Status pedagógico de entrega
         let deliveryStatusLabel = 'Sem Entregas';
@@ -173,6 +212,8 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
           student: st,
           isPne,
           isRad,
+          hasUsedAdaptation,
+          usedAdaptationCount,
           gradesPerAct,
           completedCount: completedActivitiesCount,
           totalActivities: totalActivitiesCount,
@@ -184,6 +225,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
 
       const pneCount = turmaStudents.filter((s) => isStudentPNE(s)).length;
       const radCount = turmaStudents.filter((s) => s.tag?.toUpperCase() === 'RAD').length;
+      const studentsWithAdaptationCount = studentRows.filter((r) => r.hasUsedAdaptation).length;
       const engagementPercent =
         turmaStudents.length > 0
           ? Math.round((studentsWithAtLeastOneSubmission / turmaStudents.length) * 100)
@@ -197,6 +239,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
         studentRows,
         pneCount,
         radCount,
+        studentsWithAdaptationCount,
         studentsWithAtLeastOneSubmission,
         studentsWithAllSubmissions,
         engagementPercent,
@@ -543,7 +586,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
               return (
                 <div
                   key={turmaData.turmaName}
-                  className={`turma-print-block ${!isFirstTurma ? 'rco-page-break' : ''}`}
+                  className={`turma-print-block pb-8 print:pb-8 ${!isFirstTurma ? 'rco-page-break' : ''}`}
                 >
                   {/* CABEÇALHO OFICIAL INSTITUCIONAL LIMPO */}
                   <div className="border-b-2 border-slate-900 pb-3 mb-4">
@@ -635,27 +678,51 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                     </div>
                   </div>
 
-                  {/* QUADRO DE ATIVIDADES AVALIATIVAS APLICADAS */}
+                  {/* QUADRO DE ATIVIDADES AVALIATIVAS E RECUPERAÇÕES APLICADAS */}
                   {includeActivityDetails && turmaData.activityMap.length > 0 && (
                     <div className="mb-3 p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-[10px] rco-avoid-break">
-                      <strong className="text-[10px] font-black text-slate-900 block uppercase tracking-wider mb-1.5">
-                        Quadro de Atividades Lançadas no Período:
-                      </strong>
+                      <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                        <strong className="text-[10px] font-black text-slate-900 uppercase tracking-wider">
+                          Quadro de Instrumentos Avaliativos e Recuperações Paralelas:
+                        </strong>
+                        <div className="flex items-center gap-2 text-[8px]">
+                          <span className="inline-flex items-center gap-1 font-bold text-slate-700">
+                            <span className="w-3.5 h-3.5 rounded bg-slate-900 text-white flex items-center justify-center text-[7px]">A</span> Atividade Regular
+                          </span>
+                          <span className="inline-flex items-center gap-1 font-bold text-amber-900">
+                            <span className="w-3.5 h-3.5 rounded bg-amber-600 text-white flex items-center justify-center text-[7px]">REC</span> Recuperação Paralela
+                          </span>
+                          <span className="inline-flex items-center gap-1 font-bold text-purple-900">
+                            <span className="px-1 rounded bg-purple-100 text-purple-800 border border-purple-300 text-[7px]">Adapt.</span> Adaptação PEI
+                          </span>
+                        </div>
+                      </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5">
                         {turmaData.activityMap.map((actItem) => (
                           <div
                             key={actItem.code}
-                            className="bg-white p-1.5 rounded border border-slate-200 flex items-start gap-2 text-[10px]"
+                            className={`p-1.5 rounded border flex items-start gap-2 text-[10px] ${
+                              actItem.isRecovery
+                                ? 'bg-amber-50/70 border-amber-300'
+                                : 'bg-white border-slate-200'
+                            }`}
                           >
-                            <span className="w-5 h-5 rounded bg-slate-900 text-white font-black text-[9px] flex items-center justify-center shrink-0">
+                            <span
+                              className={`w-6 h-5 rounded font-black text-[8.5px] flex items-center justify-center shrink-0 ${
+                                actItem.isRecovery
+                                  ? 'bg-amber-600 text-white'
+                                  : 'bg-slate-900 text-white'
+                              }`}
+                            >
                               {actItem.code}
                             </span>
                             <div className="min-w-0 flex-1">
                               <span className="font-bold text-slate-900 block truncate text-[10px]">
                                 {actItem.activity.title}
                               </span>
-                              <span className="text-[8px] text-slate-500 block">
-                                Tipo: {actItem.activity.type || 'Avaliação'} • Valor: {actItem.maxGrade} pts • Prazo: {actItem.deadlineFormatted}
+                              <span className="text-[8px] text-slate-600 block">
+                                {actItem.isRecovery ? 'Recuperação Paralela • ' : `Tipo: ${actItem.activity.type || 'Avaliação'} • `}
+                                Valor: {actItem.maxGrade} pts • Prazo: {actItem.deadlineFormatted}
                               </span>
                             </div>
                           </div>
@@ -665,21 +732,25 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                   )}
 
                   {/* TABELA DE ALUNOS, NOTAS E CONTROLE DE ENTREGAS */}
-                  <div className="border border-slate-300 rounded-lg overflow-hidden mb-3">
-                    <table className="w-full text-left text-[10px]">
+                  <div className="border border-slate-300 rounded-md mb-4 print:border-none print:rounded-none print:mb-2 overflow-visible">
+                    <table className="w-full text-left text-[10px] border-collapse print:text-[9.5px]">
                       <thead className="bg-slate-100 text-slate-900 font-bold border-b border-slate-300 uppercase text-[9px] tracking-wider">
-                        <tr>
+                        <tr className="rco-avoid-break">
                           <th className="py-1.5 px-2 w-7 text-center">Nº</th>
                           <th className="py-1.5 px-2.5">Nome do Aluno</th>
                           <th className="py-1.5 px-2 w-20 text-center">Matrícula</th>
                           <th className="py-1.5 px-1.5 w-12 text-center">Atend.</th>
 
-                          {/* Colunas de Atividades (A1, A2, A3...) */}
+                          {/* Colunas de Atividades Regulares e Recuperações */}
                           {turmaData.activityMap.map((actItem) => (
                             <th
                               key={actItem.code}
-                              className="py-1.5 px-2 w-10 text-center font-black text-slate-900 border-l border-slate-200"
-                              title={`${actItem.code}: ${actItem.activity.title} (Valor: ${actItem.maxGrade} pts)`}
+                              className={`py-1.5 px-2 w-10 text-center font-black border-l ${
+                                actItem.isRecovery
+                                  ? 'bg-amber-100 text-amber-950 border-amber-300'
+                                  : 'text-slate-900 border-slate-200'
+                              }`}
+                              title={`${actItem.code}: ${actItem.activity.title} (${actItem.isRecovery ? 'Recuperação Paralela' : actItem.activity.type || 'Atividade'} - Valor: ${actItem.maxGrade} pts)`}
                             >
                               {actItem.code}
                             </th>
@@ -705,7 +776,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                       </thead>
                       <tbody className="divide-y divide-slate-200">
                         {turmaData.studentRows.length === 0 ? (
-                          <tr>
+                          <tr className="rco-avoid-break">
                             <td
                               colSpan={7 + turmaData.activityMap.length}
                               className="p-4 text-center text-slate-500 italic"
@@ -717,7 +788,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                           turmaData.studentRows.map((row) => (
                             <tr
                               key={row.student.id}
-                              className={`hover:bg-slate-50 transition-colors ${
+                              className={`rco-avoid-break hover:bg-slate-50 transition-colors ${
                                 row.deliveryStatusType === 'complete'
                                   ? 'bg-emerald-50/20'
                                   : row.deliveryStatusType === 'none'
@@ -726,22 +797,32 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                               }`}
                             >
                               {/* Nº */}
-                              <td className="py-1 px-2 text-center font-bold text-slate-500 text-[10px]">
+                              <td className="py-1.5 px-2 text-center font-bold text-slate-500 text-[10px]">
                                 {String(row.index).padStart(2, '0')}
                               </td>
 
-                              {/* Nome Completo */}
-                              <td className="py-1 px-2.5 font-bold text-slate-900 text-[10px]">
-                                {row.student.fullName}
+                              {/* Nome Completo + Destaque de Adaptação Realizada */}
+                              <td className="py-1.5 px-2.5 font-bold text-slate-900 text-[10px]">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span>{row.student.fullName}</span>
+                                  {row.hasUsedAdaptation && (
+                                    <span
+                                      className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[7.5px] font-black bg-purple-100 text-purple-800 border border-purple-300"
+                                      title="Estudante realizou atividade com recurso/formato pedagógico adaptado (PEI/Inclusão)"
+                                    >
+                                      ★ Ativ. Adaptada
+                                    </span>
+                                  )}
+                                </div>
                               </td>
 
                               {/* Matrícula */}
-                              <td className="py-1 px-2 text-center font-mono text-slate-600 text-[9px]">
+                              <td className="py-1.5 px-2 text-center font-mono text-slate-600 text-[9px]">
                                 {row.student.matricula || '—'}
                               </td>
 
                               {/* Atendimento */}
-                              <td className="py-1 px-1.5 text-center">
+                              <td className="py-1.5 px-1.5 text-center">
                                 {row.isPne ? (
                                   <span className="px-1 py-0.2 rounded text-[7px] font-black bg-rose-100 text-rose-800 border border-rose-300">
                                     PNE
@@ -755,16 +836,33 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                                 )}
                               </td>
 
-                              {/* Notas Individuais por Atividade */}
+                              {/* Notas Individuais por Atividade / Recuperação */}
                               {row.gradesPerAct.map((gItem) => (
                                 <td
                                   key={gItem.code}
-                                  className="py-1 px-2 text-center font-mono font-bold text-[10px] border-l border-slate-200"
+                                  className={`py-1.5 px-2 text-center font-mono font-bold text-[10px] border-l ${
+                                    gItem.isRecovery
+                                      ? 'bg-amber-50/40 border-amber-200'
+                                      : 'border-slate-200'
+                                  }`}
                                 >
                                   {gItem.grade !== null ? (
-                                    <span className="text-slate-900 font-bold">
-                                      {gItem.grade.toFixed(1).replace('.', ',')}
-                                    </span>
+                                    <div className="flex flex-col items-center">
+                                      <span
+                                        className={
+                                          gItem.isRecovery
+                                            ? 'text-amber-900 font-black'
+                                            : 'text-slate-900 font-bold'
+                                        }
+                                      >
+                                        {gItem.grade.toFixed(1).replace('.', ',')}
+                                      </span>
+                                      {gItem.isAdaptedSubmission && (
+                                        <span className="text-[6.5px] font-bold text-purple-700 leading-none">
+                                          (adapt.)
+                                        </span>
+                                      )}
+                                    </div>
                                   ) : (
                                     <span className="text-slate-300 font-normal">—</span>
                                   )}
@@ -772,7 +870,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                               ))}
 
                               {/* Entregas Feitas / Total */}
-                              <td className="py-1 px-2 text-center font-mono font-bold text-[10px] bg-slate-100 border-l border-slate-300">
+                              <td className="py-1.5 px-2 text-center font-mono font-bold text-[10px] bg-slate-100 border-l border-slate-300">
                                 <span
                                   className={
                                     row.completedCount === row.totalActivities && row.totalActivities > 0
@@ -787,7 +885,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                               </td>
 
                               {/* Status de Entrega / Pendência */}
-                              <td className="py-1 px-2 text-center text-[9px] border-l border-slate-200">
+                              <td className="py-1.5 px-2 text-center text-[9px] border-l border-slate-200">
                                 {row.deliveryStatusType === 'complete' ? (
                                   <span className="text-emerald-800 font-bold">
                                     ✓ Entregue
@@ -805,7 +903,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
 
                               {/* Campo de Anotações do Professor / Visto Manual */}
                               {includeTeacherNotesColumn && (
-                                <td className="py-1 px-2 border-l border-slate-200 text-[8px] text-slate-400">
+                                <td className="py-1.5 px-2 border-l border-slate-200 text-[8px] text-slate-400">
                                   <div className="h-4 border-b border-dashed border-slate-300 w-full"></div>
                                 </td>
                               )}
@@ -816,28 +914,43 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                     </table>
                   </div>
 
-                  {/* Informações Especiais de Inclusão da Turma (PNE e RAD) */}
-                  {includeSpecialNeeds && (turmaData.pneCount > 0 || turmaData.radCount > 0) && (
-                    <div className="mb-4 p-2.5 bg-amber-50/60 border border-amber-300 rounded-lg text-[9px] text-slate-800 space-y-1 rco-avoid-break">
-                      <strong className="font-bold text-amber-950 block uppercase text-[9px]">
-                        Atendimento Educacional Especializado (Inclusão & RAD):
-                      </strong>
-                      <div className="space-y-0.5">
-                        {turmaData.studentRows
-                          .filter((r) => r.isPne || r.isRad)
-                          .map((r) => (
-                            <div key={r.student.id} className="flex items-start gap-1.5">
-                              <span className="font-bold text-slate-900">• {r.student.fullName}:</span>
-                              <span className="text-slate-700">
-                                {r.isPne
-                                  ? `Estudante com Plano de Ensino Individualizado (PEI) ${r.student.pneConditions ? `- Diagnóstico: ${r.student.pneConditions}` : ''} ${r.student.secondTeacherName ? `| Segundo(a) Professor(a): ${r.student.secondTeacherName}` : ''}`
-                                  : 'Estudante em Regime de Atividades Domiciliares (RAD / Atestado Médico registrado)'}
-                              </span>
-                            </div>
-                          ))}
+                  {/* Informações Especiais de Inclusão da Turma (PNE e RAD) e Explicação Pedagógica Final */}
+                  <div className="space-y-2 mb-4 rco-avoid-break">
+                    {includeSpecialNeeds && (turmaData.pneCount > 0 || turmaData.radCount > 0 || turmaData.studentsWithAdaptationCount > 0) && (
+                      <div className="p-2.5 bg-amber-50/60 border border-amber-300 rounded-lg text-[9px] text-slate-800 space-y-1">
+                        <strong className="font-bold text-amber-950 block uppercase text-[9px]">
+                          Atendimento Educacional Especializado & Adaptações Curriculares:
+                        </strong>
+                        <div className="space-y-0.5">
+                          {turmaData.studentRows
+                            .filter((r) => r.isPne || r.isRad || r.hasUsedAdaptation)
+                            .map((r) => (
+                              <div key={r.student.id} className="flex items-start gap-1.5">
+                                <span className="font-bold text-slate-900">• {r.student.fullName}:</span>
+                                <span className="text-slate-700">
+                                  {r.isPne
+                                    ? `Estudante com Plano de Ensino Individualizado (PEI) ${r.student.pneConditions ? `- Diagnóstico: ${r.student.pneConditions}` : ''} ${r.student.secondTeacherName ? `| Segundo(a) Professor(a): ${r.student.secondTeacherName}` : ''}`
+                                    : r.isRad
+                                    ? 'Estudante em Regime de Atividades Domiciliares (RAD / Atestado Médico registrado)'
+                                    : 'Atividade realizada com adequação metodológica de acessibilidade'}
+                                  {r.hasUsedAdaptation ? ' • [Adaptação Curricular Realizada]' : ''}
+                                </span>
+                              </div>
+                            ))}
+                        </div>
                       </div>
+                    )}
+
+                    {/* Explicação Final de Registro e Validação Pedagógica */}
+                    <div className="p-2.5 bg-slate-50 border border-slate-300 rounded-lg text-[8.5px] text-slate-700 leading-relaxed">
+                      <strong className="text-slate-900 font-bold uppercase block text-[9px] mb-0.5">
+                        Nota de Validação e Registro Oficial:
+                      </strong>
+                      <p>
+                        Todas as <strong>atividades avaliativas regulares</strong> e <strong>recuperações paralelas</strong> aplicadas no período letivo foram devidamente registradas neste mapa de controle. As adaptações curriculares (PEI) constituem flexibilizações metodológicas e de acessibilidade garantidas por lei aos estudantes da Educação Especial, mantendo a correspondência à atividade base sem gerar colunas adicionais de notas, encontrando-se devidamente identificadas e arquivadas no dossiê pedagógico do docente.
+                      </p>
                     </div>
-                  )}
+                  </div>
 
                   {/* ASSINATURA COMPACTA NO FINAL DE CADA TURMA */}
                   {includeSignatures && (

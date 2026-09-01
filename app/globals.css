@@ -81,7 +81,7 @@ body {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 8mm 10mm;
+    margin: 8mm 8mm 14mm 8mm;
   }
 
   html,
@@ -98,72 +98,88 @@ body {
     print-color-adjust: exact !important;
   }
 
-  /* Reset fixed modal overlay for print */
-  .fixed.inset-0.z-50 {
-    position: static !important;
-    background: transparent !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    display: block !important;
-    overflow: visible !important;
-    height: auto !important;
+  /* Ocultar TODO o conteúdo e tela do sistema ao imprimir */
+  body * {
+    visibility: hidden;
   }
 
-  .rco-modal-dialog {
-    background: white !important;
-    border: none !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    max-width: 100% !important;
-    max-height: none !important;
-    height: auto !important;
-    overflow: visible !important;
-    display: block !important;
-  }
-
-  .rco-scroll-container {
-    overflow: visible !important;
-    height: auto !important;
-    padding: 0 !important;
-    background: white !important;
-  }
-
+  /* Tornar VISÍVEIS apenas as áreas de relatório imprimíveis e seus filhos */
+  .rco-printable-area,
+  .rco-printable-area *,
   .dossier-printable-area,
-  .rco-printable-area {
-    position: static !important;
+  .dossier-printable-area * {
+    visibility: visible !important;
+  }
+
+  /* Ancorar o documento no topo absoluto da página de impressão, sem o fundo escuro do app */
+  .rco-printable-area,
+  .dossier-printable-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
     background: white !important;
     color: #0f172a !important;
     padding: 0 !important;
-    box-shadow: none !important;
-    border: none !important;
     margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
     overflow: visible !important;
+    display: block !important;
   }
 
+  /* Ocultar elementos marcados com no-print */
+  .no-print,
+  .no-print *,
+  header,
+  nav,
+  aside {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Quebra de página perfeita entre turmas */
   .rco-page-break {
     page-break-before: always !important;
     break-before: page !important;
     margin-top: 0 !important;
-    padding-top: 10mm !important;
+    padding-top: 8mm !important;
   }
 
+  /* Evitar quebra no meio de blocos críticos */
   .rco-avoid-break {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
 
-  tr {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
+  /* Regras de tabela para evitar corte de linhas no rodapé */
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
   }
 
   thead {
     display: table-header-group !important;
   }
 
-  .no-print {
-    display: none !important;
+  tfoot {
+    display: table-footer-group !important;
+  }
+
+  tr,
+  tbody tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
+  td,
+  th {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 }

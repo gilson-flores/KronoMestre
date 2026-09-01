@@ -1,27 +1,11 @@
-import { GoogleGenAI } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
+import { getGeminiClient } from "@/lib/gemini";
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    const apiKey =
-      process.env.GEMINI_API_KEY ||
-      process.env.GOOGLE_API_KEY ||
-      process.env.GOOGLE_GENAI_API_KEY ||
-      process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-
-    if (!apiKey) {
-      return NextResponse.json(
-        {
-          error:
-            "Chave GEMINI_API_KEY não configurada no servidor de produção. Adicione a variável de ambiente GEMINI_API_KEY no painel de deploy.",
-        },
-        { status: 500 }
-      );
-    }
-
     const body = await req.json();
     const {
       studentName = "Estudante",
@@ -62,6 +46,44 @@ export async function POST(req: NextRequest) {
           evaluationFormat = 'mixed';
         }
       }
+    }
+
+    // Build immediate contextual pedagogical fallback
+    let defaultFallback = "";
+    if (isSerious) {
+      if (evaluationFormat === 'objective_only') {
+        defaultFallback = isReturned
+          ? `Olá, ${studentName}! Revise com atenção os conceitos das questões objetivas em "${activityTitle}" para aprimorar seu gabarito antes de reenviar.`
+          : `Parabéns pelo ótimo desempenho nas questões objetivas em "${activityTitle}", ${studentName}! Sua dedicação e assertividade nos conceitos sociológicos foram exemplares.`;
+      } else if (evaluationFormat === 'essay_only') {
+        defaultFallback = isReturned
+          ? `Olá, ${studentName}! Releia sua resposta dissertativa em "${activityTitle}" e aprofunde seus argumentos com mais reflexão sociológica antes de reenviar.`
+          : `Excelente reflexão e escrita dissertativa em "${activityTitle}", ${studentName}! Sua argumentação crítica demonstra grande maturidade nos estudos sociológicos.`;
+      } else {
+        defaultFallback = isReturned
+          ? `Olá, ${studentName}! Revise as questões objetivas e aprofunde sua resposta dissertativa em "${activityTitle}" para enriquecer a atividade antes de reenviar.`
+          : `Parabéns pelo ótimo desempenho integral em "${activityTitle}", ${studentName}! Excelente equilíbrio entre as questões objetivas e a reflexão dissertativa.`;
+      }
+    } else {
+      if (evaluationFormat === 'objective_only') {
+        defaultFallback = isReturned
+          ? `Sensei: Quase lá, ${studentName}! Concentre seu chakra para revisar as alternativas de "${activityTitle}" e gabaritar as questões objetivas. Dattebayo! 🍃📜`
+          : `Sensei: Excelente precisão nos pergaminhos objetivos de "${activityTitle}", ${studentName}! Sua pontaria com os conceitos de Sociologia foi certeira. Dattebayo! 🍃✨`;
+      } else if (evaluationFormat === 'essay_only') {
+        defaultFallback = isReturned
+          ? `Sensei: Concentre seu chakra na escrita, ${studentName}! Aprofunde seus argumentos sociológicos em "${activityTitle}" antes de reenviar o pergaminho. Dattebayo! 📜⚡`
+          : `Sensei: Que reflexão poderosa no seu pergaminho dissertativo de "${activityTitle}", ${studentName}! Sua Vontade do Fogo brilhou na argumentação sociológica. Dattebayo! 🍃🔥`;
+      } else {
+        defaultFallback = isReturned
+          ? `Sensei: Calibre seu chakra nas questões objetivas e aprofunde o pergaminho dissertativo em "${activityTitle}" para reenviar a missão com força total, ${studentName}! Dattebayo! 📜🍃`
+          : `Sensei: Missão cumprida com maestria em "${activityTitle}", ${studentName}! Excelente domínio no gabarito e sabedoria na dissertação. Continue com a Vontade do Fogo acesa! Dattebayo! 🍃🏆`;
+      }
+    }
+
+    const ai = getGeminiClient();
+    if (!ai) {
+      // Return the contextual pedagogical feedback immediately without throwing
+      return NextResponse.json({ feedback: defaultFallback.slice(0, 400) });
     }
 
     let prompt = "";
@@ -208,116 +230,40 @@ ${formatSpecificRulesNinja}
 4. Responda estritamente em Português do Brasil.`;
     }
 
-    const ai = new GoogleGenAI({ apiKey });
-
     const candidateModels = [
-      'gemini-3.1-flash-lite',
       'gemini-3.7-flash',
+      'gemini-3.1-flash-lite',
       'gemini-flash-latest',
     ];
 
     let response: any = null;
-    let lastError: any = null;
 
     for (const modelName of candidateModels) {
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-          response = await ai.models.generateContent({
-            model: modelName,
-            contents: prompt,
-          });
-          if (response && response.text) {
-            break;
-          }
-        } catch (err: any) {
-          lastError = err;
-          const status = err?.status || err?.code;
-          const errMsg = String(err?.message || '');
-          const isQuotaExhausted = status === 429 || errMsg.includes('Quota exceeded') || errMsg.includes('RESOURCE_EXHAUSTED');
-          const isHighDemand = status === 503 || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE');
-
-          console.warn(`Tentativa ${attempt} com modelo ${modelName} no feedback:`, errMsg || err);
-
-          if (isQuotaExhausted) {
-            break;
-          }
-
-          if (isHighDemand && attempt < 2) {
-            await new Promise((r) => setTimeout(r, 600));
-            continue;
-          }
+      try {
+        response = await ai.models.generateContent({
+          model: modelName,
+          contents: prompt,
+        });
+        if (response && response.text) {
+          break;
+        }
+      } catch (err: any) {
+        const errMsg = String(err?.message || '');
+        console.warn(`Aviso na tentativa com modelo ${modelName} no feedback:`, errMsg);
+        // If API key is invalid, don't keep retrying all models uselessly
+        if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid')) {
           break;
         }
       }
-      if (response && response.text) {
-        break;
-      }
     }
 
-    if (!response || !response.text) {
-      if (lastError) {
-        throw lastError;
-      }
-      throw new Error("Nenhum modelo do Gemini respondeu à solicitação de feedback.");
-    }
-
-    let defaultFallback = "";
-    if (isSerious) {
-      if (evaluationFormat === 'objective_only') {
-        defaultFallback = isReturned
-          ? "Revise com atenção os conceitos das questões objetivas para aprimorar seu gabarito antes de reenviar."
-          : "Excelente desempenho nas questões objetivas! Parabéns pela assertividade e dedicação aos estudos.";
-      } else if (evaluationFormat === 'essay_only') {
-        defaultFallback = isReturned
-          ? "Releia sua resposta dissertativa e aprofunde seus argumentos com mais reflexão sociológica antes de reenviar."
-          : "Excelente reflexão e escrita dissertativa! Parabéns pela argumentação e dedicação nos estudos.";
-      } else {
-        defaultFallback = isReturned
-          ? "Revise as questões objetivas e aprofunde sua resposta dissertativa para enriquecer a atividade antes de reenviar."
-          : "Excelente desempenho nas questões objetivas e dissertativas! Continue dedicando-se com entusiasmo aos estudos.";
-      }
-    } else {
-      if (evaluationFormat === 'objective_only') {
-        defaultFallback = isReturned
-          ? "Sensei: Quase lá! Concentre seu chakra para revisar as alternativas e gabaritar as questões objetivas. Dattebayo!"
-          : "Sensei: Excelente precisão nos pergaminhos de questões objetivas! Mantenha o chakra focado. Dattebayo!";
-      } else if (evaluationFormat === 'essay_only') {
-        defaultFallback = isReturned
-          ? "Sensei: Concentre seu chakra na escrita e aprofunde seus argumentos sociológicos antes de reenviar. Dattebayo!"
-          : "Sensei: Excelente reflexão no seu pergaminho dissertativo! Sua Vontade do Fogo brilhou na argumentação. Dattebayo!";
-      } else {
-        defaultFallback = isReturned
-          ? "Sensei: Calibre seu chakra nas questões objetivas e aprofunde o texto dissertativo para reenviar a missão. Dattebayo!"
-          : "Sensei: Excelente esforço em toda a missão objetiva e dissertativa! Continue com a Vontade do Fogo acesa. Dattebayo!";
-      }
-    }
-
-    const generatedFeedback = (response.text || defaultFallback).trim().slice(0, 400);
-
+    const generatedFeedback = (response?.text || defaultFallback).trim().slice(0, 400);
     return NextResponse.json({ feedback: generatedFeedback });
   } catch (error: any) {
-    console.error("Erro ao gerar feedback com Gemini:", error);
-    
-    const isPrepaymentError = error?.message?.includes('prepayment') || error?.message?.includes('credits are depleted');
-    if (isPrepaymentError) {
-      return NextResponse.json(
-        { error: 'Os créditos pré-pagos do projeto desta chave de API estão esgotados. Para usar gratuitamente, crie uma chave em um projeto novo sem faturamento pré-pago no Google AI Studio (https://aistudio.google.com/app/apikey).' },
-        { status: 429 }
-      );
-    }
-
-    const isQuotaError = error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('quota');
-    if (isQuotaError) {
-      return NextResponse.json(
-        { error: 'Limite de requisições por minuto atingido. Aguarde alguns segundos e tente novamente.' },
-        { status: 429 }
-      );
-    }
-
-    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido ao chamar Gemini API";
-    return NextResponse.json(
-      { error: "Falha ao gerar feedback do Sensei.", details: errorMessage },
-      { status: 500 }
-    );
+    console.error("Erro ao gerar feedback com Gemini, aplicando resposta pedagógica de segurança:", error);
+    return NextResponse.json({
+      feedback: "Excelente dedicação e esforço demonstrados nesta atividade! Continue com foco nos estudos de Sociologia.",
+    });
   }
 }
+

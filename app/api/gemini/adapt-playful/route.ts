@@ -1,5 +1,5 @@
-import { GoogleGenAI } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
+import { getGeminiClient } from '@/lib/gemini';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -446,22 +446,6 @@ function generateFallbackPlayfulGameHtml(
 
 export async function POST(req: NextRequest) {
   try {
-    const apiKey =
-      process.env.GEMINI_API_KEY ||
-      process.env.GOOGLE_API_KEY ||
-      process.env.GOOGLE_GENAI_API_KEY ||
-      process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-
-    if (!apiKey) {
-      return NextResponse.json(
-        {
-          error:
-            'Chave GEMINI_API_KEY não configurada no servidor. Adicione a variável de ambiente GEMINI_API_KEY.',
-        },
-        { status: 500 }
-      );
-    }
-
     const {
       title,
       subject = 'Sociologia',
@@ -472,7 +456,7 @@ export async function POST(req: NextRequest) {
       customPrompt = '',
     } = await req.json();
 
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = getGeminiClient();
 
     // Format questions context
     const questionsSummary = Array.isArray(questions) && questions.length > 0
@@ -547,47 +531,42 @@ REQUISITOS PEDAGÓGICOS E ESTRUTURAIS OBRIGATÓRIOS DO JOGO LÚDICO:
 `;
 
     const candidateModels = [
-      'gemini-3.1-flash-lite',
       'gemini-3.7-flash',
+      'gemini-3.1-flash-lite',
       'gemini-flash-latest',
     ];
 
     let response: any = null;
-    let lastError: any = null;
 
-    for (const modelName of candidateModels) {
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-          response = await ai.models.generateContent({
-            model: modelName,
-            contents: prompt,
-          });
-          if (response && response.text) {
+    if (ai) {
+      for (const modelName of candidateModels) {
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            response = await ai.models.generateContent({
+              model: modelName,
+              contents: prompt,
+            });
+            if (response && response.text) {
+              break;
+            }
+          } catch (err: any) {
+            const errMsg = String(err?.message || '');
+            console.warn(`Tentativa ${attempt} com ${modelName} na geração do jogo:`, errMsg || err);
+
+            if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid')) {
+              break;
+            }
+
+            const isQuotaExhausted = err?.status === 429 || errMsg.includes('Quota exceeded') || errMsg.includes('RESOURCE_EXHAUSTED');
+            if (isQuotaExhausted) {
+              break;
+            }
             break;
           }
-        } catch (err: any) {
-          lastError = err;
-          const status = err?.status || err?.code;
-          const errMsg = String(err?.message || '');
-          const isQuotaExhausted = status === 429 || errMsg.includes('Quota exceeded') || errMsg.includes('RESOURCE_EXHAUSTED');
-          const isHighDemand = status === 503 || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE');
-
-          console.warn(`Tentativa ${attempt} com ${modelName} na geração do jogo:`, errMsg || err);
-
-          // Se a cota do modelo esgotou, pula imediatamente para o próximo modelo sem re-tentar o mesmo
-          if (isQuotaExhausted) {
-            break;
-          }
-
-          if (isHighDemand && attempt < 2) {
-            await new Promise((r) => setTimeout(r, 600));
-            continue;
-          }
+        }
+        if (response && response.text) {
           break;
         }
-      }
-      if (response && response.text) {
-        break;
       }
     }
 
