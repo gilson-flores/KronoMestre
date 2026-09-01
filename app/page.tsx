@@ -3142,6 +3142,7 @@ export default function Home() {
         onCreateActivity={handleCreateActivity}
         students={students}
         activities={activities}
+        userEmail={teacher?.email}
       />
 
       <EditActivityModal
@@ -3154,6 +3155,7 @@ export default function Home() {
         onSaveActivity={handleSaveActivity}
         students={students}
         activities={activities}
+        userEmail={teacher?.email}
       />
 
       <ParallelRecoveryModal

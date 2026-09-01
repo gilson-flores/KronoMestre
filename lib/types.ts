@@ -116,6 +116,7 @@ export interface Activity {
   adaptedFromId?: string; // ID da atividade original
   isRecovery?: boolean; // Indica se esta atividade é uma Recuperação Paralela vinculada
   recoveryFromId?: string; // ID da atividade raiz da qual esta é a recuperação paralela
+  recoveryManualParentName?: string; // Nome da atividade mãe digitado manualmente na exceção (ex: atividades em papel)
   recoveryApproach?: string; // Abordagem pedagógica diferenciada aplicada na recuperação
   includedPneStudentIds?: string[]; // IDs dos alunos PNE selecionados por proficiência para fazer a atividade normal
   questions?: ActivityQuestion[];

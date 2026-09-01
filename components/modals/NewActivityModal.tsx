@@ -20,6 +20,10 @@ import {
   ChevronDown,
   ChevronUp,
   RotateCcw,
+  KeyRound,
+  Lock,
+  AlertTriangle,
+  AlertCircle,
 } from 'lucide-react';
 import { Activity, ActivityQuestion, ActivityType, StudentUser } from '@/lib/types';
 import { DEFAULT_TURMAS, doesTurmaHavePNEStudent, canStudentAccessActivity, isStudentPNE } from '@/lib/studentUtils';
@@ -28,6 +32,7 @@ import {
   createAdaptedMildModerateActivity,
   createAdaptedSeverePlayfulActivity,
 } from '@/lib/adaptationUtils';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 interface NewActivityModalProps {
   isOpen: boolean;
@@ -35,6 +40,7 @@ interface NewActivityModalProps {
   onCreateActivity: (newAct: Activity) => void;
   students?: StudentUser[];
   activities?: Activity[];
+  userEmail?: string;
 }
 
 const getTomorrowString = () => {
@@ -57,6 +63,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   onCreateActivity,
   students = [],
   activities = [],
+  userEmail,
 }) => {
   const [title, setTitle] = useState('');
   const [subject, setSubject] = useState('Sociologia');
@@ -67,6 +74,14 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   const [type, setType] = useState<ActivityType>('Avaliação');
   const [recoveryFromId, setRecoveryFromId] = useState<string>('');
   
+  // Unlinked Parallel Recovery Exception State
+  const [isUnlinkedRecoveryPopupOpen, setIsUnlinkedRecoveryPopupOpen] = useState(false);
+  const [manualParentName, setManualParentName] = useState('');
+  const [userPassword, setUserPassword] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isAuthorizing, setIsAuthorizing] = useState(false);
+  const [pendingRecoveryActivity, setPendingRecoveryActivity] = useState<Activity | null>(null);
+
   const [deadlineDateTime, setDeadlineDateTime] = useState(() => getTomorrowString());
   const [maxGrade, setMaxGrade] = useState<number>(10);
   const [allowGroupWork, setAllowGroupWork] = useState<boolean>(false);
@@ -222,8 +237,19 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
       submissions: [],
     };
 
-    // Parallel recovery skips the PNE adaptation modal since it is already a subordinate second-chance activity
+    // Parallel recovery handling
     if (isParallelRecovery) {
+      // Se NÃO apontou uma atividade mãe vinculada, abre o popup de exceção (senha + nome manual da atividade)
+      if (!recoveryFromId) {
+        setPendingRecoveryActivity(newActivity);
+        setManualParentName('');
+        setUserPassword('');
+        setAuthError(null);
+        setIsUnlinkedRecoveryPopupOpen(true);
+        return;
+      }
+
+      // Se apontou uma atividade mãe, grava normalmente
       onCreateActivity(newActivity);
       resetFormAndClose();
       return;
@@ -239,6 +265,67 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
     }
   };
 
+  const handleConfirmUnlinkedRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualParentName.trim()) {
+      setAuthError('Por favor, informe o nome da atividade mãe manualmente.');
+      return;
+    }
+    if (!userPassword) {
+      setAuthError('Por favor, digite sua senha de usuário para autorizar a gravação.');
+      return;
+    }
+
+    setIsAuthorizing(true);
+    setAuthError(null);
+
+    try {
+      let emailToValidate = userEmail;
+      if (!emailToValidate && typeof window !== 'undefined') {
+        try {
+          const sess = sessionStorage.getItem('active_session');
+          if (sess) {
+            const parsed = JSON.parse(sess);
+            emailToValidate = parsed?.teacherData?.email;
+          }
+        } catch {}
+      }
+
+      // Validar senha contra Supabase Auth se configurado
+      if (isSupabaseConfigured && supabase && emailToValidate) {
+        const { error: authErr } = await supabase.auth.signInWithPassword({
+          email: emailToValidate.trim().toLowerCase(),
+          password: userPassword,
+        });
+        if (authErr) {
+          throw new Error('Senha de usuário incorreta. Verifique sua senha e tente novamente.');
+        }
+      }
+
+      if (!pendingRecoveryActivity) return;
+
+      const cleanManualName = manualParentName.trim();
+      const finalActivity: Activity = {
+        ...pendingRecoveryActivity,
+        isRecovery: true,
+        recoveryFromId: undefined,
+        recoveryManualParentName: cleanManualName,
+        description:
+          pendingRecoveryActivity.description ||
+          `Recuperação Paralela da avaliação "${cleanManualName}" (Atividade em papel / Externa).`,
+      };
+
+      onCreateActivity(finalActivity);
+      setIsUnlinkedRecoveryPopupOpen(false);
+      setPendingRecoveryActivity(null);
+      resetFormAndClose();
+    } catch (err: any) {
+      setAuthError(err?.message || 'Erro ao validar credenciais. Tente novamente.');
+    } finally {
+      setIsAuthorizing(false);
+    }
+  };
+
   const resetFormAndClose = () => {
     setTitle('');
     setDescription('');
@@ -249,6 +336,11 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
     setIncludedPneStudentIds([]);
     setIsPneDropdownOpen(false);
     setPendingActivityForDecision(null);
+    setIsUnlinkedRecoveryPopupOpen(false);
+    setManualParentName('');
+    setUserPassword('');
+    setAuthError(null);
+    setPendingRecoveryActivity(null);
     onClose();
   };
 
@@ -407,6 +499,133 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   };
 
   if (!isOpen) return null;
+
+  if (isUnlinkedRecoveryPopupOpen) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fadeIn">
+        <div className="w-full max-w-xl bg-[#0e172a] rounded-3xl border border-indigo-500/30 p-6 sm:p-8 space-y-6 shadow-2xl relative my-auto text-[#dae2fd]">
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-white/10 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-indigo-500/20 text-indigo-300 rounded-2xl border border-indigo-500/30">
+                <KeyRound className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-white leading-tight">
+                  Autorização de Recuperação Paralela
+                </h3>
+                <p className="text-xs text-[#bccabb]">
+                  Gravação avulsa sem apontar uma atividade mãe digital
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setIsUnlinkedRecoveryPopupOpen(false);
+                setPendingRecoveryActivity(null);
+              }}
+              className="p-2 text-[#bccabb] hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Contexto Pedagógico / Exceção */}
+          <div className="p-4 bg-[#131b2e] rounded-2xl border border-indigo-500/20 space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-indigo-300">
+              <Lock className="w-4 h-4 text-indigo-400 shrink-0" />
+              <span>Confirmação de Segurança e Autorização</span>
+            </div>
+            <p className="text-xs text-[#bccabb] leading-relaxed">
+              Você está gravando uma recuperação paralela sem vinculá-la a uma atividade mãe existente no portal (exceção para avaliações geradas em papel ou turmas assumidas). Digite o nome da atividade manualmente e sua senha para autorizar o cadastro.
+            </p>
+          </div>
+
+          <form onSubmit={handleConfirmUnlinkedRecovery} className="space-y-4">
+            {authError && (
+              <div className="p-3.5 bg-rose-500/15 border border-rose-500/30 rounded-2xl text-xs text-rose-300 flex items-start gap-2.5 animate-fadeIn">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <span>{authError}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5">
+                Nome da Atividade Mãe (Digitado Manualmente) *
+              </label>
+              <input
+                type="text"
+                required
+                autoFocus
+                value={manualParentName}
+                onChange={(e) => {
+                  setManualParentName(e.target.value);
+                  if (authError) setAuthError(null);
+                }}
+                placeholder="Ex: 1º Simulado Bimestral de Sociologia (Em Papel)"
+                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-indigo-400"
+              />
+              <p className="text-[10px] text-[#bccabb] mt-1 ml-1">
+                Informe o nome da avaliação original em papel ou externa a que esta recuperação se refere.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5">
+                Senha do Usuário *
+              </label>
+              <input
+                type="password"
+                required
+                value={userPassword}
+                onChange={(e) => {
+                  setUserPassword(e.target.value);
+                  if (authError) setAuthError(null);
+                }}
+                placeholder="Digite sua senha de acesso"
+                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-indigo-400"
+              />
+              <p className="text-[10px] text-[#bccabb] mt-1 ml-1">
+                Sua senha é exigida para autorizar a gravação de recuperações sem vínculo direto.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsUnlinkedRecoveryPopupOpen(false);
+                  setPendingRecoveryActivity(null);
+                }}
+                disabled={isAuthorizing}
+                className="px-5 py-2.5 rounded-full text-xs font-bold text-[#bccabb] hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isAuthorizing}
+                className="px-6 py-2.5 rounded-full text-xs font-bold bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-[#4ade80]/20 disabled:opacity-50"
+              >
+                {isAuthorizing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Validando Senha...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Autorizar e Gravar</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   if (pendingActivityForDecision) {
     return (
@@ -674,7 +893,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                 </div>
                 <div>
                   <h4 className="text-xs font-bold text-indigo-300">
-                    Avaliação à qual esta Recuperação será subordinada *
+                    Avaliação à qual esta Recuperação será subordinada
                   </h4>
                   <p className="text-[11px] text-[#bccabb]">
                     A recuperação paralela é uma segunda chance para quem não aproveitou a 1ª atividade. Não gera pendência nem espera entrega de quem já entregou a original.
@@ -683,8 +902,11 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
               </div>
 
               {availableParentActivities.length === 0 ? (
-                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-300">
-                  Nenhuma avaliação base encontrada para vincular. Crie primeiro uma Avaliação ou Simulado principal antes de criar a recuperação paralela.
+                <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-200 space-y-1">
+                  <p className="font-semibold text-white">Nenhuma avaliação base digital encontrada no sistema.</p>
+                  <p className="text-[11px] text-[#bccabb]">
+                    Você poderá gravar esta recuperação paralela normalmente como exceção (ex: avaliação original feita em papel ou turma assumida). Ao clicar em Publicar/Gravar, um popup solicitará a digitação manual do nome da atividade e sua senha.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -693,24 +915,29 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                     onChange={(e) => {
                       const selectedId = e.target.value;
                       setRecoveryFromId(selectedId);
-                      const parent = availableParentActivities.find((a) => a.id === selectedId);
-                      if (parent) {
-                        if (parent.turma) {
-                          const parsed = parent.turma.split(/[,;]+/).map((t) => t.trim()).filter(Boolean);
-                          if (parsed.length > 0) setSelectedTurmas(parsed);
+                      if (selectedId) {
+                        const parent = availableParentActivities.find((a) => a.id === selectedId);
+                        if (parent) {
+                          if (parent.turma) {
+                            const parsed = parent.turma.split(/[,;]+/).map((t) => t.trim()).filter(Boolean);
+                            if (parsed.length > 0) setSelectedTurmas(parsed);
+                          }
+                          if (parent.subject) setSubject(parent.subject);
+                          if (parent.maxGrade) setMaxGrade(parent.maxGrade);
+                          const cleanTitle = parent.title.replace(/^\[.*?\]\s*/i, '');
+                          setTitle(`[Recuperação Paralela] ${cleanTitle}`);
+                          setDescription(`Recuperação Paralela com abordagem diferenciada subordinada à avaliação "${cleanTitle}".`);
                         }
-                        if (parent.subject) setSubject(parent.subject);
-                        if (parent.maxGrade) setMaxGrade(parent.maxGrade);
-                        const cleanTitle = parent.title.replace(/^\[.*?\]\s*/i, '');
-                        setTitle(`[Recuperação Paralela] ${cleanTitle}`);
-                        setDescription(`Recuperação Paralela com abordagem diferenciada subordinada à avaliação "${cleanTitle}".`);
+                      } else {
+                        if (!title || title.startsWith('[Recuperação Paralela]')) {
+                          setTitle('[Recuperação Paralela] ');
+                        }
                       }
                     }}
-                    required
                     className="w-full bg-[#0e172a] border border-indigo-500/40 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-400"
                   >
-                    <option value="" disabled className="bg-[#0b1326]">
-                      -- Selecione a atividade original correspondente --
+                    <option value="" className="bg-[#0b1326] text-amber-300">
+                      -- Sem atividade mãe vinculada (Exceção: Atividade em Papel / Externa) --
                     </option>
                     {availableParentActivities.map((parent) => (
                       <option key={parent.id} value={parent.id} className="bg-[#0b1326]">
@@ -719,10 +946,15 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                     ))}
                   </select>
 
-                  {recoveryFromId && (
+                  {recoveryFromId ? (
                     <div className="flex items-center gap-2 text-[11px] text-emerald-400 bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
                       <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                       <span>Subordinação vinculada: As turmas e métricas foram sincronizadas automaticamente com a atividade raiz.</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-[11px] text-amber-300 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Modo Exceção: Ao salvar sem vincular, um popup solicitará o nome da atividade em papel e sua senha.</span>
                     </div>
                   )}
                 </div>

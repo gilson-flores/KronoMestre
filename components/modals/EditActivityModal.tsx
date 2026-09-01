@@ -1,10 +1,31 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Save, Pencil, Plus, Trash2, HelpCircle, FileText, Users, CheckCircle2, Link2, Sparkles, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
+import {
+  X,
+  Save,
+  Pencil,
+  Plus,
+  Trash2,
+  HelpCircle,
+  FileText,
+  Users,
+  CheckCircle2,
+  Link2,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  RotateCcw,
+  KeyRound,
+  Lock,
+  AlertTriangle,
+  AlertCircle,
+  Loader2,
+} from 'lucide-react';
 import { Activity, ActivityQuestion, ActivityType, StudentUser } from '@/lib/types';
 import { DEFAULT_TURMAS, getTurmaLabel, canStudentAccessActivity, isStudentPNE } from '@/lib/studentUtils';
 import { TurmaMultiSelect } from '@/components/TurmaMultiSelect';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 interface EditActivityModalProps {
   isOpen: boolean;
@@ -13,6 +34,7 @@ interface EditActivityModalProps {
   onSaveActivity: (updatedActivity: Activity) => void;
   students?: StudentUser[];
   activities?: Activity[];
+  userEmail?: string;
 }
 
 export const EditActivityModal: React.FC<EditActivityModalProps> = ({
@@ -22,6 +44,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   onSaveActivity,
   students = [],
   activities = [],
+  userEmail,
 }) => {
   const [prevActivityId, setPrevActivityId] = useState<string | null>(activity?.id || null);
   const [title, setTitle] = useState('');
@@ -42,6 +65,14 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   const [includedPneStudentIds, setIncludedPneStudentIds] = useState<string[]>([]);
   const [isPneDropdownOpen, setIsPneDropdownOpen] = useState<boolean>(true);
   const [questions, setQuestions] = useState<ActivityQuestion[]>([]);
+
+  // Unlinked Parallel Recovery Exception State
+  const [isUnlinkedRecoveryPopupOpen, setIsUnlinkedRecoveryPopupOpen] = useState(false);
+  const [manualParentName, setManualParentName] = useState('');
+  const [userPassword, setUserPassword] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isAuthorizing, setIsAuthorizing] = useState(false);
+  const [pendingUpdatedActivity, setPendingUpdatedActivity] = useState<Activity | null>(null);
 
   if (activity && activity.id !== prevActivityId) {
     setPrevActivityId(activity.id);
@@ -204,39 +235,233 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       securityBlockCopyStatement,
       securityBlockPasteEssay,
       isRecovery: isParallelRecovery || Boolean(recoveryFromId) || Boolean(activity.isRecovery),
-      recoveryFromId: isParallelRecovery && recoveryFromId ? recoveryFromId : (activity.recoveryFromId || undefined),
+      recoveryFromId: isParallelRecovery && recoveryFromId ? recoveryFromId : undefined,
       recoveryApproach: isParallelRecovery ? (activity.recoveryApproach || 'Estudos de caso e aplicações práticas do cotidiano') : activity.recoveryApproach,
+      recoveryManualParentName: isParallelRecovery && !recoveryFromId ? (activity.recoveryManualParentName || undefined) : undefined,
       includedPneStudentIds,
       questions,
     };
+
+    if (isParallelRecovery && !recoveryFromId) {
+      setPendingUpdatedActivity(updatedActivity);
+      setManualParentName(activity.recoveryManualParentName || '');
+      setUserPassword('');
+      setAuthError(null);
+      setIsUnlinkedRecoveryPopupOpen(true);
+      return;
+    }
 
     onSaveActivity(updatedActivity);
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
-      <div className="bg-[#0b1326] border border-white/10 w-full max-w-3xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 space-y-5 my-2 sm:my-8 text-[#dae2fd] shadow-2xl relative max-h-[96vh] overflow-y-auto custom-scrollbar">
-        {/* Header */}
-        <div className="flex items-start sm:items-center justify-between pb-4 border-b border-white/10 gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#4ade80]/20 border border-[#4ade80]/30 text-[#4ade80] flex items-center justify-center shrink-0">
-              <Pencil className="w-5 h-5" />
+  const handleConfirmUnlinkedRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualParentName.trim()) {
+      setAuthError('Por favor, informe o nome da atividade mãe manualmente.');
+      return;
+    }
+    if (!userPassword) {
+      setAuthError('Por favor, digite sua senha de usuário para autorizar a gravação.');
+      return;
+    }
+
+    setIsAuthorizing(true);
+    setAuthError(null);
+
+    try {
+      let emailToValidate = userEmail;
+      if (!emailToValidate && typeof window !== 'undefined') {
+        try {
+          const sess = sessionStorage.getItem('active_session');
+          if (sess) {
+            const parsed = JSON.parse(sess);
+            emailToValidate = parsed?.teacherData?.email;
+          }
+        } catch {}
+      }
+
+      if (isSupabaseConfigured && supabase && emailToValidate) {
+        const { error: authErr } = await supabase.auth.signInWithPassword({
+          email: emailToValidate.trim().toLowerCase(),
+          password: userPassword,
+        });
+        if (authErr) {
+          throw new Error('Senha de usuário incorreta. Verifique sua senha e tente novamente.');
+        }
+      }
+
+      if (!pendingUpdatedActivity) return;
+
+      const cleanManualName = manualParentName.trim();
+      const finalActivity: Activity = {
+        ...pendingUpdatedActivity,
+        isRecovery: true,
+        recoveryFromId: undefined,
+        recoveryManualParentName: cleanManualName,
+      };
+
+      onSaveActivity(finalActivity);
+      setIsUnlinkedRecoveryPopupOpen(false);
+      setPendingUpdatedActivity(null);
+      onClose();
+    } catch (err: any) {
+      setAuthError(err?.message || 'Erro ao validar credenciais. Tente novamente.');
+    } finally {
+      setIsAuthorizing(false);
+    }
+  };
+
+  if (isUnlinkedRecoveryPopupOpen) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2.5 sm:p-4 md:p-6 overflow-y-auto animate-fadeIn">
+        <div className="w-full max-w-xl bg-[#0e172a] rounded-2xl sm:rounded-3xl border border-indigo-500/30 p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 shadow-2xl relative my-auto max-h-[92vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar text-[#dae2fd]">
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-white/10 pb-3 sm:pb-4 gap-2">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="p-2.5 sm:p-3 bg-indigo-500/20 text-indigo-300 rounded-xl sm:rounded-2xl border border-indigo-500/30 shrink-0">
+                <KeyRound className="w-5 h-5 sm:w-6 sm:h-6" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm sm:text-lg font-bold text-white leading-tight truncate">
+                  Autorização de Recuperação Paralela
+                </h3>
+                <p className="text-[11px] sm:text-xs text-[#bccabb] truncate">
+                  Gravação avulsa sem apontar uma atividade mãe digital
+                </p>
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                setIsUnlinkedRecoveryPopupOpen(false);
+                setPendingUpdatedActivity(null);
+              }}
+              className="p-1.5 sm:p-2 text-[#bccabb] hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer shrink-0"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Contexto Pedagógico / Exceção */}
+          <div className="p-3.5 sm:p-4 bg-[#131b2e] rounded-xl sm:rounded-2xl border border-indigo-500/20 space-y-1.5 sm:space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-indigo-300">
+              <Lock className="w-4 h-4 text-indigo-400 shrink-0" />
+              <span>Confirmação de Segurança e Autorização</span>
+            </div>
+            <p className="text-[11px] sm:text-xs text-[#bccabb] leading-relaxed">
+              Esta recuperação paralela não possui uma atividade mãe cadastrada no portal (exceção para avaliações geradas em papel ou turmas assumidas). Digite o nome da atividade manualmente e sua senha para autorizar a gravação.
+            </p>
+          </div>
+
+          <form onSubmit={handleConfirmUnlinkedRecovery} className="space-y-3.5 sm:space-y-4">
+            {authError && (
+              <div className="p-3 sm:p-3.5 bg-rose-500/15 border border-rose-500/30 rounded-xl sm:rounded-2xl text-xs text-rose-300 flex items-start gap-2.5 animate-fadeIn">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <span className="leading-relaxed">{authError}</span>
+              </div>
+            )}
+
             <div>
-              <h2 className="text-lg sm:text-xl font-bold text-white leading-tight">Editar Atividade</h2>
-              <p className="text-xs text-[#bccabb]">Altere as configurações, enunciados e prazos da atividade.</p>
+              <label className="block text-xs font-semibold text-[#bccabb] mb-1">
+                Nome da Atividade Mãe (Digitado Manualmente) *
+              </label>
+              <input
+                type="text"
+                required
+                autoFocus
+                value={manualParentName}
+                onChange={(e) => {
+                  setManualParentName(e.target.value);
+                  if (authError) setAuthError(null);
+                }}
+                placeholder="Ex: 1º Simulado Bimestral de Sociologia (Em Papel)"
+                className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-white placeholder-[#869486] focus:outline-none focus:border-indigo-400"
+              />
+              <p className="text-[10px] text-[#bccabb] mt-1 ml-1">
+                Informe o nome da avaliação original em papel ou externa a que esta recuperação se refere.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#bccabb] mb-1">
+                Senha do Usuário *
+              </label>
+              <input
+                type="password"
+                required
+                value={userPassword}
+                onChange={(e) => {
+                  setUserPassword(e.target.value);
+                  if (authError) setAuthError(null);
+                }}
+                placeholder="Digite sua senha de acesso"
+                className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-white placeholder-[#869486] focus:outline-none focus:border-indigo-400"
+              />
+              <p className="text-[10px] text-[#bccabb] mt-1 ml-1">
+                Sua senha é exigida para autorizar a gravação de recuperações sem vínculo direto.
+              </p>
+            </div>
+
+            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-3 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsUnlinkedRecoveryPopupOpen(false);
+                  setPendingUpdatedActivity(null);
+                }}
+                disabled={isAuthorizing}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-full text-xs font-bold text-[#bccabb] hover:text-white hover:bg-white/5 transition-all cursor-pointer text-center"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isAuthorizing}
+                className="w-full sm:w-auto px-6 py-2.5 rounded-full text-xs font-bold bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-[#4ade80]/20 disabled:opacity-50"
+              >
+                {isAuthorizing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Validando Senha...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Autorizar e Salvar</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-2.5 sm:p-4 md:p-6 overflow-y-auto">
+      <div className="bg-[#0b1326] border border-white/10 w-full max-w-3xl rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 md:p-8 space-y-4 sm:space-y-5 my-auto max-h-[94vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar text-[#dae2fd] shadow-2xl relative animate-fadeIn">
+        {/* Header */}
+        <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-white/10 gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-[#4ade80]/20 border border-[#4ade80]/30 text-[#4ade80] flex items-center justify-center shrink-0">
+              <Pencil className="w-4 h-4 sm:w-5 sm:h-5" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-xl font-bold text-white leading-tight truncate">Editar Atividade</h2>
+              <p className="text-[11px] sm:text-xs text-[#bccabb] truncate">Altere as configurações, enunciados e prazos da atividade.</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-[#bccabb] hover:text-white hover:bg-white/5 rounded-full transition-colors cursor-pointer shrink-0"
+            className="p-1.5 sm:p-2 text-[#bccabb] hover:text-white hover:bg-white/5 rounded-full transition-colors cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
           {/* Title & Subject */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
             <div className="md:col-span-2">
@@ -249,7 +474,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Ex: Simulado de Sociologia - Modos de Produção"
-                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-white focus:outline-none focus:border-[#4ade80]"
               />
             </div>
             <div>
@@ -261,13 +486,13 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Ex: Sociologia"
-                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-white focus:outline-none focus:border-[#4ade80]"
               />
             </div>
           </div>
 
           {/* Type, Turma, Status, Max Grade */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <div>
               <label className="block text-xs font-semibold text-[#bccabb] mb-1">Tipo</label>
               <select
@@ -284,7 +509,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                     }
                   }
                 }}
-                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-3 py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3 py-2.5 sm:py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
               >
                 <option value="Avaliação" className="bg-[#0b1326]">Avaliação</option>
                 <option value="Simulado" className="bg-[#0b1326]">Simulado</option>
@@ -309,7 +534,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as any)}
-                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-3 py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3 py-2.5 sm:py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
               >
                 <option value="Ativo" className="bg-[#0b1326]">Ativo</option>
                 <option value="Prazo Encerrado" className="bg-[#0b1326]">Prazo Encerrado</option>
@@ -326,16 +551,16 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                 max="100"
                 value={maxGrade}
                 onChange={(e) => setMaxGrade(parseFloat(e.target.value) || 10)}
-                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-3 py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3 py-2.5 sm:py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
               />
             </div>
           </div>
 
           {/* Subordinação à Avaliação Base (quando Tipo = Recuperação Paralela) */}
           {type === 'Recuperação Paralela' && (
-            <div className="bg-[#131b2e] border border-indigo-500/40 rounded-2xl p-4 space-y-3 shadow-lg animate-fadeIn">
+            <div className="bg-[#131b2e] border border-indigo-500/40 rounded-xl sm:rounded-2xl p-3.5 sm:p-4 space-y-3 shadow-lg animate-fadeIn">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-indigo-500/20 text-indigo-300 rounded-xl border border-indigo-500/30">
+                <div className="p-2 bg-indigo-500/20 text-indigo-300 rounded-xl border border-indigo-500/30 shrink-0">
                   <RotateCcw className="w-4 h-4" />
                 </div>
                 <div>
@@ -348,14 +573,14 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                 </div>
               </div>
 
-              {availableParentActivities.length > 0 ? (
+              <div className="space-y-2">
                 <select
                   value={recoveryFromId}
                   onChange={(e) => setRecoveryFromId(e.target.value)}
                   className="w-full bg-[#0e172a] border border-indigo-500/40 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-400"
                 >
-                  <option value="" disabled className="bg-[#0b1326]">
-                    -- Selecione a atividade original correspondente --
+                  <option value="" className="bg-[#0b1326] text-amber-300">
+                    -- Sem atividade mãe vinculada (Exceção: Atividade em Papel / Externa) --
                   </option>
                   {availableParentActivities.map((parent) => (
                     <option key={parent.id} value={parent.id} className="bg-[#0b1326]">
@@ -363,11 +588,19 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                     </option>
                   ))}
                 </select>
-              ) : (
-                <div className="p-2.5 bg-white/5 rounded-xl text-xs text-[#bccabb]">
-                  Nenhuma outra atividade principal disponível no sistema para vincular.
-                </div>
-              )}
+
+                {recoveryFromId ? (
+                  <div className="flex items-center gap-2 text-[11px] text-emerald-400 bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>Subordinação vinculada: Integrada à atividade original digital.</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-[11px] text-amber-300 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Modo Exceção: Ao salvar sem vincular, um popup solicitará o nome da atividade em papel e sua senha.</span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -379,13 +612,13 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
               placeholder="Ex: 15/08/2026 às 23:59"
-              className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#4ade80]"
+              className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-white focus:outline-none focus:border-[#4ade80]"
             />
           </div>
 
           {/* Janela / Lista Suspensa com Caixas de Seleção para Alunos PNE com Proficiência */}
           {pneStudentsInSelectedTurmas.length > 0 && (
-            <div className="bg-[#131b2e] border border-amber-500/30 rounded-2xl p-3 sm:p-4 space-y-3 shadow-inner">
+            <div className="bg-[#131b2e] border border-amber-500/30 rounded-xl sm:rounded-2xl p-3 sm:p-4 space-y-3 shadow-inner">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -405,7 +638,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsPneDropdownOpen((prev) => !prev)}
-                  className="flex items-center justify-between sm:justify-center gap-2 px-3.5 py-2 bg-[#1a243c] hover:bg-[#223050] text-xs font-semibold text-white rounded-xl border border-white/10 transition-colors cursor-pointer shrink-0"
+                  className="w-full sm:w-auto flex items-center justify-between sm:justify-center gap-2 px-3.5 py-2 bg-[#1a243c] hover:bg-[#223050] text-xs font-semibold text-white rounded-xl border border-white/10 transition-colors cursor-pointer shrink-0"
                 >
                   <span className="truncate">
                     {includedPneStudentIds.length === 0
@@ -456,13 +689,13 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                       return (
                         <label
                           key={st.id}
-                          className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                          className={`flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer gap-2 ${
                             isSelected
                               ? 'bg-amber-500/10 border-amber-500/40 text-white'
                               : 'bg-[#0e172a] border-white/5 text-[#bccabb] hover:border-white/15'
                           }`}
                         >
-                          <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
                             <input
                               type="checkbox"
                               checked={isSelected}
@@ -486,7 +719,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                           </div>
 
                           <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ml-2 ${
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 self-start sm:self-center ${
                               isSelected
                                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                                 : 'bg-white/5 text-[#869486]'
@@ -504,7 +737,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
           )}
 
           {/* Group Work Option */}
-          <div className="bg-[#131b2e]/60 p-3.5 sm:p-4 rounded-2xl border border-white/5">
+          <div className="bg-[#131b2e]/60 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-white/5">
             <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -525,7 +758,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
           </div>
 
           {/* Travas de Segurança Anti-Cola */}
-          <div className="bg-[#131b2e] p-3.5 sm:p-4 rounded-2xl border border-amber-500/30 space-y-3">
+          <div className="bg-[#131b2e] p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-amber-500/30 space-y-3">
             <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-2">
               <span>🛡️ Travas de Segurança Anti-Cola</span>
             </h4>
@@ -587,11 +820,11 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
               value={supportMaterial}
               onChange={(e) => setSupportMaterial(e.target.value)}
               placeholder="Insira aqui o texto base para leitura, citações, referências bibliográficas..."
-              className="w-full bg-[#131b2e] border border-white/10 rounded-2xl p-3.5 text-xs text-white focus:outline-none focus:border-[#4ade80] resize-y leading-relaxed"
+              className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 text-xs text-white focus:outline-none focus:border-[#4ade80] resize-y leading-relaxed"
             />
 
             {/* Injetor / Adicionador de Links */}
-            <div className="bg-[#0b1326] p-3 rounded-2xl border border-white/10 space-y-2">
+            <div className="bg-[#0b1326] p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-white/10 space-y-2">
               <label className="block text-[11px] font-bold text-sky-300 flex items-center gap-1.5">
                 <Link2 className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                 <span>Adicionar Link ao Material de Apoio (Google Drive, YouTube, Artigo, PDF)</span>
@@ -602,7 +835,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                   value={supportLinkInput}
                   onChange={(e) => setSupportLinkInput(e.target.value)}
                   placeholder="https://drive.google.com/file/... ou https://youtube.com/..."
-                  className="flex-1 bg-[#131b2e] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-sky-400 font-mono"
+                  className="flex-1 min-w-0 bg-[#131b2e] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-sky-400 font-mono"
                 />
                 <button
                   type="button"
@@ -616,7 +849,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                     setSupportMaterial((prev) => (prev ? `${prev}\n\n${linkString}` : linkString));
                     setSupportLinkInput('');
                   }}
-                  className="px-3.5 py-2 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 font-bold rounded-xl text-xs border border-sky-400/40 transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
+                  className="w-full sm:w-auto px-3.5 py-2 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 font-bold rounded-xl text-xs border border-sky-400/40 transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 active:scale-95"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Adicionar Link</span>
@@ -628,7 +861,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
           {/* Questions Section */}
           <div className="space-y-4 pt-2 border-t border-white/10">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <h3 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
                 <HelpCircle className="w-4 h-4 text-[#4ade80] shrink-0" />
                 <span>Questões da Atividade ({questions.length})</span>
               </h3>
@@ -636,7 +869,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                 <button
                   type="button"
                   onClick={handleAddMultipleChoice}
-                  className="px-3 py-1.5 bg-[#171f33] hover:bg-[#222a3d] text-[#4ade80] rounded-xl text-xs font-bold border border-[#4ade80]/30 flex items-center gap-1 cursor-pointer"
+                  className="flex-1 sm:flex-initial px-3 py-1.5 bg-[#171f33] hover:bg-[#222a3d] text-[#4ade80] rounded-xl text-xs font-bold border border-[#4ade80]/30 flex items-center justify-center gap-1 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>+ Múltipla Escolha</span>
@@ -644,7 +877,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                 <button
                   type="button"
                   onClick={handleAddEssay}
-                  className="px-3 py-1.5 bg-[#171f33] hover:bg-[#222a3d] text-indigo-300 rounded-xl text-xs font-bold border border-indigo-500/30 flex items-center gap-1 cursor-pointer"
+                  className="flex-1 sm:flex-initial px-3 py-1.5 bg-[#171f33] hover:bg-[#222a3d] text-indigo-300 rounded-xl text-xs font-bold border border-indigo-500/30 flex items-center justify-center gap-1 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>+ Dissertativa</span>
@@ -653,15 +886,15 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
             </div>
 
             {questions.map((q, qIndex) => (
-              <div key={q.id} className="bg-[#131b2e] border border-white/10 p-3.5 sm:p-4 rounded-2xl space-y-3 relative">
+              <div key={q.id} className="bg-[#131b2e] border border-white/10 p-3 sm:p-4 rounded-xl sm:rounded-2xl space-y-3 relative">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-bold text-[#4ade80]">
+                  <span className="text-xs font-bold text-[#4ade80] truncate">
                     Questão {qIndex + 1} ({q.type === 'multiple_choice' ? 'Múltipla Escolha' : 'Dissertativa/Redação'})
                   </span>
                   <button
                     type="button"
                     onClick={() => handleRemoveQuestion(q.id)}
-                    className="text-rose-400 hover:text-rose-300 p-1.5 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                    className="text-rose-400 hover:text-rose-300 p-1.5 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer shrink-0"
                     title="Remover Questão"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -763,17 +996,17 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
           </div>
 
           {/* Submit Actions */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/10 sticky bottom-0 bg-[#0b1326]/95 py-2 -mx-4 px-4 sm:-mx-6 sm:px-6 md:-mx-8 md:px-8">
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-4 border-t border-white/10 sticky bottom-0 bg-[#0b1326] sm:bg-[#0b1326]/95 backdrop-blur-md py-3 -mx-3.5 px-3.5 sm:-mx-6 sm:px-6 md:-mx-8 md:px-8 z-20">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 sm:px-5 py-2.5 rounded-full text-xs font-bold text-[#bccabb] hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+              className="w-full sm:w-auto px-5 py-2.5 rounded-full text-xs font-bold text-[#bccabb] hover:text-white hover:bg-white/5 transition-colors cursor-pointer text-center"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-5 sm:px-6 py-2.5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full text-xs transition-all shadow-lg flex items-center gap-2 cursor-pointer active:scale-95"
+              className="w-full sm:w-auto px-6 py-2.5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full text-xs transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-95"
             >
               <Save className="w-4 h-4" />
               <span>Salvar Alterações</span>
