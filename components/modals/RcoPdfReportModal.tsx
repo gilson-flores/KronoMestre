@@ -393,10 +393,64 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
     }
   };
 
-  // Disparar Impressão nativa
+  // Disparar Impressão isolada e compatível com Desktop, Tablet e Celular
   const handlePrint = async () => {
     await persistEmissionAuditTrail();
-    if (typeof window !== 'undefined') {
+
+    if (typeof window === 'undefined') return;
+
+    const printableElement = document.getElementById('rco-printable-document');
+    if (!printableElement) {
+      window.print();
+      return;
+    }
+
+    try {
+      // 1. Salvar display original de todos os filhos do body e ocultá-los
+      const originalDisplays = new Map<Element, string>();
+      Array.from(document.body.children).forEach((child) => {
+        if (
+          child.tagName !== 'SCRIPT' &&
+          child.tagName !== 'STYLE' &&
+          child.id !== 'rco-isolated-print-container'
+        ) {
+          originalDisplays.set(child, (child as HTMLElement).style.display);
+          (child as HTMLElement).style.display = 'none';
+        }
+      });
+
+      // 2. Criar container exclusivo para a impressão no body
+      const printContainer = document.createElement('div');
+      printContainer.id = 'rco-isolated-print-container';
+      printContainer.style.width = '100%';
+      printContainer.style.backgroundColor = '#ffffff';
+      printContainer.style.margin = '0';
+      printContainer.style.padding = '0';
+      printContainer.style.position = 'absolute'; // Para garantir topo absoluto visual no print se necessário, ou static
+      printContainer.style.top = '0';
+      printContainer.style.left = '0';
+
+      // 3. Clonar o conteúdo (isso herda todo o CSS do Tailwind já carregado)
+      const clone = printableElement.cloneNode(true);
+      printContainer.appendChild(clone);
+      document.body.appendChild(printContainer);
+
+      // 4. Disparar a impressão e depois restaurar a tela original
+      setTimeout(() => {
+        try {
+          window.print();
+        } finally {
+          // Cleanup
+          if (document.body.contains(printContainer)) {
+            document.body.removeChild(printContainer);
+          }
+          originalDisplays.forEach((display, child) => {
+            (child as HTMLElement).style.display = display;
+          });
+        }
+      }, 150);
+    } catch (e) {
+      console.warn('Erro ao preparar impressão isolada:', e);
       window.print();
     }
   };
@@ -572,9 +626,12 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
         </div>
 
         {/* Visualizador de Folha / Área de Impressão */}
-        <div className="rco-scroll-container flex-1 overflow-y-auto p-4 sm:p-8 bg-[#090e1a] custom-scrollbar print:p-0 print:m-0 print:bg-white print:overflow-visible print:h-auto print:max-h-none">
+        <div className="rco-scroll-container flex-1 overflow-y-auto overflow-x-auto p-2 sm:p-6 md:p-8 bg-[#090e1a] custom-scrollbar print:p-0 print:m-0 print:bg-white print:overflow-visible print:h-auto print:max-h-none">
           {/* Documento A4 Timbrado Limpo */}
-          <div className="rco-printable-area bg-white text-slate-900 mx-auto max-w-[210mm] shadow-2xl p-6 sm:p-10 font-sans border border-slate-200 rounded-xl print:rounded-none print:border-none print:shadow-none print:p-0 print:max-w-none print:w-full print:m-0">
+          <div
+            id="rco-printable-document"
+            className="rco-printable-area bg-white text-slate-900 mx-auto w-full max-w-[210mm] min-w-[700px] sm:min-w-0 shadow-2xl p-4 sm:p-8 md:p-10 font-sans border border-slate-200 rounded-xl print:rounded-none print:border-none print:shadow-none print:p-0 print:max-w-none print:w-full print:m-0 print:min-w-full"
+          >
             
             {/* SEÇÕES POR TURMA (Uma turma por página na impressão) */}
             {turmasReportData.map((turmaData, tIndex) => {
