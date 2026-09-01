@@ -502,19 +502,19 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
 
   if (isUnlinkedRecoveryPopupOpen) {
     return (
-      <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fadeIn">
-        <div className="w-full max-w-xl bg-[#0e172a] rounded-3xl border border-indigo-500/30 p-6 sm:p-8 space-y-6 shadow-2xl relative my-auto text-[#dae2fd]">
+      <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2.5 sm:p-4 md:p-6 overflow-y-auto animate-fadeIn">
+        <div className="w-full max-w-xl bg-[#0e172a] rounded-2xl sm:rounded-3xl border border-indigo-500/30 p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 shadow-2xl relative my-auto max-h-[92vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar text-[#dae2fd]">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-white/10 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-indigo-500/20 text-indigo-300 rounded-2xl border border-indigo-500/30">
-                <KeyRound className="w-6 h-6" />
+          <div className="flex items-center justify-between border-b border-white/10 pb-3 sm:pb-4 gap-2">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="p-2.5 sm:p-3 bg-indigo-500/20 text-indigo-300 rounded-xl sm:rounded-2xl border border-indigo-500/30 shrink-0">
+                <KeyRound className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
-              <div>
-                <h3 className="text-base sm:text-lg font-bold text-white leading-tight">
+              <div className="min-w-0">
+                <h3 className="text-sm sm:text-lg font-bold text-white leading-tight truncate">
                   Autorização de Recuperação Paralela
                 </h3>
-                <p className="text-xs text-[#bccabb]">
+                <p className="text-[11px] sm:text-xs text-[#bccabb] truncate">
                   Gravação avulsa sem apontar uma atividade mãe digital
                 </p>
               </div>
@@ -525,33 +525,33 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                 setIsUnlinkedRecoveryPopupOpen(false);
                 setPendingRecoveryActivity(null);
               }}
-              className="p-2 text-[#bccabb] hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer"
+              className="p-1.5 sm:p-2 text-[#bccabb] hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer shrink-0"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Contexto Pedagógico / Exceção */}
-          <div className="p-4 bg-[#131b2e] rounded-2xl border border-indigo-500/20 space-y-2">
+          <div className="p-3.5 sm:p-4 bg-[#131b2e] rounded-xl sm:rounded-2xl border border-indigo-500/20 space-y-1.5 sm:space-y-2">
             <div className="flex items-center gap-2 text-xs font-bold text-indigo-300">
               <Lock className="w-4 h-4 text-indigo-400 shrink-0" />
               <span>Confirmação de Segurança e Autorização</span>
             </div>
-            <p className="text-xs text-[#bccabb] leading-relaxed">
+            <p className="text-[11px] sm:text-xs text-[#bccabb] leading-relaxed">
               Você está gravando uma recuperação paralela sem vinculá-la a uma atividade mãe existente no portal (exceção para avaliações geradas em papel ou turmas assumidas). Digite o nome da atividade manualmente e sua senha para autorizar o cadastro.
             </p>
           </div>
 
-          <form onSubmit={handleConfirmUnlinkedRecovery} className="space-y-4">
+          <form onSubmit={handleConfirmUnlinkedRecovery} className="space-y-3.5 sm:space-y-4">
             {authError && (
-              <div className="p-3.5 bg-rose-500/15 border border-rose-500/30 rounded-2xl text-xs text-rose-300 flex items-start gap-2.5 animate-fadeIn">
+              <div className="p-3 sm:p-3.5 bg-rose-500/15 border border-rose-500/30 rounded-xl sm:rounded-2xl text-xs text-rose-300 flex items-start gap-2.5 animate-fadeIn">
                 <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                <span>{authError}</span>
+                <span className="leading-relaxed">{authError}</span>
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5">
+              <label className="block text-xs font-semibold text-[#bccabb] mb-1">
                 Nome da Atividade Mãe (Digitado Manualmente) *
               </label>
               <input
@@ -564,7 +564,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                   if (authError) setAuthError(null);
                 }}
                 placeholder="Ex: 1º Simulado Bimestral de Sociologia (Em Papel)"
-                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-indigo-400"
+                className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-white placeholder-[#869486] focus:outline-none focus:border-indigo-400"
               />
               <p className="text-[10px] text-[#bccabb] mt-1 ml-1">
                 Informe o nome da avaliação original em papel ou externa a que esta recuperação se refere.
@@ -572,7 +572,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5">
+              <label className="block text-xs font-semibold text-[#bccabb] mb-1">
                 Senha do Usuário *
               </label>
               <input
@@ -584,14 +584,14 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                   if (authError) setAuthError(null);
                 }}
                 placeholder="Digite sua senha de acesso"
-                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-indigo-400"
+                className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-white placeholder-[#869486] focus:outline-none focus:border-indigo-400"
               />
               <p className="text-[10px] text-[#bccabb] mt-1 ml-1">
                 Sua senha é exigida para autorizar a gravação de recuperações sem vínculo direto.
               </p>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
+            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-3 border-t border-white/10">
               <button
                 type="button"
                 onClick={() => {
@@ -599,14 +599,14 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                   setPendingRecoveryActivity(null);
                 }}
                 disabled={isAuthorizing}
-                className="px-5 py-2.5 rounded-full text-xs font-bold text-[#bccabb] hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                className="w-full sm:w-auto px-5 py-2.5 rounded-full text-xs font-bold text-[#bccabb] hover:text-white hover:bg-white/5 transition-all cursor-pointer text-center"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={isAuthorizing}
-                className="px-6 py-2.5 rounded-full text-xs font-bold bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-[#4ade80]/20 disabled:opacity-50"
+                className="w-full sm:w-auto px-6 py-2.5 rounded-full text-xs font-bold bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-[#4ade80]/20 disabled:opacity-50"
               >
                 {isAuthorizing ? (
                   <>
