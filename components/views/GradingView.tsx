@@ -1040,8 +1040,11 @@ export const GradingView: React.FC<GradingViewProps> = ({
           message="Verifique sua conexão com a internet e tente novamente."
           onRetry={() => {
             setRefreshError(false);
-            if (onRetry) onRetry();
-            handleRefreshDeliveries();
+            if (refreshError) {
+              handleRefreshDeliveries();
+            } else if (onRetry) {
+              onRetry();
+            }
           }}
           retryLabel="Tentar novamente"
         />
@@ -1116,6 +1119,8 @@ export const GradingView: React.FC<GradingViewProps> = ({
                         <img
                           src={st.avatarUrl}
                           alt={st.fullName}
+                          loading="lazy"
+                          decoding="async"
                           className="w-10 h-10 sm:w-11 sm:h-11 rounded-full object-cover border-2 border-rose-500/30 shrink-0"
                         />
                         <div className="min-w-0">
@@ -1252,6 +1257,8 @@ export const GradingView: React.FC<GradingViewProps> = ({
             <img
               src={sub.avatarUrl}
               alt={sub.studentName}
+              loading="lazy"
+              decoding="async"
               className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-border shrink-0"
             />
             <div className="min-w-0">

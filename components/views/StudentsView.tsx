@@ -5,6 +5,7 @@ import { Search, Plus, UserPlus, Pencil, Trash2, Eye, ShieldCheck, Upload, Heart
 import { StudentUser } from '@/lib/types';
 import { ImportCsvModal } from '@/components/modals/ImportCsvModal';
 import { getTurmaLabel } from '@/lib/studentUtils';
+import { formatAvatarUrl } from '@/lib/utils';
 
 interface StudentsViewProps {
   students: StudentUser[];
@@ -13,6 +14,7 @@ interface StudentsViewProps {
   onDeleteStudent: (studentId: string) => void;
   onSuperviseStudent: (student: StudentUser) => void;
   onImportStudents: (newStudents: StudentUser[]) => void;
+  isReadOnly?: boolean;
 }
 
 export const StudentsView: React.FC<StudentsViewProps> = ({
@@ -22,6 +24,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
   onDeleteStudent,
   onSuperviseStudent,
   onImportStudents,
+  isReadOnly = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTurmaFilter, setSelectedTurmaFilter] = useState('all');
@@ -50,30 +53,37 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <span className="text-xs font-bold text-primary tracking-widest uppercase">
-            — Ensino Médio & Técnico
+            {isReadOnly ? '— Apoio Pedagógico • Somente Leitura' : '— Ensino Médio & Técnico'}
           </span>
           <h1 className="text-3xl md:text-4xl font-extrabold text-foreground tracking-tight mt-1">
-            Gestão de Alunos
+            {isReadOnly ? 'Meus Alunos (Tutelados)' : 'Gestão de Alunos'}
           </h1>
+          {isReadOnly && (
+            <p className="text-xs sm:text-sm text-muted mt-1">
+              Visualização exclusiva e somente leitura dos estudantes sob sua tutoria direta.
+            </p>
+          )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => setIsImportModalOpen(true)}
-            className="py-3 px-5 bg-[#171f33] hover:bg-surface-hover text-primary font-bold rounded-full transition-all duration-200 flex items-center gap-2 border border-primary/30 shadow-md cursor-pointer text-sm"
-          >
-            <Upload className="w-4 h-4" />
-            <span>Importar CSV</span>
-          </button>
+        {!isReadOnly && (
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => setIsImportModalOpen(true)}
+              className="py-3 px-5 bg-[#171f33] hover:bg-surface-hover text-primary font-bold rounded-full transition-all duration-200 flex items-center gap-2 border border-primary/30 shadow-md cursor-pointer text-sm"
+            >
+              <Upload className="w-4 h-4" />
+              <span>Importar CSV</span>
+            </button>
 
-          <button
-            onClick={onOpenNewStudentModal}
-            className="py-3 px-6 bg-primary hover:bg-primary-hover text-white font-bold rounded-full transition-all duration-200 flex items-center gap-2 shadow-lg shadow-primary/20 cursor-pointer text-sm"
-          >
-            <UserPlus className="w-5 h-5 stroke-[2.5]" />
-            <span>Cadastrar Aluno</span>
-          </button>
-        </div>
+            <button
+              onClick={onOpenNewStudentModal}
+              className="py-3 px-6 bg-primary hover:bg-primary-hover text-white font-bold rounded-full transition-all duration-200 flex items-center gap-2 shadow-lg shadow-primary/20 cursor-pointer text-sm"
+            >
+              <UserPlus className="w-5 h-5 stroke-[2.5]" />
+              <span>Cadastrar Aluno</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Filter and Search Container */}
@@ -171,8 +181,10 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
               {/* Left Info */}
               <div className="flex items-center gap-4">
                 <img
-                  src={student.avatarUrl}
+                  src={formatAvatarUrl(student.avatarUrl)}
                   alt={student.fullName}
+                  loading="lazy"
+                  decoding="async"
                   className="w-12 h-12 rounded-full object-cover border-2 border-border shrink-0"
                 />
                 <div>
@@ -210,26 +222,30 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                   onClick={() => onSuperviseStudent(student)}
                   className="flex-1 md:flex-none py-2.5 px-5 bg-primary hover:bg-primary-hover text-white font-bold rounded-full text-xs transition-all shadow-md cursor-pointer uppercase tracking-wider min-h-[44px] flex items-center justify-center"
                 >
-                  Supervisionar
+                  {isReadOnly ? 'Ver Ficha' : 'Supervisionar'}
                 </button>
 
-                <button
-                  onClick={() => onEditStudent(student)}
-                  className="p-2.5 bg-[#171f33] hover:bg-surface-hover text-foreground hover:text-foreground rounded-full border border-border transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
-                  title="Editar Aluno"
-                  aria-label="Editar Aluno"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
+                {!isReadOnly && (
+                  <>
+                    <button
+                      onClick={() => onEditStudent(student)}
+                      className="p-2.5 bg-[#171f33] hover:bg-surface-hover text-foreground hover:text-foreground rounded-full border border-border transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+                      title="Editar Aluno"
+                      aria-label="Editar Aluno"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
 
-                <button
-                  onClick={() => setStudentToDelete(student)}
-                  className="p-2.5 bg-[#171f33] hover:bg-rose-100 text-foreground hover:text-rose-600 rounded-full border border-border transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
-                  title="Excluir Aluno"
-                  aria-label="Excluir Aluno"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                    <button
+                      onClick={() => setStudentToDelete(student)}
+                      className="p-2.5 bg-[#171f33] hover:bg-rose-100 text-foreground hover:text-rose-600 rounded-full border border-border transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+                      title="Excluir Aluno"
+                      aria-label="Excluir Aluno"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ))

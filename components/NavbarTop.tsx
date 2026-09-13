@@ -26,11 +26,11 @@ export const NavbarTop: React.FC<NavbarTopProps> = ({
   return (
     <header className="w-full bg-background/90 backdrop-blur-md border-b border-border px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-30 min-h-[56px]">
       {/* Left Title / Branding + Mobile Menu Trigger */}
-      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
         {onToggleMobileMenu && (
           <button
             onClick={onToggleMobileMenu}
-            className="p-2 text-muted hover:text-foreground hover:bg-[#171f33] rounded-xl transition-colors md:hidden cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
+            className="p-2 text-muted hover:text-foreground hover:bg-[#171f33] rounded-xl transition-colors md:hidden cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0 active:scale-95"
             title="Menu de Navegação"
             aria-label="Abrir Menu"
           >
@@ -38,7 +38,7 @@ export const NavbarTop: React.FC<NavbarTopProps> = ({
           </button>
         )}
 
-        <div className="p-2 rounded-xl bg-[#171f33] border border-border text-primary shrink-0">
+        <div className="p-2 rounded-xl bg-[#171f33] border border-border text-primary shrink-0 hidden sm:flex">
           <BookOpen className="w-5 h-5" />
         </div>
         <div className="min-w-0">
@@ -99,7 +99,7 @@ export const NavbarTop: React.FC<NavbarTopProps> = ({
                 {'name' in user ? user.name : user.fullName}
               </p>
               <p className="text-[10px] text-muted truncate">
-                {role === 'teacher' ? 'Professor' : ('turma' in user ? user.turma : 'Aluno')}
+                {role === 'teacher' ? 'Professor' : role === 'second_teacher' ? '2º Professor' : ('turma' in user ? user.turma : 'Aluno')}
               </p>
             </div>
           </div>

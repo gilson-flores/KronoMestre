@@ -24,6 +24,7 @@ interface LibraryViewProps {
   onSaveDriveFolderUrl?: (url: string) => void;
   onAddFile?: (newFile: LibraryFile) => void;
   onDeleteFile?: (fileId: string) => void;
+  isReadOnly?: boolean;
 }
 
 export const LibraryView: React.FC<LibraryViewProps> = ({
@@ -32,6 +33,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onSaveDriveFolderUrl,
   onAddFile,
   onDeleteFile,
+  isReadOnly = false,
 }) => {
   const [prevDriveFolderUrl, setPrevDriveFolderUrl] = useState(driveFolderUrl);
   const [folderInput, setFolderInput] = useState(driveFolderUrl);
@@ -138,26 +140,34 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         <div>
           <h1 className="text-3xl font-extrabold text-foreground tracking-tight flex items-center gap-2">
             <FolderOpen className="w-8 h-8 text-primary" />
-            <span>Arquivos e Biblioteca</span>
+            <span>{isReadOnly ? 'Biblioteca de Arquivos' : 'Arquivos e Biblioteca'}</span>
           </h1>
           <p className="text-sm text-muted mt-1">
-            Gerencie o Google Drive e materiais didáticos de Sociologia para os seus alunos
+            {isReadOnly
+              ? 'Consulta de materiais didáticos e repositório do Google Drive de Sociologia. (Modo Somente Leitura)'
+              : 'Gerencie o Google Drive e materiais didáticos de Sociologia para os seus alunos'}
           </p>
         </div>
 
-        <button
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="py-3 px-6 bg-primary hover:bg-primary-hover text-white font-black rounded-2xl text-xs transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer shrink-0 active:scale-95"
-        >
-          {showAddForm ? (
-            <span>Fechar Formulário</span>
-          ) : (
-            <>
-              <Plus className="w-4 h-4" />
-              <span>Upload / Cadastrar Arquivo</span>
-            </>
-          )}
-        </button>
+        {isReadOnly ? (
+          <span className="px-3 py-1.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-full text-xs font-bold tracking-wide uppercase shrink-0">
+            Somente Leitura
+          </span>
+        ) : (
+          <button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="py-3 px-6 bg-primary hover:bg-primary-hover text-white font-black rounded-2xl text-xs transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer shrink-0 active:scale-95"
+          >
+            {showAddForm ? (
+              <span>Fechar Formulário</span>
+            ) : (
+              <>
+                <Plus className="w-4 h-4" />
+                <span>Upload / Cadastrar Arquivo</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {uploadSuccessMsg && (
@@ -168,7 +178,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       )}
 
       {/* FORMULÁRIO DE CADASTRO DE NOVO ARQUIVO */}
-      {showAddForm && (
+      {!isReadOnly && showAddForm && (
         <div className="glass-panel p-6 rounded-3xl border border-primary/40 bg-surface space-y-4 shadow-2xl animate-fadeIn">
           <div className="flex items-center gap-3 pb-3 border-b border-border">
             <div className="w-10 h-10 rounded-2xl bg-primary/20 border border-primary/40 text-primary flex items-center justify-center shrink-0">
@@ -325,53 +335,77 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           </span>
         </div>
 
-        <form onSubmit={handleSaveDriveFolder} className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-              <Link2 className="w-3.5 h-3.5 text-primary" />
-              <span>Link do Repositório do Google Drive (Pasta ou Drive Compartilhado)</span>
-            </label>
-            <input
-              type="url"
-              value={folderInput}
-              onChange={(e) => setFolderInput(e.target.value)}
-              placeholder="https://drive.google.com/drive/folders/sua-pasta-no-drive"
-              className="w-full bg-background border border-white/15 rounded-2xl px-4 py-3 text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-primary transition-all font-mono"
-            />
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-            <div className="flex items-center gap-2">
-              <button
-                type="submit"
-                className="py-3 px-6 bg-primary hover:bg-primary-hover text-white font-black rounded-xl text-xs transition-all shadow-lg shadow-primary/20 flex items-center gap-2 cursor-pointer active:scale-95"
-              >
-                <Save className="w-4 h-4" />
-                <span>Salvar Repositório do Drive</span>
-              </button>
-
-              {folderInput.trim() && (
-                <a
-                  href={folderInput.trim()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="py-3 px-5 bg-surface-hover hover:bg-white/20 text-foreground font-bold rounded-xl text-xs transition-all border border-border flex items-center gap-2 cursor-pointer active:scale-95"
-                  title="Abrir Repositório no Google Drive"
-                >
-                  <ExternalLink className="w-4 h-4 text-primary" />
-                  <span>Acessar Repositório</span>
-                </a>
+        {isReadOnly ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div className="text-xs text-muted">
+              {folderInput.trim() ? (
+                <span>Repositório gerenciado pelo professor titular regente.</span>
+              ) : (
+                <span>Nenhum repositório de pasta do Google Drive configurado até o momento.</span>
               )}
             </div>
-
-            {savedSuccess && (
-              <div className="flex items-center gap-2 text-primary text-xs font-bold animate-fadeIn">
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Repositório do Google Drive salvo com sucesso!</span>
-              </div>
+            {folderInput.trim() && (
+              <a
+                href={folderInput.trim()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-2.5 px-5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95"
+                title="Abrir Repositório no Google Drive"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Acessar Repositório no Drive</span>
+              </a>
             )}
           </div>
-        </form>
+        ) : (
+          <form onSubmit={handleSaveDriveFolder} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <Link2 className="w-3.5 h-3.5 text-primary" />
+                <span>Link do Repositório do Google Drive (Pasta ou Drive Compartilhado)</span>
+              </label>
+              <input
+                type="url"
+                value={folderInput}
+                onChange={(e) => setFolderInput(e.target.value)}
+                placeholder="https://drive.google.com/drive/folders/sua-pasta-no-drive"
+                className="w-full bg-background border border-white/15 rounded-2xl px-4 py-3 text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-primary transition-all font-mono"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+              <div className="flex items-center gap-2">
+                <button
+                  type="submit"
+                  className="py-3 px-6 bg-primary hover:bg-primary-hover text-white font-black rounded-xl text-xs transition-all shadow-lg shadow-primary/20 flex items-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Salvar Repositório do Drive</span>
+                </button>
+
+                {folderInput.trim() && (
+                  <a
+                    href={folderInput.trim()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="py-3 px-5 bg-surface-hover hover:bg-white/20 text-foreground font-bold rounded-xl text-xs transition-all border border-border flex items-center gap-2 cursor-pointer active:scale-95"
+                    title="Abrir Repositório no Google Drive"
+                  >
+                    <ExternalLink className="w-4 h-4 text-primary" />
+                    <span>Acessar Repositório</span>
+                  </a>
+                )}
+              </div>
+
+              {savedSuccess && (
+                <div className="flex items-center gap-2 text-primary text-xs font-bold animate-fadeIn">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Repositório do Google Drive salvo com sucesso!</span>
+                </div>
+              )}
+            </div>
+          </form>
+        )}
       </div>
 
       {/* LISTA DE ARQUIVOS AVULSOS */}
@@ -386,13 +420,15 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         {files.length === 0 ? (
           <div className="glass-panel p-8 text-center rounded-3xl border border-border text-muted text-xs space-y-3">
             <p>Nenhum arquivo individual cadastrado até o momento.</p>
-            <button
-              onClick={() => setShowAddForm(true)}
-              className="py-2.5 px-5 bg-primary hover:bg-primary-hover text-white font-black rounded-xl text-xs transition-all inline-flex items-center gap-2 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Cadastrar Primeiro Arquivo</span>
-            </button>
+            {!isReadOnly && (
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="py-2.5 px-5 bg-primary hover:bg-primary-hover text-white font-black rounded-xl text-xs transition-all inline-flex items-center gap-2 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Cadastrar Primeiro Arquivo</span>
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3">
@@ -444,7 +480,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       <span className="text-xs text-[#869486] italic">Sem link anexado</span>
                     )}
 
-                    {onDeleteFile && (
+                    {!isReadOnly && onDeleteFile && (
                       <button
                         onClick={() => setFileToDelete(file)}
                         className="p-2.5 text-rose-400 hover:text-foreground hover:bg-rose-100 rounded-full transition-colors border border-rose-500/20 cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center"

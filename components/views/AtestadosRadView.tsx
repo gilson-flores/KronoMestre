@@ -26,6 +26,7 @@ const generateRecordId = () => 'atest_' + Date.now() + '_' + Math.random().toStr
 
 interface AtestadosRadViewProps {
   students: StudentUser[];
+  isReadOnly?: boolean;
 }
 
 // Utility function to calculate end date (Data Final)
@@ -61,7 +62,7 @@ const getTodayStr = (): string => {
   return `${y}-${m}-${d}`;
 };
 
-export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) => {
+export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students, isReadOnly = false }) => {
   const [records, setRecords] = useState<AtestadoRadRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -325,21 +326,35 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
     setTimeout(() => setSuccessMsg(''), 3000);
   };
 
+  // Filter records strictly for the current role when isReadOnly
+  const recordsForRole = useMemo(() => {
+    if (!isReadOnly) return records;
+    const studentIds = new Set(students.map((s) => s.id));
+    const studentMatriculas = new Set(students.map((s) => s.matricula));
+    const studentNames = new Set(students.map((s) => s.fullName.toLowerCase().trim()));
+    return records.filter(
+      (r) =>
+        studentIds.has(r.studentId) ||
+        studentMatriculas.has(r.studentId) ||
+        studentNames.has(r.studentName.toLowerCase().trim())
+    );
+  }, [records, isReadOnly, students]);
+
   // Get unique turmas for filtering
   const availableTurmas = useMemo(() => {
     const set = new Set<string>();
-    records.forEach((r) => {
+    recordsForRole.forEach((r) => {
       if (r.studentTurma) set.add(r.studentTurma);
     });
     students.forEach((s) => {
       if (s.turma) set.add(s.turma);
     });
     return Array.from(set).sort();
-  }, [records, students]);
+  }, [recordsForRole, students]);
 
   // Filtered records
   const filteredRecords = useMemo(() => {
-    return records.filter((r) => {
+    return recordsForRole.filter((r) => {
       const matchesSearch =
         r.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (r.motivo && r.motivo.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -349,19 +364,19 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
 
       return matchesSearch && matchesTurma && matchesTipo;
     });
-  }, [records, searchTerm, turmaFilter, tipoFilter]);
+  }, [recordsForRole, searchTerm, turmaFilter, tipoFilter]);
 
   // Statistics
   const stats = useMemo(() => {
-    const total = records.length;
-    const radCount = records.filter((r) => r.tipo === 'RAD' || r.diasAtestado >= 15).length;
+    const total = recordsForRole.length;
+    const radCount = recordsForRole.filter((r) => r.tipo === 'RAD' || r.diasAtestado >= 15).length;
     const atestadoCount = total - radCount;
 
     const today = getTodayStr();
-    const activeNow = records.filter((r) => r.dataAtestado <= today && r.dataFinal >= today).length;
+    const activeNow = recordsForRole.filter((r) => r.dataAtestado <= today && r.dataFinal >= today).length;
 
     return { total, atestadoCount, radCount, activeNow };
-  }, [records]);
+  }, [recordsForRole]);
 
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
@@ -377,20 +392,28 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
               Atestados e RAD (Atendimento Domiciliar)
             </h1>
             <p className="text-xs sm:text-sm text-muted mt-1 max-w-2xl">
-              Registre atestados médicos, justificativas de faltas e acompanhe os alunos em Regime de Atendimento Domiciliar (RAD).
+              {isReadOnly
+                ? 'Acompanhamento dos atestados médicos e Regime de Atendimento Domiciliar (RAD) exclusivos dos seus alunos tutelados. (Modo Somente Leitura)'
+                : 'Registre atestados médicos, justificativas de faltas e acompanhe os alunos em Regime de Atendimento Domiciliar (RAD).'}
             </p>
           </div>
 
-          <button
-            onClick={() => {
-              resetForm();
-              setIsModalOpen(true);
-            }}
-            className="py-3 px-5 bg-primary hover:bg-primary-hover text-white font-extrabold rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20 cursor-pointer active:scale-95 text-sm shrink-0"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Registrar Atestado / RAD</span>
-          </button>
+          {isReadOnly ? (
+            <span className="px-3 py-1.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-full text-xs font-bold tracking-wide uppercase shrink-0">
+              Somente Leitura • Alunos Tutelados
+            </span>
+          ) : (
+            <button
+              onClick={() => {
+                resetForm();
+                setIsModalOpen(true);
+              }}
+              className="py-3 px-5 bg-primary hover:bg-primary-hover text-white font-extrabold rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20 cursor-pointer active:scale-95 text-sm shrink-0"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Registrar Atestado / RAD</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -601,14 +624,16 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
                   {/* Card Footer */}
                   <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-[11px] text-muted">
                     <span>Reg.: {formatDateBR(record.createdAt.split('T')[0])}</span>
-                    <button
-                      onClick={() => setRecordToDelete(record)}
-                      className="p-1.5 text-rose-400 hover:text-foreground hover:bg-rose-500 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-xs font-semibold"
-                      title="Excluir atestado"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Excluir</span>
-                    </button>
+                    {!isReadOnly && (
+                      <button
+                        onClick={() => setRecordToDelete(record)}
+                        className="p-1.5 text-rose-400 hover:text-foreground hover:bg-rose-500 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-xs font-semibold"
+                        title="Excluir atestado"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Excluir</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -618,7 +643,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
       </div>
 
       {/* Modal: Registrar Atestado e RAD */}
-      {isModalOpen && (
+      {!isReadOnly && isModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
           <div className="glass-panel w-full max-w-lg p-6 rounded-3xl border border-border space-y-5 bg-surface shadow-2xl relative max-h-[90vh] overflow-y-auto">
             {/* Header */}

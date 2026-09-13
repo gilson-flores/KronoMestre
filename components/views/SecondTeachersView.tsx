@@ -918,6 +918,8 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                             <img
                               src={s.avatarUrl}
                               alt={s.fullName}
+                              loading="lazy"
+                              decoding="async"
                               className="w-9 h-9 rounded-full object-cover border border-amber-400/40 shrink-0"
                             />
                             <div className="min-w-0 flex-1">
@@ -1494,7 +1496,13 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                     <div>
                       <div className="flex items-start justify-between mb-3">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={st.avatarUrl} alt={st.name} className="w-10 h-10 rounded-full object-cover border border-amber-400" />
+                        <img
+                          src={st.avatarUrl}
+                          alt={st.name}
+                          loading="lazy"
+                          decoding="async"
+                          className="w-10 h-10 rounded-full object-cover border border-amber-400"
+                        />
                         <span className="flex items-center gap-1 bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full text-[9px] font-bold border border-amber-500/20">
                           <ShieldCheck className="w-3 h-3" /> AEE
                         </span>

@@ -650,6 +650,8 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
               <img
                 src={student.avatarUrl}
                 alt={student.fullName}
+                loading="lazy"
+                decoding="async"
                 className="w-16 h-16 rounded-full object-cover border-2 border-primary/50 shadow-lg shrink-0"
               />
               <div>

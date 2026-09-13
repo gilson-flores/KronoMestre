@@ -24,6 +24,8 @@ import { LibraryView } from '@/components/views/LibraryView';
 import { StudentPortalView } from '@/components/views/StudentPortalView';
 import { MessagesView } from '@/components/views/MessagesView';
 import { SecondTeachersView } from '@/components/views/SecondTeachersView';
+import { SecondTeacherDashboardView } from '@/components/views/SecondTeacherDashboardView';
+import { SecondTeacherPortalView } from '@/components/views/SecondTeacherPortalView';
 import { AtestadosRadView } from '@/components/views/AtestadosRadView';
 import { BackupView } from '@/components/views/BackupView';
 
@@ -142,7 +144,7 @@ export default function Home() {
           } else if (session.role === 'second_teacher') {
             setRole('second_teacher');
             if (session.teacherData) setTeacher(session.teacherData);
-            setCurrentTab('2_professor');
+            setCurrentTab('dashboard');
           } else if (session.role === 'student' && session.studentData) {
             setCurrentStudent(session.studentData);
             setRole('student');
@@ -260,19 +262,6 @@ export default function Home() {
   const [globalDbStatus, setGlobalDbStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [newTeacherPassword, setNewTeacherPassword] = useState('');
 
-  // Sidebar Items Visibility State
-  const [hiddenSidebarItems, setHiddenSidebarItems] = useState<string[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('hidden_sidebar_items');
-        if (saved) return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return [];
-  });
-
   // Theme preference state (default 'dark' para alto contraste)
   const [themeMode, setThemeMode] = useState<'dark' | 'light'>(() => {
     if (typeof window !== 'undefined') {
@@ -310,18 +299,6 @@ export default function Home() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('teacher_ai_auto_reply_enabled', String(enabled));
     }
-  };
-
-  const toggleSidebarItemVisibility = (itemId: string) => {
-    setHiddenSidebarItems((prev) => {
-      const updated = prev.includes(itemId)
-        ? prev.filter((id) => id !== itemId)
-        : [...prev, itemId];
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('hidden_sidebar_items', JSON.stringify(updated));
-      }
-      return updated;
-    });
   };
 
   const showGlobalStatus = useCallback((type: 'success' | 'error' | 'info', message: string) => {
@@ -783,20 +760,8 @@ export default function Home() {
           setChatMessages(mappedMessages);
         }
 
-        // 4. Carregar Arquivos da Biblioteca do Supabase
-        const { data: dbLibrary } = await client.from('library_files').select('*');
-        if (dbLibrary && dbLibrary.length > 0) {
-          const mappedLibrary: LibraryFile[] = dbLibrary.map((item) => ({
-            id: item.id,
-            title: item.title,
-            category: item.category || 'Geral',
-            turma: item.turma || 'Todas',
-            fileSize: item.file_size || '1 MB',
-            updatedAt: item.updated_at || new Date().toLocaleDateString('pt-BR'),
-            driveUrl: item.drive_url || item.file_url || '',
-          }));
-          setLibrary(mappedLibrary);
-        } else if (typeof window !== 'undefined') {
+        // 4. Carregar Arquivos da Biblioteca via cache local inicialmente (busca no Supabase feita sob demanda ao acessar aba 'arquivos')
+        if (typeof window !== 'undefined') {
           const savedLib = localStorage.getItem('library_files_data');
           if (savedLib) {
             try {
@@ -817,6 +782,50 @@ export default function Home() {
     loadData();
   }, [loadDataTrigger]);
 
+  // Tab efetiva para 2º Professor: garante que nunca renderize aba indevida
+  const activeTeacherTab = useMemo(() => {
+    if (role === 'second_teacher') {
+      const allowedTabs = ['dashboard', 'painel', 'alunos', 'atestados_rad', 'arquivos', 'configuracoes'];
+      if (!allowedTabs.includes(currentTab)) {
+        return 'dashboard';
+      }
+    }
+    return currentTab;
+  }, [role, currentTab]);
+
+  // Carregamento sob demanda (lazy) da Biblioteca apenas quando a aba 'arquivos' for acessada
+  useEffect(() => {
+    if (activeTeacherTab !== 'arquivos') return;
+    if (!isSupabaseConfigured || !supabase) return;
+
+    const loadLibrary = async () => {
+      try {
+        const { data: dbLibrary } = await supabase.from('library_files').select('*');
+        if (dbLibrary && dbLibrary.length > 0) {
+          const mappedLibrary: LibraryFile[] = dbLibrary.map((item) => ({
+            id: item.id,
+            title: item.title,
+            category: item.category || 'Geral',
+            turma: item.turma || 'Todas',
+            fileSize: item.file_size || '1 MB',
+            updatedAt: item.updated_at || new Date().toLocaleDateString('pt-BR'),
+            driveUrl: item.drive_url || item.file_url || '',
+          }));
+          setLibrary(mappedLibrary);
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('library_files_data', JSON.stringify(mappedLibrary));
+            } catch (e) {}
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar arquivos da biblioteca sob demanda:', err);
+      }
+    };
+
+    loadLibrary();
+  }, [activeTeacherTab]);
+
   // Auth Handlers
   const handleLoginTeacher = (loggedTeacher: TeacherUser) => {
     setTeacher(loggedTeacher);
@@ -831,7 +840,7 @@ export default function Home() {
   const handleLoginSecondTeacher = (loggedTeacher: TeacherUser) => {
     setTeacher(loggedTeacher);
     setRole('second_teacher');
-    setCurrentTab('2_professor');
+    setCurrentTab('dashboard');
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('active_session', JSON.stringify({ role: 'second_teacher', teacherData: loggedTeacher }));
       requestNotificationPermission().catch(() => {});
@@ -857,6 +866,18 @@ export default function Home() {
       checkAndNotifyApproachingDeadlines(activities, loggedStudent, showGlobalStatus);
     }, 1200);
   };
+
+  const handleTeacherTabChange = useCallback((tab: string) => {
+    if (role === 'second_teacher') {
+      const allowedTabs = ['dashboard', 'painel', 'alunos', 'atestados_rad', 'arquivos', 'configuracoes'];
+      if (!allowedTabs.includes(tab)) {
+        setCurrentTab('dashboard');
+        return;
+      }
+    }
+    setCurrentTab(tab);
+    if (tab !== 'grading' && tab !== 'correcoes') setSelectedActivityForGrading(null);
+  }, [role]);
 
   const handleLogout = useCallback((reason?: string) => {
     if (typeof window !== 'undefined') {
@@ -2748,24 +2769,37 @@ export default function Home() {
     );
   }
 
-  // 3. Teacher Dashboard Layout
+  // 3. Second Teacher Dedicated Portal view
+  if (role === 'second_teacher' && teacher) {
+    return (
+      <SecondTeacherPortalView
+        teacher={teacher}
+        allStudents={activeStudents}
+        activities={activeActivities}
+        libraryFiles={library}
+        messages={chatMessages}
+        onLogout={handleLogout}
+        onSendMessage={handleSendMessage}
+        onMarkThreadAsRead={handleMarkThreadAsRead}
+      />
+    );
+  }
+
+  // 4. Teacher Dashboard Layout
   return (
     <div className="flex min-h-screen bg-background text-foreground overflow-x-hidden">
       {/* Sidebar Navigation */}
       <Sidebar
-        currentTab={currentTab}
-        setCurrentTab={(tab) => {
-          setCurrentTab(tab);
-          if (tab !== 'grading' && tab !== 'correcoes') setSelectedActivityForGrading(null);
-        }}
+        currentTab={activeTeacherTab}
+        setCurrentTab={handleTeacherTabChange}
         teacher={teacher}
+        role={role === 'second_teacher' ? 'second_teacher' : 'teacher'}
         onOpenNewContentModal={() => setIsNewActivityModalOpen(true)}
         onLogout={handleLogout}
         isMobileOpen={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
         unreadMessagesCount={teacherUnreadMessagesCount}
         pendingCorrectionsCount={teacherPendingCorrectionsCount}
-        hiddenNavItems={role === 'second_teacher' ? [...hiddenSidebarItems, 'backup_recuperacao'] : []}
       />
 
 
@@ -2774,7 +2808,7 @@ export default function Home() {
         <NavbarTop
           role={role}
           user={teacher}
-          onOpenSettings={() => setCurrentTab('configuracoes')}
+          onOpenSettings={() => handleTeacherTabChange('configuracoes')}
           globalSearch={globalSearch}
           setGlobalSearch={setGlobalSearch}
           onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -2808,23 +2842,33 @@ export default function Home() {
         )}
 
         <main className="flex-1 p-3 sm:p-6 md:p-8 max-w-7xl w-full mx-auto">
-          {(currentTab === 'dashboard' || currentTab === 'painel') && (
-            <DashboardCentralView
-              activities={activeActivities}
-              students={visibleStudentsForRole}
-              isLoading={isDataLoading}
-              hasError={dataLoadError}
-              onRetry={() => setLoadDataTrigger((prev) => prev + 1)}
-              onNavigateToTab={(tab) => setCurrentTab(tab)}
-              onOpenNewActivityModal={() => setIsNewActivityModalOpen(true)}
-              onOpenNewStudentModal={() => setIsNewStudentModalOpen(true)}
-              onSelectActivityForGrading={handleSelectActivityForGrading}
-              onOpenParallelRecoveryModal={(act) => setParallelRecoveryParentActivity(act)}
-              onViewActivity={(act) => setViewingActivity(act)}
-            />
+          {(activeTeacherTab === 'dashboard' || activeTeacherTab === 'painel') && (
+            role === 'second_teacher' ? (
+              <SecondTeacherDashboardView
+                teacher={teacher}
+                students={visibleStudentsForRole}
+                activities={activities}
+                onNavigateToTab={handleTeacherTabChange}
+                onViewStudent={handleSuperviseStudent}
+              />
+            ) : (
+              <DashboardCentralView
+                activities={activeActivities}
+                students={visibleStudentsForRole}
+                isLoading={isDataLoading}
+                hasError={dataLoadError}
+                onRetry={() => setLoadDataTrigger((prev) => prev + 1)}
+                onNavigateToTab={handleTeacherTabChange}
+                onOpenNewActivityModal={() => setIsNewActivityModalOpen(true)}
+                onOpenNewStudentModal={() => setIsNewStudentModalOpen(true)}
+                onSelectActivityForGrading={handleSelectActivityForGrading}
+                onOpenParallelRecoveryModal={(act) => setParallelRecoveryParentActivity(act)}
+                onViewActivity={(act) => setViewingActivity(act)}
+              />
+            )
           )}
 
-          {currentTab === 'atividades' && (
+          {activeTeacherTab === 'atividades' && role !== 'second_teacher' && (
             <DashboardView
               activities={activeActivities}
               students={visibleStudentsForRole}
@@ -2846,7 +2890,7 @@ export default function Home() {
             />
           )}
 
-          {(currentTab === 'correcoes' || currentTab === 'grading') && (
+          {(activeTeacherTab === 'correcoes' || activeTeacherTab === 'grading') && role !== 'second_teacher' && (
             <CorrectionsView
               activities={activeActivities}
               students={visibleStudentsForRole}
@@ -2858,7 +2902,7 @@ export default function Home() {
             />
           )}
 
-          {currentTab === 'postagem_rco' && (
+          {activeTeacherTab === 'postagem_rco' && role !== 'second_teacher' && (
             <PostagemRcoView
               activities={activeActivities}
               students={visibleStudentsForRole}
@@ -2867,7 +2911,7 @@ export default function Home() {
             />
           )}
 
-          {currentTab === 'mensagens' && (
+          {activeTeacherTab === 'mensagens' && role !== 'second_teacher' && (
             <MessagesView
               currentUserRole="teacher"
               teacher={teacher}
@@ -2881,9 +2925,10 @@ export default function Home() {
             />
           )}
 
-          {currentTab === 'alunos' && (
+          {activeTeacherTab === 'alunos' && (
             <StudentsView
               students={visibleStudentsForRole}
+              isReadOnly={role === 'second_teacher'}
               onOpenNewStudentModal={() => setIsNewStudentModalOpen(true)}
               onEditStudent={(s) => setEditingStudent(s)}
               onDeleteStudent={handleDeleteStudent}
@@ -2892,11 +2937,14 @@ export default function Home() {
             />
           )}
 
-          {currentTab === 'atestados_rad' && (
-            <AtestadosRadView students={visibleStudentsForRole} />
+          {activeTeacherTab === 'atestados_rad' && (
+            <AtestadosRadView
+              students={visibleStudentsForRole}
+              isReadOnly={role === 'second_teacher'}
+            />
           )}
 
-          {currentTab === '2_professor' && (
+          {activeTeacherTab === '2_professor' && role !== 'second_teacher' && (
             <SecondTeachersView
               teacher={teacher}
               currentUserRole={role}
@@ -2907,7 +2955,7 @@ export default function Home() {
             />
           )}
 
-          {currentTab === 'backup_recuperacao' && role === 'teacher' && (
+          {activeTeacherTab === 'backup_recuperacao' && role === 'teacher' && (
             <BackupView
               students={students}
               activities={activities}
@@ -2916,17 +2964,18 @@ export default function Home() {
             />
           )}
 
-              {currentTab === 'arquivos' && (
+              {activeTeacherTab === 'arquivos' && (
                 <LibraryView
                   files={library}
                   driveFolderUrl={teacher.driveFolderUrl}
                   onSaveDriveFolderUrl={handleSaveDriveFolderUrl}
                   onAddFile={handleAddLibraryFile}
                   onDeleteFile={handleDeleteLibraryFile}
+                  isReadOnly={role === 'second_teacher'}
                 />
               )}
 
-              {currentTab === 'configuracoes' && (
+              {activeTeacherTab === 'configuracoes' && (
                 <div className="glass-panel p-8 rounded-3xl border border-border max-w-2xl space-y-6">
               <h1 className="text-2xl font-bold text-foreground">Configurações da Conta</h1>
 
@@ -3060,113 +3109,68 @@ export default function Home() {
                   <p className="text-[10px] text-muted mt-1 ml-1">Preencha apenas se desejar alterar a senha de acesso (Supabase Auth).</p>
                 </div>
 
-                {role !== 'second_teacher' && (
-                  <>
-                    <div className="pt-4 border-t border-border space-y-3">
-                      <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                        <span>Menu Lateral (Sidebar) do 2º Professor - Opções de Visibilidade</span>
-                      </h3>
-                      <p className="text-[11px] text-muted">
-                        Selecione quais opções o 2º Professor poderá visualizar ou ocultar na barra de navegação lateral. O seu próprio menu como Professor ADM não será alterado.
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                        {[
-                          { id: 'dashboard', label: 'Dashboard' },
-                          { id: 'atividades', label: 'Atividades' },
-                          { id: 'correcoes', label: 'Correções' },
-                          { id: 'postagem_rco', label: 'Postagem RCO' },
-                          { id: 'mensagens', label: 'Mensagens' },
-                          { id: 'alunos', label: 'Alunos' },
-                          { id: 'atestados_rad', label: 'Atestados e RAD' },
-                          { id: 'arquivos', label: 'Arquivos' },
-                          { id: '2_professor', label: '2º Professor (Inclusão)' },
-                        ].map((item) => {
-                          const isVisible = !hiddenSidebarItems.includes(item.id);
-                          return (
-                            <label
-                              key={item.id}
-                              className="flex items-center justify-between p-3 bg-surface rounded-2xl border border-border cursor-pointer hover:border-border transition-all"
-                            >
-                              <span className="text-xs font-semibold text-foreground">{item.label}</span>
-                              <div className="relative inline-flex items-center cursor-pointer shrink-0 ml-2">
-                                <input
-                                  type="checkbox"
-                                  checked={isVisible}
-                                  onChange={() => toggleSidebarItemVisibility(item.id)}
-                                  className="sr-only peer"
-                                />
-                                <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
-                              </div>
-                            </label>
-                          );
-                        })}
-                      </div>
+                <div className="pt-4 border-t border-border space-y-2">
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                    <span>Aparência e Contraste Visual</span>
+                  </h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-surface rounded-2xl border border-border gap-3">
+                    <div>
+                      <p className="text-xs font-bold text-foreground">Tema Escuro de Alto Contraste</p>
+                      <p className="text-[11px] text-muted mt-0.5">Letras nítidas e legíveis para conforto visual e uso profissional prolongado.</p>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setThemeMode('dark')}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                          themeMode === 'dark'
+                            ? 'bg-primary text-white shadow-md shadow-primary/25 border border-primary'
+                            : 'bg-surface-hover text-muted hover:text-foreground border border-border'
+                        }`}
+                      >
+                        <span>🌙 Tema Escuro (Padrão)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setThemeMode('light')}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                          themeMode === 'light'
+                            ? 'bg-primary text-white shadow-md shadow-primary/25 border border-primary'
+                            : 'bg-surface-hover text-muted hover:text-foreground border border-border'
+                        }`}
+                      >
+                        <span>☀️ Tema Claro</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
 
-                    <div className="pt-4 border-t border-border space-y-2">
-                      <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                        <span>Aparência e Contraste Visual</span>
-                      </h3>
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-surface rounded-2xl border border-border gap-3">
-                        <div>
-                          <p className="text-xs font-bold text-foreground">Tema Escuro de Alto Contraste</p>
-                          <p className="text-[11px] text-muted mt-0.5">Letras nítidas e legíveis para conforto visual e uso profissional prolongado.</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setThemeMode('dark')}
-                            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                              themeMode === 'dark'
-                                ? 'bg-primary text-white shadow-md shadow-primary/25 border border-primary'
-                                : 'bg-surface-hover text-muted hover:text-foreground border border-border'
-                            }`}
-                          >
-                            <span>🌙 Tema Escuro (Padrão)</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setThemeMode('light')}
-                            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                              themeMode === 'light'
-                                ? 'bg-primary text-white shadow-md shadow-primary/25 border border-primary'
-                                : 'bg-surface-hover text-muted hover:text-foreground border border-border'
-                            }`}
-                          >
-                            <span>☀️ Tema Claro</span>
-                          </button>
-                        </div>
-                      </div>
+                <div className="pt-4 border-t border-border space-y-2">
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                    <span>Segurança da Sessão</span>
+                  </h3>
+                  <div className="flex items-center justify-between p-4 bg-surface rounded-2xl border border-border">
+                    <div>
+                      <p className="text-xs font-bold text-foreground">Deslogar por 8 minutos de inatividade</p>
+                      <p className="text-[11px] text-muted mt-0.5">Sua sessão será encerrada automaticamente após 8 minutos sem cliques ou movimentação.</p>
                     </div>
-
-                    <div className="pt-4 border-t border-border space-y-2">
-                      <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                        <span>Segurança da Sessão</span>
-                      </h3>
-                      <div className="flex items-center justify-between p-4 bg-surface rounded-2xl border border-border">
-                        <div>
-                          <p className="text-xs font-bold text-foreground">Deslogar por 8 minutos de inatividade</p>
-                          <p className="text-[11px] text-muted mt-0.5">Sua sessão será encerrada automaticamente após 8 minutos sem cliques ou movimentação.</p>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
-                          <input
-                            type="checkbox"
-                            checked={inactivityTimeoutEnabled}
-                            onChange={(e) => {
-                              const val = e.target.checked;
-                              setInactivityTimeoutEnabled(val);
-                              if (typeof window !== 'undefined') {
-                                localStorage.setItem('inactivity_timeout_enabled', String(val));
-                              }
-                            }}
-                            className="sr-only peer"
-                          />
-                          <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                        </label>
-                      </div>
-                    </div>
-                  </>
-                )}
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
+                      <input
+                        type="checkbox"
+                        checked={inactivityTimeoutEnabled}
+                        onChange={(e) => {
+                          const val = e.target.checked;
+                          setInactivityTimeoutEnabled(val);
+                          if (typeof window !== 'undefined') {
+                            localStorage.setItem('inactivity_timeout_enabled', String(val));
+                          }
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    </label>
+                  </div>
+                </div>
                 <button
                   onClick={async () => {
                     try {
@@ -3398,13 +3402,13 @@ export default function Home() {
       />
 
       <NewStudentModal
-        isOpen={isNewStudentModalOpen}
+        isOpen={isNewStudentModalOpen && role !== 'second_teacher'}
         onClose={() => setIsNewStudentModalOpen(false)}
         onCreateStudent={handleCreateStudent}
       />
 
       <EditStudentModal
-        isOpen={Boolean(editingStudent)}
+        isOpen={Boolean(editingStudent) && role !== 'second_teacher'}
         student={editingStudent}
         onClose={() => setEditingStudent(null)}
         onSaveStudent={handleSaveStudent}
@@ -3416,10 +3420,14 @@ export default function Home() {
         activities={activeActivities}
         onClose={() => setSupervisingStudent(null)}
         onSaveNotes={handleSavePedagogicalNotes}
-        onSendMessage={(st) => {
-          setSupervisingStudent(null);
-          setCurrentTab('mensagens');
-        }}
+        onSendMessage={
+          role === 'second_teacher'
+            ? undefined
+            : (st) => {
+                setSupervisingStudent(null);
+                setCurrentTab('mensagens');
+              }
+        }
       />
     </div>
   );

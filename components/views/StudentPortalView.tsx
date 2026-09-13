@@ -2063,7 +2063,13 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       }}
                       className="aspect-square min-h-[44px] min-w-[44px] rounded-2xl border-2 border-transparent hover:border-pink-400 focus:border-pink-400 bg-surface-hover hover:bg-surface-hover transition-all p-2 cursor-pointer relative group"
                     >
-                      <img src={avatarUrl} alt="Avatar" className="w-full h-full object-contain group-hover:scale-110 transition-transform" />
+                      <img
+                        src={avatarUrl}
+                        alt="Avatar"
+                        loading="lazy"
+                        decoding="async"
+                        className="w-full h-full object-contain group-hover:scale-110 transition-transform"
+                      />
                       {student.avatarUrl === avatarUrl && (
                         <div className="absolute -top-2 -right-2 bg-pink-500 text-foreground p-1 rounded-full border-2 border-[#0e172a]">
                           <Check className="w-3 h-3 stroke-[3]" />
@@ -2086,7 +2092,13 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       }}
                       className="aspect-square min-h-[44px] min-w-[44px] rounded-2xl border-2 border-transparent hover:border-blue-400 focus:border-blue-400 bg-surface-hover hover:bg-surface-hover transition-all p-2 cursor-pointer relative group"
                     >
-                      <img src={avatarUrl} alt="Avatar" className="w-full h-full object-contain group-hover:scale-110 transition-transform" />
+                      <img
+                        src={avatarUrl}
+                        alt="Avatar"
+                        loading="lazy"
+                        decoding="async"
+                        className="w-full h-full object-contain group-hover:scale-110 transition-transform"
+                      />
                       {student.avatarUrl === avatarUrl && (
                         <div className="absolute -top-2 -right-2 bg-primary text-white p-1 rounded-full border-2 border-[#0e172a]">
                           <Check className="w-3 h-3 stroke-[3]" />

@@ -554,6 +554,8 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                         <img
                           src={st.avatarUrl}
                           alt={st.fullName}
+                          loading="lazy"
+                          decoding="async"
                           className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-border"
                         />
                         <span className="w-2.5 h-2.5 rounded-full bg-primary absolute bottom-0 right-0 border-2 border-[#0c1424]" />
@@ -761,6 +763,8 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                             : formatAvatarUrl(activeStudent?.avatarUrl))
                         }
                         alt={msg.senderName}
+                        loading="lazy"
+                        decoding="async"
                         className="w-6 h-6 sm:w-7 sm:h-7 rounded-full object-cover border border-border shrink-0 mb-1"
                         onError={(e) => {
                           (e.target as HTMLImageElement).src =

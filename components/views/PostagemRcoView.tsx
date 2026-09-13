@@ -518,6 +518,8 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
                           <img
                             src={formatAvatarUrl(item.student.avatarUrl)}
                             alt={item.student.fullName}
+                            loading="lazy"
+                            decoding="async"
                             className="w-8 h-8 rounded-full object-cover border border-border shrink-0"
                             onError={(e) => {
                               (e.target as HTMLImageElement).src =
