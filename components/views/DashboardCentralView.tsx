@@ -1,34 +1,39 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   TrendingUp,
-  Layers,
-  CheckCircle2,
-  Award,
-  Users2,
-  Clock,
-  FileSpreadsheet,
-  Heart,
-  Plus,
-  ArrowRight,
-  Sparkles,
-  BarChart3,
-  FileText,
-  Building2,
-  CheckCheck,
+  Bell,
+  BookOpenCheck,
   AlertCircle,
-  RotateCcw,
+  Clock,
+  ArrowRight,
+  FileSpreadsheet,
+  Plus,
+  Users2,
+  GraduationCap,
+  CheckCircle2,
+  HeartHandshake,
+  FileText,
+  ChevronRight,
+  Sparkles,
+  Filter,
+  RefreshCw,
+  AlertTriangle,
+  Heart
 } from 'lucide-react';
+
 import { Activity, StudentUser } from '@/lib/types';
 import {
-  getActivityStudentAndSubmissionCounts,
   getCanonicalActivities,
   getUnifiedActivityMetrics,
   canStudentAccessActivity,
   getOriginalTurmas,
   isStudentPNE,
   getSubmissionTotalGrade,
+  getChildRecoveryActivities,
+  isActivityRecovery,
+  isActivityAdapted,
 } from '@/lib/studentUtils';
 
 interface DashboardCentralViewProps {
@@ -37,7 +42,12 @@ interface DashboardCentralViewProps {
   onNavigateToTab: (tab: string) => void;
   onOpenNewActivityModal: () => void;
   onOpenNewStudentModal: () => void;
+  onSelectActivityForGrading?: (act: Activity) => void;
+  onOpenParallelRecoveryModal?: (act: Activity) => void;
+  onViewActivity?: (act: Activity) => void;
 }
+
+type OperationalTabFilter = 'todas' | 'correcoes' | 'prazos' | 'recuperacao' | 'rco';
 
 export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
   activities = [],
@@ -45,251 +55,246 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
   onNavigateToTab,
   onOpenNewActivityModal,
   onOpenNewStudentModal,
+  onSelectActivityForGrading,
+  onOpenParallelRecoveryModal,
+  onViewActivity,
 }) => {
-  // Atividades canônicas/pedagógicas (atividades centrais + suas adaptações contam como 1 só)
+  const [activeQueueFilter, setActiveQueueFilter] = useState<OperationalTabFilter>('todas');
+
   const canonicalActivities = useMemo(() => getCanonicalActivities(activities), [activities]);
   const totalActivities = canonicalActivities.length;
-  const totalStudents = students.length;
 
-  const totalSubmissions = useMemo(() => {
-    return canonicalActivities.reduce((acc, a) => {
-      const { subCount } = getUnifiedActivityMetrics(a, activities, students);
-      return acc + subCount;
-    }, 0);
+  // 1. Métricas Agregadas de Correção e Entrega
+  const {
+    totalSubmissions,
+    totalExpected,
+    pendingCorrections,
+    activitiesWithPendingCorrections,
+  } = useMemo(() => {
+    let subs = 0;
+    let exp = 0;
+    let pend = 0;
+    const pendingList: Array<{
+      activity: Activity;
+      pendingCount: number;
+      subCount: number;
+      expectedCount: number;
+    }> = [];
+
+    canonicalActivities.forEach((a) => {
+      const { subCount, expectedStudentsCount, pendingCount } = getUnifiedActivityMetrics(
+        a,
+        activities,
+        students
+      );
+      subs += subCount;
+      exp += expectedStudentsCount;
+      pend += pendingCount;
+
+      if (pendingCount > 0) {
+        pendingList.push({
+          activity: a,
+          pendingCount,
+          subCount,
+          expectedCount: expectedStudentsCount,
+        });
+      }
+    });
+
+    // Ordenar atividades com mais pendências primeiro
+    pendingList.sort((x, y) => y.pendingCount - x.pendingCount);
+
+    return {
+      totalSubmissions: subs,
+      totalExpected: exp,
+      pendingCorrections: pend,
+      activitiesWithPendingCorrections: pendingList,
+    };
   }, [canonicalActivities, activities, students]);
 
-  const totalExpected = useMemo(() => {
-    return canonicalActivities.reduce((acc, a) => {
-      const { expectedStudentsCount } = getUnifiedActivityMetrics(a, activities, students);
-      return acc + expectedStudentsCount;
-    }, 0);
-  }, [canonicalActivities, activities, students]);
+  const missingSubmissions = Math.max(0, totalExpected - totalSubmissions);
+  const completionRate =
+    totalExpected > 0 ? Math.min(100, Math.round((totalSubmissions / totalExpected) * 100)) : 0;
 
-  const completionRate = totalExpected > 0 ? Math.min(100, Math.round((totalSubmissions / totalExpected) * 100)) : 0;
+  // 2. Atividades Próximas do Prazo (Hoje ou próximos 7 dias)
+  const { dueTodayActivities, approachingDeadlineActivities } = useMemo(() => {
+    const now = new Date();
+    const todayList: Activity[] = [];
+    const upcomingList: Array<{ activity: Activity; daysLeft: number; isToday: boolean }> = [];
 
-  const pendingCorrections = useMemo(() => {
-    return canonicalActivities.reduce((acc, a) => {
-      const { pendingCount } = getUnifiedActivityMetrics(a, activities, students);
-      return acc + pendingCount;
-    }, 0);
-  }, [canonicalActivities, activities, students]);
+    canonicalActivities.forEach((a) => {
+      if (!a.deadline) return;
+      const deadDate = new Date(a.deadline);
+      const diffMs = deadDate.getTime() - now.getTime();
+      const diffHours = diffMs / (1000 * 3600);
+      const diffDays = Math.ceil(diffMs / (1000 * 3600 * 24));
 
-  // Cálculo preciso da Média Geral a partir de todas as notas avaliadas/lançadas
-  const gradesCalculation = useMemo(() => {
-    let totalScoreSum = 0;
-    let totalGradedCount = 0;
-    let activitiesWithGradesCount = 0;
+      // Considera hoje se faltam até 24 horas e ainda não passou de -12h
+      const isToday = diffHours >= -12 && diffHours <= 24;
 
-    activities.forEach((act) => {
-      let actHasGraded = false;
-      const subs = act.submissions || [];
-      subs.forEach((s) => {
-        if (s.status === 'graded' || (s.essayScore !== undefined && s.essayScore !== null) || Number(s.objectiveScore) > 0) {
-          totalScoreSum += getSubmissionTotalGrade(s);
-          totalGradedCount += 1;
-          actHasGraded = true;
+      if (isToday) {
+        todayList.push(a);
+        upcomingList.push({ activity: a, daysLeft: 0, isToday: true });
+      } else if (diffDays > 0 && diffDays <= 7) {
+        upcomingList.push({ activity: a, daysLeft: diffDays, isToday: false });
+      }
+    });
+
+    upcomingList.sort((x, y) => x.daysLeft - y.daysLeft);
+
+    return {
+      dueTodayActivities: todayList,
+      approachingDeadlineActivities: upcomingList,
+    };
+  }, [canonicalActivities]);
+
+  // 3. Recuperação Paralela: identificar atividades e alunos com notas < 6.0
+  const {
+    studentsNeedingRecoveryCount,
+    activitiesNeedingRecovery,
+  } = useMemo(() => {
+    const lowGradeStudentIds = new Set<string>();
+    const activitiesNeedingRec: Array<{
+      activity: Activity;
+      lowScoreCount: number;
+      hasRecoveryCreated: boolean;
+      average: number;
+    }> = [];
+
+    canonicalActivities.forEach((act) => {
+      const childRecs = getChildRecoveryActivities(act, activities);
+      const hasRecovery = childRecs.length > 0;
+      let lowCount = 0;
+      let sumGrades = 0;
+      let gradedCount = 0;
+
+      (act.submissions || []).forEach((sub) => {
+        if (
+          sub.status === 'graded' ||
+          (sub.essayScore !== undefined && sub.essayScore !== null) ||
+          Number(sub.objectiveScore) > 0
+        ) {
+          const totalGrade = getSubmissionTotalGrade(sub);
+          sumGrades += totalGrade;
+          gradedCount += 1;
+          if (totalGrade < 6.0) {
+            lowCount += 1;
+            lowGradeStudentIds.add(sub.studentId);
+          }
         }
       });
 
-      if (actHasGraded || (act.averageGrade !== undefined && act.averageGrade !== null && act.averageGrade > 0)) {
-        activitiesWithGradesCount += 1;
+      const avg = gradedCount > 0 ? sumGrades / gradedCount : 10;
+
+      // Se há alunos com nota baixa e não é uma atividade de recuperação
+      if (lowCount > 0 && !isActivityRecovery(act)) {
+        activitiesNeedingRec.push({
+          activity: act,
+          lowScoreCount: lowCount,
+          hasRecoveryCreated: hasRecovery,
+          average: Number(avg.toFixed(1)),
+        });
       }
     });
 
-    const average = totalGradedCount > 0 ? (totalScoreSum / totalGradedCount).toFixed(1) : '0.0';
+    // Priorizar atividades que ainda NÃO têm recuperação criada
+    activitiesNeedingRec.sort((a, b) => {
+      if (a.hasRecoveryCreated !== b.hasRecoveryCreated) {
+        return a.hasRecoveryCreated ? 1 : -1;
+      }
+      return b.lowScoreCount - a.lowScoreCount;
+    });
 
     return {
-      overallAverage: average,
-      totalGradedCount,
-      activitiesWithGradesCount,
+      studentsNeedingRecoveryCount: lowGradeStudentIds.size,
+      activitiesNeedingRecovery: activitiesNeedingRec,
     };
+  }, [canonicalActivities, activities]);
+
+  // 4. Pendências Administrativas: turmas com atividades finalizadas prontas para lançamento RCO
+  const originalTurmas = useMemo(() => getOriginalTurmas(students), [students]);
+  const pneTotal = useMemo(() => students.filter((s) => isStudentPNE(s)).length, [students]);
+  const radTotal = useMemo(
+    () => students.filter((s) => s.tag?.toUpperCase() === 'RAD').length,
+    [students]
+  );
+
+  const turmasReadyForRco = useMemo(() => {
+    return originalTurmas.filter((turma) => {
+      const turmaActs = canonicalActivities.filter((a) =>
+        canStudentAccessActivity(a.turma, turma)
+      );
+      if (turmaActs.length === 0) return false;
+      // Verificar se ao menos 1 atividade tem notas lançadas
+      const hasGraded = turmaActs.some((a) =>
+        (a.submissions || []).some((s) => s.status === 'graded' || s.essayScore !== undefined)
+      );
+      return hasGraded;
+    });
+  }, [originalTurmas, canonicalActivities]);
+
+  // Média Geral
+  const overallAverage = useMemo(() => {
+    let totalScoreSum = 0;
+    let totalGradedCount = 0;
+    activities.forEach((act) => {
+      (act.submissions || []).forEach((s) => {
+        if (
+          s.status === 'graded' ||
+          (s.essayScore !== undefined && s.essayScore !== null) ||
+          Number(s.objectiveScore) > 0
+        ) {
+          totalScoreSum += getSubmissionTotalGrade(s);
+          totalGradedCount += 1;
+        }
+      });
+    });
+    return totalGradedCount > 0 ? (totalScoreSum / totalGradedCount).toFixed(1) : '0.0';
   }, [activities]);
 
-  const overallAverage = gradesCalculation.overallAverage;
-
-  // Stats by Activity Type: Contagem estrita por tipo de atividade canônica
-  const statsByType = useMemo(() => {
-    const counts = {
-      Avaliação: 0,
-      Simulado: 0,
-      Redação: 0,
-      Dinâmica: 0,
-      'Trabalho em grupo': 0,
-      'Projeto de pesquisa': 0,
-    };
-
-    canonicalActivities.forEach((act) => {
-      const t = (act.type || '').trim().toLowerCase();
-      if (t.includes('simulado')) {
-        counts.Simulado += 1;
-      } else if (t.includes('redação') || t.includes('redacao')) {
-        counts.Redação += 1;
-      } else if (t.includes('dinâmica') || t.includes('dinamica')) {
-        counts.Dinâmica += 1;
-      } else if (t.includes('grupo') || t.includes('trabalho')) {
-        counts['Trabalho em grupo'] += 1;
-      } else if (t.includes('pesquisa') || t.includes('projeto')) {
-        counts['Projeto de pesquisa'] += 1;
-      } else {
-        counts.Avaliação += 1;
-      }
-    });
-
-    return counts;
-  }, [canonicalActivities]);
-
-  // Breakdown by Turma
-  const turmasBreakdown = useMemo(() => {
-    const list = getOriginalTurmas(students);
-
-    return list.map((turma) => {
-      const turmaStudents = students.filter((s) => {
-        if (!s.turma) return false;
-        const parts = s.turma.split(/[,;]+/).map((t) => t.trim().toLowerCase());
-        return parts.includes(turma.toLowerCase());
-      });
-      const turmaCanonicalActivities = canonicalActivities.filter((a) => canStudentAccessActivity(a.turma, turma));
-      
-      let turmaExpected = 0;
-      let turmaSubmitted = 0;
-      let turmaMainCount = 0;
-      let turmaRecoveryCount = 0;
-      let turmaGradeSum = 0;
-      let turmaGradedCount = 0;
-
-      turmaCanonicalActivities.forEach((act) => {
-        const { subCount, expectedStudentsCount, submissionsList, breakdown } = getUnifiedActivityMetrics(act, activities, turmaStudents);
-        turmaExpected += expectedStudentsCount;
-        turmaSubmitted += subCount;
-        turmaMainCount += breakdown.mainCount;
-        turmaRecoveryCount += breakdown.recoveryCount;
-        
-        submissionsList.forEach((s) => {
-          if (s.status === 'graded' || (s.essayScore !== undefined && s.essayScore !== null) || Number(s.objectiveScore) > 0) {
-            turmaGradeSum += getSubmissionTotalGrade(s);
-            turmaGradedCount += 1;
-          }
-        });
-      });
-
-      const rate = turmaExpected > 0 ? Math.min(100, Math.round((turmaSubmitted / turmaExpected) * 100)) : 0;
-      const mainRate = turmaExpected > 0 ? Math.min(100, Math.round((turmaMainCount / turmaExpected) * 100)) : 0;
-      const avg = turmaGradedCount > 0 ? (turmaGradeSum / turmaGradedCount).toFixed(1) : '-';
-
-      return {
-        turma,
-        studentsCount: turmaStudents.length,
-        activitiesCount: turmaCanonicalActivities.length,
-        completionRate: rate,
-        mainCount: turmaMainCount,
-        recoveryCount: turmaRecoveryCount,
-        mainRate,
-        averageGrade: avg,
-        pneCount: turmaStudents.filter((s) => isStudentPNE(s)).length,
-        radCount: turmaStudents.filter((s) => s.tag?.toUpperCase() === 'RAD').length,
-      };
-    });
-  }, [students, activities, canonicalActivities]);
-
-  // Inclusion & Support Stats
-  const pneTotal = students.filter((s) => s.tag?.toUpperCase() === 'PNE').length;
-  const radTotal = students.filter((s) => s.tag?.toUpperCase() === 'RAD').length;
-
-  // Análise de Adesão e Recuperação Paralela
-  const adherenceAnalytics = useMemo(() => {
-    let mainCount = 0;
-    let recoveryCount = 0;
-    let recoveryOnlyCount = 0;
-    let recoveredCount = 0;
-    let adaptedCount = 0;
-    const recoveryActivitiesList: {
-      parentTitle: string;
-      turma: string;
-      approach?: string;
-      mainCount: number;
-      mainRate: number;
-      recoveryCount: number;
-      recoveryRate: number;
-      recoveryOnlyCount: number;
-      adaptedCount: number;
-      total: number;
-      expected: number;
-      rate: number;
-    }[] = [];
-
-    canonicalActivities.forEach((parent) => {
-      const metrics = getUnifiedActivityMetrics(parent, activities, students);
-      mainCount += metrics.breakdown.mainCount;
-      recoveryCount += metrics.breakdown.recoveryCount;
-      recoveryOnlyCount += metrics.breakdown.recoveryOnlyCount;
-      recoveredCount += (metrics.breakdown.recoveredCount || 0);
-      adaptedCount += metrics.breakdown.adaptedCount;
-
-      if (metrics.hasRecovery) {
-        const recAct = activities.find(
-          (a) => a.recoveryFromId === parent.id || (a.isRecovery && a.turma === parent.turma)
-        );
-        recoveryActivitiesList.push({
-          parentTitle: parent.title,
-          turma: parent.turma || '',
-          approach: recAct?.recoveryApproach,
-          mainCount: metrics.breakdown.mainCount,
-          mainRate: metrics.breakdown.mainRate,
-          recoveryCount: metrics.breakdown.recoveryCount,
-          recoveryRate: metrics.breakdown.recoveryRate,
-          recoveryOnlyCount: metrics.breakdown.recoveryOnlyCount,
-          adaptedCount: metrics.breakdown.adaptedCount,
-          total: metrics.subCount,
-          expected: metrics.expectedStudentsCount,
-          rate: metrics.completionRate,
-        });
-      }
-    });
-
-    const mainRate = totalExpected > 0 ? Math.min(100, Math.round((mainCount / totalExpected) * 100)) : 0;
-    const recoveryRate = totalExpected > 0 ? Math.min(100, Math.round((recoveryCount / totalExpected) * 100)) : 0;
-
-    return {
-      mainCount,
-      mainRate,
-      recoveryCount,
-      recoveryRate,
-      recoveryOnlyCount,
-      recoveredCount,
-      adaptedCount,
-      recoveryActivitiesList,
-    };
-  }, [canonicalActivities, activities, students, totalExpected]);
+  // Ação direta de correção mais prioritária
+  const handleDirectCorrection = () => {
+    if (activitiesWithPendingCorrections.length > 0 && onSelectActivityForGrading) {
+      onSelectActivityForGrading(activitiesWithPendingCorrections[0].activity);
+    } else {
+      onNavigateToTab('correcoes');
+    }
+  };
 
   return (
-    <div className="space-y-8 animate-fadeIn pb-12">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#131b2e] p-6 rounded-3xl border border-white/10 shadow-lg">
+    <div className="space-y-8 animate-fadeIn pb-16 max-w-6xl w-full mx-auto">
+      {/* 1. CABEÇALHO OPERACIONAL */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-6">
         <div>
-          <div className="flex items-center gap-2 text-[#4ade80] text-xs font-bold uppercase tracking-wider mb-1">
-            <TrendingUp className="w-4 h-4" />
-            <span>Painel Geral de Gestão Pedagógica</span>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+              <TrendingUp className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
+                Central de Trabalho
+              </h1>
+              <p className="text-sm sm:text-base text-muted font-medium mt-0.5">
+                O que você precisa fazer agora? Suas pendências pedagógicas e ações rápidas.
+              </p>
+            </div>
           </div>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">
-            Dashboard do Professor
-          </h1>
-          <p className="text-xs sm:text-sm text-[#bccabb] mt-1 font-medium max-w-2xl">
-            Visão consolidada de indicadores de engajamento, desempenho por turma, produções e pendências.
-          </p>
         </div>
 
-        <div className="flex items-center gap-3 self-start sm:self-center flex-wrap">
+        {/* Ações Primárias Globais */}
+        <div className="flex items-center gap-3 flex-wrap">
           <button
+            id="btn-central-rco"
             onClick={() => onNavigateToTab('postagem_rco')}
-            className="py-3 px-5 bg-[#171f33] hover:bg-[#222a3d] text-[#4ade80] font-bold rounded-2xl border border-[#4ade80]/30 transition-all text-xs flex items-center gap-2 cursor-pointer shadow-sm active:scale-95"
+            className="min-h-[44px] py-2.5 px-4 bg-surface hover:bg-surface-hover text-foreground font-bold rounded-xl border border-border transition-all text-sm flex items-center gap-2 cursor-pointer shadow-sm active:scale-95"
           >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>Postagem RCO</span>
+            <FileSpreadsheet className="w-4 h-4 text-primary" />
+            <span>Lançar RCO</span>
           </button>
-
           <button
+            id="btn-central-nova-atividade"
             onClick={onOpenNewActivityModal}
-            className="py-3 px-5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-2xl transition-all text-xs flex items-center gap-2 cursor-pointer shadow-md shadow-[#4ade80]/20 active:scale-95"
+            className="min-h-[44px] py-2.5 px-4 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl transition-all text-sm flex items-center gap-2 cursor-pointer shadow-md active:scale-95"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>Nova Atividade</span>
@@ -297,382 +302,583 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
         </div>
       </div>
 
-      {/* Primary 4 Global KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI 1: Atividades */}
-        <div className="glass-panel p-5 rounded-3xl border border-white/10 bg-[#131b2e] relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold tracking-wider text-[#bccabb] uppercase">
-              Atividades Criadas
-            </span>
-            <div className="w-9 h-9 rounded-2xl bg-[#1d273d] text-[#4ade80] flex items-center justify-center">
-              <Layers className="w-4 h-4" />
-            </div>
+      {/* 2. ÁREA DE PENDÊNCIAS (6 CARDS OPERACIONAIS COM AÇÃO DIRETA) */}
+      <section aria-labelledby="heading-pendencias">
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <div className="flex items-center gap-2">
+            <Bell className="w-5 h-5 text-amber-500" />
+            <h2 id="heading-pendencias" className="text-xl font-bold text-foreground">
+              Pendências
+            </h2>
           </div>
-          <div className="text-3xl font-extrabold text-white mb-1">{totalActivities}</div>
-          <div className="text-xs text-[#bccabb]">
-            Cadastradas em {turmasBreakdown.length} turmas
-          </div>
-        </div>
-
-        {/* KPI 2: Entregas & Engajamento */}
-        <div className="glass-panel p-5 rounded-3xl border border-white/10 bg-[#131b2e] relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold tracking-wider text-[#bccabb] uppercase">
-              Entregas & Engajamento
-            </span>
-            <div className="w-9 h-9 rounded-2xl bg-indigo-500/20 text-[#c0c1ff] flex items-center justify-center">
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-3xl font-extrabold text-white mb-1">
-            {totalSubmissions}
-            <span className="text-sm font-normal text-[#bccabb] ml-1.5">/ {totalExpected}</span>
-          </div>
-          <div className="text-xs text-[#4ade80] font-semibold flex items-center gap-1.5 flex-wrap">
-            <span>{completionRate}% total consolidado</span>
-            <span className="text-[10px] text-[#bccabb] font-normal">
-              (1ª Cham: {adherenceAnalytics.mainRate}% • Recup: {adherenceAnalytics.recoveryRate}%)
-            </span>
-          </div>
-        </div>
-
-        {/* KPI 3: Média Geral */}
-        <div className="glass-panel p-5 rounded-3xl border border-white/10 bg-[#131b2e] relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold tracking-wider text-[#bccabb] uppercase">
-              Média Geral
-            </span>
-            <div className="w-9 h-9 rounded-2xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center">
-              <Award className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-3xl font-extrabold text-white mb-1">{overallAverage}</div>
-          <div className="text-xs text-[#bccabb]">
-            {gradesCalculation.totalGradedCount > 0
-              ? `${gradesCalculation.totalGradedCount} ${gradesCalculation.totalGradedCount === 1 ? 'nota lançada' : 'notas lançadas'}`
-              : 'Sem notas ainda'}
-          </div>
-        </div>
-
-        {/* KPI 4: Pendências de Correção */}
-        <div className="glass-panel p-5 rounded-3xl border border-white/10 bg-[#131b2e] relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold tracking-wider text-[#bccabb] uppercase">
-              Aguardando Correção
-            </span>
-            <div className="w-9 h-9 rounded-2xl bg-amber-500/20 text-amber-300 flex items-center justify-center">
-              <Clock className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-3xl font-extrabold text-white mb-1">{pendingCorrections}</div>
-          <div className="text-xs text-amber-300/90 font-medium">
-            {pendingCorrections > 0 ? (
-              <button
-                onClick={() => onNavigateToTab('correcoes')}
-                className="underline hover:text-white cursor-pointer"
-              >
-                Clique para abrir correções
-              </button>
-            ) : (
-              'Nenhuma pendência na fila'
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Análise de Adesão da Turma (1ª Chamada vs. Recuperação Paralela) */}
-      <div className="glass-panel p-6 rounded-3xl border border-white/10 bg-[#131b2e] space-y-4 shadow-md">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-emerald-500/10 text-[#4ade80] flex items-center justify-center">
-              <BarChart3 className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                <span>Análise de Adesão & Engajamento Unificado</span>
-              </h2>
-              <p className="text-xs text-[#bccabb]">
-                Consolidação das entregas de 1ª chamada, recuperações paralelas e adaptações pedagógicas.
-              </p>
-            </div>
-          </div>
-          <span className="text-xs font-bold text-[#4ade80] bg-[#4ade80]/10 border border-[#4ade80]/20 px-3 py-1.5 rounded-xl self-start sm:self-center">
-            {completionRate}% de engajamento geral ({totalSubmissions}/{totalExpected} esperadas)
+          <span className="text-xs font-semibold text-muted bg-surface px-2.5 py-1 rounded-full border border-border">
+            Foco Operacional
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-          <div className="p-4 rounded-2xl bg-[#0b1326] border border-white/5 flex flex-col justify-between">
-            <span className="text-[11px] text-[#bccabb] font-semibold uppercase tracking-wider">
-              1ª Chamada (Original)
-            </span>
-            <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-2xl font-black text-white">{adherenceAnalytics.mainCount}</span>
-              <span className="text-[10px] text-[#4ade80] font-bold">
-                {adherenceAnalytics.mainRate}% engaj.
-              </span>
-            </div>
-            <span className="text-[10px] text-[#bccabb]/70 mt-1">Avaliações regulares no prazo</span>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-indigo-300 font-semibold uppercase tracking-wider">
-                Recuperação Paralela
-              </span>
-              <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
-            </div>
-            <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-2xl font-black text-indigo-200">{adherenceAnalytics.recoveryCount}</span>
-              <span className="text-[10px] text-indigo-300 font-bold">
-                {adherenceAnalytics.recoveryRate}% adesão
-              </span>
-            </div>
-            <span className="text-[10px] text-indigo-300/70 mt-1">
-              {adherenceAnalytics.recoveryOnlyCount > 0
-                ? `${adherenceAnalytics.recoveryOnlyCount} novas pós-prazo • ${adherenceAnalytics.recoveredCount} reavaliações`
-                : `${adherenceAnalytics.recoveredCount} reavaliações pedagógicas`}
-            </span>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col justify-between">
-            <span className="text-[11px] text-amber-300 font-semibold uppercase tracking-wider">
-              Adaptação PNE
-            </span>
-            <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-2xl font-black text-amber-200">{adherenceAnalytics.adaptedCount}</span>
-              <span className="text-[10px] text-amber-300 font-medium">
-                {totalSubmissions > 0
-                  ? `${Math.round((adherenceAnalytics.adaptedCount / totalSubmissions) * 100)}%`
-                  : '0%'}
-              </span>
-            </div>
-            <span className="text-[10px] text-amber-300/70 mt-1">Inclusão especializada</span>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col justify-between">
-            <span className="text-[11px] text-emerald-300 font-semibold uppercase tracking-wider">
-              Total Unificado
-            </span>
-            <div className="mt-2 flex items-baseline justify-between">
-              <span className="text-2xl font-black text-emerald-300">
-                {totalSubmissions}
-                <span className="text-sm font-normal text-emerald-300/70">/{totalExpected}</span>
-              </span>
-              <span className="text-[10px] text-emerald-300 font-bold">{completionRate}% total</span>
-            </div>
-            <span className="text-[10px] text-emerald-300/70 mt-1">Alunos únicos com meta cumprida</span>
-          </div>
-        </div>
-
-        {adherenceAnalytics.recoveryActivitiesList.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-white/5">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-bold text-white uppercase tracking-wider">
-                Atividades com Ciclo de Recuperação Ativo ({adherenceAnalytics.recoveryActivitiesList.length})
-              </span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {adherenceAnalytics.recoveryActivitiesList.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="p-3 rounded-xl bg-[#0b1326] border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
-                >
-                  <div className="truncate pr-2">
-                    <span className="font-bold text-white truncate block">{item.parentTitle}</span>
-                    <span className="text-[10px] text-[#bccabb]">
-                      Turma {item.turma} {item.approach ? `• ${item.approach}` : ''}
-                    </span>
-                    <div className="flex items-center gap-2 text-[10px] mt-1 text-[#bccabb]">
-                      <span>1ª Chamada: <strong className="text-white">{item.mainCount}</strong> ({item.mainRate}%)</span>
-                      <span>•</span>
-                      <span className="text-indigo-300">Recup: <strong className="text-indigo-200">{item.recoveryCount}</strong> ({item.recoveryRate}%)</span>
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0 self-end sm:self-center">
-                    <span className="font-bold text-[#4ade80] text-xs block">{item.rate}% total</span>
-                    <span className="text-[10px] text-[#bccabb] font-medium">{item.total}/{item.expected} alunos</span>
-                  </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* CARD 1: CORREÇÕES */}
+          <div className="p-5 rounded-2xl border border-border bg-surface flex flex-col justify-between shadow-sm hover:border-amber-500/40 transition-colors">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
+                  <BookOpenCheck className="w-5 h-5" />
                 </div>
-              ))}
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-600 bg-amber-500/10 px-2.5 py-1 rounded-lg">
+                  Avaliação
+                </span>
+              </div>
+              <div className="text-3xl font-black text-foreground">{pendingCorrections}</div>
+              <div className="text-base font-bold text-foreground mt-1">Correções Pendentes</div>
+              <p className="text-xs text-muted mt-1 leading-relaxed">
+                {pendingCorrections === 0
+                  ? 'Todas as redações e questões estão em dia!'
+                  : `${activitiesWithPendingCorrections.length} atividade(s) aguardando sua correção.`}
+              </p>
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* Production Types & Inclusion Distribution */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Tipos de Produção Pedagógica */}
-        <div className="lg:col-span-2 glass-panel p-6 rounded-3xl border border-white/10 bg-[#131b2e] space-y-4 shadow-md">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-[#4ade80]" />
-              <span>Distribuição por Tipo de Atividade</span>
-            </h2>
-            <span className="text-xs text-[#bccabb] font-semibold">{totalActivities} no total</span>
+            <button
+              id="btn-pendencia-corrigir"
+              onClick={handleDirectCorrection}
+              disabled={pendingCorrections === 0}
+              className="mt-5 w-full min-h-[44px] py-2.5 px-4 bg-amber-500/10 hover:bg-amber-500/20 disabled:opacity-40 disabled:cursor-not-allowed text-amber-600 font-bold rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
+            >
+              <span>Corrigir Agora</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {Object.entries(statsByType).map(([tipo, count]) => (
-              <div
-                key={tipo}
-                className="p-4 rounded-2xl bg-[#0b1326] border border-white/5 flex flex-col justify-between"
+          {/* CARD 2: ENTREGAS */}
+          <div className="p-5 rounded-2xl border border-border bg-surface flex flex-col justify-between shadow-sm hover:border-primary/40 transition-colors">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-wider text-primary bg-primary/10 px-2.5 py-1 rounded-lg">
+                  Adesão
+                </span>
+              </div>
+              <div className="text-3xl font-black text-foreground">{totalSubmissions}</div>
+              <div className="text-base font-bold text-foreground mt-1">Entregas Realizadas</div>
+              <p className="text-xs text-muted mt-1 leading-relaxed">
+                {totalExpected > 0
+                  ? `${completionRate}% de adesão geral (${totalSubmissions} de ${totalExpected} esperadas).`
+                  : 'Nenhuma entrega esperada no momento.'}
+              </p>
+            </div>
+            <button
+              id="btn-pendencia-entregas"
+              onClick={() => onNavigateToTab('atividades')}
+              className="mt-5 w-full min-h-[44px] py-2.5 px-4 bg-primary/10 hover:bg-primary/20 text-primary font-bold rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
+            >
+              <span>Ver Entregas</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* CARD 3: ALUNOS SEM ENTREGA */}
+          <div className="p-5 rounded-2xl border border-border bg-surface flex flex-col justify-between shadow-sm hover:border-rose-500/40 transition-colors">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-wider text-rose-600 bg-rose-500/10 px-2.5 py-1 rounded-lg">
+                  Atenção
+                </span>
+              </div>
+              <div className="text-3xl font-black text-foreground">{missingSubmissions}</div>
+              <div className="text-base font-bold text-foreground mt-1">Alunos Sem Entrega</div>
+              <p className="text-xs text-muted mt-1 leading-relaxed">
+                {missingSubmissions === 0
+                  ? 'Nenhum estudante com entrega pendente.'
+                  : 'Estudantes com atividades pendentes ou em atraso.'}
+              </p>
+            </div>
+            <button
+              id="btn-pendencia-alunos-sem-entrega"
+              onClick={() => onNavigateToTab('alunos')}
+              disabled={missingSubmissions === 0}
+              className="mt-5 w-full min-h-[44px] py-2.5 px-4 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-40 disabled:cursor-not-allowed text-rose-600 font-bold rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
+            >
+              <span>Ver Alunos</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* CARD 4: ATIVIDADES PRÓXIMAS DO PRAZO */}
+          <div className="p-5 rounded-2xl border border-border bg-surface flex flex-col justify-between shadow-sm hover:border-indigo-500/40 transition-colors">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-wider text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-lg">
+                  Prazos
+                </span>
+              </div>
+              <div className="text-3xl font-black text-foreground">
+                {approachingDeadlineActivities.length}
+              </div>
+              <div className="text-base font-bold text-foreground mt-1">Atividades Vencendo</div>
+              <p className="text-xs text-muted mt-1 leading-relaxed">
+                {dueTodayActivities.length > 0
+                  ? `${dueTodayActivities.length} atividade(s) vencendo hoje!`
+                  : approachingDeadlineActivities.length > 0
+                  ? `${approachingDeadlineActivities.length} atividade(s) nos próximos 7 dias.`
+                  : 'Nenhuma atividade com prazo urgente.'}
+              </p>
+            </div>
+            <button
+              id="btn-pendencia-prazos"
+              onClick={() => onNavigateToTab('atividades')}
+              disabled={approachingDeadlineActivities.length === 0}
+              className="mt-5 w-full min-h-[44px] py-2.5 px-4 bg-indigo-500/10 hover:bg-indigo-500/20 disabled:opacity-40 disabled:cursor-not-allowed text-indigo-400 font-bold rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
+            >
+              <span>Ver Atividades</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* CARD 5: RECUPERAÇÃO PARALELA */}
+          <div className="p-5 rounded-2xl border border-border bg-surface flex flex-col justify-between shadow-sm hover:border-violet-500/40 transition-colors">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-600 flex items-center justify-center">
+                  <GraduationCap className="w-5 h-5" />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-wider text-violet-600 bg-violet-500/10 px-2.5 py-1 rounded-lg">
+                  Pedagógico
+                </span>
+              </div>
+              <div className="text-3xl font-black text-foreground">
+                {studentsNeedingRecoveryCount}
+              </div>
+              <div className="text-base font-bold text-foreground mt-1">Alunos em Recuperação</div>
+              <p className="text-xs text-muted mt-1 leading-relaxed">
+                {studentsNeedingRecoveryCount === 0
+                  ? 'Nenhum estudante abaixo da média mínima de 6.0.'
+                  : `${activitiesNeedingRecovery.filter((a) => !a.hasRecoveryCreated).length} atividade(s) recomendam plano de recuperação.`}
+              </p>
+            </div>
+            <button
+              id="btn-pendencia-recuperacao"
+              onClick={() => {
+                const target = activitiesNeedingRecovery.find((a) => !a.hasRecoveryCreated);
+                if (target && onOpenParallelRecoveryModal) {
+                  onOpenParallelRecoveryModal(target.activity);
+                } else {
+                  onNavigateToTab('atividades');
+                }
+              }}
+              disabled={studentsNeedingRecoveryCount === 0}
+              className="mt-5 w-full min-h-[44px] py-2.5 px-4 bg-violet-500/10 hover:bg-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed text-violet-600 font-bold rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
+            >
+              <span>Organizar Recuperação</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* CARD 6: PENDÊNCIAS ADMINISTRATIVAS (RCO / ATESTADOS / RAD) */}
+          <div className="p-5 rounded-2xl border border-border bg-surface flex flex-col justify-between shadow-sm hover:border-emerald-500/40 transition-colors">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
+                  Registro
+                </span>
+              </div>
+              <div className="text-3xl font-black text-foreground">
+                {turmasReadyForRco.length}
+              </div>
+              <div className="text-base font-bold text-foreground mt-1">Turmas para RCO</div>
+              <p className="text-xs text-muted mt-1 leading-relaxed">
+                {turmasReadyForRco.length > 0
+                  ? `${turmasReadyForRco.length} turma(s) com notas prontas para postagem no RCO.`
+                  : 'Sem fechamentos pendentes de lançamento no RCO.'}
+              </p>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                id="btn-pendencia-rco"
+                onClick={() => onNavigateToTab('postagem_rco')}
+                className="min-h-[44px] py-2.5 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 font-bold rounded-xl text-xs transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-98"
               >
-                <span className="text-xs text-[#bccabb] font-medium truncate">{tipo}</span>
-                <div className="flex items-baseline justify-between mt-2">
-                  <span className="text-2xl font-extrabold text-white">{count}</span>
-                  <span className="text-[10px] text-[#4ade80] font-bold">
-                    {totalActivities > 0 ? `${Math.round((count / totalActivities) * 100)}%` : '0%'}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Resumo de Inclusão & Atendimentos */}
-        <div className="glass-panel p-6 rounded-3xl border border-white/10 bg-[#131b2e] space-y-4 shadow-md flex flex-col justify-between">
-          <div>
-            <h2 className="text-base font-bold text-white flex items-center gap-2 mb-4">
-              <Heart className="w-4 h-4 text-rose-400" />
-              <span>Inclusão & Atendimentos</span>
-            </h2>
-
-            <div className="space-y-3">
-              <div className="p-3.5 rounded-2xl bg-[#0b1326] border border-white/5 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-300 flex items-center justify-center font-bold text-xs">
-                    PNE
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-white block">Alunos com Adaptação (PNE)</span>
-                    <span className="text-[10px] text-[#bccabb]">Atendidos pelo 2º Professor</span>
-                  </div>
-                </div>
-                <span className="text-xl font-black text-rose-400">{pneTotal}</span>
-              </div>
-
-              <div className="p-3.5 rounded-2xl bg-[#0b1326] border border-white/5 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-300 flex items-center justify-center font-bold text-xs">
-                    RAD
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-white block">Atendimento Domiciliar (RAD)</span>
-                    <span className="text-[10px] text-[#bccabb]">Atestados ≥ 15 dias</span>
-                  </div>
-                </div>
-                <span className="text-xl font-black text-amber-300">{radTotal}</span>
-              </div>
+                <span>Lançar RCO</span>
+              </button>
+              <button
+                id="btn-pendencia-atestados"
+                onClick={() => onNavigateToTab('atestados_rad')}
+                className="min-h-[44px] py-2.5 px-3 bg-surface-hover hover:bg-border text-foreground font-bold rounded-xl text-xs border border-border transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-98"
+              >
+                <span>RAD ({radTotal})</span>
+              </button>
             </div>
           </div>
-
-          <button
-            onClick={() => onNavigateToTab('atestados_rad')}
-            className="w-full py-2.5 px-4 bg-[#171f33] hover:bg-[#222a3d] text-white rounded-2xl text-xs font-bold border border-white/10 flex items-center justify-center gap-1.5 transition-all cursor-pointer mt-2"
-          >
-            <span>Ver Atestados e RAD</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
         </div>
-      </div>
+      </section>
 
-      {/* Turmas Panorama Breakdown Table */}
-      <div className="glass-panel p-6 rounded-3xl border border-white/10 bg-[#131b2e] space-y-4 shadow-md">
-        <div className="flex items-center justify-between">
+      {/* 3. FILA OPERACIONAL: O QUE O PROFESSOR PRECISA FAZER AGORA? */}
+      <section aria-labelledby="heading-fila-operacional" className="pt-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <Users2 className="w-5 h-5 text-[#4ade80]" />
-              <span>Panorama de Engajamento por Turma</span>
+            <h2 id="heading-fila-operacional" className="text-xl font-bold text-foreground">
+              Ações Prioritárias
             </h2>
-            <p className="text-xs text-[#bccabb] mt-0.5">
-              Comparativo de estudantes, atividades disponibilizadas, taxa de conclusão e média.
+            <p className="text-sm text-muted">
+              Tarefas operacionais organizadas por ordem de urgência com ação direta.
             </p>
           </div>
 
-          <button
-            onClick={() => onNavigateToTab('postagem_rco')}
-            className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-[#4ade80] hover:underline cursor-pointer"
-          >
-            <span>Lançar notas no RCO</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+          {/* Filtros em Abas Segmentadas */}
+          <div className="flex items-center gap-1.5 p-1 bg-surface rounded-xl border border-border overflow-x-auto max-w-full">
+            <button
+              onClick={() => setActiveQueueFilter('todas')}
+              className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                activeQueueFilter === 'todas'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-muted hover:text-foreground'
+              }`}
+            >
+              Todas
+            </button>
+            <button
+              onClick={() => setActiveQueueFilter('correcoes')}
+              className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+                activeQueueFilter === 'correcoes'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-muted hover:text-foreground'
+              }`}
+            >
+              <span>Correções</span>
+              {pendingCorrections > 0 && (
+                <span className="w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] flex items-center justify-center font-bold">
+                  {pendingCorrections}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveQueueFilter('prazos')}
+              className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+                activeQueueFilter === 'prazos'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-muted hover:text-foreground'
+              }`}
+            >
+              <span>Prazos</span>
+              {approachingDeadlineActivities.length > 0 && (
+                <span className="w-5 h-5 rounded-full bg-indigo-500 text-white text-[10px] flex items-center justify-center font-bold">
+                  {approachingDeadlineActivities.length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveQueueFilter('recuperacao')}
+              className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+                activeQueueFilter === 'recuperacao'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-muted hover:text-foreground'
+              }`}
+            >
+              <span>Recuperação</span>
+              {studentsNeedingRecoveryCount > 0 && (
+                <span className="w-5 h-5 rounded-full bg-violet-500 text-white text-[10px] flex items-center justify-center font-bold">
+                  {studentsNeedingRecoveryCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveQueueFilter('rco')}
+              className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+                activeQueueFilter === 'rco'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-muted hover:text-foreground'
+              }`}
+            >
+              <span>RCO</span>
+              {turmasReadyForRco.length > 0 && (
+                <span className="w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] flex items-center justify-center font-bold">
+                  {turmasReadyForRco.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
-        {turmasBreakdown.length === 0 ? (
-          <div className="p-8 text-center text-xs text-[#bccabb]">
-            Nenhuma turma cadastrada no momento.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-[#bccabb]">
-              <thead className="bg-[#0b1326] text-[11px] font-bold text-[#bccabb] uppercase tracking-wider border-b border-white/10">
-                <tr>
-                  <th className="py-3 px-4">Turma</th>
-                  <th className="py-3 px-4 text-center">Alunos</th>
-                  <th className="py-3 px-4 text-center">Atividades</th>
-                  <th className="py-3 px-4">Engajamento / Conclusão</th>
-                  <th className="py-3 px-4 text-center">Média Geral</th>
-                  <th className="py-3 px-4 text-right">Ação</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {turmasBreakdown.map((t) => (
-                  <tr key={t.turma} className="hover:bg-white/5 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-white flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-[#4ade80]"></span>
-                      <span>Turma {t.turma}</span>
-                    </td>
-                    <td className="py-3.5 px-4 text-center text-white/90 font-medium">
-                      {t.studentsCount} {t.pneCount > 0 && <span className="text-[10px] text-rose-300 font-bold">({t.pneCount} PNE)</span>}
-                    </td>
-                    <td className="py-3.5 px-4 text-center text-white/90 font-medium">
-                      {t.activitiesCount}
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-3">
-                          <div className="flex-1 bg-[#0b1326] h-2 rounded-full overflow-hidden max-w-[140px]">
-                            <div
-                              className="bg-[#4ade80] h-full rounded-full transition-all duration-500"
-                              style={{ width: `${t.completionRate}%` }}
-                            />
-                          </div>
-                          <span className="font-bold text-white text-[11px] min-w-[32px]">
-                            {t.completionRate}%
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-[10px] text-[#bccabb]">
-                          <span>1ª Cham: <strong className="text-white">{t.mainCount}</strong> ({t.mainRate}%)</span>
-                          {t.recoveryCount > 0 && (
-                            <>
-                              <span>•</span>
-                              <span className="text-indigo-300">Recup: <strong className="text-indigo-200">{t.recoveryCount}</strong></span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-3.5 px-4 text-center font-bold text-[#4ade80]">
-                      {t.averageGrade}
-                    </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <button
-                        onClick={() => onNavigateToTab('postagem_rco')}
-                        className="py-1 px-3 bg-[#0b1326] hover:bg-[#171f33] text-[#4ade80] rounded-xl text-[11px] font-bold border border-white/10 transition-all cursor-pointer inline-flex items-center gap-1"
+        {/* LISTAGEM OPERACIONAL DE TAREFAS */}
+        <div className="space-y-3">
+          {/* Seção Correções na Fila */}
+          {(activeQueueFilter === 'todas' || activeQueueFilter === 'correcoes') &&
+            activitiesWithPendingCorrections.map(({ activity, pendingCount, subCount, expectedCount }) => (
+              <div
+                key={`corr-${activity.id}`}
+                className="p-4 sm:p-5 rounded-2xl bg-surface border border-border hover:border-amber-500/40 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm"
+              >
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+                    <BookOpenCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 text-xs font-bold">
+                        Correção Pendente
+                      </span>
+                      <span className="text-xs font-semibold text-muted">
+                        Turma: {activity.turma || 'Geral'}
+                      </span>
+                      {activity.deadline && (
+                        <span className="text-xs text-muted">
+                          • Prazo: {new Date(activity.deadline).toLocaleDateString('pt-BR')}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="text-base sm:text-lg font-bold text-foreground mt-1">
+                      {activity.title}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-muted mt-0.5">
+                      <strong className="text-amber-600 font-bold">{pendingCount}</strong> de{' '}
+                      {subCount} redações/respostas aguardando sua nota e feedback.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Ação Direta no Desktop e Mobile */}
+                <div className="flex items-center gap-2 self-end md:self-center shrink-0 w-full md:w-auto">
+                  <button
+                    onClick={() => {
+                      if (onSelectActivityForGrading) {
+                        onSelectActivityForGrading(activity);
+                      } else {
+                        onNavigateToTab('correcoes');
+                      }
+                    }}
+                    className="w-full md:w-auto min-h-[44px] py-2.5 px-5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                  >
+                    <span>Corrigir Atividade</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+          {/* Seção Prazos Próximos na Fila */}
+          {(activeQueueFilter === 'todas' || activeQueueFilter === 'prazos') &&
+            approachingDeadlineActivities.map(({ activity, daysLeft, isToday }) => (
+              <div
+                key={`prazo-${activity.id}`}
+                className="p-4 sm:p-5 rounded-2xl bg-surface border border-border hover:border-indigo-500/40 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm"
+              >
+                <div className="flex items-start gap-3.5">
+                  <div
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                      isToday ? 'bg-rose-500/10 text-rose-600' : 'bg-indigo-500/10 text-indigo-400'
+                    }`}
+                  >
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-xs font-bold ${
+                          isToday
+                            ? 'bg-rose-500/10 text-rose-600'
+                            : 'bg-indigo-500/10 text-indigo-400'
+                        }`}
                       >
-                        <FileSpreadsheet className="w-3 h-3" />
-                        <span>Ver RCO</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        {isToday ? 'Vence Hoje!' : `Vence em ${daysLeft} dia(s)`}
+                      </span>
+                      <span className="text-xs font-semibold text-muted">
+                        Turma: {activity.turma || 'Geral'}
+                      </span>
+                      {activity.deadline && (
+                        <span className="text-xs text-muted">
+                          • {new Date(activity.deadline).toLocaleDateString('pt-BR')}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="text-base sm:text-lg font-bold text-foreground mt-1">
+                      {activity.title}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-muted mt-0.5">
+                      {activity.submissions?.length || 0} entregas recebidas até o momento.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end md:self-center shrink-0 w-full md:w-auto">
+                  <button
+                    onClick={() => {
+                      if (onViewActivity) {
+                        onViewActivity(activity);
+                      } else {
+                        onNavigateToTab('atividades');
+                      }
+                    }}
+                    className="w-full md:w-auto min-h-[44px] py-2.5 px-4 bg-surface hover:bg-surface-hover text-foreground font-bold rounded-xl border border-border text-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                  >
+                    <span>Ver Atividade</span>
+                  </button>
+                  <button
+                    onClick={() => onNavigateToTab('atividades')}
+                    className="w-full md:w-auto min-h-[44px] py-2.5 px-4 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                  >
+                    <span>Acompanhar</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+          {/* Seção Recuperação na Fila */}
+          {(activeQueueFilter === 'todas' || activeQueueFilter === 'recuperacao') &&
+            activitiesNeedingRecovery.map(({ activity, lowScoreCount, hasRecoveryCreated, average }) => (
+              <div
+                key={`rec-${activity.id}`}
+                className="p-4 sm:p-5 rounded-2xl bg-surface border border-border hover:border-violet-500/40 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm"
+              >
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-600 flex items-center justify-center shrink-0 mt-0.5">
+                    <GraduationCap className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-600 text-xs font-bold">
+                        {hasRecoveryCreated ? 'Recuperação em Andamento' : 'Recuperação Recomendada'}
+                      </span>
+                      <span className="text-xs font-semibold text-muted">
+                        Turma: {activity.turma || 'Geral'}
+                      </span>
+                      <span className="text-xs text-muted">• Média da turma: {average}</span>
+                    </div>
+                    <h3 className="text-base sm:text-lg font-bold text-foreground mt-1">
+                      {activity.title}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-muted mt-0.5">
+                      <strong className="text-rose-600 font-bold">{lowScoreCount} estudante(s)</strong>{' '}
+                      com nota inferior a 6.0 nesta avaliação.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end md:self-center shrink-0 w-full md:w-auto">
+                  {!hasRecoveryCreated ? (
+                    <button
+                      onClick={() => {
+                        if (onOpenParallelRecoveryModal) {
+                          onOpenParallelRecoveryModal(activity);
+                        } else {
+                          onNavigateToTab('atividades');
+                        }
+                      }}
+                      className="w-full md:w-auto min-h-[44px] py-2.5 px-4 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>Criar Recuperação</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => onNavigateToTab('atividades')}
+                      className="w-full md:w-auto min-h-[44px] py-2.5 px-4 bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                    >
+                      <span>Ver Andamento</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+
+          {/* Seção RCO na Fila */}
+          {(activeQueueFilter === 'todas' || activeQueueFilter === 'rco') &&
+            turmasReadyForRco.map((turma) => (
+              <div
+                key={`rco-${turma}`}
+                className="p-4 sm:p-5 rounded-2xl bg-surface border border-border hover:border-emerald-500/40 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm"
+              >
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
+                    <FileSpreadsheet className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 text-xs font-bold">
+                        Pronto para Lançamento
+                      </span>
+                      <span className="text-xs font-semibold text-muted">Turma {turma}</span>
+                    </div>
+                    <h3 className="text-base sm:text-lg font-bold text-foreground mt-1">
+                      Postagem RCO — Turma {turma}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-muted mt-0.5">
+                      Notas consolidadas prontas para cópia formatada ou exportação de relatório para o sistema estadual.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end md:self-center shrink-0 w-full md:w-auto">
+                  <button
+                    onClick={() => onNavigateToTab('postagem_rco')}
+                    className="w-full md:w-auto min-h-[44px] py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                  >
+                    <span>Lançar no RCO</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+          {/* Estado Vazio Quando Não Há Pendências no Filtro */}
+          {activitiesWithPendingCorrections.length === 0 &&
+            approachingDeadlineActivities.length === 0 &&
+            activitiesNeedingRecovery.length === 0 &&
+            turmasReadyForRco.length === 0 && (
+              <div className="p-8 sm:p-12 text-center rounded-2xl bg-surface border border-border">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center mx-auto mb-3">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-bold text-foreground">Tudo em dia!</h3>
+                <p className="text-sm text-muted max-w-md mx-auto mt-1">
+                  Você não possui nenhuma pendência urgente de correção, prazo ou lançamento no
+                  momento.
+                </p>
+                <button
+                  onClick={onOpenNewActivityModal}
+                  className="mt-5 inline-flex items-center gap-2 min-h-[44px] py-2.5 px-4 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-sm transition-all cursor-pointer shadow-md active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Criar Nova Atividade</span>
+                </button>
+              </div>
+            )}
+        </div>
+      </section>
+
+      {/* 4. VISÃO GERAL COMPACTA (Métricas da Turma) */}
+      <section aria-labelledby="heading-metricas" className="pt-2">
+        <h2 id="heading-metricas" className="text-sm font-bold uppercase tracking-wider text-muted mb-3">
+          Resumo Geral das Turmas
+        </h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+          <div className="p-4 rounded-2xl bg-surface border border-border">
+            <span className="text-xs text-muted font-medium block">Atividades Criadas</span>
+            <span className="text-2xl font-bold text-foreground block mt-1">{totalActivities}</span>
           </div>
-        )}
-      </div>
+          <div className="p-4 rounded-2xl bg-surface border border-border">
+            <span className="text-xs text-muted font-medium block">Taxa de Conclusão</span>
+            <span className="text-2xl font-bold text-foreground block mt-1">{completionRate}%</span>
+          </div>
+          <div className="p-4 rounded-2xl bg-surface border border-border">
+            <span className="text-xs text-muted font-medium block">Média Geral</span>
+            <span className="text-2xl font-bold text-foreground block mt-1">{overallAverage}</span>
+          </div>
+          <div className="p-4 rounded-2xl bg-surface border border-border">
+            <span className="text-xs text-muted font-medium block">Total de Alunos</span>
+            <span className="text-2xl font-bold text-foreground block mt-1">{students.length}</span>
+          </div>
+        </div>
+      </section>
     </div>
   );
 };

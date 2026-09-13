@@ -315,18 +315,18 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   if (isUnlinkedRecoveryPopupOpen) {
     return (
       <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2.5 sm:p-4 md:p-6 overflow-y-auto animate-fadeIn">
-        <div className="w-full max-w-xl bg-[#0e172a] rounded-2xl sm:rounded-3xl border border-indigo-500/30 p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 shadow-2xl relative my-auto max-h-[92vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar text-[#dae2fd]">
+        <div className="w-full max-w-xl bg-surface rounded-2xl sm:rounded-3xl border border-indigo-500/30 p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 shadow-2xl relative my-auto max-h-[92vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar text-foreground">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-white/10 pb-3 sm:pb-4 gap-2">
+          <div className="flex items-center justify-between border-b border-border pb-3 sm:pb-4 gap-2">
             <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-              <div className="p-2.5 sm:p-3 bg-indigo-500/20 text-indigo-300 rounded-xl sm:rounded-2xl border border-indigo-500/30 shrink-0">
+              <div className="p-2.5 sm:p-3 bg-indigo-100 text-indigo-600 rounded-xl sm:rounded-2xl border border-indigo-500/30 shrink-0">
                 <KeyRound className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-sm sm:text-lg font-bold text-white leading-tight truncate">
+                <h3 className="text-sm sm:text-lg font-bold text-foreground leading-tight truncate">
                   Autorização de Recuperação Paralela
                 </h3>
-                <p className="text-[11px] sm:text-xs text-[#bccabb] truncate">
+                <p className="text-[11px] sm:text-xs text-muted truncate">
                   Gravação avulsa sem apontar uma atividade mãe digital
                 </p>
               </div>
@@ -337,33 +337,33 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                 setIsUnlinkedRecoveryPopupOpen(false);
                 setPendingUpdatedActivity(null);
               }}
-              className="p-1.5 sm:p-2 text-[#bccabb] hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer shrink-0"
+              className="p-1.5 sm:p-2 text-muted hover:text-foreground hover:bg-surface-hover rounded-full transition-colors cursor-pointer shrink-0"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Contexto Pedagógico / Exceção */}
-          <div className="p-3.5 sm:p-4 bg-[#131b2e] rounded-xl sm:rounded-2xl border border-indigo-500/20 space-y-1.5 sm:space-y-2">
-            <div className="flex items-center gap-2 text-xs font-bold text-indigo-300">
+          <div className="p-3.5 sm:p-4 bg-surface rounded-xl sm:rounded-2xl border border-indigo-500/20 space-y-1.5 sm:space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-indigo-600">
               <Lock className="w-4 h-4 text-indigo-400 shrink-0" />
               <span>Confirmação de Segurança e Autorização</span>
             </div>
-            <p className="text-[11px] sm:text-xs text-[#bccabb] leading-relaxed">
+            <p className="text-[11px] sm:text-xs text-muted leading-relaxed">
               Esta recuperação paralela não possui uma atividade mãe cadastrada no portal (exceção para avaliações geradas em papel ou turmas assumidas). Digite o nome da atividade manualmente e sua senha para autorizar a gravação.
             </p>
           </div>
 
           <form onSubmit={handleConfirmUnlinkedRecovery} className="space-y-3.5 sm:space-y-4">
             {authError && (
-              <div className="p-3 sm:p-3.5 bg-rose-500/15 border border-rose-500/30 rounded-xl sm:rounded-2xl text-xs text-rose-300 flex items-start gap-2.5 animate-fadeIn">
+              <div className="p-3 sm:p-3.5 bg-rose-500/15 border border-rose-500/30 rounded-xl sm:rounded-2xl text-xs text-rose-600 flex items-start gap-2.5 animate-fadeIn">
                 <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                 <span className="leading-relaxed">{authError}</span>
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">
+              <label className="block text-xs font-semibold text-muted mb-1">
                 Nome da Atividade Mãe (Digitado Manualmente) *
               </label>
               <input
@@ -376,15 +376,15 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                   if (authError) setAuthError(null);
                 }}
                 placeholder="Ex: 1º Simulado Bimestral de Sociologia (Em Papel)"
-                className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-white placeholder-[#869486] focus:outline-none focus:border-indigo-400"
+                className="w-full bg-surface border border-border rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-indigo-400"
               />
-              <p className="text-[10px] text-[#bccabb] mt-1 ml-1">
+              <p className="text-[10px] text-muted mt-1 ml-1">
                 Informe o nome da avaliação original em papel ou externa a que esta recuperação se refere.
               </p>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">
+              <label className="block text-xs font-semibold text-muted mb-1">
                 Senha do Usuário *
               </label>
               <input
@@ -396,14 +396,14 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                   if (authError) setAuthError(null);
                 }}
                 placeholder="Digite sua senha de acesso"
-                className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-white placeholder-[#869486] focus:outline-none focus:border-indigo-400"
+                className="w-full bg-surface border border-border rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-indigo-400"
               />
-              <p className="text-[10px] text-[#bccabb] mt-1 ml-1">
+              <p className="text-[10px] text-muted mt-1 ml-1">
                 Sua senha é exigida para autorizar a gravação de recuperações sem vínculo direto.
               </p>
             </div>
 
-            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-3 border-t border-white/10">
+            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-3 border-t border-border">
               <button
                 type="button"
                 onClick={() => {
@@ -411,14 +411,14 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                   setPendingUpdatedActivity(null);
                 }}
                 disabled={isAuthorizing}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-full text-xs font-bold text-[#bccabb] hover:text-white hover:bg-white/5 transition-all cursor-pointer text-center"
+                className="w-full sm:w-auto px-5 py-2.5 rounded-full text-xs font-bold text-muted hover:text-foreground hover:bg-surface-hover transition-all cursor-pointer text-center"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={isAuthorizing}
-                className="w-full sm:w-auto px-6 py-2.5 rounded-full text-xs font-bold bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-[#4ade80]/20 disabled:opacity-50"
+                className="w-full sm:w-auto px-6 py-2.5 rounded-full text-xs font-bold bg-primary hover:bg-primary-hover text-white transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-primary/20 disabled:opacity-50"
               >
                 {isAuthorizing ? (
                   <>
@@ -441,21 +441,21 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-2.5 sm:p-4 md:p-6 overflow-y-auto">
-      <div className="bg-[#0b1326] border border-white/10 w-full max-w-3xl rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 md:p-8 space-y-4 sm:space-y-5 my-auto max-h-[94vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar text-[#dae2fd] shadow-2xl relative animate-fadeIn">
+      <div className="bg-background border border-border w-full max-w-3xl rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 md:p-8 space-y-4 sm:space-y-5 my-auto max-h-[94vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar text-foreground shadow-2xl relative animate-fadeIn">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-white/10 gap-3">
+        <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-border gap-3">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-[#4ade80]/20 border border-[#4ade80]/30 text-[#4ade80] flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-primary/20 border border-primary/30 text-primary flex items-center justify-center shrink-0">
               <Pencil className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-xl font-bold text-white leading-tight truncate">Editar Atividade</h2>
-              <p className="text-[11px] sm:text-xs text-[#bccabb] truncate">Altere as configurações, enunciados e prazos da atividade.</p>
+              <h2 className="text-base sm:text-xl font-bold text-foreground leading-tight truncate">Editar Atividade</h2>
+              <p className="text-[11px] sm:text-xs text-muted truncate">Altere as configurações, enunciados e prazos da atividade.</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 sm:p-2 text-[#bccabb] hover:text-white hover:bg-white/5 rounded-full transition-colors cursor-pointer shrink-0"
+            className="p-1.5 sm:p-2 text-muted hover:text-foreground hover:bg-surface-hover rounded-full transition-colors cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
@@ -465,7 +465,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
           {/* Title & Subject */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
             <div className="md:col-span-2">
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">
+              <label className="block text-xs font-semibold text-muted mb-1">
                 Título da Atividade *
               </label>
               <input
@@ -474,11 +474,11 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Ex: Simulado de Sociologia - Modos de Produção"
-                className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-white focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-surface border border-border rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-foreground focus:outline-none focus:border-primary"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">
+              <label className="block text-xs font-semibold text-muted mb-1">
                 Disciplina
               </label>
               <input
@@ -486,7 +486,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Ex: Sociologia"
-                className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-white focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-surface border border-border rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-foreground focus:outline-none focus:border-primary"
               />
             </div>
           </div>
@@ -494,7 +494,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
           {/* Type, Turma, Status, Max Grade */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">Tipo</label>
+              <label className="block text-xs font-semibold text-muted mb-1">Tipo</label>
               <select
                 value={type}
                 onChange={(e) => {
@@ -509,20 +509,20 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                     }
                   }
                 }}
-                className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3 py-2.5 sm:py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-surface border border-border rounded-xl sm:rounded-2xl px-3 py-2.5 sm:py-3 text-xs text-foreground focus:outline-none focus:border-primary"
               >
-                <option value="Avaliação" className="bg-[#0b1326]">Avaliação</option>
-                <option value="Simulado" className="bg-[#0b1326]">Simulado</option>
-                <option value="Redação" className="bg-[#0b1326]">Redação</option>
-                <option value="Dinâmica" className="bg-[#0b1326]">Dinâmica</option>
-                <option value="Trabalho em grupo" className="bg-[#0b1326]">Trabalho em grupo</option>
-                <option value="Projeto de pesquisa" className="bg-[#0b1326]">Projeto de pesquisa</option>
-                <option value="Recuperação Paralela" className="bg-[#0b1326]">Recuperação Paralela</option>
+                <option value="Avaliação" className="bg-background">Avaliação</option>
+                <option value="Simulado" className="bg-background">Simulado</option>
+                <option value="Redação" className="bg-background">Redação</option>
+                <option value="Dinâmica" className="bg-background">Dinâmica</option>
+                <option value="Trabalho em grupo" className="bg-background">Trabalho em grupo</option>
+                <option value="Projeto de pesquisa" className="bg-background">Projeto de pesquisa</option>
+                <option value="Recuperação Paralela" className="bg-background">Recuperação Paralela</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">Turmas *</label>
+              <label className="block text-xs font-semibold text-muted mb-1">Turmas *</label>
               <TurmaMultiSelect
                 selectedTurmas={selectedTurmas}
                 onChange={setSelectedTurmas}
@@ -530,20 +530,20 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">Status</label>
+              <label className="block text-xs font-semibold text-muted mb-1">Status</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as any)}
-                className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3 py-2.5 sm:py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-surface border border-border rounded-xl sm:rounded-2xl px-3 py-2.5 sm:py-3 text-xs text-foreground focus:outline-none focus:border-primary"
               >
-                <option value="Ativo" className="bg-[#0b1326]">Ativo</option>
-                <option value="Prazo Encerrado" className="bg-[#0b1326]">Prazo Encerrado</option>
-                <option value="Inativo" className="bg-[#0b1326]">Inativo</option>
+                <option value="Ativo" className="bg-background">Ativo</option>
+                <option value="Prazo Encerrado" className="bg-background">Prazo Encerrado</option>
+                <option value="Inativo" className="bg-background">Inativo</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">Nota Máxima</label>
+              <label className="block text-xs font-semibold text-muted mb-1">Nota Máxima</label>
               <input
                 type="number"
                 step="0.5"
@@ -551,23 +551,23 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                 max="100"
                 value={maxGrade}
                 onChange={(e) => setMaxGrade(parseFloat(e.target.value) || 10)}
-                className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3 py-2.5 sm:py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-surface border border-border rounded-xl sm:rounded-2xl px-3 py-2.5 sm:py-3 text-xs text-foreground focus:outline-none focus:border-primary"
               />
             </div>
           </div>
 
           {/* Subordinação à Avaliação Base (quando Tipo = Recuperação Paralela) */}
           {type === 'Recuperação Paralela' && (
-            <div className="bg-[#131b2e] border border-indigo-500/40 rounded-xl sm:rounded-2xl p-3.5 sm:p-4 space-y-3 shadow-lg animate-fadeIn">
+            <div className="bg-surface border border-indigo-200 rounded-xl sm:rounded-2xl p-3.5 sm:p-4 space-y-3 shadow-lg animate-fadeIn">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-indigo-500/20 text-indigo-300 rounded-xl border border-indigo-500/30 shrink-0">
+                <div className="p-2 bg-indigo-100 text-indigo-600 rounded-xl border border-indigo-500/30 shrink-0">
                   <RotateCcw className="w-4 h-4" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-indigo-300">
+                  <h4 className="text-xs font-bold text-indigo-600">
                     Avaliação à qual esta Recuperação é subordinada
                   </h4>
-                  <p className="text-[11px] text-[#bccabb]">
+                  <p className="text-[11px] text-muted">
                     Não conta como entrega esperada para quem já entregou a 1ª atividade original.
                   </p>
                 </div>
@@ -577,13 +577,13 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                 <select
                   value={recoveryFromId}
                   onChange={(e) => setRecoveryFromId(e.target.value)}
-                  className="w-full bg-[#0e172a] border border-indigo-500/40 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-400"
+                  className="w-full bg-surface border border-indigo-200 rounded-xl px-3 py-2.5 text-xs text-foreground focus:outline-none focus:border-indigo-400"
                 >
-                  <option value="" className="bg-[#0b1326] text-amber-300">
+                  <option value="" className="bg-background text-amber-600">
                     -- Sem atividade mãe vinculada (Exceção: Atividade em Papel / Externa) --
                   </option>
                   {availableParentActivities.map((parent) => (
-                    <option key={parent.id} value={parent.id} className="bg-[#0b1326]">
+                    <option key={parent.id} value={parent.id} className="bg-background">
                       {parent.title} • Turma: {parent.turma} {parent.subject ? `• ${parent.subject}` : ''}
                     </option>
                   ))}
@@ -595,7 +595,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                     <span>Subordinação vinculada: Integrada à atividade original digital.</span>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 text-[11px] text-amber-300 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
+                  <div className="flex items-center gap-2 text-[11px] text-amber-600 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                     <span>Modo Exceção: Ao salvar sem vincular, um popup solicitará o nome da atividade em papel e sua senha.</span>
                   </div>
@@ -606,31 +606,31 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
 
           {/* Deadline */}
           <div>
-            <label className="block text-xs font-semibold text-[#bccabb] mb-1">Prazo de Entrega (Texto Exibido)</label>
+            <label className="block text-xs font-semibold text-muted mb-1">Prazo de Entrega (Texto Exibido)</label>
             <input
               type="text"
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
               placeholder="Ex: 15/08/2026 às 23:59"
-              className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-white focus:outline-none focus:border-[#4ade80]"
+              className="w-full bg-surface border border-border rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-foreground focus:outline-none focus:border-primary"
             />
           </div>
 
           {/* Janela / Lista Suspensa com Caixas de Seleção para Alunos PNE com Proficiência */}
           {pneStudentsInSelectedTurmas.length > 0 && (
-            <div className="bg-[#131b2e] border border-amber-500/30 rounded-xl sm:rounded-2xl p-3 sm:p-4 space-y-3 shadow-inner">
+            <div className="bg-surface border border-amber-500/30 rounded-xl sm:rounded-2xl p-3 sm:p-4 space-y-3 shadow-inner">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-amber-600 flex items-center gap-1.5">
                       <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
                       Alunos PNE com Proficiência (Atividade Normal)
                     </span>
-                    <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">
+                    <span className="text-[10px] font-bold bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full border border-amber-500/30">
                       {pneStudentsInSelectedTurmas.length} PNE na(s) turma(s)
                     </span>
                   </div>
-                  <p className="text-[11px] text-[#bccabb] mt-0.5 leading-relaxed">
+                  <p className="text-[11px] text-muted mt-0.5 leading-relaxed">
                     Selecione os alunos PNE que já atingiram proficiência para realizarem a <strong>atividade normal</strong> (evita retrocesso por desmotivação).
                   </p>
                 </div>
@@ -638,7 +638,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsPneDropdownOpen((prev) => !prev)}
-                  className="w-full sm:w-auto flex items-center justify-between sm:justify-center gap-2 px-3.5 py-2 bg-[#1a243c] hover:bg-[#223050] text-xs font-semibold text-white rounded-xl border border-white/10 transition-colors cursor-pointer shrink-0"
+                  className="w-full sm:w-auto flex items-center justify-between sm:justify-center gap-2 px-3.5 py-2 bg-[#1a243c] hover:bg-[#223050] text-xs font-semibold text-foreground rounded-xl border border-border transition-colors cursor-pointer shrink-0"
                 >
                   <span className="truncate">
                     {includedPneStudentIds.length === 0
@@ -654,20 +654,20 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
               </div>
 
               {isPneDropdownOpen && (
-                <div className="pt-3 border-t border-white/10 space-y-3 animate-fadeIn">
+                <div className="pt-3 border-t border-border space-y-3 animate-fadeIn">
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <span className="text-[#bccabb] text-[11px]">
+                    <span className="text-muted text-[11px]">
                       Marque para liberar a atividade normal:
                     </span>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => setIncludedPneStudentIds(pneStudentsInSelectedTurmas.map((s) => s.id))}
-                        className="text-[11px] text-[#4ade80] hover:underline cursor-pointer font-medium"
+                        className="text-[11px] text-primary hover:underline cursor-pointer font-medium"
                       >
                         Marcar todos
                       </button>
-                      <span className="text-white/20">•</span>
+                      <span className="text-foreground/20">•</span>
                       <button
                         type="button"
                         onClick={() => setIncludedPneStudentIds([])}
@@ -691,8 +691,8 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                           key={st.id}
                           className={`flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer gap-2 ${
                             isSelected
-                              ? 'bg-amber-500/10 border-amber-500/40 text-white'
-                              : 'bg-[#0e172a] border-white/5 text-[#bccabb] hover:border-white/15'
+                              ? 'bg-amber-500/10 border-amber-200 text-foreground'
+                              : 'bg-surface border-border text-muted hover:border-white/15'
                           }`}
                         >
                           <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -706,14 +706,14 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                                   setIncludedPneStudentIds((prev) => prev.filter((id) => id !== st.id));
                                 }
                               }}
-                              className="w-4 h-4 rounded border-white/20 text-amber-500 focus:ring-amber-400 focus:ring-offset-0 bg-[#131b2e] cursor-pointer shrink-0"
+                              className="w-4 h-4 rounded border-border text-amber-500 focus:ring-amber-400 focus:ring-offset-0 bg-surface cursor-pointer shrink-0"
                             />
                             <div className="truncate min-w-0">
-                              <span className="text-xs font-semibold text-white block truncate">
+                              <span className="text-xs font-semibold text-foreground block truncate">
                                 {st.fullName}
                               </span>
                               <span className="text-[10px] text-[#869486] block truncate">
-                                Turma: <strong className="text-[#bccabb]">{st.turma}</strong> • {conditionText}
+                                Turma: <strong className="text-muted">{st.turma}</strong> • {conditionText}
                               </span>
                             </div>
                           </div>
@@ -721,8 +721,8 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                           <span
                             className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 self-start sm:self-center ${
                               isSelected
-                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                : 'bg-white/5 text-[#869486]'
+                                ? 'bg-emerald-100 text-emerald-600 border border-emerald-500/30'
+                                : 'bg-surface-hover text-[#869486]'
                             }`}
                           >
                             {isSelected ? 'Atividade Normal' : 'Ativ. Adaptada'}
@@ -737,20 +737,20 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
           )}
 
           {/* Group Work Option */}
-          <div className="bg-[#131b2e]/60 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-white/5">
+          <div className="bg-surface/60 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-border">
             <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
                 checked={allowGroupWork}
                 onChange={(e) => setAllowGroupWork(e.target.checked)}
-                className="w-5 h-5 rounded border-white/20 bg-[#131b2e] text-[#4ade80] focus:ring-[#4ade80] focus:ring-offset-0 cursor-pointer shrink-0"
+                className="w-5 h-5 rounded border-border bg-surface text-primary focus:ring-[#4ade80] focus:ring-offset-0 cursor-pointer shrink-0"
               />
               <div>
-                <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <Users className="w-3.5 h-3.5 text-[#4ade80]" />
+                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-primary" />
                   Permitir Atividade em Grupo?
                 </span>
-                <p className="text-[10px] text-[#bccabb] leading-relaxed">
+                <p className="text-[10px] text-muted leading-relaxed">
                   Quando ativo, os alunos podem escolher os membros da equipe no envio.
                 </p>
               </div>
@@ -758,51 +758,51 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
           </div>
 
           {/* Travas de Segurança Anti-Cola */}
-          <div className="bg-[#131b2e] p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-amber-500/30 space-y-3">
-            <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-2">
+          <div className="bg-surface p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-amber-500/30 space-y-3">
+            <h4 className="text-xs font-bold text-amber-600 uppercase tracking-wider flex items-center gap-2">
               <span>🛡️ Travas de Segurança Anti-Cola</span>
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 pt-1">
-              <label className="flex items-start gap-2.5 cursor-pointer bg-[#0b1326] p-3 rounded-xl border border-white/10 hover:border-amber-500/40 transition-colors">
+              <label className="flex items-start gap-2.5 cursor-pointer bg-background p-3 rounded-xl border border-border hover:border-amber-200 transition-colors">
                 <input
                   type="checkbox"
                   checked={securityFocusLock}
                   onChange={(e) => setSecurityFocusLock(e.target.checked)}
-                  className="w-4 h-4 rounded border-white/20 bg-[#131b2e] text-[#4ade80] focus:ring-[#4ade80] mt-0.5 shrink-0 cursor-pointer"
+                  className="w-4 h-4 rounded border-border bg-surface text-primary focus:ring-[#4ade80] mt-0.5 shrink-0 cursor-pointer"
                 />
                 <div>
-                  <span className="text-xs font-bold text-white block">Trava de Foco</span>
-                  <span className="text-[10px] text-[#bccabb] block leading-tight mt-0.5">
+                  <span className="text-xs font-bold text-foreground block">Trava de Foco</span>
+                  <span className="text-[10px] text-muted block leading-tight mt-0.5">
                     Gera avisos ao sair da tela e auto-entrega no 4º aviso.
                   </span>
                 </div>
               </label>
 
-              <label className="flex items-start gap-2.5 cursor-pointer bg-[#0b1326] p-3 rounded-xl border border-white/10 hover:border-amber-500/40 transition-colors">
+              <label className="flex items-start gap-2.5 cursor-pointer bg-background p-3 rounded-xl border border-border hover:border-amber-200 transition-colors">
                 <input
                   type="checkbox"
                   checked={securityBlockCopyStatement}
                   onChange={(e) => setSecurityBlockCopyStatement(e.target.checked)}
-                  className="w-4 h-4 rounded border-white/20 bg-[#131b2e] text-[#4ade80] focus:ring-[#4ade80] mt-0.5 shrink-0 cursor-pointer"
+                  className="w-4 h-4 rounded border-border bg-surface text-primary focus:ring-[#4ade80] mt-0.5 shrink-0 cursor-pointer"
                 />
                 <div>
-                  <span className="text-xs font-bold text-white block">Bloquear Cópia</span>
-                  <span className="text-[10px] text-[#bccabb] block leading-tight mt-0.5">
+                  <span className="text-xs font-bold text-foreground block">Bloquear Cópia</span>
+                  <span className="text-[10px] text-muted block leading-tight mt-0.5">
                     Impede copiar enunciados com Ctrl+C e botão direito.
                   </span>
                 </div>
               </label>
 
-              <label className="flex items-start gap-2.5 cursor-pointer bg-[#0b1326] p-3 rounded-xl border border-white/10 hover:border-amber-500/40 transition-colors">
+              <label className="flex items-start gap-2.5 cursor-pointer bg-background p-3 rounded-xl border border-border hover:border-amber-200 transition-colors">
                 <input
                   type="checkbox"
                   checked={securityBlockPasteEssay}
                   onChange={(e) => setSecurityBlockPasteEssay(e.target.checked)}
-                  className="w-4 h-4 rounded border-white/20 bg-[#131b2e] text-[#4ade80] focus:ring-[#4ade80] mt-0.5 shrink-0 cursor-pointer"
+                  className="w-4 h-4 rounded border-border bg-surface text-primary focus:ring-[#4ade80] mt-0.5 shrink-0 cursor-pointer"
                 />
                 <div>
-                  <span className="text-xs font-bold text-white block">Bloquear Cola</span>
-                  <span className="text-[10px] text-[#bccabb] block leading-tight mt-0.5">
+                  <span className="text-xs font-bold text-foreground block">Bloquear Cola</span>
+                  <span className="text-[10px] text-muted block leading-tight mt-0.5">
                     Bloqueia colar texto (Ctrl+V) na resposta dissertativa.
                   </span>
                 </div>
@@ -812,7 +812,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
 
           {/* Material de Apoio / Texto Base & Links */}
           <div className="space-y-2">
-            <label className="block text-xs font-semibold text-[#bccabb] mb-1">
+            <label className="block text-xs font-semibold text-muted mb-1">
               Material de Apoio / Texto Base
             </label>
             <textarea
@@ -820,11 +820,11 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
               value={supportMaterial}
               onChange={(e) => setSupportMaterial(e.target.value)}
               placeholder="Insira aqui o texto base para leitura, citações, referências bibliográficas..."
-              className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 text-xs text-white focus:outline-none focus:border-[#4ade80] resize-y leading-relaxed"
+              className="w-full bg-surface border border-border rounded-xl sm:rounded-2xl p-3 sm:p-3.5 text-xs text-foreground focus:outline-none focus:border-primary resize-y leading-relaxed"
             />
 
             {/* Injetor / Adicionador de Links */}
-            <div className="bg-[#0b1326] p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-white/10 space-y-2">
+            <div className="bg-background p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-border space-y-2">
               <label className="block text-[11px] font-bold text-sky-300 flex items-center gap-1.5">
                 <Link2 className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                 <span>Adicionar Link ao Material de Apoio (Google Drive, YouTube, Artigo, PDF)</span>
@@ -835,7 +835,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                   value={supportLinkInput}
                   onChange={(e) => setSupportLinkInput(e.target.value)}
                   placeholder="https://drive.google.com/file/... ou https://youtube.com/..."
-                  className="flex-1 min-w-0 bg-[#131b2e] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-sky-400 font-mono"
+                  className="flex-1 min-w-0 bg-surface border border-border rounded-xl px-3 py-2 text-xs text-foreground placeholder-[#869486] focus:outline-none focus:border-sky-400 font-mono"
                 />
                 <button
                   type="button"
@@ -859,17 +859,17 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
           </div>
 
           {/* Questions Section */}
-          <div className="space-y-4 pt-2 border-t border-white/10">
+          <div className="space-y-4 pt-2 border-t border-border">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-              <h3 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
-                <HelpCircle className="w-4 h-4 text-[#4ade80] shrink-0" />
+              <h3 className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-2">
+                <HelpCircle className="w-4 h-4 text-primary shrink-0" />
                 <span>Questões da Atividade ({questions.length})</span>
               </h3>
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={handleAddMultipleChoice}
-                  className="flex-1 sm:flex-initial px-3 py-1.5 bg-[#171f33] hover:bg-[#222a3d] text-[#4ade80] rounded-xl text-xs font-bold border border-[#4ade80]/30 flex items-center justify-center gap-1 cursor-pointer"
+                  className="flex-1 sm:flex-initial px-3 py-1.5 bg-[#171f33] hover:bg-surface-hover text-primary rounded-xl text-xs font-bold border border-primary/30 flex items-center justify-center gap-1 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>+ Múltipla Escolha</span>
@@ -877,7 +877,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                 <button
                   type="button"
                   onClick={handleAddEssay}
-                  className="flex-1 sm:flex-initial px-3 py-1.5 bg-[#171f33] hover:bg-[#222a3d] text-indigo-300 rounded-xl text-xs font-bold border border-indigo-500/30 flex items-center justify-center gap-1 cursor-pointer"
+                  className="flex-1 sm:flex-initial px-3 py-1.5 bg-[#171f33] hover:bg-surface-hover text-indigo-600 rounded-xl text-xs font-bold border border-indigo-500/30 flex items-center justify-center gap-1 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>+ Dissertativa</span>
@@ -886,15 +886,15 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
             </div>
 
             {questions.map((q, qIndex) => (
-              <div key={q.id} className="bg-[#131b2e] border border-white/10 p-3 sm:p-4 rounded-xl sm:rounded-2xl space-y-3 relative">
+              <div key={q.id} className="bg-surface border border-border p-3 sm:p-4 rounded-xl sm:rounded-2xl space-y-3 relative">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-bold text-[#4ade80] truncate">
+                  <span className="text-xs font-bold text-primary truncate">
                     Questão {qIndex + 1} ({q.type === 'multiple_choice' ? 'Múltipla Escolha' : 'Dissertativa/Redação'})
                   </span>
                   <button
                     type="button"
                     onClick={() => handleRemoveQuestion(q.id)}
-                    className="text-rose-400 hover:text-rose-300 p-1.5 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer shrink-0"
+                    className="text-rose-400 hover:text-rose-600 p-1.5 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer shrink-0"
                     title="Remover Questão"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -904,7 +904,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                 {q.type === 'multiple_choice' ? (
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-[11px] font-semibold text-[#bccabb] mb-1">
+                      <label className="block text-[11px] font-semibold text-muted mb-1">
                         Enunciado da Questão
                       </label>
                       <textarea
@@ -912,12 +912,12 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                         value={q.statement}
                         onChange={(e) => handleUpdateMCQuestion(q.id, 'statement', e.target.value)}
                         placeholder="Digite o enunciado completo da questão..."
-                        className="w-full bg-[#0b1326] border border-white/10 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#4ade80] resize-y leading-relaxed"
+                        className="w-full bg-background border border-border rounded-xl p-3 text-xs text-foreground focus:outline-none focus:border-primary resize-y leading-relaxed"
                       />
                     </div>
 
                     <div className="space-y-2 pt-1">
-                      <label className="block text-[11px] font-semibold text-[#bccabb]">
+                      <label className="block text-[11px] font-semibold text-muted">
                         Alternativas (Selecione a alternativa correta):
                       </label>
                       <div className="grid grid-cols-1 gap-2.5">
@@ -929,8 +929,8 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                               key={optIdx}
                               className={`flex items-start gap-2.5 p-2.5 sm:p-3 rounded-xl border transition-all ${
                                 isCorrect
-                                  ? 'bg-[#4ade80]/10 border-[#4ade80]/40 text-white'
-                                  : 'bg-[#0b1326] border-white/10 text-[#bccabb]'
+                                  ? 'bg-primary/10 border-primary/40 text-foreground'
+                                  : 'bg-background border-border text-muted'
                               }`}
                             >
                               <div className="pt-2 shrink-0">
@@ -945,7 +945,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                               </div>
                               <div className="flex-1 min-w-0 space-y-1">
                                 <div className="flex items-center justify-between">
-                                  <span className={`text-[10px] font-bold ${isCorrect ? 'text-[#4ade80]' : 'text-[#869486]'}`}>
+                                  <span className={`text-[10px] font-bold ${isCorrect ? 'text-primary' : 'text-[#869486]'}`}>
                                     Opção {letter} {isCorrect && '• (Correta)'}
                                   </span>
                                 </div>
@@ -954,7 +954,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                                   value={opt}
                                   onChange={(e) => handleUpdateMCOption(q.id, optIdx, e.target.value)}
                                   placeholder={`Texto da opção ${letter}...`}
-                                  className="w-full bg-[#131b2e] border border-white/10 rounded-lg p-2 sm:p-2.5 text-xs text-white focus:outline-none focus:border-[#4ade80] resize-y leading-relaxed"
+                                  className="w-full bg-surface border border-border rounded-lg p-2 sm:p-2.5 text-xs text-foreground focus:outline-none focus:border-primary resize-y leading-relaxed"
                                 />
                               </div>
                             </div>
@@ -966,7 +966,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                 ) : (
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-[11px] font-semibold text-[#bccabb] mb-1">
+                      <label className="block text-[11px] font-semibold text-muted mb-1">
                         Enunciado ou Proposta de Redação
                       </label>
                       <textarea
@@ -974,11 +974,11 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                         value={q.statement}
                         onChange={(e) => handleUpdateEssayQuestion(q.id, 'statement', e.target.value)}
                         placeholder="Enunciado ou tema da proposta de redação..."
-                        className="w-full bg-[#0b1326] border border-white/10 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#4ade80] resize-y leading-relaxed"
+                        className="w-full bg-background border border-border rounded-xl p-3 text-xs text-foreground focus:outline-none focus:border-primary resize-y leading-relaxed"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-semibold text-[#bccabb] mb-1">
+                      <label className="block text-[11px] font-semibold text-muted mb-1">
                         Palavras-chave de Atenção
                       </label>
                       <textarea
@@ -986,7 +986,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
                         value={q.keywords || ''}
                         onChange={(e) => handleUpdateEssayQuestion(q.id, 'keywords', e.target.value)}
                         placeholder="Palavras-chave de atenção (separadas por vírgula)..."
-                        className="w-full bg-[#0b1326] border border-white/10 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-[#4ade80] resize-y leading-relaxed"
+                        className="w-full bg-background border border-border rounded-xl p-3 text-xs text-foreground focus:outline-none focus:border-primary resize-y leading-relaxed"
                       />
                     </div>
                   </div>
@@ -996,17 +996,17 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
           </div>
 
           {/* Submit Actions */}
-          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-4 border-t border-white/10 sticky bottom-0 bg-[#0b1326] sm:bg-[#0b1326]/95 backdrop-blur-md py-3 -mx-3.5 px-3.5 sm:-mx-6 sm:px-6 md:-mx-8 md:px-8 z-20">
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-4 border-t border-border sticky bottom-0 bg-background sm:bg-background/95 backdrop-blur-md py-3 -mx-3.5 px-3.5 sm:-mx-6 sm:px-6 md:-mx-8 md:px-8 z-20">
             <button
               type="button"
               onClick={onClose}
-              className="w-full sm:w-auto px-5 py-2.5 rounded-full text-xs font-bold text-[#bccabb] hover:text-white hover:bg-white/5 transition-colors cursor-pointer text-center"
+              className="w-full sm:w-auto px-5 py-2.5 rounded-full text-xs font-bold text-muted hover:text-foreground hover:bg-surface-hover transition-colors cursor-pointer text-center"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="w-full sm:w-auto px-6 py-2.5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full text-xs transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+              className="w-full sm:w-auto px-6 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-full text-xs transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-95"
             >
               <Save className="w-4 h-4" />
               <span>Salvar Alterações</span>

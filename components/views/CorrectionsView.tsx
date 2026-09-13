@@ -16,10 +16,18 @@ import {
   Star,
   Award,
   Filter,
-  CheckCheck
+  CheckCheck,
+  GitFork,
+  Layers,
 } from 'lucide-react';
 import { Activity, ActivitySubmission, StudentUser } from '@/lib/types';
-import { getOriginalTurmas, sortTurmas, canStudentAccessActivity } from '@/lib/studentUtils';
+import {
+  getOriginalTurmas,
+  sortTurmas,
+  canStudentAccessActivity,
+  getChildRecoveryActivities,
+  getChildAdaptations,
+} from '@/lib/studentUtils';
 import { GradingView } from './GradingView';
 
 interface CorrectionsViewProps {
@@ -115,24 +123,24 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
     return (
       <div className="space-y-6 animate-fadeIn pb-12">
         {/* Barra superior de contexto da Correção */}
-        <div className="bg-[#131b2e] p-4 sm:p-5 rounded-3xl border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg">
+        <div className="bg-surface p-4 sm:p-5 rounded-3xl border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSelectedActivityId(null)}
-              className="p-2.5 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] hover:text-white rounded-2xl border border-white/10 transition-all cursor-pointer flex items-center gap-2 text-xs font-bold"
+              className="p-2.5 bg-[#171f33] hover:bg-surface-hover text-foreground hover:text-foreground rounded-2xl border border-border transition-all cursor-pointer flex items-center gap-2 text-xs font-bold"
               title="Voltar para a lista de correções"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Ver Todas as Atividades</span>
             </button>
 
-            <div className="h-6 w-px bg-white/10 hidden sm:block" />
+            <div className="h-6 w-px bg-surface-hover hidden sm:block" />
 
             <div>
-              <span className="text-[11px] font-bold text-[#4ade80] uppercase tracking-wider block">
+              <span className="text-[11px] font-bold text-primary uppercase tracking-wider block">
                 Painel de Correção & Atribuição de Notas
               </span>
-              <h2 className="text-lg sm:text-xl font-black text-white truncate max-w-md sm:max-w-xl">
+              <h2 className="text-lg sm:text-xl font-black text-foreground truncate max-w-md sm:max-w-xl">
                 {activeGradingActivity.title}
               </h2>
             </div>
@@ -140,18 +148,18 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
 
           {/* Seletor rápido de atividade para alternar sem voltar */}
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <label className="text-xs font-bold text-[#bccabb] whitespace-nowrap hidden md:inline">
+            <label className="text-xs font-bold text-muted whitespace-nowrap hidden md:inline">
               Trocar Atividade:
             </label>
             <select
               value={activeGradingActivity.id}
               onChange={(e) => setSelectedActivityId(e.target.value)}
-              className="bg-[#0b1326] border border-white/15 rounded-2xl px-3 py-2 text-xs text-white font-bold focus:outline-none focus:border-[#4ade80] cursor-pointer w-full sm:w-64"
+              className="bg-background border border-white/15 rounded-2xl px-3 py-2 text-xs text-foreground font-bold focus:outline-none focus:border-primary cursor-pointer w-full sm:w-64"
             >
               {activities.map((a) => {
                 const pend = (a.submissions || []).filter((s) => s.status === 'pending' || s.status === 'draft').length;
                 return (
-                  <option key={a.id} value={a.id} className="bg-[#0b1326] text-white">
+                  <option key={a.id} value={a.id} className="bg-background text-foreground">
                     {a.title} {pend > 0 ? `(⏳ ${pend} pendentes)` : ''}
                   </option>
                 );
@@ -177,23 +185,23 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
       {/* Header com Estatísticas de Correção */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#131b2e] p-5 sm:p-6 rounded-3xl border border-white/10 shadow-lg">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface p-5 sm:p-6 rounded-3xl border border-border shadow-lg">
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+          <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
             <FileCheck2 className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
                 Central de Correções
               </h1>
               {totalPendingCount > 0 && (
-                <span className="px-3 py-0.5 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
+                <span className="px-3 py-0.5 rounded-full text-xs font-black bg-amber-100 text-amber-600 border border-amber-200 animate-pulse">
                   ⏳ {totalPendingCount} pendentes
                 </span>
               )}
             </div>
-            <p className="text-xs sm:text-sm text-[#bccabb] font-medium mt-0.5">
+            <p className="text-xs sm:text-sm text-muted font-medium mt-0.5">
               Selecione uma atividade para corrigir redações, atribuir notas, gerar feedback e lançar avaliações.
             </p>
           </div>
@@ -201,35 +209,35 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
 
         {/* Resumo Rápido em Cartões Compactos */}
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="px-4 py-2.5 rounded-2xl bg-[#0b1326] border border-amber-500/30 text-left">
+          <div className="px-4 py-2.5 rounded-2xl bg-background border border-amber-500/30 text-left">
             <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
               A Corrigir
             </span>
-            <span className="text-lg font-black text-amber-300">{totalPendingCount}</span>
+            <span className="text-lg font-black text-amber-600">{totalPendingCount}</span>
           </div>
 
-          <div className="px-4 py-2.5 rounded-2xl bg-[#0b1326] border border-emerald-500/30 text-left">
+          <div className="px-4 py-2.5 rounded-2xl bg-background border border-emerald-500/30 text-left">
             <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">
               Corrigidas
             </span>
-            <span className="text-lg font-black text-emerald-300">{totalGradedCount}</span>
+            <span className="text-lg font-black text-emerald-600">{totalGradedCount}</span>
           </div>
 
-          <div className="px-4 py-2.5 rounded-2xl bg-[#0b1326] border border-white/10 text-left">
-            <span className="text-[10px] font-bold text-[#bccabb] uppercase tracking-wider block">
+          <div className="px-4 py-2.5 rounded-2xl bg-background border border-border text-left">
+            <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">
               Total Entregas
             </span>
-            <span className="text-lg font-black text-white">{totalDeliveriesCount}</span>
+            <span className="text-lg font-black text-foreground">{totalDeliveriesCount}</span>
           </div>
         </div>
       </div>
 
       {/* Barra de Filtros: Turmas Originais e Busca */}
-      <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-white/10 bg-[#131b2e] space-y-4 shadow-md">
+      <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-border bg-surface space-y-4 shadow-md">
         {/* Seletor de Turmas Originais em Abas/Pills */}
         <div className="space-y-2">
-          <label className="text-xs font-bold text-[#bccabb] flex items-center gap-1.5 uppercase tracking-wider">
-            <Users className="w-3.5 h-3.5 text-[#4ade80]" />
+          <label className="text-xs font-bold text-muted flex items-center gap-1.5 uppercase tracking-wider">
+            <Users className="w-3.5 h-3.5 text-primary" />
             <span>Filtrar por Turma:</span>
           </label>
           <div className="flex flex-wrap items-center gap-2">
@@ -237,8 +245,8 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
               onClick={() => setSelectedTurmaFilter('all')}
               className={`py-2 px-4 rounded-full text-xs font-bold transition-all cursor-pointer ${
                 selectedTurmaFilter === 'all'
-                  ? 'bg-[#4ade80] text-[#003919] shadow-md shadow-[#4ade80]/20'
-                  : 'bg-[#0b1326] text-[#bccabb] hover:text-white border border-white/10'
+                  ? 'bg-primary text-white shadow-md shadow-primary/20'
+                  : 'bg-background text-muted hover:text-foreground border border-border'
               }`}
             >
               Todas as Turmas
@@ -252,8 +260,8 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                   onClick={() => setSelectedTurmaFilter(turmaCode)}
                   className={`py-2 px-4 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                     selectedTurmaFilter === turmaCode
-                      ? 'bg-[#4ade80] text-[#003919] shadow-md shadow-[#4ade80]/20'
-                      : 'bg-[#0b1326] text-[#bccabb] hover:text-white border border-white/10'
+                      ? 'bg-primary text-white shadow-md shadow-primary/20'
+                      : 'bg-background text-muted hover:text-foreground border border-border'
                   }`}
                 >
                   <span>Turma {turmaCode}</span>
@@ -265,7 +273,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
         </div>
 
         {/* Linha de Busca e Subfiltros */}
-        <div className="flex flex-col sm:flex-row items-center gap-3 pt-3 border-t border-white/10">
+        <div className="flex flex-col sm:flex-row items-center gap-3 pt-3 border-t border-border">
           <div className="relative flex-1 w-full">
             <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-[#869486]" />
             <input
@@ -273,7 +281,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar atividade por título..."
-              className="w-full bg-[#0b1326] border border-white/10 rounded-full pl-11 pr-4 py-2.5 text-xs sm:text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
+              className="w-full bg-background border border-border rounded-full pl-11 pr-4 py-2.5 text-xs sm:text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-primary"
             />
           </div>
 
@@ -282,8 +290,8 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
               onClick={() => setStatusFilter('all')}
               className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                 statusFilter === 'all'
-                  ? 'bg-[#1d273d] text-[#4ade80] border border-[#4ade80]/30'
-                  : 'bg-[#0b1326] text-[#bccabb] hover:text-white border border-white/10'
+                  ? 'bg-[#1d273d] text-primary border border-primary/30'
+                  : 'bg-background text-muted hover:text-foreground border border-border'
               }`}
             >
               Todas ({activities.length})
@@ -292,8 +300,8 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
               onClick={() => setStatusFilter('pending')}
               className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
                 statusFilter === 'pending'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                  : 'bg-[#0b1326] text-[#bccabb] hover:text-white border border-white/10'
+                  ? 'bg-amber-100 text-amber-600 border border-amber-200'
+                  : 'bg-background text-muted hover:text-foreground border border-border'
               }`}
             >
               <span>⏳ Pendentes</span>
@@ -302,8 +310,8 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
               onClick={() => setStatusFilter('graded')}
               className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
                 statusFilter === 'graded'
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                  : 'bg-[#0b1326] text-[#bccabb] hover:text-white border border-white/10'
+                  ? 'bg-emerald-100 text-emerald-600 border border-emerald-200'
+                  : 'bg-background text-muted hover:text-foreground border border-border'
               }`}
             >
               <span>✅ Concluídas</span>
@@ -315,12 +323,12 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
       {/* Lista de Atividades para Correção */}
       <div className="space-y-3">
         {filteredActivities.length === 0 ? (
-          <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 bg-[#131b2e] text-[#bccabb] space-y-2">
-            <CheckCircle2 className="w-12 h-12 text-[#4ade80] mx-auto opacity-80" />
-            <p className="font-bold text-white text-base">
+          <div className="glass-panel p-12 text-center rounded-3xl border border-border bg-surface text-muted space-y-2">
+            <CheckCircle2 className="w-12 h-12 text-primary mx-auto opacity-80" />
+            <p className="font-bold text-foreground text-base">
               Nenhuma atividade encontrada com os filtros selecionados.
             </p>
-            <p className="text-xs text-[#bccabb]">
+            <p className="text-xs text-muted">
               Selecione outra turma ou limpe o termo de busca para visualizar as atividades.
             </p>
           </div>
@@ -330,6 +338,20 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
             const pendingCount = subs.filter((s) => s.status === 'pending' || s.status === 'draft').length;
             const gradedCount = subs.filter((s) => s.status === 'graded').length;
             const totalSubs = subs.length;
+
+            // Atividades filhas associadas (Adaptações PNE e Recuperações Paralelas)
+            const childRecs = getChildRecoveryActivities(act, activities);
+            const childAdaps = getChildAdaptations(act, activities);
+            const totalChildCount = childRecs.length + childAdaps.length;
+
+            // Total de pendências incluindo filhas
+            let totalPendingWithChildren = pendingCount;
+            childRecs.forEach((c) => {
+              totalPendingWithChildren += (c.submissions || []).filter((s) => s.status === 'pending' || s.status === 'draft').length;
+            });
+            childAdaps.forEach((c) => {
+              totalPendingWithChildren += (c.submissions || []).filter((s) => s.status === 'pending' || s.status === 'draft').length;
+            });
 
             // Calcular média real das notas lançadas
             const gradedSubs = subs.filter((s) => s.status === 'graded');
@@ -346,32 +368,38 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
               <div
                 key={act.id}
                 onClick={() => setSelectedActivityId(act.id)}
-                className="glass-panel p-4 sm:p-5 rounded-3xl border border-white/10 bg-[#131b2e] hover:border-[#4ade80]/40 transition-all cursor-pointer shadow-md hover:shadow-xl hover:scale-[1.005] group"
+                className="glass-panel p-4 sm:p-5 rounded-3xl border border-border bg-surface hover:border-primary/40 transition-all cursor-pointer shadow-md hover:shadow-xl hover:scale-[1.005] group"
               >
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   {/* Informações da Atividade */}
                   <div className="space-y-2 flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[11px] font-bold bg-[#171f33] text-[#bccabb] px-3 py-0.5 rounded-full border border-white/5">
-                        Turma: <strong className="text-white">{act.turma}</strong>
+                      <span className="text-[11px] font-bold bg-[#171f33] text-muted px-3 py-0.5 rounded-full border border-border">
+                        Turma: <strong className="text-foreground">{act.turma}</strong>
                       </span>
-                      <span className="text-[11px] font-bold bg-[#171f33] text-[#4ade80] px-3 py-0.5 rounded-full border border-white/5">
+                      <span className="text-[11px] font-bold bg-[#171f33] text-primary px-3 py-0.5 rounded-full border border-border">
                         {act.type}
                       </span>
                       {act.isAdapted && (
-                        <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1">
+                        <span className="text-[10px] font-bold bg-amber-100 text-amber-600 px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1">
                           <Sparkles className="w-3 h-3 text-amber-400" />
                           <span>PNE Adaptada</span>
                         </span>
                       )}
+                      {totalChildCount > 0 && (
+                        <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-2.5 py-0.5 rounded-full border border-purple-300 flex items-center gap-1">
+                          <GitFork className="w-3 h-3 text-purple-600" />
+                          <span>{totalChildCount} Filha(s) Vinculada(s)</span>
+                        </span>
+                      )}
                     </div>
 
-                    <h3 className="text-base sm:text-lg font-black text-white group-hover:text-[#4ade80] transition-colors leading-tight">
+                    <h3 className="text-base sm:text-lg font-black text-foreground group-hover:text-primary transition-colors leading-tight">
                       {act.title}
                     </h3>
 
                     {act.description && (
-                      <p className="text-xs text-[#bccabb] line-clamp-1">
+                      <p className="text-xs text-muted line-clamp-1">
                         {act.description}
                       </p>
                     )}
@@ -380,18 +408,25 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                   {/* Badges de Entregas, Pendências e Notas */}
                   <div className="flex flex-wrap items-center gap-3 shrink-0">
                     {/* Status da Fila de Correção */}
-                    {pendingCount > 0 ? (
-                      <div className="px-3.5 py-2 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-300 flex items-center gap-2">
+                    {totalPendingWithChildren > 0 ? (
+                      <div className="px-3.5 py-2 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-600 flex items-center gap-2">
                         <Clock className="w-4 h-4 text-amber-400 shrink-0" />
                         <div>
                           <span className="text-[10px] font-bold uppercase tracking-wider block leading-none">
                             Aguardando
                           </span>
-                          <span className="text-sm font-black">{pendingCount} a corrigir</span>
+                          <span className="text-sm font-black">
+                            {pendingCount} a corrigir
+                            {totalPendingWithChildren > pendingCount && (
+                              <span className="text-[10px] font-bold text-purple-600 ml-1">
+                                (+{totalPendingWithChildren - pendingCount} filhas)
+                              </span>
+                            )}
+                          </span>
                         </div>
                       </div>
                     ) : (
-                      <div className="px-3.5 py-2 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 flex items-center gap-2">
+                      <div className="px-3.5 py-2 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 flex items-center gap-2">
                         <CheckCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                         <div>
                           <span className="text-[10px] font-bold uppercase tracking-wider block leading-none">
@@ -403,11 +438,11 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                     )}
 
                     {/* Total de Entregas e Corrigidas */}
-                    <div className="px-3.5 py-2 rounded-2xl bg-[#0b1326] border border-white/10 text-left">
-                      <span className="text-[10px] font-bold text-[#bccabb] uppercase tracking-wider block leading-none">
+                    <div className="px-3.5 py-2 rounded-2xl bg-background border border-border text-left">
+                      <span className="text-[10px] font-bold text-muted uppercase tracking-wider block leading-none">
                         Entregas
                       </span>
-                      <span className="text-sm font-black text-white">
+                      <span className="text-sm font-black text-foreground">
                         {gradedCount}/{totalSubs} <span className="text-xs text-[#869486]">corrigidas</span>
                       </span>
                     </div>
@@ -426,7 +461,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                     )}
 
                     {/* Botão de Acesso */}
-                    <div className="p-3 rounded-2xl bg-[#4ade80] text-[#003919] font-bold group-hover:bg-[#6bfb9a] transition-all flex items-center justify-center shadow-md">
+                    <div className="p-3 rounded-2xl bg-primary text-white font-bold group-hover:bg-[#6bfb9a] transition-all flex items-center justify-center shadow-md">
                       <ChevronRight className="w-5 h-5 stroke-[2.5]" />
                     </div>
                   </div>

@@ -65,8 +65,8 @@ Retorne um objeto JSON contendo:
 `;
 
     const candidateModels = [
+      'gemini-3.8-flash',
       'gemini-3.1-flash-lite',
-      'gemini-3.7-flash',
       'gemini-flash-latest',
     ];
 
@@ -122,11 +122,11 @@ Retorne um objeto JSON contendo:
             const isQuotaExhausted = status === 429 || errMsg.includes('Quota exceeded') || errMsg.includes('RESOURCE_EXHAUSTED');
             const isHighDemand = status === 503 || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE');
 
-            console.warn(`Tentativa ${attempt} com ${modelName} na adaptação leve:`, errMsg || err);
-
             if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid')) {
               break;
             }
+
+            console.warn(`Tentativa ${attempt} com ${modelName} na adaptação leve:`, errMsg || err);
 
             if (isQuotaExhausted) {
               break;

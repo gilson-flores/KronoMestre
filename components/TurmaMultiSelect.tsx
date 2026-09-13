@@ -69,9 +69,9 @@ export const TurmaMultiSelect: React.FC<TurmaMultiSelectProps> = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-3.5 py-3 text-xs text-white flex items-center justify-between gap-2 focus:outline-none focus:border-[#4ade80] transition-colors cursor-pointer text-left"
+        className="w-full bg-surface border border-border rounded-2xl px-3.5 py-3 text-xs text-foreground flex items-center justify-between gap-2 focus:outline-none focus:border-primary transition-colors cursor-pointer text-left"
       >
-        <span className={`truncate font-medium ${selectedTurmas.length === 0 ? 'text-[#869486]' : 'text-white'}`}>
+        <span className={`truncate font-medium ${selectedTurmas.length === 0 ? 'text-[#869486]' : 'text-foreground'}`}>
           {getDisplayText()}
         </span>
         <ChevronDown
@@ -83,18 +83,18 @@ export const TurmaMultiSelect: React.FC<TurmaMultiSelectProps> = ({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute z-50 left-0 right-0 mt-1.5 bg-[#0e172a] border border-white/15 rounded-2xl shadow-2xl p-2.5 space-y-1.5 max-h-60 overflow-y-auto backdrop-blur-xl">
+        <div className="absolute z-50 left-0 right-0 mt-1.5 bg-surface border border-white/15 rounded-2xl shadow-2xl p-2.5 space-y-1.5 max-h-60 overflow-y-auto backdrop-blur-xl">
           {/* Select All Option */}
           <button
             type="button"
             onClick={toggleSelectAll}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-amber-300 hover:bg-white/5 transition-colors cursor-pointer border-b border-white/10 pb-2 mb-1"
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-amber-600 hover:bg-surface-hover transition-colors cursor-pointer border-b border-border pb-2 mb-1"
           >
             <div
               className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
                 isAllSelected
                   ? 'bg-amber-400 border-amber-400 text-black'
-                  : 'border-white/30 bg-[#131b2e]'
+                  : 'border-border bg-surface'
               }`}
             >
               {isAllSelected && <Check className="w-3 h-3 stroke-[3]" />}
@@ -111,15 +111,15 @@ export const TurmaMultiSelect: React.FC<TurmaMultiSelectProps> = ({
                 onClick={() => toggleTurma(turma)}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer select-none ${
                   isChecked
-                    ? 'bg-[#4ade80]/15 text-white font-semibold'
-                    : 'text-[#dae2fd] hover:bg-white/5'
+                    ? 'bg-primary/15 text-foreground font-semibold'
+                    : 'text-foreground hover:bg-surface-hover'
                 }`}
               >
                 <div
                   className={`w-4 h-4 rounded border flex items-center justify-center transition-colors shrink-0 ${
                     isChecked
-                      ? 'bg-[#4ade80] border-[#4ade80] text-[#003919]'
-                      : 'border-white/30 bg-[#131b2e]'
+                      ? 'bg-primary border-primary text-white'
+                      : 'border-border bg-surface'
                   }`}
                 >
                   {isChecked && <Check className="w-3 h-3 stroke-[3]" />}

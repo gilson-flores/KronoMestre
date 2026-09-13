@@ -135,37 +135,37 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
-      <div className="glass-panel w-full max-w-lg rounded-3xl border border-white/10 p-6 sm:p-8 space-y-6 relative bg-[#131b2e] shadow-2xl">
+      <div className="glass-panel w-full max-w-lg rounded-3xl border border-border p-6 sm:p-8 space-y-6 relative bg-surface shadow-2xl">
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-[#bccabb] hover:text-white p-2 rounded-full hover:bg-white/10 transition-all cursor-pointer"
+          className="absolute top-5 right-5 text-muted hover:text-foreground p-2 rounded-full hover:bg-surface-hover transition-all cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Header */}
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center shrink-0">
+          <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-200 text-amber-400 flex items-center justify-center shrink-0">
             <HeartHandshake className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white">Cadastrar 2º Professor (AEE)</h2>
-            <p className="text-xs text-[#bccabb] mt-0.5">
+            <h2 className="text-xl font-bold text-foreground">Cadastrar 2º Professor (AEE)</h2>
+            <p className="text-xs text-muted mt-0.5">
               Cadastre o Professor de Inclusão para acesso ao diário de acompanhamento e PEI.
             </p>
           </div>
         </div>
 
         {formError && (
-          <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-2xl text-xs flex items-center gap-2">
+          <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-600 rounded-2xl text-xs flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>{formError}</span>
           </div>
         )}
 
         {formSuccess && (
-          <div className="p-3 bg-[#4ade80]/20 border border-[#4ade80]/40 text-[#4ade80] rounded-2xl text-xs flex items-center gap-2">
+          <div className="p-3 bg-primary/20 border border-primary/40 text-primary rounded-2xl text-xs flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
             <span>{formSuccess}</span>
           </div>
@@ -173,7 +173,7 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">
+            <label className="block text-xs font-semibold text-muted mb-1.5 ml-1">
               Nome Completo do 2º Professor *
             </label>
             <input
@@ -182,13 +182,13 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ex: Maria das Dores Fernandes"
-              className="w-full bg-[#0b1326] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
+              className="w-full bg-background border border-border rounded-2xl px-4 py-3 text-xs text-foreground placeholder-[#869486] focus:outline-none focus:border-primary"
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">
+              <label className="block text-xs font-semibold text-muted mb-1.5 ml-1">
                 E-mail de Acesso *
               </label>
               <input
@@ -197,12 +197,12 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="professor2@escola.edu.br"
-                className="w-full bg-[#0b1326] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-background border border-border rounded-2xl px-4 py-3 text-xs text-foreground placeholder-[#869486] focus:outline-none focus:border-primary"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">
+              <label className="block text-xs font-semibold text-muted mb-1.5 ml-1">
                 Senha de Acesso *
               </label>
               <div className="relative">
@@ -212,7 +212,7 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Senha para o login"
-                  className="w-full bg-[#0b1326] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
+                  className="w-full bg-background border border-border rounded-2xl px-4 py-3 text-xs text-foreground placeholder-[#869486] focus:outline-none focus:border-primary"
                 />
                 <Lock className="w-4 h-4 absolute right-3.5 top-1/2 -translate-y-1/2 text-[#869486]" />
               </div>
@@ -221,7 +221,7 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">
+              <label className="block text-xs font-semibold text-muted mb-1.5 ml-1">
                 Disciplina / Função
               </label>
               <input
@@ -229,12 +229,12 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="AEE / Educação Inclusiva"
-                className="w-full bg-[#0b1326] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-background border border-border rounded-2xl px-4 py-3 text-xs text-foreground focus:outline-none focus:border-primary"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">
+              <label className="block text-xs font-semibold text-muted mb-1.5 ml-1">
                 Telefone / Celular
               </label>
               <input
@@ -242,13 +242,13 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="(00) 90000-0000"
-                className="w-full bg-[#0b1326] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-background border border-border rounded-2xl px-4 py-3 text-xs text-foreground focus:outline-none focus:border-primary"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-[#bccabb] mb-1.5 ml-1">
+            <label className="block text-xs font-semibold text-muted mb-1.5 ml-1">
               Escola / Instituição
             </label>
             <input
@@ -256,7 +256,7 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
               value={school}
               onChange={(e) => setSchool(e.target.value)}
               placeholder="Nome da Escola"
-              className="w-full bg-[#0b1326] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
+              className="w-full bg-background border border-border rounded-2xl px-4 py-3 text-xs text-foreground focus:outline-none focus:border-primary"
             />
           </div>
 
@@ -264,7 +264,7 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2.5 rounded-2xl bg-white/10 text-xs font-bold text-[#bccabb] hover:text-white transition-all cursor-pointer"
+              className="px-5 py-2.5 rounded-2xl bg-surface-hover text-xs font-bold text-muted hover:text-foreground transition-all cursor-pointer"
             >
               Cancelar
             </button>

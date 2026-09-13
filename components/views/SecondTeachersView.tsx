@@ -648,16 +648,16 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   return (
     <div className="space-y-5 animate-fadeIn max-w-7xl mx-auto pb-12">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#131b2e] p-4 sm:p-5 rounded-3xl border border-white/10 shadow-lg">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface p-4 sm:p-5 rounded-3xl border border-border shadow-lg">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-amber-400/20 border border-amber-400/30 flex items-center justify-center text-amber-300 shrink-0">
+          <div className="w-10 h-10 rounded-2xl bg-amber-400/20 border border-amber-400/30 flex items-center justify-center text-amber-600 shrink-0">
             <HeartHandshake className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
               {isSecondTeacher ? 'Ambiente do 2º Professor' : 'Inclusão & 2º Professores'}
             </h1>
-            <p className="text-xs text-[#bccabb]">
+            <p className="text-xs text-muted">
               {isSecondTeacher
                 ? `Professor(a) ${teacher.name} • Acompanhamento direto dos seus alunos tutelados`
                 : 'Acompanhe os estudantes de inclusão e execute atividades adaptadas.'}
@@ -673,7 +673,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                 setChangePasswordMsg(null);
                 setIsChangePasswordOpen(true);
               }}
-              className="py-2 px-3.5 bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 font-bold rounded-xl transition-all border border-amber-400/30 flex items-center gap-1.5 cursor-pointer text-xs shrink-0 shadow-sm active:scale-95"
+              className="py-2 px-3.5 bg-amber-400/15 hover:bg-amber-400/25 text-amber-600 font-bold rounded-xl transition-all border border-amber-400/30 flex items-center gap-1.5 cursor-pointer text-xs shrink-0 shadow-sm active:scale-95"
             >
               <KeyRound className="w-3.5 h-3.5 text-amber-400" />
               <span>Trocar Senha</span>
@@ -681,13 +681,13 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
           )}
 
           {!isSecondTeacher && (
-            <div className="flex bg-[#0b1326] p-1 rounded-2xl border border-white/10">
+            <div className="flex bg-background p-1 rounded-2xl border border-border">
               <button
                 onClick={() => setActiveTab('atividades_alunos')}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                   activeTab === 'atividades_alunos'
                     ? 'bg-amber-400 text-black shadow-md'
-                    : 'text-[#bccabb] hover:text-white'
+                    : 'text-muted hover:text-foreground'
                 }`}
               >
                 <Smartphone className="w-3.5 h-3.5" />
@@ -698,7 +698,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                   activeTab === 'professores_apoio'
                     ? 'bg-amber-400 text-black shadow-md'
-                    : 'text-[#bccabb] hover:text-white'
+                    : 'text-muted hover:text-foreground'
                 }`}
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
@@ -721,20 +721,20 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
       {/* Global Status messages */}
       {errorMsg && (
-        <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-2xl text-xs font-semibold">
+        <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 text-rose-600 rounded-2xl text-xs font-semibold">
           {errorMsg}
         </div>
       )}
 
       {successMsg && (
-        <div className="p-3.5 bg-[#4ade80]/20 border border-[#4ade80]/40 text-[#4ade80] rounded-2xl text-xs font-semibold">
+        <div className="p-3.5 bg-primary/20 border border-primary/40 text-primary rounded-2xl text-xs font-semibold">
           {successMsg}
         </div>
       )}
 
       {submissionFeedback && (
-        <div className="p-3.5 bg-[#4ade80]/20 border border-[#4ade80]/40 text-[#4ade80] rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2.5 shadow-lg animate-fadeIn">
-          <CheckCircle2 className="w-4 h-4 shrink-0 text-[#4ade80]" />
+        <div className="p-3.5 bg-primary/20 border border-primary/40 text-primary rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2.5 shadow-lg animate-fadeIn">
+          <CheckCircle2 className="w-4 h-4 shrink-0 text-primary" />
           <span>{submissionFeedback}</span>
         </div>
       )}
@@ -743,24 +743,24 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
       {activeTab === 'atividades_alunos' && (
         <div className="space-y-5">
           {/* MENU RETRÁTIL 1: PAINEL DE MÉTRICAS & RESUMO */}
-          <div className="glass-panel rounded-3xl border border-white/10 bg-[#131b2e] overflow-hidden transition-all shadow-md">
+          <div className="glass-panel rounded-3xl border border-border bg-surface overflow-hidden transition-all shadow-md">
             <button
               onClick={() => setIsMetricsRetractableOpen(!isMetricsRetractableOpen)}
-              className="w-full p-3.5 sm:p-4 flex items-center justify-between gap-3 text-left hover:bg-white/5 transition-colors cursor-pointer"
+              className="w-full p-3.5 sm:p-4 flex items-center justify-between gap-3 text-left hover:bg-surface-hover transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-7 h-7 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                <div className="w-7 h-7 rounded-xl bg-amber-100 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
                   <Layers className="w-3.5 h-3.5" />
                 </div>
-                <span className="font-bold text-white text-xs sm:text-sm">Resumo da Tutela AEE</span>
-                <div className="hidden sm:flex items-center gap-2 text-[11px] text-[#bccabb] border-l border-white/10 pl-3">
-                  <span className="bg-amber-400/10 text-amber-300 border border-amber-400/20 px-2 py-0.5 rounded-full font-bold">
+                <span className="font-bold text-foreground text-xs sm:text-sm">Resumo da Tutela AEE</span>
+                <div className="hidden sm:flex items-center gap-2 text-[11px] text-muted border-l border-border pl-3">
+                  <span className="bg-amber-400/10 text-amber-600 border border-amber-400/20 px-2 py-0.5 rounded-full font-bold">
                     {tutelageMetrics.totalTutelageStudents} {tutelageMetrics.totalTutelageStudents === 1 ? 'Aluno' : 'Alunos'}
                   </span>
-                  <span className="bg-white/5 text-[#bccabb] px-2 py-0.5 rounded-full">
+                  <span className="bg-surface-hover text-muted px-2 py-0.5 rounded-full">
                     {tutelageMetrics.totalPending} Pendentes
                   </span>
-                  <span className="bg-emerald-500/10 text-[#4ade80] border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                  <span className="bg-emerald-500/10 text-primary border border-emerald-500/20 px-2 py-0.5 rounded-full">
                     {tutelageMetrics.totalGraded} Concluídas
                   </span>
                 </div>
@@ -774,44 +774,44 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
             {/* Expanded Metrics Content */}
             {isMetricsRetractableOpen && (
-              <div className="p-4 pt-1 border-t border-white/10 grid grid-cols-2 md:grid-cols-4 gap-3 animate-fadeIn">
+              <div className="p-4 pt-1 border-t border-border grid grid-cols-2 md:grid-cols-4 gap-3 animate-fadeIn">
                 <div className="p-3.5 rounded-2xl border border-amber-400/30 bg-amber-500/10 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-amber-400/20 border border-amber-400/30 flex items-center justify-center text-amber-300 shrink-0">
+                  <div className="w-9 h-9 rounded-xl bg-amber-400/20 border border-amber-400/30 flex items-center justify-center text-amber-600 shrink-0">
                     <GraduationCap className="w-4 h-4" />
                   </div>
                   <div>
-                    <p className="text-[9px] font-bold uppercase text-amber-300 tracking-wider">Sob Sua Tutela</p>
-                    <p className="text-lg font-black text-white">{tutelageMetrics.totalTutelageStudents} <span className="text-[10px] font-normal text-[#bccabb]">Alunos</span></p>
+                    <p className="text-[9px] font-bold uppercase text-amber-600 tracking-wider">Sob Sua Tutela</p>
+                    <p className="text-lg font-black text-foreground">{tutelageMetrics.totalTutelageStudents} <span className="text-[10px] font-normal text-muted">Alunos</span></p>
                   </div>
                 </div>
 
-                <div className="p-3.5 rounded-2xl border border-white/10 bg-[#0b1326] flex items-center gap-3">
+                <div className="p-3.5 rounded-2xl border border-border bg-background flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
                     <Clock className="w-4 h-4" />
                   </div>
                   <div>
-                    <p className="text-[9px] font-bold uppercase text-[#bccabb] tracking-wider">A Fazer com Apoio</p>
-                    <p className="text-lg font-black text-white">{tutelageMetrics.totalPending} <span className="text-[10px] font-normal text-[#bccabb]">Atividades</span></p>
+                    <p className="text-[9px] font-bold uppercase text-muted tracking-wider">A Fazer com Apoio</p>
+                    <p className="text-lg font-black text-foreground">{tutelageMetrics.totalPending} <span className="text-[10px] font-normal text-muted">Atividades</span></p>
                   </div>
                 </div>
 
-                <div className="p-3.5 rounded-2xl border border-white/10 bg-[#0b1326] flex items-center gap-3">
+                <div className="p-3.5 rounded-2xl border border-border bg-background flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 shrink-0">
                     <Sparkles className="w-4 h-4" />
                   </div>
                   <div>
-                    <p className="text-[9px] font-bold uppercase text-[#bccabb] tracking-wider">Em Análise (Regente)</p>
-                    <p className="text-lg font-black text-white">{tutelageMetrics.totalToCorrect} <span className="text-[10px] font-normal text-[#bccabb]">Enviadas</span></p>
+                    <p className="text-[9px] font-bold uppercase text-muted tracking-wider">Em Análise (Regente)</p>
+                    <p className="text-lg font-black text-foreground">{tutelageMetrics.totalToCorrect} <span className="text-[10px] font-normal text-muted">Enviadas</span></p>
                   </div>
                 </div>
 
-                <div className="p-3.5 rounded-2xl border border-white/10 bg-[#0b1326] flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-[#4ade80] shrink-0">
+                <div className="p-3.5 rounded-2xl border border-border bg-background flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-primary shrink-0">
                     <CheckCircle2 className="w-4 h-4" />
                   </div>
                   <div>
-                    <p className="text-[9px] font-bold uppercase text-[#bccabb] tracking-wider">Concluídas / Avaliadas</p>
-                    <p className="text-lg font-black text-white">{tutelageMetrics.totalGraded} <span className="text-[10px] font-normal text-[#bccabb]">Finalizadas</span></p>
+                    <p className="text-[9px] font-bold uppercase text-muted tracking-wider">Concluídas / Avaliadas</p>
+                    <p className="text-lg font-black text-foreground">{tutelageMetrics.totalGraded} <span className="text-[10px] font-normal text-muted">Finalizadas</span></p>
                   </div>
                 </div>
               </div>
@@ -822,11 +822,11 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
             {/* Left Column: Lista de Alunos */}
             <div className="lg:col-span-4 space-y-4">
-              <div className="glass-panel p-4 rounded-3xl border border-white/10 bg-[#131b2e] space-y-3 shadow-md">
+              <div className="glass-panel p-4 rounded-3xl border border-border bg-surface space-y-3 shadow-md">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <GraduationCap className="w-4 h-4 text-amber-400" />
-                    <h3 className="font-bold text-white text-xs sm:text-sm">
+                    <h3 className="font-bold text-foreground text-xs sm:text-sm">
                       {isSecondTeacher ? 'Meus Alunos Tutelados' : 'Estudantes AEE'}
                     </h3>
                   </div>
@@ -837,13 +837,13 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
                 {/* Se for Professor Regente, permite alternar escopo */}
                 {!isSecondTeacher && (
-                  <div className="grid grid-cols-2 p-1 bg-[#0b1326] rounded-2xl border border-white/10 text-xs">
+                  <div className="grid grid-cols-2 p-1 bg-background rounded-2xl border border-border text-xs">
                     <button
                       onClick={() => setTutelaScope('minha_tutela')}
                       className={`py-1 px-2 rounded-xl font-bold transition-all cursor-pointer text-center text-[10px] ${
                         tutelaScope === 'minha_tutela'
                           ? 'bg-amber-400 text-black shadow'
-                          : 'text-[#bccabb] hover:text-white'
+                          : 'text-muted hover:text-foreground'
                       }`}
                     >
                       Minha Tutela ({myTutelageStudents.length})
@@ -853,7 +853,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                       className={`py-1 px-2 rounded-xl font-bold transition-all cursor-pointer text-center text-[10px] ${
                         tutelaScope === 'todos_pne'
                           ? 'bg-amber-400 text-black shadow'
-                          : 'text-[#bccabb] hover:text-white'
+                          : 'text-muted hover:text-foreground'
                       }`}
                     >
                       Todos AEE ({boundOrPneStudents.length})
@@ -863,23 +863,23 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
                 {/* Search */}
                 <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-[#bccabb] absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Search className="w-3.5 h-3.5 text-muted absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={studentSearch}
                     onChange={(e) => setStudentSearch(e.target.value)}
                     placeholder="Buscar aluno por nome, turma..."
-                    className="w-full bg-[#0b1326] border border-white/10 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder:text-[#bccabb]/50 focus:outline-none focus:border-amber-400"
+                    className="w-full bg-background border border-border rounded-xl pl-8 pr-3 py-2 text-xs text-foreground placeholder:text-muted/50 focus:outline-none focus:border-amber-400"
                   />
                 </div>
 
                 {/* Student list */}
                 <div className="space-y-1.5 max-h-[480px] overflow-y-auto pr-1">
                   {filteredStudents.length === 0 ? (
-                    <div className="py-8 text-center text-xs text-[#bccabb] space-y-2">
+                    <div className="py-8 text-center text-xs text-muted space-y-2">
                       <p>Nenhum aluno encontrado para este filtro.</p>
                       {isSecondTeacher && (
-                        <p className="text-[11px] text-[#bccabb]/70">
+                        <p className="text-[11px] text-muted/70">
                           Apenas os alunos vinculados a você ({teacher.name}) são exibidos aqui.
                         </p>
                       )}
@@ -911,7 +911,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                           className={`w-full text-left p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-2.5 ${
                             isSelected
                               ? 'bg-amber-400/20 border-amber-400/60 shadow-md ring-1 ring-amber-400/40'
-                              : 'bg-[#0b1326] border-white/5 hover:border-white/20 hover:bg-[#141e33]'
+                              : 'bg-background border-border hover:border-border hover:bg-[#141e33]'
                           }`}
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
@@ -922,14 +922,14 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                               className="w-9 h-9 rounded-full object-cover border border-amber-400/40 shrink-0"
                             />
                             <div className="min-w-0 flex-1">
-                              <h4 className="font-bold text-white text-xs truncate leading-tight">{s.fullName}</h4>
-                              <p className="text-[10px] text-amber-300 font-medium truncate mt-0.5">
+                              <h4 className="font-bold text-foreground text-xs truncate leading-tight">{s.fullName}</h4>
+                              <p className="text-[10px] text-amber-600 font-medium truncate mt-0.5">
                                 Turma {s.turma} {s.matricula ? `• Matrícula ${s.matricula}` : ''}
                               </p>
                             </div>
                           </div>
 
-                          <ChevronRight className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-amber-400' : 'text-[#bccabb]/40'}`} />
+                          <ChevronRight className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-amber-400' : 'text-muted/40'}`} />
                         </div>
                       );
                     })
@@ -943,10 +943,10 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
               {/* If solving activity in fullscreen playful mode */}
               {executingActivity && (executingActivity.playfulGameHtml || executingActivity.adaptationType === 'severe_playful') ? (
                 <div className="fixed inset-0 z-50 w-screen h-screen bg-[#070d19] flex flex-col p-2 sm:p-4 animate-fadeIn">
-                  <div className="flex items-center justify-between gap-3 pb-2 px-2 border-b border-white/10">
+                  <div className="flex items-center justify-between gap-3 pb-2 px-2 border-b border-border">
                     <button
                       onClick={() => setExecutingActivityId(null)}
-                      className="px-3.5 py-2 bg-[#171f33] hover:bg-[#222c42] text-white font-bold text-xs rounded-xl border border-white/10 transition-all flex items-center gap-1.5 cursor-pointer shadow active:scale-95 shrink-0"
+                      className="px-3.5 py-2 bg-[#171f33] hover:bg-[#222c42] text-foreground font-bold text-xs rounded-xl border border-border transition-all flex items-center gap-1.5 cursor-pointer shadow active:scale-95 shrink-0"
                     >
                       <ArrowLeft className="w-3.5 h-3.5 text-amber-400" />
                       <span>Voltar</span>
@@ -954,14 +954,14 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
                     <div className="flex items-center gap-2 min-w-0">
                       <Gamepad2 className="w-4 h-4 text-amber-400 shrink-0" />
-                      <span className="font-bold text-white text-xs sm:text-sm truncate">
+                      <span className="font-bold text-foreground text-xs sm:text-sm truncate">
                         {executingActivity.title}
                       </span>
-                      <span className="text-[11px] text-amber-300 font-semibold bg-[#171f33] px-2 py-0.5 rounded-full border border-amber-500/30 hidden sm:inline">
+                      <span className="text-[11px] text-amber-600 font-semibold bg-[#171f33] px-2 py-0.5 rounded-full border border-amber-500/30 hidden sm:inline">
                         Aluno: {activeStudent?.fullName}
                       </span>
                       {playfulScore && (
-                        <span className="px-2.5 py-0.5 bg-[#4ade80]/20 text-[#4ade80] font-bold text-xs rounded-full border border-[#4ade80]/30 hidden sm:flex items-center gap-1 shrink-0">
+                        <span className="px-2.5 py-0.5 bg-primary/20 text-primary font-bold text-xs rounded-full border border-primary/30 hidden sm:flex items-center gap-1 shrink-0">
                           <Star className="w-3 h-3 fill-[#4ade80]" />
                           {playfulScore.grade} / {executingActivity.maxGrade || 10} pts
                         </span>
@@ -971,14 +971,14 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                     <button
                       disabled={isSubmitting}
                       onClick={() => handleConfirmSubmit(executingActivity)}
-                      className="px-4 py-2 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-black text-xs rounded-xl transition-all shadow-md cursor-pointer flex items-center gap-1.5 active:scale-95 shrink-0 disabled:opacity-50"
+                      className="px-4 py-2 bg-primary hover:bg-primary-hover text-white font-black text-xs rounded-xl transition-all shadow-md cursor-pointer flex items-center gap-1.5 active:scale-95 shrink-0 disabled:opacity-50"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>{isSubmitting ? 'Enviando...' : 'Enviar Atividade'}</span>
                     </button>
                   </div>
 
-                  <div className="flex-1 w-full rounded-2xl overflow-hidden border border-white/10 bg-black shadow-2xl relative mt-2">
+                  <div className="flex-1 w-full rounded-2xl overflow-hidden border border-border bg-black shadow-2xl relative mt-2">
                     <iframe
                       srcDoc={
                         executingActivity.playfulGameHtml
@@ -995,10 +995,10 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
               ) : executingActivity ? (
                 /* Mobile Assist Simulator */
                 <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-amber-400/40 space-y-4 shadow-xl bg-[#0e162a]">
-                  <div className="flex items-center justify-between gap-3 pb-3 border-b border-white/10">
+                  <div className="flex items-center justify-between gap-3 pb-3 border-b border-border">
                     <button
                       onClick={() => setExecutingActivityId(null)}
-                      className="py-1.5 px-3 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                      className="py-1.5 px-3 bg-surface-hover hover:bg-white/20 text-foreground rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
                     >
                       <ArrowLeft className="w-3.5 h-3.5 text-amber-400" />
                       <span>Voltar</span>
@@ -1006,19 +1006,19 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
                     <div className="flex items-center gap-2 truncate">
                       <Smartphone className="w-4 h-4 text-amber-400 shrink-0" />
-                      <span className="font-bold text-white text-xs sm:text-sm truncate">
+                      <span className="font-bold text-foreground text-xs sm:text-sm truncate">
                         {executingActivity.title}
                       </span>
                     </div>
 
-                    <span className="text-[10px] font-bold text-[#4ade80] bg-[#4ade80]/10 px-2.5 py-1 rounded-full border border-[#4ade80]/30 shrink-0">
+                    <span className="text-[10px] font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/30 shrink-0">
                       {getActivityGradeDistribution(executingActivity).maxGrade.toFixed(1)} pts
                     </span>
                   </div>
 
                   {/* Simulator Screen Container */}
-                  <div className="max-w-2xl mx-auto bg-[#131b2e] rounded-2xl border border-white/15 p-4 sm:p-5 space-y-4 shadow-inner">
-                    <div className="bg-[#171f33] p-3 rounded-xl border border-white/10 flex items-center justify-between text-xs">
+                  <div className="max-w-2xl mx-auto bg-surface rounded-2xl border border-white/15 p-4 sm:p-5 space-y-4 shadow-inner">
+                    <div className="bg-[#171f33] p-3 rounded-xl border border-border flex items-center justify-between text-xs">
                       <div className="flex items-center gap-2">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
@@ -1027,22 +1027,22 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                           className="w-7 h-7 rounded-full object-cover border border-amber-400"
                         />
                         <div>
-                          <p className="font-bold text-white leading-tight">{activeStudent?.fullName}</p>
+                          <p className="font-bold text-foreground leading-tight">{activeStudent?.fullName}</p>
                           <p className="text-[10px] text-amber-400">Turma {activeStudent?.turma}</p>
                         </div>
                       </div>
-                      <span className="text-[9px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold border border-amber-500/30">
+                      <span className="text-[9px] bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full font-bold border border-amber-500/30">
                         Resolução com Apoio AEE
                       </span>
                     </div>
 
                     {/* MENU RETRÁTIL NO SIMULADOR: Orientações & Material de Apoio */}
                     {(executingActivity.description || executingActivity.supportMaterial) && (
-                      <div className="border border-white/10 rounded-xl bg-[#0b1326] overflow-hidden">
+                      <div className="border border-border rounded-xl bg-background overflow-hidden">
                         <button
                           type="button"
                           onClick={() => setIsMobileSupportMaterialOpen(!isMobileSupportMaterialOpen)}
-                          className="w-full p-2.5 flex items-center justify-between text-left text-xs font-bold text-amber-300 hover:bg-white/5 cursor-pointer"
+                          className="w-full p-2.5 flex items-center justify-between text-left text-xs font-bold text-amber-600 hover:bg-surface-hover cursor-pointer"
                         >
                           <span className="flex items-center gap-1.5">
                             <BookOpen className="w-3.5 h-3.5 text-amber-400" />
@@ -1052,9 +1052,9 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                         </button>
 
                         {isMobileSupportMaterialOpen && (
-                          <div className="p-3 pt-1 border-t border-white/5 text-xs text-[#bccabb] space-y-2">
+                          <div className="p-3 pt-1 border-t border-border text-xs text-muted space-y-2">
                             {executingActivity.description && (
-                              <p className="text-white leading-relaxed">{executingActivity.description}</p>
+                              <p className="text-foreground leading-relaxed">{executingActivity.description}</p>
                             )}
                             {executingActivity.supportMaterial && (
                               <div className="p-2.5 bg-black/30 rounded-lg text-[11px] whitespace-pre-wrap">
@@ -1070,8 +1070,8 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                     {executingActivity.questions &&
                       executingActivity.questions.filter((q) => q.type === 'multiple_choice').length > 0 && (
                         <div className="space-y-3 pt-1">
-                          <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                            <HelpCircle className="w-3.5 h-3.5 text-[#4ade80]" />
+                          <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                            <HelpCircle className="w-3.5 h-3.5 text-primary" />
                             <span>Questões Objetivas Adaptadas</span>
                           </h4>
 
@@ -1081,9 +1081,9 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                               const currentChoice = objectiveInputs[q.id];
 
                               return (
-                                <div key={q.id || qIdx} className="bg-[#0b1326] p-3.5 rounded-xl border border-white/10 space-y-2.5">
-                                  <p className="text-xs font-bold text-white">
-                                    {qIdx + 1}. <span className="text-[#dae2fd] font-normal">{q.statement}</span>
+                                <div key={q.id || qIdx} className="bg-background p-3.5 rounded-xl border border-border space-y-2.5">
+                                  <p className="text-xs font-bold text-foreground">
+                                    {qIdx + 1}. <span className="text-foreground font-normal">{q.statement}</span>
                                   </p>
 
                                   <div className="space-y-1.5 pt-1">
@@ -1102,13 +1102,13 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                                           }
                                           className={`w-full text-left p-2.5 rounded-xl text-xs transition-all flex items-center gap-2.5 border cursor-pointer ${
                                             isSelected
-                                              ? 'bg-amber-400/20 border-amber-400 text-white font-bold shadow'
-                                              : 'bg-[#171f33] border-white/5 text-[#bccabb] hover:bg-[#222a3d] hover:text-white'
+                                              ? 'bg-amber-400/20 border-amber-400 text-foreground font-bold shadow'
+                                              : 'bg-[#171f33] border-border text-muted hover:bg-surface-hover hover:text-foreground'
                                           }`}
                                         >
                                           <span
                                             className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px] font-black ${
-                                              isSelected ? 'bg-amber-400 text-black' : 'bg-white/10 text-white'
+                                              isSelected ? 'bg-amber-400 text-black' : 'bg-surface-hover text-foreground'
                                             }`}
                                           >
                                             {String.fromCharCode(65 + optIdx)}
@@ -1129,7 +1129,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                     {executingActivity.questions &&
                       executingActivity.questions.filter((q) => q.type === 'essay').length > 0 && (
                         <div className="space-y-3 pt-1">
-                          <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
                             <PenTool className="w-3.5 h-3.5 text-[#c0c1ff]" />
                             <span>Questão Dissertativa Adaptada</span>
                           </h4>
@@ -1137,8 +1137,8 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                           {executingActivity.questions
                             .filter((q) => q.type === 'essay')
                             .map((q: any, qIdx: number) => (
-                              <div key={q.id || qIdx} className="bg-[#0b1326] p-3 rounded-xl border border-white/10">
-                                <p className="text-xs text-[#dae2fd]">{q.statement}</p>
+                              <div key={q.id || qIdx} className="bg-background p-3 rounded-xl border border-border">
+                                <p className="text-xs text-foreground">{q.statement}</p>
                               </div>
                             ))}
 
@@ -1147,16 +1147,16 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                             value={essayInput}
                             onChange={(e) => setEssayInput(e.target.value)}
                             placeholder="Digite a resposta com o estudante durante a mediação..."
-                            className="w-full bg-[#0b1326] border border-white/15 rounded-xl p-3 text-xs text-white placeholder:text-[#bccabb]/50 focus:outline-none focus:border-amber-400 leading-relaxed"
+                            className="w-full bg-background border border-white/15 rounded-xl p-3 text-xs text-foreground placeholder:text-muted/50 focus:outline-none focus:border-amber-400 leading-relaxed"
                           />
                         </div>
                       )}
 
                     {/* Actions */}
-                    <div className="pt-3 border-t border-white/10 flex items-center justify-between gap-3">
+                    <div className="pt-3 border-t border-border flex items-center justify-between gap-3">
                       <button
                         onClick={() => setExecutingActivityId(null)}
-                        className="py-2 px-4 bg-white/5 hover:bg-white/10 text-[#bccabb] hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                        className="py-2 px-4 bg-surface-hover hover:bg-surface-hover text-muted hover:text-foreground rounded-xl text-xs font-bold transition-all cursor-pointer"
                       >
                         Cancelar
                       </button>
@@ -1177,7 +1177,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                 <div className="space-y-4">
                   {/* Selected Student Banner + MENU RETRÁTIL 2: FICHA DO ESTUDANTE / PEI */}
                   {activeStudent && (
-                    <div className="glass-panel p-4 rounded-3xl border border-amber-400/30 bg-[#131b2e] shadow-md space-y-3">
+                    <div className="glass-panel p-4 rounded-3xl border border-amber-400/30 bg-surface shadow-md space-y-3">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1187,13 +1187,13 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                             className="w-11 h-11 rounded-full object-cover border-2 border-amber-400/60 shrink-0"
                           />
                           <div className="min-w-0">
-                            <h2 className="text-white font-extrabold text-sm sm:text-base truncate leading-tight">
+                            <h2 className="text-foreground font-extrabold text-sm sm:text-base truncate leading-tight">
                               {activeStudent.fullName}
                             </h2>
-                            <p className="text-[11px] text-[#bccabb] mt-0.5 truncate">
-                              Turma <strong className="text-white">{activeStudent.turma}</strong>
+                            <p className="text-[11px] text-muted mt-0.5 truncate">
+                              Turma <strong className="text-foreground">{activeStudent.turma}</strong>
                               {activeStudent.matricula && (
-                                <> • Matrícula: <strong className="text-white">{activeStudent.matricula}</strong></>
+                                <> • Matrícula: <strong className="text-foreground">{activeStudent.matricula}</strong></>
                               )}
                             </p>
                           </div>
@@ -1202,7 +1202,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                         {/* Botão Retrátil da Ficha do PEI */}
                         <button
                           onClick={() => setIsStudentDossierOpen(!isStudentDossierOpen)}
-                          className="py-1.5 px-3 bg-white/5 hover:bg-white/10 text-amber-300 font-bold rounded-xl border border-white/10 transition-all flex items-center gap-1.5 cursor-pointer text-[11px] shrink-0"
+                          className="py-1.5 px-3 bg-surface-hover hover:bg-surface-hover text-amber-600 font-bold rounded-xl border border-border transition-all flex items-center gap-1.5 cursor-pointer text-[11px] shrink-0"
                         >
                           <FileText className="w-3.5 h-3.5 text-amber-400" />
                           <span>{isStudentDossierOpen ? 'Recolher Ficha' : 'Ficha & PEI'}</span>
@@ -1212,15 +1212,15 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
                       {/* Conteúdo Retrátil da Ficha & PEI */}
                       {isStudentDossierOpen && (
-                        <div className="pt-3 border-t border-white/10 space-y-3 text-xs animate-fadeIn">
+                        <div className="pt-3 border-t border-border space-y-3 text-xs animate-fadeIn">
                           {activeStudent.pneConditions && activeStudent.pneConditions.length > 0 && (
                             <div className="space-y-1">
-                              <p className="text-[10px] font-bold text-[#bccabb] uppercase">Necessidades & Diagnósticos:</p>
+                              <p className="text-[10px] font-bold text-muted uppercase">Necessidades & Diagnósticos:</p>
                               <div className="flex flex-wrap gap-1">
                                 {activeStudent.pneConditions.map((cond, i) => (
                                   <span
                                     key={i}
-                                    className="px-2 py-0.5 bg-amber-400/15 text-amber-300 border border-amber-400/30 rounded-lg text-[10px] font-semibold"
+                                    className="px-2 py-0.5 bg-amber-400/15 text-amber-600 border border-amber-400/30 rounded-lg text-[10px] font-semibold"
                                   >
                                     {cond}
                                   </span>
@@ -1230,14 +1230,14 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                           )}
 
                           {activeStudent.pedagogicalNotes ? (
-                            <div className="p-3 bg-[#0b1326] rounded-xl border border-white/10 text-[11px] text-[#dae2fd] leading-relaxed space-y-1">
-                              <p className="font-bold text-amber-300 text-[10px] uppercase flex items-center gap-1">
+                            <div className="p-3 bg-background rounded-xl border border-border text-[11px] text-foreground leading-relaxed space-y-1">
+                              <p className="font-bold text-amber-600 text-[10px] uppercase flex items-center gap-1">
                                 <BookOpen className="w-3 h-3" /> Observações do PEI / Laudo
                               </p>
                               <p className="whitespace-pre-wrap">{activeStudent.pedagogicalNotes}</p>
                             </div>
                           ) : (
-                            <p className="text-[11px] text-[#bccabb] italic">Sem observações de PEI cadastradas.</p>
+                            <p className="text-[11px] text-muted italic">Sem observações de PEI cadastradas.</p>
                           )}
                         </div>
                       )}
@@ -1246,27 +1246,27 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
                   {/* MENUS RETRÁTEIS 3: ATIVIDADES POR STATUS (SANFONA / ACCORDION) */}
                   {studentAdaptedActivities.length === 0 ? (
-                    <div className="glass-panel p-8 rounded-3xl border border-white/10 bg-[#131b2e] text-center space-y-2">
+                    <div className="glass-panel p-8 rounded-3xl border border-border bg-surface text-center space-y-2">
                       <Sparkles className="w-8 h-8 text-amber-400 mx-auto opacity-70" />
-                      <h4 className="font-bold text-white text-sm">Nenhuma Atividade Adaptada para esta Turma</h4>
-                      <p className="text-xs text-[#bccabb] max-w-sm mx-auto">
+                      <h4 className="font-bold text-foreground text-sm">Nenhuma Atividade Adaptada para esta Turma</h4>
+                      <p className="text-xs text-muted max-w-sm mx-auto">
                         Quando o professor regente disponibilizar ou adaptar atividades para a turma {activeStudent?.turma}, elas aparecerão aqui.
                       </p>
                     </div>
                   ) : (
                     <div className="space-y-3">
                       {/* ACCORDION 1: ATIVIDADES A FAZER */}
-                      <div className="glass-panel rounded-3xl border border-white/10 bg-[#131b2e] overflow-hidden shadow-md">
+                      <div className="glass-panel rounded-3xl border border-border bg-surface overflow-hidden shadow-md">
                         <button
                           onClick={() => setIsPendingSectionOpen(!isPendingSectionOpen)}
-                          className="w-full p-3.5 flex items-center justify-between gap-3 text-left hover:bg-white/5 cursor-pointer"
+                          className="w-full p-3.5 flex items-center justify-between gap-3 text-left hover:bg-surface-hover cursor-pointer"
                         >
                           <div className="flex items-center gap-2">
                             <Clock className="w-4 h-4 text-amber-400" />
-                            <h3 className="font-bold text-white text-xs sm:text-sm">
+                            <h3 className="font-bold text-foreground text-xs sm:text-sm">
                               Atividades a Fazer com Suporte
                             </h3>
-                            <span className="px-2 py-0.5 bg-amber-400/20 text-amber-300 border border-amber-400/30 rounded-full text-[10px] font-extrabold">
+                            <span className="px-2 py-0.5 bg-amber-400/20 text-amber-600 border border-amber-400/30 rounded-full text-[10px] font-extrabold">
                               {pendingActivities.length}
                             </span>
                           </div>
@@ -1276,9 +1276,9 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                         </button>
 
                         {isPendingSectionOpen && (
-                          <div className="p-3.5 pt-0 space-y-2.5 border-t border-white/5 animate-fadeIn">
+                          <div className="p-3.5 pt-0 space-y-2.5 border-t border-border animate-fadeIn">
                             {pendingActivities.length === 0 ? (
-                              <p className="text-xs text-[#bccabb] italic py-2">Nenhuma atividade pendente a fazer para este aluno.</p>
+                              <p className="text-xs text-muted italic py-2">Nenhuma atividade pendente a fazer para este aluno.</p>
                             ) : (
                               pendingActivities.map((act) => {
                                 const distribution = getActivityGradeDistribution(act);
@@ -1287,24 +1287,24 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                                 return (
                                   <div
                                     key={act.id}
-                                    className="p-3.5 rounded-2xl border border-white/10 bg-[#0b1326] space-y-2.5 hover:border-amber-400/40 transition-all"
+                                    className="p-3.5 rounded-2xl border border-border bg-background space-y-2.5 hover:border-amber-400/40 transition-all"
                                   >
                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                       <div>
                                         <div className="flex items-center gap-2">
-                                          <span className="text-[9px] font-extrabold bg-amber-400/20 text-amber-300 px-2 py-0.2 rounded-full border border-amber-400/30">
+                                          <span className="text-[9px] font-extrabold bg-amber-400/20 text-amber-600 px-2 py-0.2 rounded-full border border-amber-400/30">
                                             {act.isAdapted ? 'Adaptada PNE' : act.type}
                                           </span>
                                           {act.adaptationType === 'severe_playful' && (
-                                            <span className="text-[9px] font-extrabold bg-purple-500/20 text-purple-300 px-2 py-0.2 rounded-full border border-purple-500/30">
+                                            <span className="text-[9px] font-extrabold bg-purple-100 text-purple-600 px-2 py-0.2 rounded-full border border-purple-500/30">
                                               🎮 Lúdica
                                             </span>
                                           )}
-                                          <span className="text-[10px] text-[#bccabb]">
+                                          <span className="text-[10px] text-muted">
                                             Prazo: {act.deadline || 'Sem data'}
                                           </span>
                                         </div>
-                                        <h4 className="text-sm font-bold text-white mt-1">{act.title}</h4>
+                                        <h4 className="text-sm font-bold text-foreground mt-1">{act.title}</h4>
                                       </div>
 
                                       <button
@@ -1322,13 +1322,13 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                                         <button
                                           type="button"
                                           onClick={() => toggleActivityNotes(act.id)}
-                                          className="text-[10px] text-amber-300 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                                          className="text-[10px] text-amber-600 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
                                         >
                                           <Info className="w-3 h-3" />
                                           <span>{isNotesOpen ? 'Ocultar Orientações' : 'Ver Orientações'}</span>
                                         </button>
                                         {isNotesOpen && (
-                                          <p className="text-xs text-[#bccabb] mt-1.5 leading-relaxed bg-[#131b2e] p-2.5 rounded-xl border border-white/5 animate-fadeIn">
+                                          <p className="text-xs text-muted mt-1.5 leading-relaxed bg-surface p-2.5 rounded-xl border border-border animate-fadeIn">
                                             {act.description}
                                           </p>
                                         )}
@@ -1343,14 +1343,14 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                       </div>
 
                       {/* ACCORDION 2: AGUARDANDO CORREÇÃO DO REGENTE */}
-                      <div className="glass-panel rounded-3xl border border-white/10 bg-[#131b2e] overflow-hidden shadow-md">
+                      <div className="glass-panel rounded-3xl border border-border bg-surface overflow-hidden shadow-md">
                         <button
                           onClick={() => setIsAwaitingSectionOpen(!isAwaitingSectionOpen)}
-                          className="w-full p-3.5 flex items-center justify-between gap-3 text-left hover:bg-white/5 cursor-pointer"
+                          className="w-full p-3.5 flex items-center justify-between gap-3 text-left hover:bg-surface-hover cursor-pointer"
                         >
                           <div className="flex items-center gap-2">
                             <Sparkles className="w-4 h-4 text-sky-400" />
-                            <h3 className="font-bold text-white text-xs sm:text-sm">
+                            <h3 className="font-bold text-foreground text-xs sm:text-sm">
                               Enviadas / Aguardando Parecer do Regente
                             </h3>
                             <span className="px-2 py-0.5 bg-sky-500/20 text-sky-300 border border-sky-500/30 rounded-full text-[10px] font-extrabold">
@@ -1363,25 +1363,25 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                         </button>
 
                         {isAwaitingSectionOpen && (
-                          <div className="p-3.5 pt-0 space-y-2.5 border-t border-white/5 animate-fadeIn">
+                          <div className="p-3.5 pt-0 space-y-2.5 border-t border-border animate-fadeIn">
                             {awaitingCorrectionActivities.length === 0 ? (
-                              <p className="text-xs text-[#bccabb] italic py-2">Nenhuma atividade aguardando correção.</p>
+                              <p className="text-xs text-muted italic py-2">Nenhuma atividade aguardando correção.</p>
                             ) : (
                               awaitingCorrectionActivities.map((act) => (
                                 <div
                                   key={act.id}
-                                  className="p-3.5 rounded-2xl border border-white/10 bg-[#0b1326] flex items-center justify-between gap-3"
+                                  className="p-3.5 rounded-2xl border border-border bg-background flex items-center justify-between gap-3"
                                 >
                                   <div>
                                     <span className="text-[9px] font-extrabold bg-sky-500/20 text-sky-300 px-2 py-0.2 rounded-full border border-sky-500/30">
                                       ⏳ Em Análise
                                     </span>
-                                    <h4 className="text-sm font-bold text-white mt-1">{act.title}</h4>
+                                    <h4 className="text-sm font-bold text-foreground mt-1">{act.title}</h4>
                                   </div>
 
                                   <button
                                     onClick={() => handleStartSolving(act)}
-                                    className="py-1.5 px-3 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shrink-0"
+                                    className="py-1.5 px-3 bg-surface-hover hover:bg-white/20 text-foreground font-bold text-xs rounded-xl transition-all cursor-pointer shrink-0"
                                   >
                                     Editar Resposta
                                   </button>
@@ -1393,29 +1393,29 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                       </div>
 
                       {/* ACCORDION 3: CONCLUÍDAS E AVALIADAS */}
-                      <div className="glass-panel rounded-3xl border border-white/10 bg-[#131b2e] overflow-hidden shadow-md">
+                      <div className="glass-panel rounded-3xl border border-border bg-surface overflow-hidden shadow-md">
                         <button
                           onClick={() => setIsGradedSectionOpen(!isGradedSectionOpen)}
-                          className="w-full p-3.5 flex items-center justify-between gap-3 text-left hover:bg-white/5 cursor-pointer"
+                          className="w-full p-3.5 flex items-center justify-between gap-3 text-left hover:bg-surface-hover cursor-pointer"
                         >
                           <div className="flex items-center gap-2">
-                            <CheckCircle2 className="w-4 h-4 text-[#4ade80]" />
-                            <h3 className="font-bold text-white text-xs sm:text-sm">
+                            <CheckCircle2 className="w-4 h-4 text-primary" />
+                            <h3 className="font-bold text-foreground text-xs sm:text-sm">
                               Concluídas e Avaliadas
                             </h3>
-                            <span className="px-2 py-0.5 bg-emerald-500/20 text-[#4ade80] border border-emerald-500/30 rounded-full text-[10px] font-extrabold">
+                            <span className="px-2 py-0.5 bg-emerald-100 text-primary border border-emerald-500/30 rounded-full text-[10px] font-extrabold">
                               {gradedActivities.length}
                             </span>
                           </div>
-                          <div className="text-xs text-[#4ade80] font-bold flex items-center gap-1">
+                          <div className="text-xs text-primary font-bold flex items-center gap-1">
                             {isGradedSectionOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                           </div>
                         </button>
 
                         {isGradedSectionOpen && (
-                          <div className="p-3.5 pt-0 space-y-2.5 border-t border-white/5 animate-fadeIn">
+                          <div className="p-3.5 pt-0 space-y-2.5 border-t border-border animate-fadeIn">
                             {gradedActivities.length === 0 ? (
-                              <p className="text-xs text-[#bccabb] italic py-2">Nenhuma atividade avaliada ainda.</p>
+                              <p className="text-xs text-muted italic py-2">Nenhuma atividade avaliada ainda.</p>
                             ) : (
                               gradedActivities.map((act) => {
                                 const sub = act.submissions?.find(
@@ -1429,16 +1429,16 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                                 return (
                                   <div
                                     key={act.id}
-                                    className="p-3.5 rounded-2xl border border-white/10 bg-[#0b1326] space-y-2"
+                                    className="p-3.5 rounded-2xl border border-border bg-background space-y-2"
                                   >
                                     <div className="flex items-center justify-between gap-2">
-                                      <h4 className="text-sm font-bold text-white">{act.title}</h4>
-                                      <span className="font-extrabold text-xs text-[#4ade80] bg-[#4ade80]/15 px-2.5 py-0.5 rounded-full border border-[#4ade80]/30 shrink-0">
+                                      <h4 className="text-sm font-bold text-foreground">{act.title}</h4>
+                                      <span className="font-extrabold text-xs text-primary bg-primary/15 px-2.5 py-0.5 rounded-full border border-primary/30 shrink-0">
                                         Nota: {totalScore.toFixed(1)} pts
                                       </span>
                                     </div>
                                     {sub?.teacherFeedback && (
-                                      <p className="text-xs text-[#dae2fd] italic bg-[#131b2e] p-2 rounded-lg">
+                                      <p className="text-xs text-foreground italic bg-surface p-2 rounded-lg">
                                         &ldquo;{sub.teacherFeedback}&rdquo;
                                       </p>
                                     )}
@@ -1462,17 +1462,17 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
       {activeTab === 'professores_apoio' && !isSecondTeacher && (
         <div className="space-y-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-white">Professores de Apoio (AEE) Cadastrados</h2>
+            <h2 className="text-lg font-bold text-foreground">Professores de Apoio (AEE) Cadastrados</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {isLoadingTeachers ? (
-              <div className="col-span-full py-8 text-center text-[#bccabb]">Carregando profissionais...</div>
+              <div className="col-span-full py-8 text-center text-muted">Carregando profissionais...</div>
             ) : secondTeachers.length === 0 ? (
-              <div className="col-span-full glass-panel p-8 rounded-3xl border border-white/10 text-center flex flex-col items-center justify-center">
+              <div className="col-span-full glass-panel p-8 rounded-3xl border border-border text-center flex flex-col items-center justify-center">
                 <HeartHandshake className="w-8 h-8 text-amber-400 mb-2" />
-                <h3 className="text-base font-bold text-white mb-1">Nenhum 2º Professor Cadastrado</h3>
-                <p className="text-xs text-[#bccabb] max-w-md mx-auto mb-4">
+                <h3 className="text-base font-bold text-foreground mb-1">Nenhum 2º Professor Cadastrado</h3>
+                <p className="text-xs text-muted max-w-md mx-auto mb-4">
                   Cadastre profissionais de Atendimento Educacional Especializado (AEE) para auxiliarem no acompanhamento de alunos de inclusão.
                 </p>
                 <button
@@ -1490,7 +1490,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                 return (
                   <div
                     key={st.id}
-                    className="glass-panel p-4 rounded-3xl border border-white/10 bg-[#131b2e] flex flex-col justify-between"
+                    className="glass-panel p-4 rounded-3xl border border-border bg-surface flex flex-col justify-between"
                   >
                     <div>
                       <div className="flex items-start justify-between mb-3">
@@ -1500,16 +1500,16 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                           <ShieldCheck className="w-3 h-3" /> AEE
                         </span>
                       </div>
-                      <h3 className="font-bold text-white text-sm mb-1 truncate">{st.name}</h3>
+                      <h3 className="font-bold text-foreground text-sm mb-1 truncate">{st.name}</h3>
 
                       {isPendingReset && (
-                        <div className="mt-1 text-[10px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/40 px-2 py-1 rounded-lg flex items-center gap-1">
+                        <div className="mt-1 text-[10px] font-bold text-amber-600 bg-amber-100 border border-amber-200 px-2 py-1 rounded-lg flex items-center gap-1">
                           <KeyRound className="w-3 h-3 text-amber-400 shrink-0" />
                           <span>Solicitação de Reset (Senha 1234)</span>
                         </div>
                       )}
 
-                      <div className="space-y-1 mt-3 text-xs text-[#bccabb]">
+                      <div className="space-y-1 mt-3 text-xs text-muted">
                         <div className="flex items-center gap-1.5 truncate">
                           <Mail className="w-3 h-3 shrink-0" />
                           <span className="truncate">{st.email}</span>
@@ -1529,10 +1529,10 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                       </div>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between gap-2">
+                    <div className="mt-4 pt-3 border-t border-border flex items-center justify-between gap-2">
                       <button
                         onClick={() => handleResetTeacherPassword(st)}
-                        className="py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1 bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border-amber-400/30 cursor-pointer"
+                        className="py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1 bg-amber-400/20 hover:bg-amber-400/30 text-amber-600 border-amber-400/30 cursor-pointer"
                       >
                         <KeyRound className="w-3 h-3" />
                         <span>Resetar Senha</span>
@@ -1540,7 +1540,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
                       <button
                         onClick={() => handleDelete(st.id, st.name)}
-                        className="p-1.5 text-rose-400 hover:text-white hover:bg-rose-500 rounded-xl transition-all cursor-pointer"
+                        className="p-1.5 text-rose-400 hover:text-foreground hover:bg-rose-500 rounded-xl transition-all cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -1568,15 +1568,15 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
       {/* Modal Trocar Senha */}
       {isChangePasswordOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
-          <div className="glass-panel w-full max-w-md p-5 sm:p-6 rounded-3xl border border-white/10 space-y-4 bg-[#0e172a] shadow-2xl relative">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div className="glass-panel w-full max-w-md p-5 sm:p-6 rounded-3xl border border-border space-y-4 bg-surface shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
                 <KeyRound className="w-4 h-4" />
                 <span>Trocar Minha Senha de Acesso</span>
               </div>
               <button
                 onClick={() => setIsChangePasswordOpen(false)}
-                className="text-[#bccabb] hover:text-white p-1 rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+                className="text-muted hover:text-foreground p-1 rounded-xl hover:bg-surface-hover transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1586,8 +1586,8 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
               <div
                 className={`p-3 rounded-2xl text-xs font-semibold ${
                   changePasswordMsg.type === 'success'
-                    ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300'
-                    : 'bg-rose-500/20 border border-rose-500/40 text-rose-300'
+                    ? 'bg-emerald-100 border border-emerald-200 text-emerald-600'
+                    : 'bg-rose-100 border border-rose-200 text-rose-600'
                 }`}
               >
                 {changePasswordMsg.text}
@@ -1596,35 +1596,35 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
             <form onSubmit={handleChangePassword} className="space-y-3.5 text-xs">
               <div>
-                <label className="block text-[#bccabb] font-semibold mb-1">E-mail Cadastrado</label>
+                <label className="block text-muted font-semibold mb-1">E-mail Cadastrado</label>
                 <input
                   type="email"
                   disabled
                   value={teacher.email || ''}
-                  className="w-full bg-[#131b2e]/60 border border-white/10 rounded-2xl px-4 py-2.5 text-white/70 cursor-not-allowed"
+                  className="w-full bg-surface/60 border border-border rounded-2xl px-4 py-2.5 text-foreground/70 cursor-not-allowed"
                 />
               </div>
 
               <div>
-                <label className="block text-[#bccabb] font-semibold mb-1">Nova Senha (Mínimo 4 caracteres)</label>
+                <label className="block text-muted font-semibold mb-1">Nova Senha (Mínimo 4 caracteres)</label>
                 <input
                   type="password"
                   required
                   value={changePasswordNewPass}
                   onChange={(e) => setChangePasswordNewPass(e.target.value)}
-                  className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-2.5 text-white focus:outline-none focus:border-amber-400"
+                  className="w-full bg-surface border border-border rounded-2xl px-4 py-2.5 text-foreground focus:outline-none focus:border-amber-400"
                   placeholder="Digite sua nova senha"
                 />
               </div>
 
               <div>
-                <label className="block text-[#bccabb] font-semibold mb-1">Confirmar Nova Senha</label>
+                <label className="block text-muted font-semibold mb-1">Confirmar Nova Senha</label>
                 <input
                   type="password"
                   required
                   value={changePasswordConfirmPass}
                   onChange={(e) => setChangePasswordConfirmPass(e.target.value)}
-                  className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-2.5 text-white focus:outline-none focus:border-amber-400"
+                  className="w-full bg-surface border border-border rounded-2xl px-4 py-2.5 text-foreground focus:outline-none focus:border-amber-400"
                   placeholder="Repita a nova senha"
                 />
               </div>
@@ -1633,7 +1633,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsChangePasswordOpen(false)}
-                  className="flex-1 py-2.5 bg-[#131b2e] hover:bg-[#1a243b] text-[#bccabb] font-bold rounded-2xl border border-white/10 transition-colors cursor-pointer"
+                  className="flex-1 py-2.5 bg-surface hover:bg-[#1a243b] text-muted font-bold rounded-2xl border border-border transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>

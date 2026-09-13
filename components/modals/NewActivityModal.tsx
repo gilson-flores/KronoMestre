@@ -503,18 +503,18 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   if (isUnlinkedRecoveryPopupOpen) {
     return (
       <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2.5 sm:p-4 md:p-6 overflow-y-auto animate-fadeIn">
-        <div className="w-full max-w-xl bg-[#0e172a] rounded-2xl sm:rounded-3xl border border-indigo-500/30 p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 shadow-2xl relative my-auto max-h-[92vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar text-[#dae2fd]">
+        <div className="w-full max-w-xl bg-surface rounded-2xl sm:rounded-3xl border border-indigo-500/30 p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 shadow-2xl relative my-auto max-h-[92vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar text-foreground">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-white/10 pb-3 sm:pb-4 gap-2">
+          <div className="flex items-center justify-between border-b border-border pb-3 sm:pb-4 gap-2">
             <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-              <div className="p-2.5 sm:p-3 bg-indigo-500/20 text-indigo-300 rounded-xl sm:rounded-2xl border border-indigo-500/30 shrink-0">
+              <div className="p-2.5 sm:p-3 bg-indigo-100 text-indigo-600 rounded-xl sm:rounded-2xl border border-indigo-500/30 shrink-0">
                 <KeyRound className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-sm sm:text-lg font-bold text-white leading-tight truncate">
+                <h3 className="text-sm sm:text-lg font-bold text-foreground leading-tight truncate">
                   Autorização de Recuperação Paralela
                 </h3>
-                <p className="text-[11px] sm:text-xs text-[#bccabb] truncate">
+                <p className="text-[11px] sm:text-xs text-muted truncate">
                   Gravação avulsa sem apontar uma atividade mãe digital
                 </p>
               </div>
@@ -525,33 +525,33 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                 setIsUnlinkedRecoveryPopupOpen(false);
                 setPendingRecoveryActivity(null);
               }}
-              className="p-1.5 sm:p-2 text-[#bccabb] hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer shrink-0"
+              className="p-1.5 sm:p-2 text-muted hover:text-foreground hover:bg-surface-hover rounded-full transition-colors cursor-pointer shrink-0"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Contexto Pedagógico / Exceção */}
-          <div className="p-3.5 sm:p-4 bg-[#131b2e] rounded-xl sm:rounded-2xl border border-indigo-500/20 space-y-1.5 sm:space-y-2">
-            <div className="flex items-center gap-2 text-xs font-bold text-indigo-300">
+          <div className="p-3.5 sm:p-4 bg-surface rounded-xl sm:rounded-2xl border border-indigo-500/20 space-y-1.5 sm:space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-indigo-600">
               <Lock className="w-4 h-4 text-indigo-400 shrink-0" />
               <span>Confirmação de Segurança e Autorização</span>
             </div>
-            <p className="text-[11px] sm:text-xs text-[#bccabb] leading-relaxed">
+            <p className="text-[11px] sm:text-xs text-muted leading-relaxed">
               Você está gravando uma recuperação paralela sem vinculá-la a uma atividade mãe existente no portal (exceção para avaliações geradas em papel ou turmas assumidas). Digite o nome da atividade manualmente e sua senha para autorizar o cadastro.
             </p>
           </div>
 
           <form onSubmit={handleConfirmUnlinkedRecovery} className="space-y-3.5 sm:space-y-4">
             {authError && (
-              <div className="p-3 sm:p-3.5 bg-rose-500/15 border border-rose-500/30 rounded-xl sm:rounded-2xl text-xs text-rose-300 flex items-start gap-2.5 animate-fadeIn">
+              <div className="p-3 sm:p-3.5 bg-rose-500/15 border border-rose-500/30 rounded-xl sm:rounded-2xl text-xs text-rose-600 flex items-start gap-2.5 animate-fadeIn">
                 <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                 <span className="leading-relaxed">{authError}</span>
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">
+              <label className="block text-xs font-semibold text-muted mb-1">
                 Nome da Atividade Mãe (Digitado Manualmente) *
               </label>
               <input
@@ -564,15 +564,15 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                   if (authError) setAuthError(null);
                 }}
                 placeholder="Ex: 1º Simulado Bimestral de Sociologia (Em Papel)"
-                className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-white placeholder-[#869486] focus:outline-none focus:border-indigo-400"
+                className="w-full bg-surface border border-border rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-indigo-400"
               />
-              <p className="text-[10px] text-[#bccabb] mt-1 ml-1">
+              <p className="text-[10px] text-muted mt-1 ml-1">
                 Informe o nome da avaliação original em papel ou externa a que esta recuperação se refere.
               </p>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">
+              <label className="block text-xs font-semibold text-muted mb-1">
                 Senha do Usuário *
               </label>
               <input
@@ -584,14 +584,14 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                   if (authError) setAuthError(null);
                 }}
                 placeholder="Digite sua senha de acesso"
-                className="w-full bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-white placeholder-[#869486] focus:outline-none focus:border-indigo-400"
+                className="w-full bg-surface border border-border rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-indigo-400"
               />
-              <p className="text-[10px] text-[#bccabb] mt-1 ml-1">
+              <p className="text-[10px] text-muted mt-1 ml-1">
                 Sua senha é exigida para autorizar a gravação de recuperações sem vínculo direto.
               </p>
             </div>
 
-            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-3 border-t border-white/10">
+            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-3 border-t border-border">
               <button
                 type="button"
                 onClick={() => {
@@ -599,14 +599,14 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                   setPendingRecoveryActivity(null);
                 }}
                 disabled={isAuthorizing}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-full text-xs font-bold text-[#bccabb] hover:text-white hover:bg-white/5 transition-all cursor-pointer text-center"
+                className="w-full sm:w-auto px-5 py-2.5 rounded-full text-xs font-bold text-muted hover:text-foreground hover:bg-surface-hover transition-all cursor-pointer text-center"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={isAuthorizing}
-                className="w-full sm:w-auto px-6 py-2.5 rounded-full text-xs font-bold bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-[#4ade80]/20 disabled:opacity-50"
+                className="w-full sm:w-auto px-6 py-2.5 rounded-full text-xs font-bold bg-primary hover:bg-primary-hover text-white transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-primary/20 disabled:opacity-50"
               >
                 {isAuthorizing ? (
                   <>
@@ -630,34 +630,34 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   if (pendingActivityForDecision) {
     return (
       <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fadeIn">
-        <div className="w-full max-w-2xl bg-[#0e172a] rounded-3xl border border-white/15 p-6 sm:p-8 space-y-6 shadow-2xl relative my-auto">
-          <div className="flex items-center justify-between border-b border-white/10 pb-4">
+        <div className="w-full max-w-2xl bg-surface rounded-3xl border border-white/15 p-6 sm:p-8 space-y-6 shadow-2xl relative my-auto">
+          <div className="flex items-center justify-between border-b border-border pb-4">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-amber-500/20 text-amber-400 rounded-2xl border border-amber-500/30">
+              <div className="p-3 bg-amber-100 text-amber-400 rounded-2xl border border-amber-500/30">
                 <Sparkles className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white">Atividade Pronta! Deseja Adaptar para PNE?</h3>
-                <p className="text-xs text-[#bccabb]">
+                <h3 className="text-lg font-bold text-foreground">Atividade Pronta! Deseja Adaptar para PNE?</h3>
+                <p className="text-xs text-muted">
                   Escolha as modalidades inclusivas para gerar automaticamente junto com a atividade padrão.
                 </p>
               </div>
             </div>
             <button
               onClick={() => setPendingActivityForDecision(null)}
-              className="p-2 text-[#bccabb] hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer"
+              className="p-2 text-muted hover:text-foreground hover:bg-surface-hover rounded-full transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          <div className="p-4 bg-[#131b2e] rounded-2xl border border-white/10 space-y-1">
+          <div className="p-4 bg-surface rounded-2xl border border-border space-y-1">
             <span className="text-[10px] font-bold text-[#869486] uppercase tracking-wider block">
               Atividade Criada
             </span>
-            <h4 className="text-sm font-bold text-white">{pendingActivityForDecision.title}</h4>
-            <p className="text-xs text-[#bccabb]">
-              Turma: <strong className="text-white">{pendingActivityForDecision.turma}</strong> • {questions.length} Questões cadastradas
+            <h4 className="text-sm font-bold text-foreground">{pendingActivityForDecision.title}</h4>
+            <p className="text-xs text-muted">
+              Turma: <strong className="text-foreground">{pendingActivityForDecision.turma}</strong> • {questions.length} Questões cadastradas
             </p>
           </div>
 
@@ -667,17 +667,17 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
               type="button"
               onClick={handleConfirmOnlyStandard}
               disabled={isGeneratingPlayful}
-              className="w-full p-4 rounded-2xl bg-[#131b2e] hover:bg-[#1a243c] border border-white/10 hover:border-white/20 text-left transition-all flex items-center justify-between group cursor-pointer"
+              className="w-full p-4 rounded-2xl bg-surface hover:bg-[#1a243c] border border-border hover:border-border text-left transition-all flex items-center justify-between group cursor-pointer"
             >
               <div>
-                <span className="text-xs font-bold text-white block group-hover:text-[#4ade80] transition-colors">
+                <span className="text-xs font-bold text-foreground block group-hover:text-primary transition-colors">
                   1. Publicar Somente a Versão Padrão
                 </span>
-                <span className="text-[11px] text-[#bccabb]">
+                <span className="text-[11px] text-muted">
                   Salva apenas a atividade regular para toda a turma.
                 </span>
               </div>
-              <ArrowRight className="w-4 h-4 text-[#869486] group-hover:text-white group-hover:translate-x-1 transition-all" />
+              <ArrowRight className="w-4 h-4 text-[#869486] group-hover:text-foreground group-hover:translate-x-1 transition-all" />
             </button>
 
             {/* Option 2: Standard + Mild/Moderate */}
@@ -688,15 +688,15 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
               className="w-full p-4 rounded-2xl bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/30 hover:border-emerald-500/50 text-left transition-all flex items-center justify-between group cursor-pointer"
             >
               <div className="space-y-0.5">
-                <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                <span className="text-xs font-bold text-emerald-600 flex items-center gap-1.5">
                   <Cpu className="w-4 h-4 text-emerald-400" />
                   2. Publicar Padrão + Versão PNE Leve/Moderada (Função no Código)
                 </span>
-                <span className="text-[11px] text-[#bccabb] block">
+                <span className="text-[11px] text-muted block">
                   Reduz 50% das questões, 2 alternativas por objetiva, dissertativas simplificadas e sem caracteres mínimos.
                 </span>
               </div>
-              <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 text-[10px] font-bold rounded-lg border border-emerald-500/30 shrink-0">
+              <span className="px-2.5 py-1 bg-emerald-100 text-emerald-600 text-[10px] font-bold rounded-lg border border-emerald-500/30 shrink-0">
                 Instantâneo
               </span>
             </button>
@@ -709,18 +709,18 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
               className="w-full p-4 rounded-2xl bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/30 hover:border-amber-500/50 text-left transition-all flex items-center justify-between group cursor-pointer"
             >
               <div className="space-y-0.5">
-                <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                <span className="text-xs font-bold text-amber-600 flex items-center gap-1.5">
                   <Gamepad2 className="w-4 h-4 text-amber-400" />
                   3. Publicar Padrão + Jogo Lúdico para Síndromes Severas (IA Gemini)
                 </span>
-                <span className="text-[11px] text-[#bccabb] block">
+                <span className="text-[11px] text-muted block">
                   Gera um jogo interativo gamificado em HTML com perguntas ilustradas, sons e contagem de estrelas/pontuação.
                 </span>
               </div>
               {isGeneratingPlayful ? (
                 <Loader2 className="w-5 h-5 text-amber-400 animate-spin shrink-0" />
               ) : (
-                <span className="px-2.5 py-1 bg-amber-500/20 text-amber-300 text-[10px] font-bold rounded-lg border border-amber-500/30 shrink-0">
+                <span className="px-2.5 py-1 bg-amber-100 text-amber-600 text-[10px] font-bold rounded-lg border border-amber-500/30 shrink-0">
                   Gemini IA
                 </span>
               )}
@@ -731,25 +731,25 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
               type="button"
               onClick={handleConfirmAllAdaptations}
               disabled={isGeneratingPlayful}
-              className="w-full p-4 rounded-2xl bg-[#4ade80]/10 hover:bg-[#4ade80]/15 border border-[#4ade80]/30 hover:border-[#4ade80]/50 text-left transition-all flex items-center justify-between group cursor-pointer"
+              className="w-full p-4 rounded-2xl bg-primary/10 hover:bg-primary/15 border border-primary/30 hover:border-primary/50 text-left transition-all flex items-center justify-between group cursor-pointer"
             >
               <div className="space-y-0.5">
-                <span className="text-xs font-bold text-[#4ade80] flex items-center gap-1.5">
-                  <Layers className="w-4 h-4 text-[#4ade80]" />
+                <span className="text-xs font-bold text-primary flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-primary" />
                   4. Publicar Todas (Padrão + Leve/Mod + Jogo Lúdico Severo)
                 </span>
-                <span className="text-[11px] text-[#bccabb] block">
+                <span className="text-[11px] text-muted block">
                   Gera o pacote inclusivo completo para atender a todos os níveis de alunos da turma.
                 </span>
               </div>
-              <span className="px-3 py-1 bg-[#4ade80]/20 text-[#4ade80] text-[10px] font-bold rounded-lg border border-[#4ade80]/40 shrink-0">
+              <span className="px-3 py-1 bg-primary/20 text-primary text-[10px] font-bold rounded-lg border border-primary/40 shrink-0">
                 Pacote Completo
               </span>
             </button>
           </div>
 
           {isGeneratingPlayful && (
-            <div className="p-4 bg-[#131b2e] rounded-2xl border border-amber-500/30 flex items-center gap-3 text-xs text-amber-300">
+            <div className="p-4 bg-surface rounded-2xl border border-amber-500/30 flex items-center gap-3 text-xs text-amber-600">
               <Loader2 className="w-5 h-5 animate-spin text-amber-400 shrink-0" />
               <span>O Gemini está gerando o jogo lúdico interativo em HTML... Por favor, aguarde alguns segundos.</span>
             </div>
@@ -761,23 +761,23 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-      <div className="w-full max-w-2xl bg-[#0b1326] rounded-3xl border border-white/10 p-5 sm:p-8 space-y-6 shadow-2xl relative my-auto max-h-[90vh] overflow-y-auto custom-scrollbar animate-fadeIn">
+      <div className="w-full max-w-2xl bg-background rounded-3xl border border-border p-5 sm:p-8 space-y-6 shadow-2xl relative my-auto max-h-[90vh] overflow-y-auto custom-scrollbar animate-fadeIn">
         
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-white/10 pb-4 pr-10 relative">
+        <div className="flex items-start justify-between border-b border-border pb-4 pr-10 relative">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-[#4ade80]/10 text-[#4ade80] rounded-2xl border border-[#4ade80]/20 shrink-0">
+            <div className="p-3 bg-primary/10 text-primary rounded-2xl border border-primary/20 shrink-0">
               <BookOpen className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg sm:text-xl font-bold text-white leading-snug">Criar Atividade no Studio</h2>
-              <p className="text-xs text-[#bccabb]">Cadastre avaliações, redações ou exercícios interativos</p>
+              <h2 className="text-lg sm:text-xl font-bold text-foreground leading-snug">Criar Atividade no Studio</h2>
+              <p className="text-xs text-muted">Cadastre avaliações, redações ou exercícios interativos</p>
             </div>
           </div>
           <button
             onClick={onClose}
             type="button"
-            className="p-2.5 text-[#bccabb] hover:text-white rounded-full hover:bg-white/5 transition-colors cursor-pointer absolute top-0 right-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            className="p-2.5 text-muted hover:text-foreground rounded-full hover:bg-surface-hover transition-colors cursor-pointer absolute top-0 right-0 min-h-[44px] min-w-[44px] flex items-center justify-center"
             aria-label="Fechar Modal"
           >
             <X className="w-5 h-5" />
@@ -789,7 +789,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
           {/* Título e Disciplina */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">
+              <label className="block text-xs font-semibold text-muted mb-1">
                 Título da Atividade *
               </label>
               <input
@@ -798,12 +798,12 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Ex: Simulado: Ação Social e Instituições"
-                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-primary"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">
+              <label className="block text-xs font-semibold text-muted mb-1">
                 Disciplina
               </label>
               <input
@@ -811,7 +811,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Ex: Sociologia"
-                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-xs text-foreground placeholder-[#869486] focus:outline-none focus:border-primary"
               />
             </div>
           </div>
@@ -819,7 +819,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
           {/* Turmas, Prazo e Tipo */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">
+              <label className="block text-xs font-semibold text-muted mb-1">
                 Turmas *
               </label>
               <TurmaMultiSelect
@@ -829,19 +829,19 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">
+              <label className="block text-xs font-semibold text-muted mb-1">
                 Prazo Final (Data e Hora)
               </label>
               <input
                 type="datetime-local"
                 value={deadlineDateTime}
                 onChange={(e) => setDeadlineDateTime(e.target.value)}
-                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-3 py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-surface border border-border rounded-2xl px-3 py-3 text-xs text-foreground focus:outline-none focus:border-primary"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">
+              <label className="block text-xs font-semibold text-muted mb-1">
                 Tipo
               </label>
               <select
@@ -871,31 +871,31 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                     }
                   }
                 }}
-                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-3 py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-surface border border-border rounded-2xl px-3 py-3 text-xs text-foreground focus:outline-none focus:border-primary"
               >
-                <option value="Avaliação" className="bg-[#0b1326]">Avaliação</option>
-                <option value="Simulado" className="bg-[#0b1326]">Simulado</option>
-                <option value="Redação" className="bg-[#0b1326]">Redação</option>
-                <option value="Dinâmica" className="bg-[#0b1326]">Dinâmica</option>
-                <option value="Trabalho em grupo" className="bg-[#0b1326]">Trabalho em grupo</option>
-                <option value="Projeto de pesquisa" className="bg-[#0b1326]">Projeto de pesquisa</option>
-                <option value="Recuperação Paralela" className="bg-[#0b1326]">Recuperação Paralela</option>
+                <option value="Avaliação" className="bg-background">Avaliação</option>
+                <option value="Simulado" className="bg-background">Simulado</option>
+                <option value="Redação" className="bg-background">Redação</option>
+                <option value="Dinâmica" className="bg-background">Dinâmica</option>
+                <option value="Trabalho em grupo" className="bg-background">Trabalho em grupo</option>
+                <option value="Projeto de pesquisa" className="bg-background">Projeto de pesquisa</option>
+                <option value="Recuperação Paralela" className="bg-background">Recuperação Paralela</option>
               </select>
             </div>
           </div>
 
           {/* Campo de Subordinação à Avaliação Original (Exibido quando Tipo = Recuperação Paralela) */}
           {type === 'Recuperação Paralela' && (
-            <div className="bg-[#131b2e] border border-indigo-500/40 rounded-2xl p-4 space-y-3 shadow-lg animate-fadeIn">
+            <div className="bg-surface border border-indigo-200 rounded-2xl p-4 space-y-3 shadow-lg animate-fadeIn">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-indigo-500/20 text-indigo-300 rounded-xl border border-indigo-500/30">
+                <div className="p-2 bg-indigo-100 text-indigo-600 rounded-xl border border-indigo-500/30">
                   <RotateCcw className="w-4 h-4" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-indigo-300">
+                  <h4 className="text-xs font-bold text-indigo-600">
                     Avaliação à qual esta Recuperação será subordinada
                   </h4>
-                  <p className="text-[11px] text-[#bccabb]">
+                  <p className="text-[11px] text-muted">
                     A recuperação paralela é uma segunda chance para quem não aproveitou a 1ª atividade. Não gera pendência nem espera entrega de quem já entregou a original.
                   </p>
                 </div>
@@ -903,8 +903,8 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
 
               {availableParentActivities.length === 0 ? (
                 <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-200 space-y-1">
-                  <p className="font-semibold text-white">Nenhuma avaliação base digital encontrada no sistema.</p>
-                  <p className="text-[11px] text-[#bccabb]">
+                  <p className="font-semibold text-foreground">Nenhuma avaliação base digital encontrada no sistema.</p>
+                  <p className="text-[11px] text-muted">
                     Você poderá gravar esta recuperação paralela normalmente como exceção (ex: avaliação original feita em papel ou turma assumida). Ao clicar em Publicar/Gravar, um popup solicitará a digitação manual do nome da atividade e sua senha.
                   </p>
                 </div>
@@ -934,13 +934,13 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                         }
                       }
                     }}
-                    className="w-full bg-[#0e172a] border border-indigo-500/40 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-400"
+                    className="w-full bg-surface border border-indigo-200 rounded-xl px-3 py-2.5 text-xs text-foreground focus:outline-none focus:border-indigo-400"
                   >
-                    <option value="" className="bg-[#0b1326] text-amber-300">
+                    <option value="" className="bg-background text-amber-600">
                       -- Sem atividade mãe vinculada (Exceção: Atividade em Papel / Externa) --
                     </option>
                     {availableParentActivities.map((parent) => (
-                      <option key={parent.id} value={parent.id} className="bg-[#0b1326]">
+                      <option key={parent.id} value={parent.id} className="bg-background">
                         {parent.title} • Turma: {parent.turma} {parent.subject ? `• ${parent.subject}` : ''}
                       </option>
                     ))}
@@ -952,7 +952,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                       <span>Subordinação vinculada: As turmas e métricas foram sincronizadas automaticamente com a atividade raiz.</span>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 text-[11px] text-amber-300 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
+                    <div className="flex items-center gap-2 text-[11px] text-amber-600 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
                       <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                       <span>Modo Exceção: Ao salvar sem vincular, um popup solicitará o nome da atividade em papel e sua senha.</span>
                     </div>
@@ -964,19 +964,19 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
 
           {/* Janela / Lista Suspensa com Caixas de Seleção para Alunos PNE com Proficiência */}
           {pneStudentsInSelectedTurmas.length > 0 && (
-            <div className="bg-[#131b2e] border border-amber-500/30 rounded-2xl p-4 space-y-3 shadow-inner">
+            <div className="bg-surface border border-amber-500/30 rounded-2xl p-4 space-y-3 shadow-inner">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-amber-600 flex items-center gap-1.5">
                       <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
                       Alunos PNE com Proficiência (Atividade Normal)
                     </span>
-                    <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">
+                    <span className="text-[10px] font-bold bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full border border-amber-500/30">
                       {pneStudentsInSelectedTurmas.length} PNE na(s) turma(s)
                     </span>
                   </div>
-                  <p className="text-[11px] text-[#bccabb] mt-0.5">
+                  <p className="text-[11px] text-muted mt-0.5">
                     Selecione os alunos PNE que já atingiram proficiência para realizarem a <strong>atividade normal</strong> (evita retrocesso por desmotivação).
                   </p>
                 </div>
@@ -984,7 +984,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsPneDropdownOpen((prev) => !prev)}
-                  className="flex items-center justify-between sm:justify-center gap-2 px-3.5 py-2 bg-[#1a243c] hover:bg-[#223050] text-xs font-semibold text-white rounded-xl border border-white/10 transition-colors cursor-pointer shrink-0"
+                  className="flex items-center justify-between sm:justify-center gap-2 px-3.5 py-2 bg-[#1a243c] hover:bg-[#223050] text-xs font-semibold text-foreground rounded-xl border border-border transition-colors cursor-pointer shrink-0"
                 >
                   <span>
                     {includedPneStudentIds.length === 0
@@ -1000,20 +1000,20 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
               </div>
 
               {isPneDropdownOpen && (
-                <div className="pt-3 border-t border-white/10 space-y-3 animate-fadeIn">
+                <div className="pt-3 border-t border-border space-y-3 animate-fadeIn">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-[#bccabb] text-[11px]">
+                    <span className="text-muted text-[11px]">
                       Marque para liberar a atividade normal:
                     </span>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => setIncludedPneStudentIds(pneStudentsInSelectedTurmas.map((s) => s.id))}
-                        className="text-[11px] text-[#4ade80] hover:underline cursor-pointer font-medium"
+                        className="text-[11px] text-primary hover:underline cursor-pointer font-medium"
                       >
                         Marcar todos
                       </button>
-                      <span className="text-white/20">•</span>
+                      <span className="text-foreground/20">•</span>
                       <button
                         type="button"
                         onClick={() => setIncludedPneStudentIds([])}
@@ -1037,8 +1037,8 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                           key={st.id}
                           className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
                             isSelected
-                              ? 'bg-amber-500/10 border-amber-500/40 text-white'
-                              : 'bg-[#0e172a] border-white/5 text-[#bccabb] hover:border-white/15'
+                              ? 'bg-amber-500/10 border-amber-200 text-foreground'
+                              : 'bg-surface border-border text-muted hover:border-white/15'
                           }`}
                         >
                           <div className="flex items-center gap-3 min-w-0">
@@ -1052,14 +1052,14 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                                   setIncludedPneStudentIds((prev) => prev.filter((id) => id !== st.id));
                                 }
                               }}
-                              className="w-4 h-4 rounded border-white/20 text-amber-500 focus:ring-amber-400 focus:ring-offset-0 bg-[#131b2e] cursor-pointer"
+                              className="w-4 h-4 rounded border-border text-amber-500 focus:ring-amber-400 focus:ring-offset-0 bg-surface cursor-pointer"
                             />
                             <div className="truncate">
-                              <span className="text-xs font-semibold text-white block truncate">
+                              <span className="text-xs font-semibold text-foreground block truncate">
                                 {st.fullName}
                               </span>
                               <span className="text-[10px] text-[#869486] block truncate">
-                                Turma: <strong className="text-[#bccabb]">{st.turma}</strong> • {conditionText}
+                                Turma: <strong className="text-muted">{st.turma}</strong> • {conditionText}
                               </span>
                             </div>
                           </div>
@@ -1067,8 +1067,8 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                           <span
                             className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ml-2 ${
                               isSelected
-                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                : 'bg-white/5 text-[#869486]'
+                                ? 'bg-emerald-100 text-emerald-600 border border-emerald-500/30'
+                                : 'bg-surface-hover text-[#869486]'
                             }`}
                           >
                             {isSelected ? 'Atividade Normal' : 'Ativ. Adaptada'}
@@ -1083,9 +1083,9 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
           )}
 
           {/* Nota Máxima e Permitir Trabalho em Grupo */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-[#131b2e]/60 p-4 rounded-2xl border border-white/5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-surface/60 p-4 rounded-2xl border border-border">
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">
+              <label className="block text-xs font-semibold text-muted mb-1">
                 Nota Máxima Oficial (0 a 10)
               </label>
               <input
@@ -1095,7 +1095,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                 step={0.5}
                 value={maxGrade}
                 onChange={(e) => setMaxGrade(Number(e.target.value))}
-                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-2.5 text-sm font-bold text-[#4ade80] focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-surface border border-border rounded-2xl px-4 py-2.5 text-sm font-bold text-primary focus:outline-none focus:border-primary"
               />
             </div>
 
@@ -1105,14 +1105,14 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                   type="checkbox"
                   checked={allowGroupWork}
                   onChange={(e) => setAllowGroupWork(e.target.checked)}
-                  className="w-5 h-5 rounded border-white/20 bg-[#131b2e] text-[#4ade80] focus:ring-[#4ade80] focus:ring-offset-0 cursor-pointer"
+                  className="w-5 h-5 rounded border-border bg-surface text-primary focus:ring-[#4ade80] focus:ring-offset-0 cursor-pointer"
                 />
                 <div>
-                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-[#4ade80]" />
+                  <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-primary" />
                     Permitir Atividade em Grupo?
                   </span>
-                  <p className="text-[10px] text-[#bccabb]">
+                  <p className="text-[10px] text-muted">
                     Quando ativo, os alunos podem escolher os membros da equipe no envio.
                   </p>
                 </div>
@@ -1121,54 +1121,54 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
           </div>
 
           {/* Travas de Segurança Anti-Cola */}
-          <div className="bg-[#131b2e] p-4 rounded-2xl border border-amber-500/30 space-y-3">
-            <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-2">
+          <div className="bg-surface p-4 rounded-2xl border border-amber-500/30 space-y-3">
+            <h4 className="text-xs font-bold text-amber-600 uppercase tracking-wider flex items-center gap-2">
               <span>🛡️ Travas de Segurança Anti-Cola</span>
             </h4>
-            <p className="text-[11px] text-[#bccabb]">
+            <p className="text-[11px] text-muted">
               Ative os mecanismos de integridade para avaliações e provas:
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-              <label className="flex items-start gap-2.5 cursor-pointer bg-[#0b1326] p-3 rounded-xl border border-white/10 hover:border-amber-500/40 transition-colors">
+              <label className="flex items-start gap-2.5 cursor-pointer bg-background p-3 rounded-xl border border-border hover:border-amber-200 transition-colors">
                 <input
                   type="checkbox"
                   checked={securityFocusLock}
                   onChange={(e) => setSecurityFocusLock(e.target.checked)}
-                  className="w-4 h-4 rounded border-white/20 bg-[#131b2e] text-[#4ade80] focus:ring-[#4ade80] mt-0.5"
+                  className="w-4 h-4 rounded border-border bg-surface text-primary focus:ring-[#4ade80] mt-0.5"
                 />
                 <div>
-                  <span className="text-xs font-bold text-white block">Trava de Foco</span>
-                  <span className="text-[10px] text-[#bccabb] block leading-tight mt-0.5">
+                  <span className="text-xs font-bold text-foreground block">Trava de Foco</span>
+                  <span className="text-[10px] text-muted block leading-tight mt-0.5">
                     Gera avisos ao sair da tela e auto-entrega no 4º aviso.
                   </span>
                 </div>
               </label>
 
-              <label className="flex items-start gap-2.5 cursor-pointer bg-[#0b1326] p-3 rounded-xl border border-white/10 hover:border-amber-500/40 transition-colors">
+              <label className="flex items-start gap-2.5 cursor-pointer bg-background p-3 rounded-xl border border-border hover:border-amber-200 transition-colors">
                 <input
                   type="checkbox"
                   checked={securityBlockCopyStatement}
                   onChange={(e) => setSecurityBlockCopyStatement(e.target.checked)}
-                  className="w-4 h-4 rounded border-white/20 bg-[#131b2e] text-[#4ade80] focus:ring-[#4ade80] mt-0.5"
+                  className="w-4 h-4 rounded border-border bg-surface text-primary focus:ring-[#4ade80] mt-0.5"
                 />
                 <div>
-                  <span className="text-xs font-bold text-white block">Bloquear Cópia</span>
-                  <span className="text-[10px] text-[#bccabb] block leading-tight mt-0.5">
+                  <span className="text-xs font-bold text-foreground block">Bloquear Cópia</span>
+                  <span className="text-[10px] text-muted block leading-tight mt-0.5">
                     Impede copiar enunciados e textos com Ctrl+C e botão direito.
                   </span>
                 </div>
               </label>
 
-              <label className="flex items-start gap-2.5 cursor-pointer bg-[#0b1326] p-3 rounded-xl border border-white/10 hover:border-amber-500/40 transition-colors">
+              <label className="flex items-start gap-2.5 cursor-pointer bg-background p-3 rounded-xl border border-border hover:border-amber-200 transition-colors">
                 <input
                   type="checkbox"
                   checked={securityBlockPasteEssay}
                   onChange={(e) => setSecurityBlockPasteEssay(e.target.checked)}
-                  className="w-4 h-4 rounded border-white/20 bg-[#131b2e] text-[#4ade80] focus:ring-[#4ade80] mt-0.5"
+                  className="w-4 h-4 rounded border-border bg-surface text-primary focus:ring-[#4ade80] mt-0.5"
                 />
                 <div>
-                  <span className="text-xs font-bold text-white block">Bloquear Cola</span>
-                  <span className="text-[10px] text-[#bccabb] block leading-tight mt-0.5">
+                  <span className="text-xs font-bold text-foreground block">Bloquear Cola</span>
+                  <span className="text-[10px] text-muted block leading-tight mt-0.5">
                     Bloqueia colar texto (Ctrl+V) na resposta dissertativa.
                   </span>
                 </div>
@@ -1178,7 +1178,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
 
           {/* Material de Apoio / Texto Base */}
           <div className="space-y-2">
-            <label className="block text-xs font-semibold text-[#bccabb] mb-1">
+            <label className="block text-xs font-semibold text-muted mb-1">
               Material de Apoio / Texto Base
             </label>
             <textarea
@@ -1186,11 +1186,11 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
               value={supportMaterial}
               onChange={(e) => setSupportMaterial(e.target.value)}
               placeholder="Insira aqui o texto base para leitura, citações, referências bibliográficas..."
-              className="w-full bg-[#131b2e] border border-white/10 rounded-2xl p-3.5 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80] resize-y"
+              className="w-full bg-surface border border-border rounded-2xl p-3.5 text-xs text-foreground placeholder-[#869486] focus:outline-none focus:border-primary resize-y"
             />
 
             {/* Injetor / Adicionador de Links */}
-            <div className="bg-[#0b1326] p-3 rounded-2xl border border-white/10 space-y-2">
+            <div className="bg-background p-3 rounded-2xl border border-border space-y-2">
               <label className="block text-[11px] font-bold text-sky-300 flex items-center gap-1.5">
                 <Link2 className="w-3.5 h-3.5 text-sky-400" />
                 <span>Adicionar Link ao Material de Apoio (Google Drive, YouTube, Artigo, PDF)</span>
@@ -1201,7 +1201,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                   value={supportLinkInput}
                   onChange={(e) => setSupportLinkInput(e.target.value)}
                   placeholder="https://drive.google.com/file/... ou https://youtube.com/..."
-                  className="flex-1 bg-[#131b2e] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-sky-400 font-mono"
+                  className="flex-1 bg-surface border border-border rounded-xl px-3 py-2 text-xs text-foreground placeholder-[#869486] focus:outline-none focus:border-sky-400 font-mono"
                 />
                 <button
                   type="button"
@@ -1227,21 +1227,21 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
 
 
           {/* Seção de Questões */}
-          <div className="space-y-4 pt-2 border-t border-white/10">
+          <div className="space-y-4 pt-2 border-t border-border">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <HelpCircle className="w-4 h-4 text-[#4ade80]" />
+                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <HelpCircle className="w-4 h-4 text-primary" />
                   Questões da Atividade ({questions.length})
                 </h3>
-                <p className="text-[11px] text-[#bccabb]">Adicione questões objetivas e dissertativas</p>
+                <p className="text-[11px] text-muted">Adicione questões objetivas e dissertativas</p>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={handleAddMultipleChoice}
-                  className="px-3 py-2 bg-[#4ade80]/10 hover:bg-[#4ade80]/20 text-[#4ade80] rounded-xl text-xs font-bold border border-[#4ade80]/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                  className="px-3 py-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl text-xs font-bold border border-primary/30 transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>+ Add Múltipla Escolha</span>
@@ -1250,7 +1250,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                 <button
                   type="button"
                   onClick={handleAddEssay}
-                  className="px-3 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 rounded-xl text-xs font-bold border border-blue-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                  className="px-3 py-2 bg-blue-500/10 hover:bg-blue-100 text-blue-600 rounded-xl text-xs font-bold border border-blue-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <FileText className="w-3.5 h-3.5" />
                   <span>+ Add Redação / Dissertativa</span>
@@ -1265,16 +1265,16 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                   return (
                     <div
                       key={q.id}
-                      className="bg-[#131b2e] border border-white/10 rounded-2xl p-4 space-y-3 relative group"
+                      className="bg-surface border border-border rounded-2xl p-4 space-y-3 relative group"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-[#4ade80] bg-[#4ade80]/10 px-2.5 py-1 rounded-full border border-[#4ade80]/20">
+                        <span className="text-xs font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20">
                           Questão {qIndex + 1} • Múltipla Escolha (4 Respostas)
                         </span>
                         <button
                           type="button"
                           onClick={() => handleRemoveQuestion(q.id)}
-                          className="text-rose-400 hover:text-rose-300 p-1 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                          className="text-rose-400 hover:text-rose-600 p-1 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
                           title="Remover Questão"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1282,7 +1282,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                       </div>
 
                       <div>
-                        <label className="block text-[11px] text-[#bccabb] font-semibold mb-1">
+                        <label className="block text-[11px] text-muted font-semibold mb-1">
                           Enunciado da Questão
                         </label>
                         <textarea
@@ -1290,12 +1290,12 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                           value={q.statement}
                           onChange={(e) => handleUpdateMCQuestion(q.id, 'statement', e.target.value)}
                           placeholder="Digite o enunciado da questão..."
-                          className="w-full bg-[#0b1326] border border-white/10 rounded-xl p-3 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
+                          className="w-full bg-background border border-border rounded-xl p-3 text-xs text-foreground placeholder-[#869486] focus:outline-none focus:border-primary"
                         />
                       </div>
 
                       <div className="space-y-2 pt-1">
-                        <label className="block text-[11px] text-[#bccabb] font-semibold">
+                        <label className="block text-[11px] text-muted font-semibold">
                           Opções de Resposta (Marque a opção correta):
                         </label>
                         {['A', 'B', 'C', 'D'].map((letter, optIdx) => (
@@ -1305,8 +1305,8 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                               onClick={() => handleUpdateMCQuestion(q.id, 'correctOptionIndex', optIdx)}
                               className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center transition-all cursor-pointer ${
                                 q.correctOptionIndex === optIdx
-                                  ? 'bg-[#4ade80] text-[#003919] ring-2 ring-[#4ade80]/50'
-                                  : 'bg-[#0b1326] text-[#bccabb] border border-white/10 hover:border-white/30'
+                                  ? 'bg-primary text-white ring-2 ring-[#4ade80]/50'
+                                  : 'bg-background text-muted border border-border hover:border-border'
                               }`}
                               title={`Marcar opção ${letter} como correta`}
                             >
@@ -1317,10 +1317,10 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                               value={q.options[optIdx] || ''}
                               onChange={(e) => handleUpdateMCOption(q.id, optIdx, e.target.value)}
                               placeholder={`Opção ${letter}...`}
-                              className="flex-1 bg-[#0b1326] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
+                              className="flex-1 bg-background border border-border rounded-xl px-3 py-2 text-xs text-foreground placeholder-[#869486] focus:outline-none focus:border-primary"
                             />
                             {q.correctOptionIndex === optIdx && (
-                              <CheckCircle2 className="w-4 h-4 text-[#4ade80] shrink-0" />
+                              <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
                             )}
                           </div>
                         ))}
@@ -1333,16 +1333,16 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                 return (
                   <div
                     key={q.id}
-                    className="bg-[#131b2e] border border-blue-500/20 rounded-2xl p-4 space-y-3 relative"
+                    className="bg-surface border border-blue-500/20 rounded-2xl p-4 space-y-3 relative"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-blue-300 bg-blue-500/10 px-2.5 py-1 rounded-full border border-blue-500/20">
+                      <span className="text-xs font-bold text-blue-600 bg-blue-500/10 px-2.5 py-1 rounded-full border border-blue-500/20">
                         Questão {qIndex + 1} • Redação / Pesquisa Dissertativa
                       </span>
                       <button
                         type="button"
                         onClick={() => handleRemoveQuestion(q.id)}
-                        className="text-rose-400 hover:text-rose-300 p-1 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                        className="text-rose-400 hover:text-rose-600 p-1 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
                         title="Remover Questão"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -1350,7 +1350,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                     </div>
 
                     <div>
-                      <label className="block text-[11px] text-[#bccabb] font-semibold mb-1">
+                      <label className="block text-[11px] text-muted font-semibold mb-1">
                         Enunciado ou Tema da Redação/Pesquisa
                       </label>
                       <textarea
@@ -1358,13 +1358,13 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                         value={q.statement}
                         onChange={(e) => handleUpdateEssayQuestion(q.id, 'statement', e.target.value)}
                         placeholder="Ex: Elabore uma dissertação sobre a Teoria do Fato Social de Émile Durkheim..."
-                        className="w-full bg-[#0b1326] border border-white/10 rounded-xl p-3 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-blue-400"
+                        className="w-full bg-background border border-border rounded-xl p-3 text-xs text-foreground placeholder-[#869486] focus:outline-none focus:border-blue-400"
                       />
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[11px] text-[#bccabb] font-semibold mb-1">
+                        <label className="block text-[11px] text-muted font-semibold mb-1">
                           Mínimo de Caracteres Exigido
                         </label>
                         <input
@@ -1373,12 +1373,12 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                           step={50}
                           value={q.minCharacters}
                           onChange={(e) => handleUpdateEssayQuestion(q.id, 'minCharacters', Number(e.target.value))}
-                          className="w-full bg-[#0b1326] border border-white/10 rounded-xl px-3 py-2 text-xs text-blue-300 font-bold focus:outline-none focus:border-blue-400"
+                          className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs text-blue-600 font-bold focus:outline-none focus:border-blue-400"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[11px] text-[#bccabb] font-semibold mb-1">
+                        <label className="block text-[11px] text-muted font-semibold mb-1">
                           Palavras-Chave de Atenção (I.A. e Aluno)
                         </label>
                         <input
@@ -1386,7 +1386,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                           value={q.keywords || ''}
                           onChange={(e) => handleUpdateEssayQuestion(q.id, 'keywords', e.target.value)}
                           placeholder="Ex: Fato social, Coerção, Durkheim, Anomia"
-                          className="w-full bg-[#0b1326] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-blue-400"
+                          className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs text-foreground placeholder-[#869486] focus:outline-none focus:border-blue-400"
                         />
                       </div>
                     </div>
@@ -1399,7 +1399,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
           {/* Submit Button */}
           <button
             type="submit"
-            className="w-full py-3.5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#4ade80]/20 cursor-pointer text-sm mt-6"
+            className="w-full py-3.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-full transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20 cursor-pointer text-sm mt-6"
           >
             <Plus className="w-5 h-5 stroke-[2.5]" />
             <span>Publicar Atividade no Studio</span>

@@ -21,10 +21,27 @@ import {
   Loader2,
   Filter,
   GraduationCap,
-  Zap
+  Zap,
+  TrendingUp,
+  ArrowRight,
+  BookOpenCheck,
+  Maximize2,
+  ExternalLink,
 } from 'lucide-react';
 import { Activity, ActivitySubmission, StudentUser, EssayQuestion } from '@/lib/types';
-import { canStudentAccessActivity, normalizeStudentName, getActivityGradeDistribution, isStudentPNE } from '@/lib/studentUtils';
+import {
+  canStudentAccessActivity,
+  normalizeStudentName,
+  getActivityGradeDistribution,
+  isStudentPNE,
+  getChildRecoveryActivities,
+  getChildAdaptations,
+  isActivityRecovery,
+  isActivityAdapted,
+  getSubmissionTotalGrade,
+} from '@/lib/studentUtils';
+import { GradeConsolidationModal } from '@/components/modals/GradeConsolidationModal';
+import { Layers, GitFork, CheckCheck, HelpCircle } from 'lucide-react';
 
 interface GradingViewProps {
   activity: Activity;
@@ -67,6 +84,8 @@ export const GradingView: React.FC<GradingViewProps> = ({
   const [prevSubmissions, setPrevSubmissions] = useState(activity.submissions);
   const [submissions, setSubmissions] = useState<ActivitySubmission[]>(activity.submissions || []);
   const [selectedTurmaFilter, setSelectedTurmaFilter] = useState<string>('all');
+  // Visão Unificada com Atividades Filhas (Adaptações PNE e Recuperações Paralelas)
+  const [includeChildActivities, setIncludeChildActivities] = useState<boolean>(true);
 
   const [savedSuccessId, setSavedSuccessId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -85,6 +104,23 @@ export const GradingView: React.FC<GradingViewProps> = ({
 
   // Gemini AI Feedback state (Ninja / Serious)
   const [generatingFeedbackState, setGeneratingFeedbackState] = useState<{ studentId: string; type: 'ninja' | 'serious' } | null>(null);
+
+  // Modal de Consolidação de Notas da Recuperação Paralela
+  const [consolidationModalData, setConsolidationModalData] = useState<{
+    data: {
+      isRecoveryView: boolean;
+      isParentView: boolean;
+      parentGrade: number | null;
+      parentTitle: string;
+      recoveryGrade: number | null;
+      recoveryTitle: string;
+      recalculatedFinalGrade: number | null;
+      gradeEvolution: number | null;
+    };
+    studentName: string;
+    matricula?: string;
+    turma?: string;
+  } | null>(null);
 
   const handleGenerateAiFeedback = async (
     sub: ActivitySubmission,
@@ -261,9 +297,11 @@ export const GradingView: React.FC<GradingViewProps> = ({
     );
   };
 
-  const handleSave = (studentId: string, status: 'graded' | 'returned' | 'draft') => {
+  const handleSave = (studentId: string, status: 'graded' | 'returned' | 'draft', targetActivityId?: string) => {
     const sub = submissions.find((s) => s.studentId === studentId);
     if (!sub) return;
+
+    const actIdToUpdate = targetActivityId || (sub as any).originActivityId || activity.id;
 
     const isInitialGroupGrading = sub.status === 'pending' && Boolean(sub.groupMembers);
 
@@ -300,7 +338,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
     }
 
     onUpdateSubmission(
-      activity.id,
+      actIdToUpdate,
       studentId,
       sub.essayScore ?? 0,
       sub.teacherFeedback ?? '',
@@ -419,8 +457,92 @@ export const GradingView: React.FC<GradingViewProps> = ({
     return student?.turma || '';
   };
 
+  // Identificação estrutural de atividade adaptada e de recuperação
+  const isAdaptedActivity = Boolean(activity.isAdapted || activity.adaptedFromId || isActivityAdapted(activity));
+  const isRecoveryActivity = Boolean(activity.isRecovery || activity.recoveryFromId || activity.type === 'Recuperação Paralela' || isActivityRecovery(activity));
+
+  // Atividade mãe caso esta seja uma Recuperação Paralela
+  const parentRecoveryAct = isRecoveryActivity
+    ? (allActivities || []).find((a) => a.id === activity.recoveryFromId) ||
+      (allActivities || []).find(
+        (a) =>
+          a.id !== activity.id &&
+          !isActivityRecovery(a) &&
+          !isActivityAdapted(a) &&
+          canStudentAccessActivity(a.turma, activity.turma) &&
+          activity.title &&
+          a.title &&
+          activity.title.toLowerCase().includes(a.title.toLowerCase().replace(/^\[.*?\]\s*/i, '').slice(0, 15))
+      )
+    : null;
+
+  // Recuperações filhas caso esta seja uma atividade canônica/mãe
+  const childRecoveries = React.useMemo(() => {
+    if (isRecoveryActivity) return [];
+    return getChildRecoveryActivities(activity, allActivities || []);
+  }, [activity, allActivities, isRecoveryActivity]);
+
+  // Adaptações filhas (PNE) caso esta seja uma atividade canônica/mãe
+  const childAdaptations = React.useMemo(() => {
+    if (isAdaptedActivity) return [];
+    return getChildAdaptations(activity, allActivities || []);
+  }, [activity, allActivities, isAdaptedActivity]);
+
+  // Possui atividades filhas conectadas?
+  const hasLinkedChildren = childRecoveries.length > 0 || childAdaptations.length > 0;
+
+  // Coleção efetiva de submissões (unificada ou isolada)
+  const effectiveSubmissions = React.useMemo(() => {
+    const mainSubs: (ActivitySubmission & { originActivityId?: string; originActivityTitle?: string; originKind?: 'canonical' | 'recovery' | 'adapted' })[] =
+      submissions.map((s) => ({
+        ...s,
+        originActivityId: activity.id,
+        originActivityTitle: activity.title,
+        originKind: 'canonical',
+      }));
+
+    if (!includeChildActivities || !hasLinkedChildren) {
+      return mainSubs;
+    }
+
+    const mergedSubs = [...mainSubs];
+    const seenStudentIds = new Set(mainSubs.map((s) => s.studentId));
+
+    // Inclui submissões de adaptações filhas PNE
+    childAdaptations.forEach((childAct) => {
+      (childAct.submissions || []).forEach((cSub) => {
+        if (!seenStudentIds.has(cSub.studentId)) {
+          seenStudentIds.add(cSub.studentId);
+          mergedSubs.push({
+            ...cSub,
+            originActivityId: childAct.id,
+            originActivityTitle: childAct.title,
+            originKind: 'adapted',
+          });
+        }
+      });
+    });
+
+    // Inclui submissões de recuperações filhas (quando o aluno fez recuperação)
+    childRecoveries.forEach((childAct) => {
+      (childAct.submissions || []).forEach((cSub) => {
+        if (!seenStudentIds.has(cSub.studentId)) {
+          seenStudentIds.add(cSub.studentId);
+          mergedSubs.push({
+            ...cSub,
+            originActivityId: childAct.id,
+            originActivityTitle: childAct.title,
+            originKind: 'recovery',
+          });
+        }
+      });
+    });
+
+    return mergedSubs;
+  }, [submissions, includeChildActivities, hasLinkedChildren, childAdaptations, childRecoveries, activity.id, activity.title]);
+
   // Filter submissions by selected turma filter
-  const filteredSubmissions = submissions.filter((s) => {
+  const filteredSubmissions = effectiveSubmissions.filter((s) => {
     if (selectedTurmaFilter === 'all') return true;
     const stTurma = getSubmissionTurma(s);
     if (!stTurma) return true;
@@ -432,20 +554,33 @@ export const GradingView: React.FC<GradingViewProps> = ({
   const gradedQueue = filteredSubmissions.filter((s) => s.status === 'graded');
   const returnedQueue = filteredSubmissions.filter((s) => s.status === 'returned');
 
-  // Find students in the turma who haven't submitted yet
-  const submittedStudentIds = new Set(submissions.map((s) => s.studentId));
-  const activeTurmaScope = selectedTurmaFilter === 'all' ? activity.turma : selectedTurmaFilter;
+  // Set de alunos que entregaram (seja na atividade atual ou nas filhas se integrado)
+  const submittedStudentIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    submissions.forEach((s) => {
+      if (s.studentId) ids.add(s.studentId);
+      if (s.matricula) ids.add(s.matricula);
+    });
 
-  const isAdaptedActivity = Boolean(activity.isAdapted || activity.adaptedFromId);
-  const hasAdaptationChild = !isAdaptedActivity && (allActivities || []).some(
-    (a) =>
-      a.id !== activity.id &&
-      (a.adaptedFromId === activity.id ||
-        (Boolean(a.isAdapted) &&
-          canStudentAccessActivity(a.turma, activity.turma) &&
-          a.title && activity.title &&
-          a.title.toLowerCase().startsWith(activity.title.toLowerCase().slice(0, 15))))
-  );
+    if (includeChildActivities && hasLinkedChildren) {
+      childAdaptations.forEach((ca) => {
+        (ca.submissions || []).forEach((s) => {
+          if (s.studentId) ids.add(s.studentId);
+          if (s.matricula) ids.add(s.matricula);
+        });
+      });
+      childRecoveries.forEach((cr) => {
+        (cr.submissions || []).forEach((s) => {
+          if (s.studentId) ids.add(s.studentId);
+          if (s.matricula) ids.add(s.matricula);
+        });
+      });
+    }
+
+    return ids;
+  }, [submissions, includeChildActivities, hasLinkedChildren, childAdaptations, childRecoveries]);
+
+  const hasAdaptationChild = !isAdaptedActivity && childAdaptations.length > 0;
 
   const parentAct = isAdaptedActivity
     ? (allActivities || []).find((a) => a.id === activity.adaptedFromId)
@@ -464,22 +599,43 @@ export const GradingView: React.FC<GradingViewProps> = ({
     );
   };
 
+  // Cálculo rigoroso de Não Fizeram (Missing Students)
   const missingStudents = students.filter((st) => {
-    const isSameTurma = canStudentAccessActivity(activeTurmaScope, st.turma);
-    const hasSubmitted = submittedStudentIds.has(st.id);
+    // Escopo de turma
+    const matchesTurma = selectedTurmaFilter === 'all'
+      ? canStudentAccessActivity(activity.turma, st.turma)
+      : canStudentAccessActivity(selectedTurmaFilter, st.turma);
+
+    if (!matchesTurma) return false;
+
+    // Se o aluno já entregou na atividade principal ou em alguma filha vinculada
+    const hasSubmitted = submittedStudentIds.has(st.id) || (Boolean(st.matricula) && submittedStudentIds.has(st.matricula));
+    if (hasSubmitted) return false;
+
     const isPne = isStudentPNE(st);
 
-    if (!isSameTurma || hasSubmitted) return false;
+    // Se estivermos em visão unificada (ou se for a atividade principal com filhas incluídas)
+    if (includeChildActivities && hasLinkedChildren) {
+      // Visão total da turma: todos os alunos matriculados que ainda não fizeram nenhuma entrega
+      return true;
+    }
 
     if (isAdaptedActivity) {
-      // Adapted activity -> only expect PNE students who are NOT proficient for normal activity
+      // Atividade adaptada isolada: apenas alunos PNE não proficientes no regular
       return isPne && !isProficientPne(st);
     }
+
     if (hasAdaptationChild) {
-      // Principal activity with adaptation -> expect regular students + proficient PNE students
+      // Atividade principal com adaptação existente (quando visualizada sem unificação): alunos regulares + PNE proficientes
       return !isPne || isProficientPne(st);
     }
-    // Principal activity without adaptation -> expect all students
+
+    if (isRecoveryActivity) {
+      // Recuperação isolada: espera apenas quem não entregou a mãe ou tirou nota baixa
+      return true;
+    }
+
+    // Atividade padrão sem adaptações: todos os matriculados
     return true;
   });
 
@@ -489,7 +645,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <button
           onClick={onBack}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] rounded-full text-xs font-bold transition-all border border-white/10 cursor-pointer"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-[#171f33] hover:bg-surface-hover text-foreground rounded-full text-xs font-bold transition-all border border-border cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Voltar para Atividades</span>
@@ -501,7 +657,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
           <button
             onClick={handleRefreshDeliveries}
             disabled={isRefreshing}
-            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#131b2e] hover:bg-[#1c263f] text-[#4ade80] rounded-full text-xs font-bold transition-all border border-[#4ade80]/30 cursor-pointer shadow-sm disabled:opacity-50"
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2 bg-surface hover:bg-[#1c263f] text-primary rounded-full text-xs font-bold transition-all border border-primary/30 cursor-pointer shadow-sm disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>{isRefreshing ? 'Sincronizando...' : 'Atualizar Entregas'}</span>
@@ -511,7 +667,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
           <div className="relative flex-1 sm:flex-initial">
             <button
               onClick={() => setIsActivityDropdownOpen(!isActivityDropdownOpen)}
-              className="w-full inline-flex items-center justify-between gap-2 px-4 py-2 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] rounded-full text-xs font-bold transition-all shadow-md cursor-pointer"
+              className="w-full inline-flex items-center justify-between gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-full text-xs font-bold transition-all shadow-md cursor-pointer"
             >
               <div className="flex items-center gap-1.5 truncate">
                 <FileCheck2 className="w-4 h-4 shrink-0" />
@@ -522,13 +678,13 @@ export const GradingView: React.FC<GradingViewProps> = ({
 
             {/* Dropdown Menu of Activities */}
             {isActivityDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-72 bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl p-2 z-50 space-y-1">
-                <div className="px-3 py-2 text-[10px] font-bold text-[#bccabb] uppercase tracking-wider border-b border-white/5">
+              <div className="absolute right-0 mt-2 w-72 bg-surface border border-border rounded-2xl shadow-2xl p-2 z-50 space-y-1">
+                <div className="px-3 py-2 text-[10px] font-bold text-muted uppercase tracking-wider border-b border-border">
                   Selecione para Corrigir
                 </div>
                 <div className="max-h-60 overflow-y-auto space-y-1">
                   {allActivities.length === 0 ? (
-                    <div className="p-3 text-xs text-[#bccabb]">Nenhuma outra atividade.</div>
+                    <div className="p-3 text-xs text-muted">Nenhuma outra atividade.</div>
                   ) : (
                     allActivities.map((act) => (
                       <button
@@ -539,12 +695,12 @@ export const GradingView: React.FC<GradingViewProps> = ({
                         }}
                         className={`w-full text-left px-3 py-2.5 rounded-xl text-xs transition-all flex items-center justify-between cursor-pointer ${
                           act.id === activity.id
-                            ? 'bg-[#4ade80]/20 text-[#4ade80] font-bold'
-                            : 'text-white hover:bg-white/5'
+                            ? 'bg-primary/20 text-primary font-bold'
+                            : 'text-foreground hover:bg-surface-hover'
                         }`}
                       >
                         <span className="truncate">{act.title}</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-white/10 text-[#bccabb]">
+                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-surface-hover text-muted">
                           {act.turma}
                         </span>
                       </button>
@@ -559,7 +715,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
 
       {/* Toast Alert for Deliveries Refresh */}
       {refreshToast && (
-        <div className="p-4 bg-[#4ade80]/20 border border-[#4ade80]/40 text-[#4ade80] rounded-2xl text-xs font-bold flex items-center gap-2 animate-fadeIn">
+        <div className="p-4 bg-primary/20 border border-primary/40 text-primary rounded-2xl text-xs font-bold flex items-center gap-2 animate-fadeIn">
           <CheckCircle2 className="w-4 h-4" />
           <span>Entregas sincronizadas e atualizadas com sucesso!</span>
         </div>
@@ -569,30 +725,30 @@ export const GradingView: React.FC<GradingViewProps> = ({
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-2">
         <div>
           <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span className="text-xs font-bold bg-[#4ade80]/20 text-[#4ade80] px-3 py-1 rounded-full border border-[#4ade80]/30 uppercase">
+            <span className="text-xs font-bold bg-primary/20 text-primary px-3 py-1 rounded-full border border-primary/30 uppercase">
               {activity.turma || 'Todas as Turmas'}
             </span>
-            <span className="text-xs font-bold bg-[#171f33] text-[#c0c1ff] px-3 py-1 rounded-full border border-white/10 uppercase">
+            <span className="text-xs font-bold bg-[#171f33] text-[#c0c1ff] px-3 py-1 rounded-full border border-border uppercase">
               {activity.type}
             </span>
             {activity.deadline && (
-              <span className="text-xs font-bold bg-amber-500/20 text-amber-300 px-3 py-1 rounded-full border border-amber-500/30 flex items-center gap-1">
+              <span className="text-xs font-bold bg-amber-100 text-amber-600 px-3 py-1 rounded-full border border-amber-500/30 flex items-center gap-1">
                 <Clock className="w-3 h-3" />
                 Prazo: {activity.deadline}
               </span>
             )}
           </div>
 
-          <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
+          <h1 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight">
             {activity.title}
           </h1>
-          <p className="text-xs md:text-sm text-[#bccabb] mt-1 font-medium max-w-3xl">
+          <p className="text-xs md:text-sm text-muted mt-1 font-medium max-w-3xl">
             {activity.description}
           </p>
 
           {/* Display essay question keywords if defined */}
           {activity.questions?.some((q) => q.type === 'essay' && q.keywords) && (
-            <div className="mt-3 inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/30 px-3 py-1.5 rounded-xl text-xs text-blue-300">
+            <div className="mt-3 inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/30 px-3 py-1.5 rounded-xl text-xs text-blue-600">
               <span className="font-bold">Palavras-Chave Exigidas:</span>
               <span>
                 {activity.questions
@@ -605,56 +761,96 @@ export const GradingView: React.FC<GradingViewProps> = ({
         </div>
 
         {/* Counter Badge */}
-        <div className="glass-panel px-6 py-3.5 rounded-3xl border border-white/10 flex items-center gap-6 shrink-0 self-start lg:self-center">
+        <div className="glass-panel px-6 py-3.5 rounded-3xl border border-border flex items-center gap-6 shrink-0 self-start lg:self-center">
           <div className="text-center">
-            <span className="text-xl font-extrabold text-[#4ade80]">{gradedQueue.length}</span>
-            <span className="block text-[10px] font-bold text-[#bccabb] tracking-wider uppercase">
+            <span className="text-xl font-extrabold text-primary">{gradedQueue.length}</span>
+            <span className="block text-[10px] font-bold text-muted tracking-wider uppercase">
               Já Corrigidas
             </span>
           </div>
-          <div className="w-px h-8 bg-white/10"></div>
+          <div className="w-px h-8 bg-surface-hover"></div>
           <div className="text-center">
             <span className="text-xl font-extrabold text-amber-400">{pendingQueue.length}</span>
-            <span className="block text-[10px] font-bold text-[#bccabb] tracking-wider uppercase">
+            <span className="block text-[10px] font-bold text-muted tracking-wider uppercase">
               Na Fila
             </span>
           </div>
-          <div className="w-px h-8 bg-white/10"></div>
+          <div className="w-px h-8 bg-surface-hover"></div>
           <div className="text-center">
             <span className="text-xl font-extrabold text-sky-400">{returnedQueue.length}</span>
-            <span className="block text-[10px] font-bold text-[#bccabb] tracking-wider uppercase">
+            <span className="block text-[10px] font-bold text-muted tracking-wider uppercase">
               Devolvidas
             </span>
           </div>
-          <div className="w-px h-8 bg-white/10"></div>
+          <div className="w-px h-8 bg-surface-hover"></div>
           <div className="text-center">
             <span className="text-xl font-extrabold text-rose-400">{missingStudents.length}</span>
-            <span className="block text-[10px] font-bold text-[#bccabb] tracking-wider uppercase">
+            <span className="block text-[10px] font-bold text-muted tracking-wider uppercase">
               Não Fizeram
             </span>
           </div>
         </div>
       </div>
 
-      {/* Turma Filter Bar (Exibido quando a atividade possui mais de uma turma associada) */}
-      {hasMultipleTurmas && (
-        <div className="flex flex-wrap items-center gap-2 p-3.5 bg-[#131b2e] rounded-2xl border border-white/10">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-[#bccabb] mr-1">
-            <Filter className="w-3.5 h-3.5 text-[#4ade80]" />
+      {/* Barra de Controle da Visão Total (Atividades Filhas: PNE e Recuperações Paralelas) */}
+      {hasLinkedChildren && (
+        <div className="bg-surface/80 p-4 rounded-3xl border border-border shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+              <Layers className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-black text-foreground">
+                  Visão Unificada do Ciclo Pedagógico
+                </span>
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30">
+                  {childAdaptations.length + childRecoveries.length} filhas vinculadas
+                </span>
+              </div>
+              <p className="text-[11px] text-muted">
+                {includeChildActivities
+                  ? 'Mostrando em conjunto a atividade principal e todas as entregas das adaptações PNE e recuperações.'
+                  : 'Modo isolado ativo: exibindo estritamente as entregas desta atividade específica.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+            <button
+              onClick={() => setIncludeChildActivities(!includeChildActivities)}
+              className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 border ${
+                includeChildActivities
+                  ? 'bg-primary text-white border-primary shadow-sm'
+                  : 'bg-background text-muted hover:text-foreground border-border'
+              }`}
+            >
+              <GitFork className="w-3.5 h-3.5" />
+              <span>{includeChildActivities ? 'Visão Total Ativa' : 'Ativar Visão Total'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Turma Filter Bar (Exibido quando a atividade possui mais de uma turma associada ou em visão unificada) */}
+      {(hasMultipleTurmas || (includeChildActivities && hasLinkedChildren)) && (
+        <div className="flex flex-wrap items-center gap-2 p-3.5 bg-surface rounded-2xl border border-border">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-muted mr-1">
+            <Filter className="w-3.5 h-3.5 text-primary" />
             <span>Filtrar por Turma:</span>
           </div>
           <button
             onClick={() => setSelectedTurmaFilter('all')}
             className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[36px] ${
               selectedTurmaFilter === 'all'
-                ? 'bg-[#4ade80] text-[#003919] shadow-sm font-extrabold'
-                : 'bg-[#171f33] text-[#bccabb] hover:text-white hover:bg-[#222a3d] border border-white/5'
+                ? 'bg-primary text-white shadow-sm font-extrabold'
+                : 'bg-[#171f33] text-muted hover:text-foreground hover:bg-surface-hover border border-border'
             }`}
           >
-            Todas as Turmas ({submissions.length})
+            Todas as Turmas ({effectiveSubmissions.length})
           </button>
           {activityTurmas.map((turmaCode) => {
-            const countInTurma = submissions.filter((s) => {
+            const countInTurma = effectiveSubmissions.filter((s) => {
               const stTurma = getSubmissionTurma(s);
               return stTurma ? canStudentAccessActivity(turmaCode, stTurma) : true;
             }).length;
@@ -664,8 +860,8 @@ export const GradingView: React.FC<GradingViewProps> = ({
                 onClick={() => setSelectedTurmaFilter(turmaCode)}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[36px] ${
                   selectedTurmaFilter === turmaCode
-                    ? 'bg-[#4ade80] text-[#003919] shadow-sm font-extrabold'
-                    : 'bg-[#171f33] text-[#bccabb] hover:text-white hover:bg-[#222a3d] border border-white/5'
+                    ? 'bg-primary text-white shadow-sm font-extrabold'
+                    : 'bg-[#171f33] text-muted hover:text-foreground hover:bg-surface-hover border border-border'
                 }`}
               >
                 Turma {turmaCode} ({countInTurma})
@@ -676,13 +872,13 @@ export const GradingView: React.FC<GradingViewProps> = ({
       )}
 
       {/* Correction Sub-Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 border-b border-white/10 pb-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 border-b border-border pb-2">
         <button
           onClick={() => setActiveTab('fila')}
           className={`px-4 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
             activeTab === 'fila'
-              ? 'bg-[#4ade80] text-[#003919] shadow-md'
-              : 'bg-[#131b2e] text-[#bccabb] hover:text-white hover:bg-[#1c263f]'
+              ? 'bg-primary text-white shadow-md'
+              : 'bg-surface text-muted hover:text-foreground hover:bg-[#1c263f]'
           }`}
         >
           <Clock className="w-4 h-4 shrink-0" />
@@ -693,8 +889,8 @@ export const GradingView: React.FC<GradingViewProps> = ({
           onClick={() => setActiveTab('corrigidas')}
           className={`px-4 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
             activeTab === 'corrigidas'
-              ? 'bg-[#4ade80] text-[#003919] shadow-md'
-              : 'bg-[#131b2e] text-[#bccabb] hover:text-white hover:bg-[#1c263f]'
+              ? 'bg-primary text-white shadow-md'
+              : 'bg-surface text-muted hover:text-foreground hover:bg-[#1c263f]'
           }`}
         >
           <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -705,8 +901,8 @@ export const GradingView: React.FC<GradingViewProps> = ({
           onClick={() => setActiveTab('devolvidas')}
           className={`px-4 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
             activeTab === 'devolvidas'
-              ? 'bg-sky-500 text-white shadow-md'
-              : 'bg-[#131b2e] text-[#bccabb] hover:text-white hover:bg-[#1c263f]'
+              ? 'bg-sky-500 text-foreground shadow-md'
+              : 'bg-surface text-muted hover:text-foreground hover:bg-[#1c263f]'
           }`}
         >
           <RotateCcw className="w-4 h-4 shrink-0" />
@@ -718,7 +914,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
           className={`px-4 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
             activeTab === 'nao_fizeram'
               ? 'bg-rose-500 text-white shadow-md'
-              : 'bg-[#131b2e] text-[#bccabb] hover:text-white hover:bg-[#1c263f]'
+              : 'bg-surface text-muted hover:text-foreground hover:bg-[#1c263f]'
           }`}
         >
           <UserX className="w-4 h-4 shrink-0" />
@@ -728,14 +924,14 @@ export const GradingView: React.FC<GradingViewProps> = ({
 
       {/* Global Error Banner */}
       {aiErrorMessage && (
-        <div className="p-4 bg-rose-500/20 border border-rose-500/40 text-rose-300 rounded-2xl text-xs flex items-center justify-between">
+        <div className="p-4 bg-rose-100 border border-rose-200 text-rose-600 rounded-2xl text-xs flex items-center justify-between">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{aiErrorMessage}</span>
           </div>
           <button
             onClick={() => setAiErrorMessage(null)}
-            className="text-white hover:underline text-[10px] uppercase font-bold cursor-pointer"
+            className="text-foreground hover:underline text-[10px] uppercase font-bold cursor-pointer"
           >
             Fechar
           </button>
@@ -746,9 +942,9 @@ export const GradingView: React.FC<GradingViewProps> = ({
       {activeTab === 'fila' && (
         <>
           {pendingQueue.length === 0 ? (
-            <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb] space-y-2">
-              <CheckCircle2 className="w-10 h-10 text-[#4ade80] mx-auto opacity-80" />
-              <p className="text-sm font-bold text-white">Nenhuma entrega pendente na fila!</p>
+            <div className="glass-panel p-12 text-center rounded-3xl border border-border text-muted space-y-2">
+              <CheckCircle2 className="w-10 h-10 text-primary mx-auto opacity-80" />
+              <p className="text-sm font-bold text-foreground">Nenhuma entrega pendente na fila!</p>
               <p className="text-xs">Todas as respostas enviadas para esta atividade já foram corrigidas.</p>
             </div>
           ) : (
@@ -763,9 +959,9 @@ export const GradingView: React.FC<GradingViewProps> = ({
       {activeTab === 'corrigidas' && (
         <>
           {gradedQueue.length === 0 ? (
-            <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb] space-y-2">
+            <div className="glass-panel p-12 text-center rounded-3xl border border-border text-muted space-y-2">
               <Clock className="w-10 h-10 text-amber-400 mx-auto opacity-80" />
-              <p className="text-sm font-bold text-white">Nenhuma atividade corrigida ainda.</p>
+              <p className="text-sm font-bold text-foreground">Nenhuma atividade corrigida ainda.</p>
               <p className="text-xs">As atividades avaliadas e finalizadas aparecerão nesta aba.</p>
             </div>
           ) : (
@@ -780,9 +976,9 @@ export const GradingView: React.FC<GradingViewProps> = ({
       {activeTab === 'devolvidas' && (
         <>
           {returnedQueue.length === 0 ? (
-            <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb] space-y-2">
+            <div className="glass-panel p-12 text-center rounded-3xl border border-border text-muted space-y-2">
               <RotateCcw className="w-10 h-10 text-sky-400 mx-auto opacity-80" />
-              <p className="text-sm font-bold text-white">Nenhuma atividade devolvida no momento.</p>
+              <p className="text-sm font-bold text-foreground">Nenhuma atividade devolvida no momento.</p>
               <p className="text-xs">Quando você clicar em &ldquo;Devolver para Refazer&rdquo;, a atividade aparecerá aqui e o aluno poderá enviar uma nova resposta no portal.</p>
             </div>
           ) : (
@@ -797,7 +993,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
       {activeTab === 'nao_fizeram' && (
         <div className="space-y-4">
           {missingStudents.length === 0 ? (
-            <div className="glass-panel p-12 text-center rounded-3xl border border-white/10 text-[#bccabb]">
+            <div className="glass-panel p-12 text-center rounded-3xl border border-border text-muted">
               🎉 Todos os alunos da turma enviaram a atividade!
             </div>
           ) : (
@@ -805,7 +1001,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
               {missingStudents.map((st) => (
                 <div
                   key={st.id}
-                  className="glass-panel p-5 rounded-3xl border border-white/10 flex items-center justify-between gap-4"
+                  className="glass-panel p-5 rounded-3xl border border-border flex items-center justify-between gap-4"
                 >
                   <div className="flex items-center gap-3">
                     <img
@@ -814,12 +1010,12 @@ export const GradingView: React.FC<GradingViewProps> = ({
                       className="w-11 h-11 rounded-full object-cover border-2 border-rose-500/30"
                     />
                     <div>
-                      <h4 className="text-xs font-bold text-white">{st.fullName}</h4>
-                      <p className="text-[10px] text-[#bccabb]">
+                      <h4 className="text-xs font-bold text-foreground">{st.fullName}</h4>
+                      <p className="text-[10px] text-muted">
                         Turma: {st.turma} • Matrícula: {st.matricula}
                       </p>
                       {st.tag && (
-                        <span className="inline-block mt-1 text-[9px] font-bold px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                        <span className="inline-block mt-1 text-[9px] font-bold px-2 py-0.5 rounded-md bg-rose-100 text-rose-600 border border-rose-500/30">
                           {st.tag}
                         </span>
                       )}
@@ -828,7 +1024,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
 
                   <button
                     onClick={() => alert(`Lembrete enviado para o aluno ${st.fullName}!`)}
-                    className="px-3 py-1.5 bg-[#171f33] hover:bg-[#222a3d] text-rose-300 rounded-xl text-[10px] font-bold border border-rose-500/30 transition-all cursor-pointer"
+                    className="px-3 py-1.5 bg-[#171f33] hover:bg-surface-hover text-rose-600 rounded-xl text-[10px] font-bold border border-rose-500/30 transition-all cursor-pointer"
                   >
                     Enviar Lembrete
                   </button>
@@ -838,6 +1034,16 @@ export const GradingView: React.FC<GradingViewProps> = ({
           )}
         </div>
       )}
+
+      {/* Modal Popup de Consolidação de Notas de Recuperação Paralela */}
+      <GradeConsolidationModal
+        isOpen={Boolean(consolidationModalData)}
+        onClose={() => setConsolidationModalData(null)}
+        data={consolidationModalData?.data || null}
+        studentName={consolidationModalData?.studentName}
+        matricula={consolidationModalData?.matricula}
+        turma={consolidationModalData?.turma}
+      />
     </div>
   );
 
@@ -857,10 +1063,77 @@ export const GradingView: React.FC<GradingViewProps> = ({
 
     const studentInfo = students.find((st) => st.id === sub.studentId || (st.matricula && st.matricula === sub.matricula));
 
+    // Dados de Vínculo entre Avaliação Original e Recuperação Paralela
+    let recoveryLinkData: {
+      isRecoveryView: boolean; // Estamos vendo a tela da recuperação
+      isParentView: boolean; // Estamos vendo a tela da atividade mãe
+      parentGrade: number | null;
+      parentTitle: string;
+      recoveryGrade: number | null;
+      recoveryTitle: string;
+      recalculatedFinalGrade: number | null; // Melhor nota (maior entre original e recuperação)
+      gradeEvolution: number | null; // Diferença da recuperação vs original
+    } | null = null;
+
+    if (isRecoveryActivity && parentRecoveryAct) {
+      // Cenário 1: Estamos no GradingView da Recuperação Paralela
+      const parentSub = (parentRecoveryAct.submissions || []).find(
+        (s) => s.studentId === sub.studentId || (s.matricula && s.matricula === sub.matricula)
+      );
+      const pGrade = parentSub ? getSubmissionTotalGrade(parentSub) : null;
+      const rGrade = totalScore;
+      const recalculated = pGrade !== null ? Math.max(pGrade, rGrade) : rGrade;
+      const evolution = pGrade !== null ? Number((rGrade - pGrade).toFixed(1)) : null;
+
+      recoveryLinkData = {
+        isRecoveryView: true,
+        isParentView: false,
+        parentGrade: pGrade,
+        parentTitle: parentRecoveryAct.title,
+        recoveryGrade: rGrade,
+        recoveryTitle: activity.title,
+        recalculatedFinalGrade: recalculated,
+        gradeEvolution: evolution,
+      };
+    } else if (!isRecoveryActivity && childRecoveries.length > 0) {
+      // Cenário 2: Estamos no GradingView da Avaliação Mãe e existe Recuperação Paralela
+      let childSub: ActivitySubmission | undefined;
+      let matchedRecoveryAct: Activity | undefined;
+
+      for (const recAct of childRecoveries) {
+        const found = (recAct.submissions || []).find(
+          (s) => s.studentId === sub.studentId || (s.matricula && s.matricula === sub.matricula)
+        );
+        if (found) {
+          childSub = found;
+          matchedRecoveryAct = recAct;
+          break;
+        }
+      }
+
+      if (childSub && matchedRecoveryAct) {
+        const pGrade = totalScore;
+        const rGrade = getSubmissionTotalGrade(childSub);
+        const recalculated = Math.max(pGrade, rGrade);
+        const evolution = Number((rGrade - pGrade).toFixed(1));
+
+        recoveryLinkData = {
+          isRecoveryView: false,
+          isParentView: true,
+          parentGrade: pGrade,
+          parentTitle: activity.title,
+          recoveryGrade: rGrade,
+          recoveryTitle: matchedRecoveryAct.title,
+          recalculatedFinalGrade: recalculated,
+          gradeEvolution: evolution,
+        };
+      }
+    }
+
     return (
       <div
         key={sub.studentId}
-        className="glass-panel p-6 rounded-3xl border border-white/10 space-y-5 relative flex flex-col justify-between"
+        className="glass-panel p-6 rounded-3xl border border-border space-y-5 relative flex flex-col justify-between"
       >
         {/* Card Header: Student Info & Badges */}
         <div className="flex items-start justify-between gap-3">
@@ -868,15 +1141,15 @@ export const GradingView: React.FC<GradingViewProps> = ({
             <img
               src={sub.avatarUrl}
               alt={sub.studentName}
-              className="w-12 h-12 rounded-full object-cover border-2 border-white/10"
+              className="w-12 h-12 rounded-full object-cover border-2 border-border"
             />
             <div>
-              <h3 className="text-sm font-bold text-white">{sub.studentName}</h3>
-              <p className="text-[10px] text-[#bccabb] uppercase tracking-wider">
+              <h3 className="text-sm font-bold text-foreground">{sub.studentName}</h3>
+              <p className="text-[10px] text-muted uppercase tracking-wider">
                 {studentInfo?.turma ? `TURMA: ${studentInfo.turma} • ` : ''}MATRÍCULA: {sub.matricula}
               </p>
               {sub.groupMembers && (
-                <p className="text-[10px] text-purple-300 mt-0.5 font-medium">
+                <p className="text-[10px] text-purple-600 mt-0.5 font-medium">
                   👥 Grupo: {sub.groupMembers}
                 </p>
               )}
@@ -885,11 +1158,25 @@ export const GradingView: React.FC<GradingViewProps> = ({
 
           <div className="flex flex-col items-end gap-1.5">
             {/* Return Count Badge */}
+            {(sub as any).originKind && (sub as any).originKind !== 'canonical' && (
+              <span
+                className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border flex items-center gap-1 ${
+                  (sub as any).originKind === 'adapted'
+                    ? 'bg-purple-100 text-purple-700 border-purple-300'
+                    : 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                }`}
+                title={`Entregue via ${(sub as any).originActivityTitle || 'atividade filha'}`}
+              >
+                <GitFork className="w-2.5 h-2.5" />
+                {(sub as any).originKind === 'adapted' ? 'Adaptada PNE' : 'Recuperação'}
+              </span>
+            )}
+
             {sub.returnCount && sub.returnCount > 0 ? (
               <span
                 className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${
                   sub.returnCount === 3
-                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                    ? 'bg-rose-100 text-rose-600 border-rose-200'
                     : sub.returnCount === 2
                     ? 'bg-orange-600/20 text-orange-200 border-orange-500/40'
                     : 'bg-orange-500/20 text-orange-300 border-orange-500/30'
@@ -903,24 +1190,32 @@ export const GradingView: React.FC<GradingViewProps> = ({
               <span
                 className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
                   sub.tag === 'PNE'
-                    ? 'bg-[#4ade80]/20 text-[#4ade80] border border-[#4ade80]/30'
+                    ? 'bg-primary/20 text-primary border border-primary/30'
                     : sub.tag === 'RAD'
                     ? 'bg-[#c0c1ff]/20 text-[#c0c1ff] border border-[#c0c1ff]/30'
-                    : 'bg-[#171f33] text-[#bccabb]'
+                    : 'bg-[#171f33] text-muted'
                 }`}
               >
                 {sub.tag}
               </span>
             )}
 
+            {/* Recovery status badge if linked */}
+            {recoveryLinkData && (
+              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 flex items-center gap-1">
+                <RotateCcw className="w-3 h-3" />
+                {recoveryLinkData.isRecoveryView ? 'Fez Recuperação' : 'Teve Recuperação'}
+              </span>
+            )}
+
             {/* Registration status badge in State System */}
             {sub.registeredInStateSystem ? (
-              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-600 border border-emerald-200 flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" />
                 No RCO/SED
               </span>
             ) : (
-              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30">
+              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/30">
                 Pendente RCO
               </span>
             )}
@@ -929,16 +1224,16 @@ export const GradingView: React.FC<GradingViewProps> = ({
 
         {/* Student Essay Response Block */}
         {sub.essayAnswer && (
-          <div className="bg-[#131b2e] p-4 rounded-2xl border border-white/5 space-y-2">
+          <div className="bg-surface p-4 rounded-2xl border border-border space-y-2">
             <div className="flex items-center justify-between">
-              <span className="font-semibold text-xs text-[#bccabb]">
+              <span className="font-semibold text-xs text-muted">
                 Resposta Dissertativa do Aluno:
               </span>
               <span className="text-[10px] text-[#869486]">
                 {sub.essayAnswer.length} caracteres
               </span>
             </div>
-            <p className="italic text-xs text-[#dae2fd] leading-relaxed bg-[#0b1326] p-3 rounded-xl border border-white/5">
+            <p className="italic text-xs text-foreground leading-relaxed bg-background p-3 rounded-xl border border-border">
               &ldquo;{sub.essayAnswer}&rdquo;
             </p>
 
@@ -946,7 +1241,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
             <button
               onClick={() => handleAiCorrection(sub)}
               disabled={isLoadingAi}
-              className="w-full mt-2 py-2.5 px-4 bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer disabled:opacity-50"
+              className="w-full mt-2 py-2.5 px-4 bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-foreground font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer disabled:opacity-50"
             >
               <Sparkles className={`w-4 h-4 ${isLoadingAi ? 'animate-spin' : ''}`} />
               <span>
@@ -960,9 +1255,9 @@ export const GradingView: React.FC<GradingViewProps> = ({
 
         {/* AI Diagnostic Results Accordion / Card */}
         {aiDiag && (
-          <div className="bg-[#1e1b4b]/60 border border-purple-500/30 rounded-2xl p-4 space-y-2.5 text-xs text-[#dae2fd] animate-fadeIn">
+          <div className="bg-[#1e1b4b]/60 border border-purple-500/30 rounded-2xl p-4 space-y-2.5 text-xs text-foreground animate-fadeIn">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-500/20 pb-2">
-              <div className="flex items-center gap-2 text-purple-300 font-bold">
+              <div className="flex items-center gap-2 text-purple-600 font-bold">
                 <Sparkles className="w-4 h-4 text-purple-400" />
                 <span>Diagnóstico IA - Google Gemini</span>
               </div>
@@ -970,10 +1265,10 @@ export const GradingView: React.FC<GradingViewProps> = ({
                 <div
                   className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold border ${
                     aiDiag.aiUsagePercentage <= 25
-                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      ? 'bg-emerald-100 text-emerald-600 border-emerald-200'
                       : aiDiag.aiUsagePercentage <= 60
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                      : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                      ? 'bg-amber-100 text-amber-600 border-amber-200'
+                      : 'bg-rose-100 text-rose-600 border-rose-200'
                   }`}
                 >
                   <span>🤖 Uso Estimado de IA: {Math.round(aiDiag.aiUsagePercentage)}%</span>
@@ -987,32 +1282,32 @@ export const GradingView: React.FC<GradingViewProps> = ({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-1">
-              <div className="bg-[#0f172a]/80 p-2.5 rounded-xl border border-white/5">
-                <span className="text-purple-300 font-bold block mb-0.5">🎯 Fidelidade ao Tema:</span>
-                <p className="text-[#bccabb]">{aiDiag.themeFidelity}</p>
+              <div className="bg-surface/80 p-2.5 rounded-xl border border-border">
+                <span className="text-purple-600 font-bold block mb-0.5">🎯 Fidelidade ao Tema:</span>
+                <p className="text-muted">{aiDiag.themeFidelity}</p>
               </div>
 
-              <div className="bg-[#0f172a]/80 p-2.5 rounded-xl border border-white/5">
-                <span className="text-purple-300 font-bold block mb-0.5">🔑 Uso de Palavras-Chave:</span>
-                <p className="text-[#bccabb]">{aiDiag.keywordsCheck}</p>
+              <div className="bg-surface/80 p-2.5 rounded-xl border border-border">
+                <span className="text-purple-600 font-bold block mb-0.5">🔑 Uso de Palavras-Chave:</span>
+                <p className="text-muted">{aiDiag.keywordsCheck}</p>
               </div>
 
-              <div className="bg-[#0f172a]/80 p-2.5 rounded-xl border border-white/5">
-                <span className="text-purple-300 font-bold block mb-0.5">📝 Estrutura Textual:</span>
-                <p className="text-[#bccabb]">{aiDiag.structureCheck}</p>
+              <div className="bg-surface/80 p-2.5 rounded-xl border border-border">
+                <span className="text-purple-600 font-bold block mb-0.5">📝 Estrutura Textual:</span>
+                <p className="text-muted">{aiDiag.structureCheck}</p>
               </div>
 
-              <div className="bg-[#0f172a]/80 p-2.5 rounded-xl border border-white/5">
-                <span className="text-purple-300 font-bold block mb-0.5">✍️ Gramática e Ortografia:</span>
-                <p className="text-[#bccabb]">{aiDiag.grammarCheck}</p>
+              <div className="bg-surface/80 p-2.5 rounded-xl border border-border">
+                <span className="text-purple-600 font-bold block mb-0.5">✍️ Gramática e Ortografia:</span>
+                <p className="text-muted">{aiDiag.grammarCheck}</p>
               </div>
 
               {aiDiag.aiUsageAnalysis && (
-                <div className="sm:col-span-2 bg-[#0f172a]/90 p-2.5 rounded-xl border border-purple-500/20 flex flex-col gap-1">
-                  <span className="text-purple-300 font-bold flex items-center gap-1.5">
+                <div className="sm:col-span-2 bg-surface/90 p-2.5 rounded-xl border border-purple-500/20 flex flex-col gap-1">
+                  <span className="text-purple-600 font-bold flex items-center gap-1.5">
                     <span>🔬 Análise de Autoria, Pesquisa e Uso de IA:</span>
                   </span>
-                  <p className="text-[#dae2fd] text-[11px] leading-relaxed">
+                  <p className="text-foreground text-[11px] leading-relaxed">
                     {aiDiag.aiUsageAnalysis}
                   </p>
                 </div>
@@ -1025,20 +1320,20 @@ export const GradingView: React.FC<GradingViewProps> = ({
         <div className={`grid ${distribution.hasObjective ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
           {/* Objective Score (Only shown if activity has objective questions) */}
           {distribution.hasObjective && (
-            <div className="bg-[#131b2e] p-3 rounded-2xl border border-white/5">
-              <span className="block text-[9px] font-bold text-[#bccabb] uppercase tracking-wider mb-1">
+            <div className="bg-surface p-3 rounded-2xl border border-border">
+              <span className="block text-[9px] font-bold text-muted uppercase tracking-wider mb-1">
                 Objetivas
               </span>
-              <div className="text-lg font-extrabold text-[#4ade80]">
+              <div className="text-lg font-extrabold text-primary">
                 {objectiveScore.toFixed(1)}{' '}
-                <span className="text-xs text-[#bccabb] font-normal">/ {distribution.maxObjectiveGrade.toFixed(1)}</span>
+                <span className="text-xs text-muted font-normal">/ {distribution.maxObjectiveGrade.toFixed(1)}</span>
               </div>
             </div>
           )}
 
           {/* Essay Score */}
-          <div className="bg-[#131b2e] p-3 rounded-2xl border border-white/5">
-            <span className="block text-[9px] font-bold text-[#bccabb] uppercase tracking-wider mb-1">
+          <div className="bg-surface p-3 rounded-2xl border border-border">
+            <span className="block text-[9px] font-bold text-muted uppercase tracking-wider mb-1">
               Dissertativa
             </span>
             <div className="flex items-baseline gap-1">
@@ -1050,15 +1345,15 @@ export const GradingView: React.FC<GradingViewProps> = ({
                 value={sub.essayScore !== undefined ? sub.essayScore : ''}
                 onChange={(e) => handleScoreChange(sub.studentId, e.target.value)}
                 placeholder="-"
-                className="w-14 bg-[#171f33] border border-white/10 rounded-xl px-2 py-1 text-base font-extrabold text-white text-center focus:outline-none focus:border-[#4ade80]"
+                className="w-14 bg-[#171f33] border border-border rounded-xl px-2 py-1 text-base font-extrabold text-foreground text-center focus:outline-none focus:border-primary"
               />
-              <span className="text-xs text-[#bccabb] font-normal">/ {maxEssayValue.toFixed(1)}</span>
+              <span className="text-xs text-muted font-normal">/ {maxEssayValue.toFixed(1)}</span>
             </div>
           </div>
 
           {/* Extra Points by Teacher */}
-          <div className="bg-[#131b2e] p-3 rounded-2xl border border-amber-500/20">
-            <span className="block text-[9px] font-bold text-amber-300 uppercase tracking-wider mb-1 flex items-center gap-1">
+          <div className="bg-surface p-3 rounded-2xl border border-amber-500/20">
+            <span className="block text-[9px] font-bold text-amber-600 uppercase tracking-wider mb-1 flex items-center gap-1">
               <Award className="w-3 h-3" /> Ponto Extra
             </span>
             <input
@@ -1068,29 +1363,76 @@ export const GradingView: React.FC<GradingViewProps> = ({
               max="3"
               value={sub.extraPoints || 0}
               onChange={(e) => handleExtraPointsChange(sub.studentId, e.target.value)}
-              className="w-full bg-[#171f33] border border-amber-500/30 rounded-xl px-2 py-1 text-base font-extrabold text-amber-300 text-center focus:outline-none focus:border-amber-400"
+              className="w-full bg-[#171f33] border border-amber-500/30 rounded-xl px-2 py-1 text-base font-extrabold text-amber-600 text-center focus:outline-none focus:border-amber-400"
             />
           </div>
         </div>
 
         {/* Calculated Final Total Score Banner */}
-        <div className="bg-gradient-to-r from-[#171f33] to-[#1e293b] p-3 rounded-2xl border border-white/10 flex items-center justify-between">
-          <span className="text-xs font-bold text-white flex items-center gap-1.5">
+        <div className="bg-gradient-to-r from-[#171f33] to-[#1e293b] p-3 rounded-2xl border border-border flex items-center justify-between">
+          <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
             <Award className="w-4 h-4 text-amber-400" />
             Nota Final Total:
           </span>
-          <span className="text-xl font-extrabold text-[#4ade80]">
+          <span className="text-xl font-extrabold text-primary">
             {totalScore.toFixed(1)}{' '}
-            <span className="text-xs text-[#bccabb]">
+            <span className="text-xs text-muted">
               / {distribution.maxGrade.toFixed(1)}
             </span>
           </span>
         </div>
 
+        {/* Visual Link: Consolidação de Notas da Recuperação Paralela (Resumo Compacto + Botão Janela Popup) */}
+        {recoveryLinkData && (
+          <div className="p-3 rounded-2xl bg-surface border border-primary/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="p-2 bg-primary/20 text-primary rounded-xl shrink-0">
+                <RotateCcw className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-bold text-foreground">
+                    Recuperação Paralela Vinculada
+                  </span>
+                  {recoveryLinkData.recalculatedFinalGrade !== null && (
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      Consolidada: {recoveryLinkData.recalculatedFinalGrade.toFixed(1)}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted truncate">
+                  {recoveryLinkData.isRecoveryView
+                    ? `Raiz: "${recoveryLinkData.parentTitle}"`
+                    : `Recuperação: "${recoveryLinkData.recoveryTitle}"`}
+                </p>
+              </div>
+            </div>
+
+            {/* Botão para Abrir Janela Popup Completa de Consolidação */}
+            <button
+              type="button"
+              onClick={() => {
+                const currentStudentUser = students.find((s) => s.id === sub.studentId);
+                setConsolidationModalData({
+                  data: recoveryLinkData,
+                  studentName: sub.studentName || currentStudentUser?.fullName || 'Aluno',
+                  matricula: currentStudentUser?.matricula || sub.matricula,
+                  turma: currentStudentUser?.turma || activity.turma,
+                });
+              }}
+              className="px-3.5 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0"
+              title="Abrir registros detalhados de consolidação em janela popup"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span>Ver Consolidação Completa</span>
+            </button>
+          </div>
+        )}
+
         {/* Teacher Feedback Textarea */}
         <div>
           <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
-            <label className="block text-[11px] font-bold text-[#bccabb] uppercase tracking-wider">
+            <label className="block text-[11px] font-bold text-muted uppercase tracking-wider">
               Feedback Pedagógico ao Aluno
             </label>
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -1099,7 +1441,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
                 type="button"
                 onClick={() => handleGenerateAiFeedback(sub, sub.status === 'returned' ? 'returned' : 'graded', 'ninja')}
                 disabled={Boolean(generatingFeedbackState?.studentId === sub.studentId)}
-                className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold rounded-lg text-[10px] flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                className="px-2.5 py-1 bg-amber-100 hover:bg-amber-500/30 border border-amber-200 text-amber-600 font-bold rounded-lg text-[10px] flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
                 title="Gerar feedback temático Ninja (Naruto) limitado a 400 caracteres com Gemini"
               >
                 {generatingFeedbackState?.studentId === sub.studentId && generatingFeedbackState?.type === 'ninja' ? (
@@ -1120,7 +1462,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
                 type="button"
                 onClick={() => handleGenerateAiFeedback(sub, sub.status === 'returned' ? 'returned' : 'graded', 'serious')}
                 disabled={Boolean(generatingFeedbackState?.studentId === sub.studentId)}
-                className="px-2.5 py-1 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 text-blue-300 font-bold rounded-lg text-[10px] flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                className="px-2.5 py-1 bg-blue-100 hover:bg-blue-500/30 border border-blue-200 text-blue-600 font-bold rounded-lg text-[10px] flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
                 title="Gerar feedback pedagógico do professor (acolhedor e motivador, limitado a 400 caracteres) com Gemini"
               >
                 {generatingFeedbackState?.studentId === sub.studentId && generatingFeedbackState?.type === 'serious' ? (
@@ -1147,13 +1489,13 @@ export const GradingView: React.FC<GradingViewProps> = ({
             value={sub.teacherFeedback || ''}
             onChange={(e) => handleFeedbackChange(sub.studentId, e.target.value)}
             placeholder="Feedback motivacional ou formal, observações sobre a resposta e recomendações de estudo..."
-            className="w-full bg-[#131b2e] border border-white/10 rounded-2xl p-3.5 text-xs text-[#dae2fd] placeholder-[#869486] focus:outline-none focus:border-[#4ade80] transition-all resize-none"
+            className="w-full bg-surface border border-border rounded-2xl p-3.5 text-xs text-foreground placeholder-[#869486] focus:outline-none focus:border-primary transition-all resize-none"
           />
         </div>
 
         {/* Checkbox for Registration in State System */}
         <div className="pt-1">
-          <label className="flex items-center gap-2.5 cursor-pointer text-xs text-[#dae2fd] select-none bg-[#131b2e] p-3 rounded-2xl border border-white/5 hover:bg-[#1a243b] transition-colors">
+          <label className="flex items-center gap-2.5 cursor-pointer text-xs text-foreground select-none bg-surface p-3 rounded-2xl border border-border hover:bg-[#1a243b] transition-colors">
             <input
               type="checkbox"
               checked={!!sub.registeredInStateSystem}
@@ -1168,8 +1510,8 @@ export const GradingView: React.FC<GradingViewProps> = ({
         {isSaved && (
           <div className={`p-3 rounded-2xl text-xs font-bold flex items-center gap-2 ${
             sub.status === 'returned'
-              ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300'
-              : 'bg-[#4ade80]/20 border border-[#4ade80]/40 text-[#4ade80]'
+              ? 'bg-amber-100 border border-amber-200 text-amber-600'
+              : 'bg-primary/20 border border-primary/40 text-primary'
           }`}>
             <UserCheck className="w-4 h-4" />
             <span>
@@ -1184,7 +1526,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
         <div className="grid grid-cols-2 gap-3 pt-2">
           <button
             onClick={() => handleSave(sub.studentId, 'graded')}
-            className="py-3 px-4 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
+            className="py-3 px-4 bg-primary hover:bg-primary-hover text-white font-bold rounded-full text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
           >
             <Save className="w-4 h-4" />
             <span>{sub.status === 'graded' ? 'Salvar Nota' : 'Salvar e Finalizar'}</span>
@@ -1196,7 +1538,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
               onClick={() => {
                 alert('🚨 Bloqueio Ninja: Esta atividade já foi devolvida 3 vezes ao aluno. A 4ª devolução está BLOQUEADA! Por favor, atribua a nota final e clique em Salvar e Finalizar.');
               }}
-              className="py-3 px-4 bg-rose-500/10 text-rose-300 font-bold rounded-full text-xs border border-rose-500/30 flex items-center justify-center gap-2 transition-all cursor-not-allowed opacity-90"
+              className="py-3 px-4 bg-rose-500/10 text-rose-600 font-bold rounded-full text-xs border border-rose-500/30 flex items-center justify-center gap-2 transition-all cursor-not-allowed opacity-90"
               title="A 4ª devolução está bloqueada pelo sistema. Atribua a nota final."
             >
               <RotateCcw className="w-4 h-4 text-rose-400" />
@@ -1205,7 +1547,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
           ) : (
             <button
               onClick={() => handleSave(sub.studentId, 'returned')}
-              className="py-3 px-4 bg-transparent hover:bg-white/5 text-[#dae2fd] font-bold rounded-full text-xs border border-white/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
+              className="py-3 px-4 bg-transparent hover:bg-surface-hover text-foreground font-bold rounded-full text-xs border border-border flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
               <span>

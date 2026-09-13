@@ -64,7 +64,7 @@ Nova mensagem enviada por ${studentName}:
 
 Responda diretamente ao aluno como ${teacherName}:`;
 
-    const candidateModels = ['gemini-3.7-flash', 'gemini-3.1-flash-lite'];
+    const candidateModels = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
     let response: any = null;
 
     for (const modelName of candidateModels) {
@@ -80,10 +80,10 @@ Responda diretamente ao aluno como ${teacherName}:`;
         if (response && response.text) break;
       } catch (err: any) {
         const errMsg = String(err?.message || '');
-        console.warn(`Aviso na rota teacher-bot com ${modelName}:`, errMsg);
         if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid')) {
           break;
         }
+        console.warn(`Tentativa na rota teacher-bot com ${modelName}:`, errMsg);
       }
     }
 

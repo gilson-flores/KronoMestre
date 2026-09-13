@@ -680,6 +680,7 @@ export function createParallelRecoveryActivity(
     recoveryDescription?: string;
     recoveryApproach?: string;
     deadline?: string;
+    turma?: string;
     questions?: ActivityQuestion[];
   }
 ): Activity {
@@ -695,7 +696,7 @@ export function createParallelRecoveryActivity(
     subject: parentActivity.subject || 'Sociologia',
     description,
     supportMaterial: parentActivity.supportMaterial || '',
-    turma: parentActivity.turma,
+    turma: options.turma || parentActivity.turma,
     type: 'Recuperação Paralela',
     status: 'Ativo',
     deadline: options.deadline || parentActivity.deadline,

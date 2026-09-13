@@ -196,46 +196,46 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="w-full max-w-3xl glass-panel rounded-3xl border border-white/10 p-6 sm:p-8 space-y-6 shadow-2xl relative my-8 animate-fadeIn max-h-[90vh] flex flex-col">
+      <div className="w-full max-w-3xl glass-panel rounded-3xl border border-border p-6 sm:p-8 space-y-6 shadow-2xl relative my-8 animate-fadeIn max-h-[90vh] flex flex-col">
         {/* Header Close */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 text-[#bccabb] hover:text-white rounded-full hover:bg-white/5 transition-colors cursor-pointer"
+          className="absolute top-5 right-5 p-2 text-muted hover:text-foreground rounded-full hover:bg-surface-hover transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Modal Title */}
         <div className="flex items-center gap-3 shrink-0">
-          <div className="p-3 bg-[#4ade80]/10 text-[#4ade80] rounded-2xl border border-[#4ade80]/20">
+          <div className="p-3 bg-primary/10 text-primary rounded-2xl border border-primary/20">
             <Upload className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white">Importar Alunos via CSV</h2>
-            <p className="text-xs text-[#bccabb]">
+            <h2 className="text-xl font-bold text-foreground">Importar Alunos via CSV</h2>
+            <p className="text-xs text-muted">
               Padronização automática de nomes em MAIÚSCULAS e turmas de 3 ou 4 dígitos
             </p>
           </div>
         </div>
 
         {/* Instructions & English Header Spec */}
-        <div className="bg-[#131b2e] p-4 rounded-2xl border border-white/10 space-y-3 shrink-0 text-xs">
+        <div className="bg-surface p-4 rounded-2xl border border-border space-y-3 shrink-0 text-xs">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-[#4ade80] font-bold uppercase tracking-wider">
+            <div className="flex items-center gap-2 text-primary font-bold uppercase tracking-wider">
               <Info className="w-4 h-4" />
               <span>Cabeçalho Obrigatório no CSV (em inglês):</span>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={handleCopyExample}
-                className="py-1 px-3 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] rounded-lg border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="py-1 px-3 bg-[#171f33] hover:bg-surface-hover text-foreground rounded-lg border border-border flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                {copied ? <Check className="w-3.5 h-3.5 text-[#4ade80]" /> : <Copy className="w-3.5 h-3.5" />}
+                {copied ? <Check className="w-3.5 h-3.5 text-primary" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copied ? 'Copiado!' : 'Copiar Exemplo'}</span>
               </button>
               <button
                 onClick={handleDownloadExample}
-                className="py-1 px-3 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] rounded-lg border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="py-1 px-3 bg-[#171f33] hover:bg-surface-hover text-foreground rounded-lg border border-border flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Baixar Modelo</span>
@@ -243,24 +243,24 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
             </div>
           </div>
 
-          <div className="bg-[#0b1326] p-2.5 rounded-xl font-mono text-white/90 border border-white/5 overflow-x-auto selection:bg-[#4ade80]/30">
+          <div className="bg-background p-2.5 rounded-xl font-mono text-foreground/90 border border-border overflow-x-auto selection:bg-primary/30">
             full_name,turma,matricula,tag
           </div>
 
-          <ul className="text-[#bccabb] space-y-1 list-disc list-inside text-[11px]">
+          <ul className="text-muted space-y-1 list-disc list-inside text-[11px]">
             <li>
-              <strong className="text-white">full_name:</strong> Nome do aluno. Será convertido automaticamente para{' '}
-              <span className="text-[#4ade80] font-bold">MAIÚSCULAS E SEM ACENTOS</span> (ex: <code>JOAO DA SILVA</code>).
+              <strong className="text-foreground">full_name:</strong> Nome do aluno. Será convertido automaticamente para{' '}
+              <span className="text-primary font-bold">MAIÚSCULAS E SEM ACENTOS</span> (ex: <code>JOAO DA SILVA</code>).
             </li>
             <li>
-              <strong className="text-white">turma:</strong> Código da turma. 3 dígitos para ensino regular (ex:{' '}
+              <strong className="text-foreground">turma:</strong> Código da turma. 3 dígitos para ensino regular (ex:{' '}
               <code>101</code>, <code>301</code>) ou 4 dígitos para técnico (ex: <code>3001</code>).
             </li>
             <li>
-              <strong className="text-white">matricula:</strong> Número de registro do aluno (ex: <code>2023854</code>).
+              <strong className="text-foreground">matricula:</strong> Número de registro do aluno (ex: <code>2023854</code>).
             </li>
             <li>
-              <strong className="text-white">tag:</strong> Categoria do aluno: <code>REGULAR</code>, <code>PNE</code> ou <code>RAD</code>.
+              <strong className="text-foreground">tag:</strong> Categoria do aluno: <code>REGULAR</code>, <code>PNE</code> ou <code>RAD</code>.
             </li>
           </ul>
         </div>
@@ -268,8 +268,8 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
         {/* Upload & Text input zone */}
         <div className="space-y-3 shrink-0">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-white">Carregar Arquivo ou Colar Conteúdo CSV:</label>
-            <label className="py-1.5 px-3 bg-[#171f33] hover:bg-[#222a3d] text-[#4ade80] font-bold rounded-lg border border-[#4ade80]/30 text-xs flex items-center gap-1.5 cursor-pointer transition-colors">
+            <label className="text-xs font-semibold text-foreground">Carregar Arquivo ou Colar Conteúdo CSV:</label>
+            <label className="py-1.5 px-3 bg-[#171f33] hover:bg-surface-hover text-primary font-bold rounded-lg border border-primary/30 text-xs flex items-center gap-1.5 cursor-pointer transition-colors">
               <Upload className="w-3.5 h-3.5" />
               <span>Escolher Arquivo .csv</span>
               <input type="file" accept=".csv,.txt" onChange={handleFileUpload} className="hidden" />
@@ -284,13 +284,13 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
               processCsvContent(e.target.value);
             }}
             placeholder={`Cole aqui o conteúdo CSV. Exemplo:\nfull_name,turma,matricula,tag\nCARLOS EDUARDO SILVEIRA,301,2023854,REGULAR\nANA JULIA PEREIRA,3001,2023855,PNE`}
-            className="w-full bg-[#131b2e] border border-white/10 rounded-2xl p-3 text-xs font-mono text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
+            className="w-full bg-surface border border-border rounded-2xl p-3 text-xs font-mono text-foreground placeholder-[#869486] focus:outline-none focus:border-primary"
           />
         </div>
 
         {/* Error Alert */}
         {headerError && (
-          <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-2xl text-xs flex items-center gap-2 shrink-0">
+          <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-600 rounded-2xl text-xs flex items-center gap-2 shrink-0">
             <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
             <span>{headerError}</span>
           </div>
@@ -298,11 +298,11 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
 
         {/* Preview Table of parsed rows */}
         {hasProcessed && parsedRows.length > 0 && (
-          <div className="flex-1 min-h-[160px] overflow-y-auto space-y-2 border border-white/10 rounded-2xl p-3 bg-[#0b1326]/60">
-            <div className="flex items-center justify-between text-xs font-semibold text-[#bccabb] px-1 pb-1 border-b border-white/5">
+          <div className="flex-1 min-h-[160px] overflow-y-auto space-y-2 border border-border rounded-2xl p-3 bg-background/60">
+            <div className="flex items-center justify-between text-xs font-semibold text-muted px-1 pb-1 border-b border-border">
               <span>Pré-visualização da Importação ({parsedRows.length} linhas)</span>
               <div className="flex items-center gap-3">
-                <span className="text-[#4ade80] font-bold">{validCount} Válidos</span>
+                <span className="text-primary font-bold">{validCount} Válidos</span>
                 {invalidCount > 0 && <span className="text-rose-400 font-bold">{invalidCount} Com Erros</span>}
               </div>
             </div>
@@ -313,13 +313,13 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
                   key={row.index}
                   className={`p-2.5 rounded-xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
                     row.isValid
-                      ? 'bg-[#131b2e]/80 border-[#4ade80]/20 text-white'
+                      ? 'bg-surface/80 border-primary/20 text-foreground'
                       : 'bg-rose-950/30 border-rose-500/30 text-rose-200'
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     {row.isValid ? (
-                      <CheckCircle2 className="w-4 h-4 text-[#4ade80] shrink-0" />
+                      <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
                     ) : (
                       <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
                     )}
@@ -327,13 +327,13 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
                       <div className="font-bold flex items-center gap-2">
                         <span>{row.normalizedFullName || row.rawFullName || '(Sem Nome)'}</span>
                         {row.rawFullName && row.rawFullName.toUpperCase() !== row.normalizedFullName && (
-                          <span className="text-[10px] text-[#4ade80] bg-[#4ade80]/10 px-1.5 py-0.5 rounded font-mono">
+                          <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-mono">
                             Padronizado
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] text-[#bccabb]">
-                        Turma: <strong className="text-white">{row.turma || '-'}</strong> ({getTurmaLabel(row.turma)}) • Matrícula: {row.matricula} • Tag: {row.tag}
+                      <div className="text-[11px] text-muted">
+                        Turma: <strong className="text-foreground">{row.turma || '-'}</strong> ({getTurmaLabel(row.turma)}) • Matrícula: {row.matricula} • Tag: {row.tag}
                       </div>
                     </div>
                   </div>
@@ -350,10 +350,10 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
         )}
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-end gap-3 shrink-0 pt-2 border-t border-white/10">
+        <div className="flex items-center justify-end gap-3 shrink-0 pt-2 border-t border-border">
           <button
             onClick={onClose}
-            className="px-5 py-2.5 bg-[#171f33] hover:bg-[#222a3d] text-[#bccabb] hover:text-white text-xs font-bold rounded-full transition-colors cursor-pointer"
+            className="px-5 py-2.5 bg-[#171f33] hover:bg-surface-hover text-muted hover:text-foreground text-xs font-bold rounded-full transition-colors cursor-pointer"
           >
             Cancelar
           </button>
@@ -363,8 +363,8 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
             disabled={validCount === 0}
             className={`py-2.5 px-6 font-bold rounded-full text-xs transition-all shadow-lg flex items-center gap-2 ${
               validCount > 0
-                ? 'bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] shadow-[#4ade80]/20 cursor-pointer'
-                : 'bg-white/10 text-white/40 cursor-not-allowed'
+                ? 'bg-primary hover:bg-primary-hover text-white shadow-primary/20 cursor-pointer'
+                : 'bg-surface-hover text-foreground/40 cursor-not-allowed'
             }`}
           >
             <Upload className="w-4 h-4" />

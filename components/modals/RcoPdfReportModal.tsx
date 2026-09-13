@@ -460,23 +460,23 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn print:static print:p-0 print:m-0 print:bg-white print:overflow-visible">
       {/* Container Principal do Modal */}
-      <div className="rco-modal-dialog bg-[#0b1326] border border-white/15 rounded-3xl w-full max-w-5xl max-h-[95vh] flex flex-col shadow-2xl overflow-hidden print:border-none print:shadow-none print:max-h-none print:overflow-visible print:bg-white print:w-full print:max-w-none print:rounded-none">
+      <div className="rco-modal-dialog bg-background border border-white/15 rounded-3xl w-full max-w-5xl max-h-[95vh] flex flex-col shadow-2xl overflow-hidden print:border-none print:shadow-none print:max-h-none print:overflow-visible print:bg-white print:w-full print:max-w-none print:rounded-none">
         {/* Modal Header & Toolbar (oculto na impressão com .no-print) */}
-        <div className="no-print p-4 sm:p-5 bg-[#131b2e] border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="no-print p-4 sm:p-5 bg-surface border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#4ade80]/20 border border-[#4ade80]/30 flex items-center justify-center text-[#4ade80] shrink-0">
+            <div className="w-10 h-10 rounded-2xl bg-primary/20 border border-primary/30 flex items-center justify-center text-primary shrink-0">
               <ClipboardList className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-black text-white tracking-tight">
+                <h2 className="text-base sm:text-lg font-black text-foreground tracking-tight">
                   Mapa de Controle Docente • Lançamento de Atividades
                 </h2>
-                <span className="bg-[#4ade80]/20 text-[#4ade80] text-[10px] font-bold px-2 py-0.5 rounded-full border border-[#4ade80]/30">
+                <span className="bg-primary/20 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full border border-primary/30">
                   Pronto para Impressão
                 </span>
               </div>
-              <p className="text-xs text-[#bccabb] mt-0.5">
+              <p className="text-xs text-muted mt-0.5">
                 Organização do dia a dia do professor: conferência de entregas, notas de atividades e controle de pendências.
               </p>
             </div>
@@ -485,7 +485,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
           <div className="flex items-center gap-2 flex-wrap self-end sm:self-center">
             <button
               onClick={handlePrint}
-              className="py-2.5 px-4 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-extrabold rounded-2xl transition-all text-xs flex items-center gap-2 cursor-pointer shadow-lg shadow-[#4ade80]/20 active:scale-95"
+              className="py-2.5 px-4 bg-primary hover:bg-primary-hover text-white font-extrabold rounded-2xl transition-all text-xs flex items-center gap-2 cursor-pointer shadow-lg shadow-primary/20 active:scale-95"
             >
               <Printer className="w-4 h-4" />
               <span>Imprimir / Salvar em PDF</span>
@@ -493,7 +493,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
 
             <button
               onClick={handleCopyPendingList}
-              className="py-2.5 px-3 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] font-bold rounded-2xl border border-white/10 transition-all text-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+              className="py-2.5 px-3 bg-[#171f33] hover:bg-surface-hover text-foreground font-bold rounded-2xl border border-border transition-all text-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
               title="Copiar lista de pendências para WhatsApp ou bloco de notas"
             >
               {copiedState ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
@@ -502,7 +502,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
 
             <button
               onClick={handleExportCsv}
-              className="py-2.5 px-3 bg-[#171f33] hover:bg-[#222a3d] text-[#dae2fd] font-bold rounded-2xl border border-white/10 transition-all text-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+              className="py-2.5 px-3 bg-[#171f33] hover:bg-surface-hover text-foreground font-bold rounded-2xl border border-border transition-all text-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
               title="Exportar Planilha de Entregas (CSV)"
             >
               <Download className="w-4 h-4" />
@@ -511,7 +511,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
 
             <button
               onClick={onClose}
-              className="p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors cursor-pointer"
+              className="p-2.5 rounded-2xl bg-surface-hover hover:bg-surface-hover text-foreground/70 hover:text-foreground transition-colors cursor-pointer"
               title="Fechar"
             >
               <X className="w-5 h-5" />
@@ -521,7 +521,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
 
         {/* Notificação de Persistência */}
         {persistedSuccessNotice && (
-          <div className="no-print bg-emerald-500/20 border-b border-emerald-500/40 px-5 py-2 text-xs text-emerald-300 flex items-center justify-between animate-fadeIn">
+          <div className="no-print bg-emerald-100 border-b border-emerald-200 px-5 py-2 text-xs text-emerald-600 flex items-center justify-between animate-fadeIn">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
               <span>
@@ -530,7 +530,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
             </div>
             <button
               onClick={() => setPersistedSuccessNotice(false)}
-              className="text-emerald-300 hover:text-white"
+              className="text-emerald-600 hover:text-foreground"
             >
               ✕
             </button>
@@ -538,20 +538,20 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
         )}
 
         {/* Options Toolbar (no-print) */}
-        <div className="no-print px-5 py-3.5 bg-[#0f172a] border-b border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="no-print px-5 py-3.5 bg-surface border-b border-border flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-[#bccabb] font-bold flex items-center gap-1">
-              <Layers className="w-3.5 h-3.5 text-[#4ade80]" />
+            <span className="text-muted font-bold flex items-center gap-1">
+              <Layers className="w-3.5 h-3.5 text-primary" />
               Escopo / Turma:
             </span>
-            <div className="inline-flex rounded-xl p-1 bg-[#0b1326] border border-white/10">
+            <div className="inline-flex rounded-xl p-1 bg-background border border-border">
               <button
                 type="button"
                 onClick={() => setScope('all')}
                 className={`px-3 py-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
                   scope === 'all'
-                    ? 'bg-[#4ade80] text-[#003919] shadow-sm'
-                    : 'text-[#bccabb] hover:text-white'
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-muted hover:text-foreground'
                 }`}
               >
                 Todas as Turmas (Relatório Geral)
@@ -561,8 +561,8 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                 onClick={() => setScope('single')}
                 className={`px-3 py-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
                   scope === 'single'
-                    ? 'bg-[#4ade80] text-[#003919] shadow-sm'
-                    : 'text-[#bccabb] hover:text-white'
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-muted hover:text-foreground'
                 }`}
               >
                 Turma Específica
@@ -579,46 +579,46 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                   setActiveTurma(e.target.value);
                 }
               }}
-              className="bg-[#0b1326] border border-white/15 rounded-xl px-3 py-1.5 text-xs text-white font-bold focus:outline-none focus:border-[#4ade80] cursor-pointer"
+              className="bg-background border border-white/15 rounded-xl px-3 py-1.5 text-xs text-foreground font-bold focus:outline-none focus:border-primary cursor-pointer"
             >
-              <option value="ALL" className="bg-[#0b1326] text-[#4ade80] font-bold">
+              <option value="ALL" className="bg-background text-primary font-bold">
                 📋 Todas as Turmas (Relatório Geral - {allTurmas.length} turmas)
               </option>
               {allTurmas.map((t) => (
-                <option key={t} value={t} className="bg-[#0b1326] text-white">
+                <option key={t} value={t} className="bg-background text-foreground">
                   Turma {t}
                 </option>
               ))}
             </select>
           </div>
 
-          <div className="flex items-center gap-4 flex-wrap text-[#bccabb]">
-            <label className="flex items-center gap-1.5 cursor-pointer hover:text-white">
+          <div className="flex items-center gap-4 flex-wrap text-muted">
+            <label className="flex items-center gap-1.5 cursor-pointer hover:text-foreground">
               <input
                 type="checkbox"
                 checked={includeActivityDetails}
                 onChange={(e) => setIncludeActivityDetails(e.target.checked)}
-                className="rounded text-[#4ade80] focus:ring-[#4ade80] cursor-pointer"
+                className="rounded text-primary focus:ring-[#4ade80] cursor-pointer"
               />
               <span>Quadro de Atividades</span>
             </label>
 
-            <label className="flex items-center gap-1.5 cursor-pointer hover:text-white">
+            <label className="flex items-center gap-1.5 cursor-pointer hover:text-foreground">
               <input
                 type="checkbox"
                 checked={includeSpecialNeeds}
                 onChange={(e) => setIncludeSpecialNeeds(e.target.checked)}
-                className="rounded text-[#4ade80] focus:ring-[#4ade80] cursor-pointer"
+                className="rounded text-primary focus:ring-[#4ade80] cursor-pointer"
               />
               <span>Notas de Inclusão (PNE / RAD)</span>
             </label>
 
-            <label className="flex items-center gap-1.5 cursor-pointer hover:text-white">
+            <label className="flex items-center gap-1.5 cursor-pointer hover:text-foreground">
               <input
                 type="checkbox"
                 checked={includeSignatures}
                 onChange={(e) => setIncludeSignatures(e.target.checked)}
-                className="rounded text-[#4ade80] focus:ring-[#4ade80] cursor-pointer"
+                className="rounded text-primary focus:ring-[#4ade80] cursor-pointer"
               />
               <span>Assinaturas</span>
             </label>
@@ -683,13 +683,13 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                       </div>
 
                       <div className="text-right shrink-0">
-                        <div className="inline-block bg-slate-900 text-white rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider">
+                        <div className="inline-block bg-slate-900 text-foreground rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider">
                           Mapa de Lançamento
                         </div>
-                        <div className="text-[9px] text-slate-500 font-medium mt-1">
+                        <div className="text-[9px] text-muted font-medium mt-1">
                           Data: {currentDateFormatted}
                         </div>
-                        <div className="text-[8px] text-slate-400 font-mono">
+                        <div className="text-[8px] text-muted font-mono">
                           Ref: {emissionHash}
                         </div>
                       </div>
@@ -697,7 +697,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                   </div>
 
                   {/* IDENTIFICAÇÃO DA TURMA E RESUMO OPERACIONAL */}
-                  <div className="bg-slate-900 text-white p-3 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                  <div className="bg-slate-900 text-foreground p-3 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-lg bg-emerald-400 text-slate-950 font-black flex items-center justify-center text-xs shrink-0 shadow-sm">
                         {turmaData.turmaName.slice(0, 3)}
@@ -706,24 +706,24 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                         <h3 className="text-sm font-black uppercase tracking-tight">
                           TURMA {turmaData.turmaName} • CONTROLE DE ATIVIDADES E ENTREGAS
                         </h3>
-                        <span className="text-[10px] text-slate-300">
+                        <span className="text-[10px] text-muted">
                           Ano Letivo 2026 • Acompanhamento e Visto de Sala
                         </span>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap text-[10px]">
-                      <div className="bg-white/10 px-2 py-1 rounded text-slate-200">
+                      <div className="bg-surface-hover px-2 py-1 rounded text-slate-200">
                         <strong>{turmaData.studentsCount}</strong> alunos
                       </div>
-                      <div className="bg-white/10 px-2 py-1 rounded text-slate-200">
+                      <div className="bg-surface-hover px-2 py-1 rounded text-slate-200">
                         <strong>{turmaData.activitiesCount}</strong> atividades
                       </div>
-                      <div className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-1 rounded font-bold">
+                      <div className="bg-emerald-100 text-emerald-600 border border-emerald-500/30 px-2 py-1 rounded font-bold">
                         {turmaData.studentsWithAtLeastOneSubmission}/{turmaData.studentsCount} com entregas ({turmaData.engagementPercent}%)
                       </div>
                       {(turmaData.pneCount > 0 || turmaData.radCount > 0) && (
-                        <div className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-1 rounded font-bold">
+                        <div className="bg-amber-100 text-amber-600 border border-amber-500/30 px-2 py-1 rounded font-bold">
                           {turmaData.pneCount > 0 ? `${turmaData.pneCount} PNE` : ''}
                           {turmaData.pneCount > 0 && turmaData.radCount > 0 ? ' • ' : ''}
                           {turmaData.radCount > 0 ? `${turmaData.radCount} RAD` : ''}
@@ -741,10 +741,10 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                         </strong>
                         <div className="flex items-center gap-2 text-[8px]">
                           <span className="inline-flex items-center gap-1 font-bold text-slate-700">
-                            <span className="w-3.5 h-3.5 rounded bg-slate-900 text-white flex items-center justify-center text-[7px]">A</span> Atividade Regular
+                            <span className="w-3.5 h-3.5 rounded bg-slate-900 text-foreground flex items-center justify-center text-[7px]">A</span> Atividade Regular
                           </span>
                           <span className="inline-flex items-center gap-1 font-bold text-amber-900">
-                            <span className="w-3.5 h-3.5 rounded bg-amber-600 text-white flex items-center justify-center text-[7px]">REC</span> Recuperação Paralela
+                            <span className="w-3.5 h-3.5 rounded bg-amber-600 text-foreground flex items-center justify-center text-[7px]">REC</span> Recuperação Paralela
                           </span>
                           <span className="inline-flex items-center gap-1 font-bold text-purple-900">
                             <span className="px-1 rounded bg-purple-100 text-purple-800 border border-purple-300 text-[7px]">Adapt.</span> Adaptação PEI
@@ -764,8 +764,8 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                             <span
                               className={`w-6 h-5 rounded font-black text-[8.5px] flex items-center justify-center shrink-0 ${
                                 actItem.isRecovery
-                                  ? 'bg-amber-600 text-white'
-                                  : 'bg-slate-900 text-white'
+                                  ? 'bg-amber-600 text-foreground'
+                                  : 'bg-slate-900 text-foreground'
                               }`}
                             >
                               {actItem.code}
@@ -821,7 +821,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                           <tr className="rco-avoid-break">
                             <td
                               colSpan={5 + turmaData.activityMap.length}
-                              className="p-4 text-center text-slate-500 italic"
+                              className="p-4 text-center text-muted italic"
                             >
                               Nenhum aluno cadastrado nesta turma.
                             </td>
@@ -839,7 +839,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                               }`}
                             >
                               {/* Nº */}
-                              <td className="py-1.5 px-2 text-center font-bold text-slate-500 text-[10px]">
+                              <td className="py-1.5 px-2 text-center font-bold text-muted text-[10px]">
                                 {String(row.index).padStart(2, '0')}
                               </td>
 
@@ -874,7 +874,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                                     RAD
                                   </span>
                                 ) : (
-                                  <span className="text-slate-400 text-[8px]">Reg.</span>
+                                  <span className="text-muted text-[8px]">Reg.</span>
                                 )}
                               </td>
 
@@ -906,7 +906,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                                       )}
                                     </div>
                                   ) : (
-                                    <span className="text-slate-300 font-normal">—</span>
+                                    <span className="text-muted font-normal">—</span>
                                   )}
                                 </td>
                               ))}
@@ -919,7 +919,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                                       ? 'text-emerald-900 font-black'
                                       : row.completedCount > 0
                                       ? 'text-amber-800 font-bold'
-                                      : 'text-slate-400'
+                                      : 'text-muted'
                                   }
                                 >
                                   {row.completedCount}/{row.totalActivities}
@@ -983,19 +983,19 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                               Professor(a) de {teacher.subject || 'Sociologia'}
                             </span>
                           </div>
-                          <span className="text-[7px] text-slate-400">Visto do Docente Responsável</span>
+                          <span className="text-[7px] text-muted">Visto do Docente Responsável</span>
                         </div>
 
                         <div>
                           <div className="border-b border-slate-400 pb-0.5 mb-0.5">
-                            <span className="block text-slate-400 font-bold">
+                            <span className="block text-muted font-bold">
                               __________________________________________
                             </span>
                             <span className="text-[8px] text-slate-600 font-bold">
                               Especialista Pedagógico / Direção Escolar
                             </span>
                           </div>
-                          <span className="text-[7px] text-slate-400">Visto da Coordenação</span>
+                          <span className="text-[7px] text-muted">Visto da Coordenação</span>
                         </div>
                       </div>
                     </div>
@@ -1007,9 +1007,9 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
         </div>
 
         {/* Modal Footer (no-print) */}
-        <div className="no-print p-4 bg-[#131b2e] border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs text-[#bccabb]">
-            <Info className="w-4 h-4 text-[#4ade80]" />
+        <div className="no-print p-4 bg-surface border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-muted">
+            <Info className="w-4 h-4 text-primary" />
             <span>
               Para gerar o PDF físico sem margens cortadas, utilize o comando <strong>Imprimir / Salvar em PDF</strong>.
             </span>
@@ -1018,13 +1018,13 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="py-2 px-5 bg-white/10 hover:bg-white/15 text-white rounded-full text-xs font-bold transition-all cursor-pointer"
+              className="py-2 px-5 bg-surface-hover hover:bg-white/15 text-foreground rounded-full text-xs font-bold transition-all cursor-pointer"
             >
               Fechar Visualização
             </button>
             <button
               onClick={handlePrint}
-              className="py-2 px-6 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-black rounded-full text-xs transition-all shadow-md cursor-pointer flex items-center gap-2"
+              className="py-2 px-6 bg-primary hover:bg-primary-hover text-white font-black rounded-full text-xs transition-all shadow-md cursor-pointer flex items-center gap-2"
             >
               <Printer className="w-4 h-4" />
               <span>Gerar PDF Agora</span>

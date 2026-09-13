@@ -320,22 +320,22 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
   return (
     <div className="space-y-4 max-w-7xl mx-auto pb-6 sm:pb-10 w-full min-w-0">
       {/* Header Banner */}
-      <div className="glass-panel p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4 shadow-xl min-w-0">
+      <div className="glass-panel p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-border flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4 shadow-xl min-w-0">
         <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-          <div className="p-2.5 sm:p-3.5 bg-[#4ade80]/10 text-[#4ade80] rounded-2xl border border-[#4ade80]/20 shrink-0">
+          <div className="p-2.5 sm:p-3.5 bg-primary/10 text-primary rounded-2xl border border-primary/20 shrink-0">
             <MessageSquare className="w-6 h-6 sm:w-7 sm:h-7" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] sm:text-xs font-bold text-[#4ade80] uppercase tracking-wider bg-[#4ade80]/10 px-2.5 sm:px-3 py-0.5 rounded-full border border-[#4ade80]/20 shrink-0">
+              <span className="text-[10px] sm:text-xs font-bold text-primary uppercase tracking-wider bg-primary/10 px-2.5 sm:px-3 py-0.5 rounded-full border border-primary/20 shrink-0">
                 Mensagens
               </span>
-              <span className="text-[10px] sm:text-xs font-semibold text-[#bccabb] truncate">Sociologia On-line • Comunicação Direta</span>
+              <span className="text-[10px] sm:text-xs font-semibold text-muted truncate">Sociologia On-line • Comunicação Direta</span>
             </div>
-            <h1 className="text-lg sm:text-2xl font-extrabold text-white mt-1 truncate">
+            <h1 className="text-lg sm:text-2xl font-extrabold text-foreground mt-1 truncate">
               {currentUserRole === 'teacher' ? 'Central de Mensagens e Atendimento' : 'Atendimento com o Prof. Gilson'}
             </h1>
-            <p className="text-[11px] sm:text-xs text-[#bccabb] mt-0.5 line-clamp-2 sm:line-clamp-none">
+            <p className="text-[11px] sm:text-xs text-muted mt-0.5 line-clamp-2 sm:line-clamp-none">
               {currentUserRole === 'teacher'
                 ? 'Tire dúvidas, envie feedbacks individuais e acompanhe respostas automáticas com IA.'
                 : 'Tire dúvidas conceituais, consulte prazos de atividades e receba orientações pedagógicas em tempo real.'}
@@ -351,14 +351,14 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
             onClick={handleToggleNotifications}
             className={`px-3 py-2 rounded-2xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm ${
               notifPermission === 'granted'
-                ? 'bg-[#4ade80]/15 text-[#4ade80] border-[#4ade80]/30 hover:bg-[#4ade80]/25'
-                : 'bg-[#131b2e] text-[#bccabb] border-white/10 hover:text-white hover:bg-white/5'
+                ? 'bg-primary/15 text-primary border-primary/30 hover:bg-primary/25'
+                : 'bg-surface text-muted border-border hover:text-foreground hover:bg-surface-hover'
             }`}
             title="Ativar ou verificar notificações no navegador Chrome e Smartphone"
           >
             {notifPermission === 'granted' ? (
               <>
-                <BellRing className="w-3.5 h-3.5 text-[#4ade80]" />
+                <BellRing className="w-3.5 h-3.5 text-primary" />
                 <span className="hidden sm:inline">Notificações Ativas</span>
                 <span className="sm:hidden">Notificações</span>
               </>
@@ -377,8 +377,8 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               onClick={() => onToggleAiAutoReply(!isAiAutoReplyEnabled)}
               className={`px-3 py-2 rounded-2xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm ${
                 isAiAutoReplyEnabled
-                  ? 'bg-purple-500/20 text-purple-300 border-purple-500/40 hover:bg-purple-500/30'
-                  : 'bg-[#131b2e] text-[#bccabb] border-white/10 hover:text-white'
+                  ? 'bg-purple-100 text-purple-600 border-purple-200 hover:bg-purple-500/30'
+                  : 'bg-surface text-muted border-border hover:text-foreground'
               }`}
               title="Ativar/Pausar respostas automáticas com IA do Prof. Gilson para os alunos"
             >
@@ -387,31 +387,31 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
             </button>
           )}
 
-          <div className="bg-[#131b2e] px-3 py-2 rounded-2xl border border-white/10 flex items-center gap-2 text-xs text-[#dae2fd] shrink-0">
-            <Shield className="w-3.5 h-3.5 text-[#4ade80] shrink-0" />
+          <div className="bg-surface px-3 py-2 rounded-2xl border border-border flex items-center gap-2 text-xs text-foreground shrink-0">
+            <Shield className="w-3.5 h-3.5 text-primary shrink-0" />
             <span className="text-[11px] font-medium hidden lg:inline">Canal Seguro</span>
           </div>
         </div>
       </div>
 
       {/* Main Messaging Interface Container */}
-      <div className="glass-panel rounded-2xl sm:rounded-3xl border border-white/10 shadow-2xl overflow-hidden h-[calc(100vh-220px)] sm:h-[calc(100vh-250px)] min-h-[480px] max-h-[780px] flex flex-col md:flex-row relative w-full min-w-0">
+      <div className="glass-panel rounded-2xl sm:rounded-3xl border border-border shadow-2xl overflow-hidden h-[calc(100vh-220px)] sm:h-[calc(100vh-250px)] min-h-[480px] max-h-[780px] flex flex-col md:flex-row relative w-full min-w-0">
         
         {/* LEFT PANEL: Student Thread List (Teacher View) */}
         {currentUserRole === 'teacher' && (
           <div
-            className={`w-full md:w-72 lg:w-80 xl:w-96 bg-[#0c1424] border-r border-white/10 flex flex-col transition-all duration-300 h-full min-h-0 shrink-0 ${
+            className={`w-full md:w-72 lg:w-80 xl:w-96 bg-[#0c1424] border-r border-border flex flex-col transition-all duration-300 h-full min-h-0 shrink-0 ${
               isMobileChatOpen ? 'hidden md:flex' : 'flex'
             }`}
           >
             {/* Teacher Sidebar Header */}
-            <div className="p-3 sm:p-4 border-b border-white/10 space-y-2.5 bg-[#0e172a]/60 shrink-0">
+            <div className="p-3 sm:p-4 border-b border-border space-y-2.5 bg-surface/60 shrink-0">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                  <User className="w-4 h-4 text-[#4ade80]" />
+                <h3 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
+                  <User className="w-4 h-4 text-primary" />
                   <span>Conversas ({students.length})</span>
                 </h3>
-                <span className="text-[10px] bg-[#4ade80]/20 text-[#4ade80] px-2 py-0.5 rounded-full font-bold">
+                <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded-full font-bold">
                   Ativas
                 </span>
               </div>
@@ -421,19 +421,19 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                 {/* 1. Filtro por Aluno */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-[#869486] uppercase tracking-wider flex items-center gap-1.5">
-                    <User className="w-3 h-3 text-[#4ade80]" />
+                    <User className="w-3 h-3 text-primary" />
                     <span>Filtro por Aluno</span>
                   </label>
                   <select
                     value={selectedStudentFilter}
                     onChange={(e) => setSelectedStudentFilter(e.target.value)}
-                    className="w-full bg-[#131b2e] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#4ade80] cursor-pointer"
+                    className="w-full bg-surface border border-border rounded-xl px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:border-primary cursor-pointer"
                   >
-                    <option value="Todos" className="bg-[#0e172a] text-white">
+                    <option value="Todos" className="bg-surface text-foreground">
                       Todos os Alunos com Mensagens
                     </option>
                     {students.map((s) => (
-                      <option key={s.id} value={s.id} className="bg-[#0e172a] text-white">
+                      <option key={s.id} value={s.id} className="bg-surface text-foreground">
                         {s.fullName} ({s.turma})
                       </option>
                     ))}
@@ -443,19 +443,19 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                 {/* 2. Filtro por Turma */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-[#869486] uppercase tracking-wider flex items-center gap-1.5">
-                    <Filter className="w-3 h-3 text-[#4ade80]" />
+                    <Filter className="w-3 h-3 text-primary" />
                     <span>Filtro por Turma</span>
                   </label>
                   <select
                     value={selectedTurmaFilter}
                     onChange={(e) => setSelectedTurmaFilter(e.target.value)}
-                    className="w-full bg-[#131b2e] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#4ade80] cursor-pointer"
+                    className="w-full bg-surface border border-border rounded-xl px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:border-primary cursor-pointer"
                   >
-                    <option value="Todas" className="bg-[#0e172a] text-white">
+                    <option value="Todas" className="bg-surface text-foreground">
                       Todas as Turmas
                     </option>
                     {availableTurmas.map((t) => (
-                      <option key={t} value={t} className="bg-[#0e172a] text-white">
+                      <option key={t} value={t} className="bg-surface text-foreground">
                         Turma {t}
                       </option>
                     ))}
@@ -465,21 +465,21 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                 {/* 3. Filtro por Lidas / Não Lidas */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-[#869486] uppercase tracking-wider flex items-center gap-1.5">
-                    <MessageSquare className="w-3 h-3 text-[#4ade80]" />
+                    <MessageSquare className="w-3 h-3 text-primary" />
                     <span>Status de Leitura</span>
                   </label>
                   <select
                     value={readStatusFilter}
                     onChange={(e) => setReadStatusFilter(e.target.value as 'todas' | 'nao_lidas' | 'lidas')}
-                    className="w-full bg-[#131b2e] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#4ade80] cursor-pointer"
+                    className="w-full bg-surface border border-border rounded-xl px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:border-primary cursor-pointer"
                   >
-                    <option value="todas" className="bg-[#0e172a] text-white">
+                    <option value="todas" className="bg-surface text-foreground">
                       Todas as Mensagens
                     </option>
-                    <option value="nao_lidas" className="bg-[#0e172a] text-[#4ade80]">
+                    <option value="nao_lidas" className="bg-surface text-primary">
                       Apenas Não Lidas ({totalUnreadThreads})
                     </option>
-                    <option value="lidas" className="bg-[#0e172a] text-white">
+                    <option value="lidas" className="bg-surface text-foreground">
                       Apenas Lidas
                     </option>
                   </select>
@@ -494,28 +494,28 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                 className={`w-full p-3 sm:p-4 text-left flex items-center sm:items-start gap-3 transition-colors cursor-pointer relative ${
                   selectedStudentId === 'broadcast'
                     ? 'bg-[#17233b] border-l-4 border-l-[#4ade80]'
-                    : 'hover:bg-white/5'
+                    : 'hover:bg-surface-hover'
                 }`}
               >
                 <div className="relative shrink-0">
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#4ade80]/20 flex items-center justify-center border border-[#4ade80]/30">
-                     <Users className="w-5 h-5 text-[#4ade80]" />
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-primary/20 flex items-center justify-center border border-primary/30">
+                     <Users className="w-5 h-5 text-primary" />
                   </div>
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex justify-between items-start gap-2">
-                    <h4 className={`text-xs font-bold truncate ${selectedStudentId === 'broadcast' ? 'text-white' : 'text-[#dae2fd]'}`}>
+                    <h4 className={`text-xs font-bold truncate ${selectedStudentId === 'broadcast' ? 'text-foreground' : 'text-foreground'}`}>
                       Mensagem para Turma
                     </h4>
                   </div>
-                  <p className="text-[10px] sm:text-[11px] text-[#bccabb] mt-0.5 truncate">
+                  <p className="text-[10px] sm:text-[11px] text-muted mt-0.5 truncate">
                     Enviar para múltiplos alunos
                   </p>
                 </div>
               </button>
 
               {filteredStudents.length === 0 ? (
-                <div className="p-6 text-center text-xs text-[#bccabb] space-y-2">
+                <div className="p-6 text-center text-xs text-muted space-y-2">
                   <p>Nenhuma mensagem ou conversa encontrada para os filtros selecionados.</p>
                   {(selectedStudentFilter !== 'Todos' || selectedTurmaFilter !== 'Todas' || readStatusFilter !== 'todas') && (
                     <button
@@ -525,7 +525,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                         setSelectedTurmaFilter('Todas');
                         setReadStatusFilter('todas');
                       }}
-                      className="text-[#4ade80] underline font-semibold text-xs hover:text-[#6bfb9a] cursor-pointer"
+                      className="text-primary underline font-semibold text-xs hover:text-[#6bfb9a] cursor-pointer"
                     >
                       Limpar Filtros
                     </button>
@@ -547,21 +547,21 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                       className={`w-full p-3 sm:p-4 text-left flex items-center sm:items-start gap-3 transition-colors cursor-pointer relative ${
                         isSelected
                           ? 'bg-[#17233b] border-l-4 border-l-[#4ade80]'
-                          : 'hover:bg-white/5'
+                          : 'hover:bg-surface-hover'
                       }`}
                     >
                       <div className="relative shrink-0">
                         <img
                           src={st.avatarUrl}
                           alt={st.fullName}
-                          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-white/20"
+                          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-border"
                         />
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#4ade80] absolute bottom-0 right-0 border-2 border-[#0c1424]" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-primary absolute bottom-0 right-0 border-2 border-[#0c1424]" />
                       </div>
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
-                          <h4 className="text-xs font-bold text-white truncate">
+                          <h4 className="text-xs font-bold text-foreground truncate">
                             {st.fullName}
                           </h4>
                           {lastMsg && (
@@ -572,23 +572,23 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                         </div>
 
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                          <span className="text-[10px] bg-[#131b2e] text-[#bccabb] px-1.5 py-0.2 rounded border border-white/10 font-semibold">
+                          <span className="text-[10px] bg-surface text-muted px-1.5 py-0.2 rounded border border-border font-semibold">
                             {st.turma}
                           </span>
                           {st.tag && (
-                            <span className="text-[9px] bg-[#4ade80]/20 text-[#4ade80] px-1.5 py-0.2 rounded font-bold">
+                            <span className="text-[9px] bg-primary/20 text-primary px-1.5 py-0.2 rounded font-bold">
                               {st.tag}
                             </span>
                           )}
                         </div>
 
-                        <p className="text-[11px] text-[#bccabb] truncate mt-1">
+                        <p className="text-[11px] text-muted truncate mt-1">
                           {lastMsg ? lastMsg.content : 'Iniciar conversa...'}
                         </p>
                       </div>
 
                       {unreadCount > 0 && (
-                        <span className="bg-[#4ade80] text-[#003919] text-[10px] font-extrabold w-5 h-5 rounded-full flex items-center justify-center shrink-0 shadow-sm self-center">
+                        <span className="bg-primary text-white text-[10px] font-extrabold w-5 h-5 rounded-full flex items-center justify-center shrink-0 shadow-sm self-center">
                           {unreadCount}
                         </span>
                       )}
@@ -607,13 +607,13 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
           }`}
         >
           {/* Chat Window Header */}
-          <div className="p-3 sm:p-4 bg-[#0e172a] border-b border-white/10 flex items-center justify-between gap-2.5 sm:gap-3 shrink-0 min-w-0 w-full">
+          <div className="p-3 sm:p-4 bg-surface border-b border-border flex items-center justify-between gap-2.5 sm:gap-3 shrink-0 min-w-0 w-full">
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
               {/* Back button for mobile view */}
               {currentUserRole === 'teacher' && (
                 <button
                   onClick={() => setIsMobileChatOpen(false)}
-                  className="md:hidden p-1.5 text-[#bccabb] hover:text-white rounded-full hover:bg-white/5 transition-colors shrink-0"
+                  className="md:hidden p-1.5 text-muted hover:text-foreground rounded-full hover:bg-surface-hover transition-colors shrink-0"
                   aria-label="Voltar para lista de alunos"
                 >
                   <ArrowLeft className="w-5 h-5" />
@@ -623,13 +623,13 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               {currentUserRole === 'teacher' ? (
                 selectedStudentId === 'broadcast' ? (
                   <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#4ade80]/20 flex items-center justify-center border border-[#4ade80]/40 shrink-0">
-                      <Users className="w-4 h-4 sm:w-5 sm:h-5 text-[#4ade80]" />
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-primary/20 flex items-center justify-center border border-primary/40 shrink-0">
+                      <Users className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                        <h3 className="text-xs sm:text-sm font-bold text-white truncate">Mensagem para Turma</h3>
-                        <span className="text-[10px] bg-[#171f33] text-[#4ade80] font-bold px-2 py-0.5 rounded border border-white/10 shrink-0">
+                        <h3 className="text-xs sm:text-sm font-bold text-foreground truncate">Mensagem para Turma</h3>
+                        <span className="text-[10px] bg-[#171f33] text-primary font-bold px-2 py-0.5 rounded border border-border shrink-0">
                           Múltiplos Alunos
                         </span>
                       </div>
@@ -637,7 +637,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                         <select
                           value={broadcastTurma}
                           onChange={(e) => setBroadcastTurma(e.target.value)}
-                          className="bg-[#131b2e] border border-white/10 rounded-md px-1.5 py-0.5 text-[10px] text-[#bccabb] hover:text-white focus:outline-none focus:border-[#4ade80] cursor-pointer"
+                          className="bg-surface border border-border rounded-md px-1.5 py-0.5 text-[10px] text-muted hover:text-foreground focus:outline-none focus:border-primary cursor-pointer"
                         >
                           <option value="Todas">Todas as Turmas ({students.length})</option>
                           {availableTurmas.map(t => (
@@ -652,49 +652,49 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                     <img
                       src={formatAvatarUrl(activeStudent.avatarUrl)}
                       alt={activeStudent.fullName}
-                      className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover border border-[#4ade80] shrink-0"
+                      className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover border border-primary shrink-0"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200';
                       }}
                     />
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                        <h3 className="text-xs sm:text-sm font-bold text-white truncate">{activeStudent.fullName}</h3>
-                        <span className="text-[10px] bg-[#171f33] text-[#4ade80] font-bold px-2 py-0.5 rounded border border-white/10 shrink-0">
+                        <h3 className="text-xs sm:text-sm font-bold text-foreground truncate">{activeStudent.fullName}</h3>
+                        <span className="text-[10px] bg-[#171f33] text-primary font-bold px-2 py-0.5 rounded border border-border shrink-0">
                           {activeStudent.turma}
                         </span>
                       </div>
-                      <p className="text-[10px] sm:text-[11px] text-[#bccabb] truncate">
-                        Matrícula: <span className="font-mono text-white">{activeStudent.matricula}</span>
+                      <p className="text-[10px] sm:text-[11px] text-muted truncate">
+                        Matrícula: <span className="font-mono text-foreground">{activeStudent.matricula}</span>
                       </p>
                     </div>
                   </div>
                 ) : (
-                  <span className="text-xs text-[#bccabb]">Selecione um aluno</span>
+                  <span className="text-xs text-muted">Selecione um aluno</span>
                 )
               ) : (
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 w-full min-w-0">
                   <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-                    <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-[#4ade80] shrink-0" />
+                    <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0" />
                     <div className="min-w-0">
-                      <h3 className="text-xs sm:text-sm font-extrabold text-white truncate">
+                      <h3 className="text-xs sm:text-sm font-extrabold text-foreground truncate">
                         Canal de Comunicação com os Professores
                       </h3>
-                      <p className="text-[10px] sm:text-[11px] text-[#bccabb] truncate">
+                      <p className="text-[10px] sm:text-[11px] text-muted truncate">
                         {studentRecipient === 'segundo' ? 'Mensagem para o 2º Professor (Inclusão / AEE)' : 'Mensagem para o Professor Regente (Sociologia)'}
                       </p>
                     </div>
                   </div>
 
                   {/* Student Recipient Toggle */}
-                  <div className="flex items-center gap-1 bg-[#131b2e] p-1 rounded-xl border border-white/10 shrink-0 self-start sm:self-auto">
+                  <div className="flex items-center gap-1 bg-surface p-1 rounded-xl border border-border shrink-0 self-start sm:self-auto">
                     <button
                       type="button"
                       onClick={() => setStudentRecipient('titular')}
                       className={`px-2 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer ${
                         studentRecipient === 'titular'
-                          ? 'bg-[#4ade80] text-[#003919] shadow'
-                          : 'text-[#bccabb] hover:text-white'
+                          ? 'bg-primary text-white shadow'
+                          : 'text-muted hover:text-foreground'
                       }`}
                     >
                       Prof. Regente
@@ -705,7 +705,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                       className={`px-2 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer ${
                         studentRecipient === 'segundo'
                           ? 'bg-amber-400 text-amber-950 shadow'
-                          : 'text-[#bccabb] hover:text-white'
+                          : 'text-muted hover:text-foreground'
                       }`}
                     >
                       2º Professor
@@ -715,8 +715,8 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               )}
             </div>
 
-            <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-[#bccabb] shrink-0">
-              <span className="w-2 h-2 rounded-full bg-[#4ade80] shrink-0" />
+            <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-muted shrink-0">
+              <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
               <span className="hidden lg:inline font-semibold text-[11px]">Canal Ativo</span>
             </div>
           </div>
@@ -725,13 +725,13 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
           <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 sm:p-5 space-y-3.5 sm:space-y-4">
             {activeThreadMessages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-6 sm:p-8 space-y-3">
-                <div className="p-3.5 sm:p-4 rounded-full bg-[#131b2e] text-[#4ade80] border border-white/10">
+                <div className="p-3.5 sm:p-4 rounded-full bg-surface text-primary border border-border">
                   {selectedStudentId === 'broadcast' ? <Users className="w-7 h-7 sm:w-8 sm:h-8" /> : <MessageSquare className="w-7 h-7 sm:w-8 sm:h-8" />}
                 </div>
-                <h4 className="text-xs sm:text-sm font-bold text-white">
+                <h4 className="text-xs sm:text-sm font-bold text-foreground">
                   {selectedStudentId === 'broadcast' ? 'Nova Mensagem em Massa' : 'Nenhuma mensagem nesta conversa'}
                 </h4>
-                <p className="text-[11px] sm:text-xs text-[#bccabb] max-w-sm">
+                <p className="text-[11px] sm:text-xs text-muted max-w-sm">
                   {selectedStudentId === 'broadcast'
                     ? 'Escreva uma mensagem que será enviada individualmente para todos os alunos selecionados.'
                     : currentUserRole === 'teacher'
@@ -761,7 +761,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                             : formatAvatarUrl(activeStudent?.avatarUrl))
                         }
                         alt={msg.senderName}
-                        className="w-6 h-6 sm:w-7 sm:h-7 rounded-full object-cover border border-white/20 shrink-0 mb-1"
+                        className="w-6 h-6 sm:w-7 sm:h-7 rounded-full object-cover border border-border shrink-0 mb-1"
                         onError={(e) => {
                           (e.target as HTMLImageElement).src =
                             msg.senderRole === 'teacher'
@@ -776,21 +776,21 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                       <div
                         className={`p-3 sm:p-4 rounded-2xl text-xs sm:text-xs leading-relaxed shadow-lg break-words overflow-hidden ${
                           isMine
-                            ? 'bg-[#115e33] text-white rounded-br-none border border-[#4ade80]/30'
-                            : 'bg-[#131b2e] text-[#dae2fd] rounded-bl-none border border-white/10'
+                            ? 'bg-[#115e33] text-foreground rounded-br-none border border-primary/30'
+                            : 'bg-surface text-foreground rounded-bl-none border border-border'
                         }`}
                       >
                         {/* 2º Professor Tag */}
                         {(msg.recipientId === 'second-teacher' || msg.recipientName?.includes('2º Professor')) && (
                           <div className="mb-2">
-                            <span className="inline-block px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                            <span className="inline-block px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-400/20 text-amber-600 border border-amber-400/30">
                               Para: 2º Professor (Inclusão)
                             </span>
                           </div>
                         )}
                         {msg.senderName?.includes('2º Professor') && (
                           <div className="mb-2">
-                            <span className="inline-block px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                            <span className="inline-block px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-400/20 text-amber-600 border border-amber-400/30">
                               De: 2º Professor (Inclusão)
                             </span>
                           </div>
@@ -798,7 +798,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
 
                         {/* Linked Activity Card inside Message */}
                         {msg.activityTitle && (
-                          <div className="mb-2.5 p-2 sm:p-2.5 bg-black/20 rounded-xl border border-white/10 flex items-center gap-2 text-[11px] text-[#4ade80] font-semibold">
+                          <div className="mb-2.5 p-2 sm:p-2.5 bg-black/20 rounded-xl border border-border flex items-center gap-2 text-[11px] text-primary font-semibold">
                             <FileText className="w-4 h-4 shrink-0" />
                             <span className="truncate">Ref: {msg.activityTitle}</span>
                           </div>
@@ -816,7 +816,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                         <span>{msg.createdAt}</span>
                         {isMine && (
                           msg.read ? (
-                            <span title="Lida"><CheckCheck className="w-3.5 h-3.5 text-[#4ade80]" /></span>
+                            <span title="Lida"><CheckCheck className="w-3.5 h-3.5 text-primary" /></span>
                           ) : (
                             <span title="Enviada"><Check className="w-3.5 h-3.5 text-[#869486]" /></span>
                           )
@@ -831,16 +831,16 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
           </div>
 
           {/* Quick Suggestion Chips */}
-          <div className="px-3 sm:px-4 py-1.5 sm:py-2 bg-[#0c1424] border-t border-white/5 flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar shrink-0 w-full touch-pan-x">
+          <div className="px-3 sm:px-4 py-1.5 sm:py-2 bg-[#0c1424] border-t border-border flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar shrink-0 w-full touch-pan-x">
             <span className="text-[10px] font-bold text-[#869486] shrink-0 uppercase tracking-wider flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-[#4ade80] shrink-0" />
+              <Sparkles className="w-3 h-3 text-primary shrink-0" />
               <span className="hidden sm:inline">Sugestões:</span>
             </span>
             {quickPrompts.map((promptText, idx) => (
               <button
                 key={idx}
                 onClick={() => setNewMessageText(promptText)}
-                className="px-2.5 sm:px-3 py-1 rounded-full bg-[#131b2e] hover:bg-[#1f2b47] text-[#dae2fd] text-[10px] sm:text-[11px] border border-white/10 whitespace-nowrap transition-colors cursor-pointer shrink-0"
+                className="px-2.5 sm:px-3 py-1 rounded-full bg-surface hover:bg-[#1f2b47] text-foreground text-[10px] sm:text-[11px] border border-border whitespace-nowrap transition-colors cursor-pointer shrink-0"
               >
                 {promptText}
               </button>
@@ -849,14 +849,14 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
 
           {/* Attached Activity Selector (if user clicked clip) */}
           {isAttachingActivity && (
-            <div className="p-2.5 sm:p-3 bg-[#131b2e] border-t border-white/10 flex items-center justify-between gap-2 animate-fadeIn shrink-0">
-              <div className="flex items-center gap-2 text-xs text-white min-w-0 flex-1">
-                <FileText className="w-4 h-4 text-[#4ade80] shrink-0" />
+            <div className="p-2.5 sm:p-3 bg-surface border-t border-border flex items-center justify-between gap-2 animate-fadeIn shrink-0">
+              <div className="flex items-center gap-2 text-xs text-foreground min-w-0 flex-1">
+                <FileText className="w-4 h-4 text-primary shrink-0" />
                 <span className="font-bold text-xs truncate shrink-0">Atividade:</span>
                 <select
                   value={attachedActivityId}
                   onChange={(e) => setAttachedActivityId(e.target.value)}
-                  className="bg-[#0e172a] border border-white/15 rounded-xl px-2.5 py-1 text-xs text-white focus:outline-none min-w-0 flex-1 truncate"
+                  className="bg-surface border border-white/15 rounded-xl px-2.5 py-1 text-xs text-foreground focus:outline-none min-w-0 flex-1 truncate"
                 >
                   <option value="">Selecione uma atividade...</option>
                   {activities.map((a) => (
@@ -871,7 +871,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                   setIsAttachingActivity(false);
                   setAttachedActivityId('');
                 }}
-                className="text-[#bccabb] hover:text-white p-1 shrink-0"
+                className="text-muted hover:text-foreground p-1 shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -881,7 +881,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
           {/* Chat Message Input Bar */}
           <form
             onSubmit={handleSend}
-            className="p-2 sm:p-3.5 bg-[#0e172a] border-t border-white/10 flex items-center gap-1.5 sm:gap-2.5 shrink-0 w-full min-w-0"
+            className="p-2 sm:p-3.5 bg-surface border-t border-border flex items-center gap-1.5 sm:gap-2.5 shrink-0 w-full min-w-0"
           >
             {/* Fixed Sender Avatar outside input box */}
             <div className="hidden sm:flex items-center gap-2 shrink-0">
@@ -892,7 +892,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                     : formatAvatarUrl(student?.avatarUrl)
                 }
                 alt={currentUserRole === 'teacher' ? (teacher.name || 'Professor') : (student?.fullName || 'Aluno')}
-                className="w-7 h-7 sm:w-9 sm:h-9 rounded-full object-cover border border-[#4ade80]/40 shrink-0 shadow-sm"
+                className="w-7 h-7 sm:w-9 sm:h-9 rounded-full object-cover border border-primary/40 shrink-0 shadow-sm"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src =
                     currentUserRole === 'teacher'
@@ -907,8 +907,8 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               onClick={() => setIsAttachingActivity(!isAttachingActivity)}
               className={`p-2 sm:p-2.5 rounded-xl sm:rounded-2xl border transition-colors cursor-pointer min-h-[38px] min-w-[38px] sm:min-h-[44px] sm:min-w-[44px] flex items-center justify-center shrink-0 ${
                 attachedActivityId
-                  ? 'bg-[#4ade80]/20 text-[#4ade80] border-[#4ade80]/40'
-                  : 'bg-[#131b2e] hover:bg-[#1a253e] text-[#bccabb] border-white/10'
+                  ? 'bg-primary/20 text-primary border-primary/40'
+                  : 'bg-surface hover:bg-[#1a253e] text-muted border-border'
               }`}
               title="Vincular atividade à mensagem"
             >
@@ -926,7 +926,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                   ? `Escrever para ${activeStudent?.fullName ? activeStudent.fullName.split(' ')[0] : 'o aluno'}...`
                   : 'Escrever sua dúvida para o Prof. Gilson...'
               }
-              className="flex-1 min-w-0 bg-[#131b2e] border border-white/10 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2 sm:py-3 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80] leading-relaxed min-h-[38px] sm:min-h-[44px]"
+              className="flex-1 min-w-0 bg-surface border border-border rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2 sm:py-3 text-xs text-foreground placeholder-[#869486] focus:outline-none focus:border-primary leading-relaxed min-h-[38px] sm:min-h-[44px]"
             />
 
             {/* Teacher AI Draft Assistant Button */}
@@ -935,7 +935,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                 type="button"
                 onClick={handleGenerateAiTeacherDraft}
                 disabled={isGeneratingAiDraft}
-                className="px-2.5 sm:px-3 py-2 sm:py-3 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 rounded-xl sm:rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 min-h-[38px] sm:min-h-[44px]"
+                className="px-2.5 sm:px-3 py-2 sm:py-3 bg-purple-100 hover:bg-purple-500/30 text-purple-600 border border-purple-200 rounded-xl sm:rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 min-h-[38px] sm:min-h-[44px]"
                 title="Pedir para a IA do Prof. Gilson redigir uma resposta pedagógica"
               >
                 {isGeneratingAiDraft ? (
@@ -955,7 +955,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
             <button
               type="submit"
               disabled={!newMessageText.trim() || isGeneratingAiDraft}
-              className="px-3 sm:px-5 py-2 sm:py-3 bg-[#4ade80] hover:bg-[#6bfb9a] disabled:opacity-40 disabled:hover:bg-[#4ade80] text-[#003919] font-extrabold rounded-xl sm:rounded-2xl text-xs transition-all shadow-md cursor-pointer flex items-center justify-center gap-1.5 shrink-0 min-h-[38px] sm:min-h-[44px]"
+              className="px-3 sm:px-5 py-2 sm:py-3 bg-primary hover:bg-[#6bfb9a] disabled:opacity-40 disabled:hover:bg-primary text-white font-extrabold rounded-xl sm:rounded-2xl text-xs transition-all shadow-md cursor-pointer flex items-center justify-center gap-1.5 shrink-0 min-h-[38px] sm:min-h-[44px]"
             >
               <Send className="w-4 h-4 shrink-0" />
               <span className="hidden sm:inline">Enviar</span>

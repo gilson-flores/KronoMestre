@@ -369,17 +369,17 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
       {/* Top Header */}
-      <div className="glass-panel p-6 rounded-3xl border border-white/10 relative overflow-hidden bg-gradient-to-r from-[#0e172a] via-[#131b2e] to-[#0b1326] shadow-xl">
+      <div className="glass-panel p-6 rounded-3xl border border-border relative overflow-hidden bg-gradient-to-r from-surface via-surface to-background shadow-xl">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-amber-400 text-xs font-bold uppercase tracking-wider mb-2">
               <FileSpreadsheet className="w-4 h-4" />
               <span>Controle Frequência e Afastamentos</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
               Atestados e RAD (Atendimento Domiciliar)
             </h1>
-            <p className="text-xs sm:text-sm text-[#bccabb] mt-1 max-w-2xl">
+            <p className="text-xs sm:text-sm text-muted mt-1 max-w-2xl">
               Registre atestados médicos, justificativas de faltas e acompanhe os alunos em Regime de Atendimento Domiciliar (RAD).
             </p>
           </div>
@@ -389,7 +389,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
               resetForm();
               setIsModalOpen(true);
             }}
-            className="py-3 px-5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-extrabold rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#4ade80]/20 cursor-pointer active:scale-95 text-sm shrink-0"
+            className="py-3 px-5 bg-primary hover:bg-primary-hover text-white font-extrabold rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20 cursor-pointer active:scale-95 text-sm shrink-0"
           >
             <Plus className="w-5 h-5" />
             <span>Registrar Atestado / RAD</span>
@@ -399,55 +399,55 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
 
       {/* Alert Messages */}
       {successMsg && (
-        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center justify-between animate-fadeIn">
+        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 text-xs font-semibold flex items-center justify-between animate-fadeIn">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
             <span>{successMsg}</span>
           </div>
-          <button onClick={() => setSuccessMsg('')} className="text-emerald-400 hover:text-white cursor-pointer">
+          <button onClick={() => setSuccessMsg('')} className="text-emerald-400 hover:text-foreground cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
       {/* Search & Filters Toolbar */}
-      <div className="glass-panel p-4 rounded-3xl border border-white/10 bg-[#0e172a] flex flex-col md:flex-row gap-3 items-center justify-between">
+      <div className="glass-panel p-4 rounded-3xl border border-border bg-surface flex flex-col md:flex-row gap-3 items-center justify-between">
         <div className="relative w-full md:w-80">
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Buscar por nome do aluno ou motivo..."
-            className="w-full bg-[#131b2e] border border-white/10 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80]"
+            className="w-full bg-surface border border-border rounded-2xl pl-10 pr-4 py-2.5 text-xs text-foreground placeholder-[#869486] focus:outline-none focus:border-primary"
           />
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#869486]" />
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
-          <div className="flex items-center gap-1.5 bg-[#131b2e] border border-white/10 rounded-2xl px-3 py-1.5 text-xs text-[#bccabb]">
+          <div className="flex items-center gap-1.5 bg-surface border border-border rounded-2xl px-3 py-1.5 text-xs text-muted">
             <Filter className="w-3.5 h-3.5 text-amber-400" />
-            <span className="font-semibold text-white">Turma:</span>
+            <span className="font-semibold text-foreground">Turma:</span>
             <select
               value={turmaFilter}
               onChange={(e) => setTurmaFilter(e.target.value)}
-              className="bg-transparent text-white font-bold focus:outline-none cursor-pointer"
+              className="bg-transparent text-foreground font-bold focus:outline-none cursor-pointer"
             >
-              <option value="all" className="bg-[#0e172a] text-white">Todas as Turmas</option>
+              <option value="all" className="bg-surface text-foreground">Todas as Turmas</option>
               {availableTurmas.map((t) => (
-                <option key={t} value={t} className="bg-[#0e172a] text-white">
+                <option key={t} value={t} className="bg-surface text-foreground">
                   {t}
                 </option>
               ))}
             </select>
           </div>
 
-          <div className="flex items-center gap-1 bg-[#131b2e] border border-white/10 rounded-2xl p-1 text-xs">
+          <div className="flex items-center gap-1 bg-surface border border-border rounded-2xl p-1 text-xs">
             <button
               onClick={() => setTipoFilter('all')}
               className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
                 tipoFilter === 'all'
-                  ? 'bg-[#4ade80] text-[#003919] shadow'
-                  : 'text-[#bccabb] hover:text-white'
+                  ? 'bg-primary text-white shadow'
+                  : 'text-muted hover:text-foreground'
               }`}
             >
               Todos
@@ -457,7 +457,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
               className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
                 tipoFilter === 'Atestado'
                   ? 'bg-blue-500 text-white shadow'
-                  : 'text-[#bccabb] hover:text-white'
+                  : 'text-muted hover:text-foreground'
               }`}
             >
               Atestados
@@ -466,8 +466,8 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
               onClick={() => setTipoFilter('RAD')}
               className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
                 tipoFilter === 'RAD'
-                  ? 'bg-purple-500 text-white shadow'
-                  : 'text-[#bccabb] hover:text-white'
+                  ? 'bg-purple-500 text-foreground shadow'
+                  : 'text-muted hover:text-foreground'
               }`}
             >
               RAD
@@ -478,7 +478,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
             onClick={handleRefresh}
             disabled={isRefreshing || isLoading}
             title="Sincronizar com banco de dados"
-            className="flex items-center gap-1.5 px-3 py-2 bg-[#131b2e] hover:bg-white/10 text-amber-400 hover:text-amber-300 border border-white/10 rounded-2xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-2 bg-surface hover:bg-surface-hover text-amber-400 hover:text-amber-600 border border-border rounded-2xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-amber-400' : ''}`} />
             <span className="hidden sm:inline">Sincronizar</span>
@@ -489,16 +489,16 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
       {/* Main Records List */}
       <div className="space-y-3">
         {isLoading ? (
-          <div className="glass-panel p-12 text-center text-[#bccabb] rounded-3xl border border-white/10">
+          <div className="glass-panel p-12 text-center text-muted rounded-3xl border border-border">
             Carregando registros de atestados e RAD...
           </div>
         ) : filteredRecords.length === 0 ? (
-          <div className="glass-panel p-12 rounded-3xl border border-white/10 text-center flex flex-col items-center justify-center">
+          <div className="glass-panel p-12 rounded-3xl border border-border text-center flex flex-col items-center justify-center">
             <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4 text-amber-400">
               <FileSpreadsheet className="w-8 h-8" />
             </div>
-            <h3 className="text-lg font-bold text-white mb-1">Nenhum Registro Encontrado</h3>
-            <p className="text-xs text-[#bccabb] max-w-md mb-6">
+            <h3 className="text-lg font-bold text-foreground mb-1">Nenhum Registro Encontrado</h3>
+            <p className="text-xs text-muted max-w-md mb-6">
               {searchTerm || turmaFilter !== 'all' || tipoFilter !== 'all'
                 ? 'Nenhum atestado corresponde aos filtros selecionados.'
                 : 'Nenhum atestado ou RAD registrado até o momento. Clique no botão acima para cadastrar.'}
@@ -523,16 +523,16 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
               return (
                 <div
                   key={record.id}
-                  className="glass-panel p-5 rounded-3xl border border-white/10 bg-[#0e172a] hover:border-white/20 transition-all flex flex-col justify-between group shadow-lg"
+                  className="glass-panel p-5 rounded-3xl border border-border bg-surface hover:border-border transition-all flex flex-col justify-between group shadow-lg"
                 >
                   <div>
                     {/* Header: Student Name + Type Badge */}
                     <div className="flex items-start justify-between gap-2 mb-3">
                       <div>
-                        <span className="inline-block text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[#bccabb] mb-1">
+                        <span className="inline-block text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-surface-hover border border-border text-muted mb-1">
                           {record.studentTurma || 'Turma N/I'}
                         </span>
-                        <h3 className="font-bold text-white text-base leading-snug truncate">
+                        <h3 className="font-bold text-foreground text-base leading-snug truncate">
                           {record.studentName}
                         </h3>
                       </div>
@@ -541,8 +541,8 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
                         <span
                           className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border flex items-center gap-1 ${
                             isRad
-                              ? 'bg-purple-500/20 text-purple-300 border-purple-500/40 shadow-sm shadow-purple-500/20'
-                              : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                              ? 'bg-purple-100 text-purple-600 border-purple-200 shadow-sm shadow-purple-500/20'
+                              : 'bg-blue-100 text-blue-600 border-blue-200'
                           }`}
                         >
                           <Sparkles className="w-3 h-3" />
@@ -550,7 +550,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
                         </span>
 
                         {isActive && (
-                          <span className="text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full animate-pulse">
+                          <span className="text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-500/30 px-2 py-0.5 rounded-full animate-pulse">
                             Afastado Hoje
                           </span>
                         )}
@@ -558,34 +558,34 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
                     </div>
 
                     {/* Dates Grid */}
-                    <div className="grid grid-cols-2 gap-2 bg-[#131b2e] p-3 rounded-2xl border border-white/5 my-3 text-xs">
+                    <div className="grid grid-cols-2 gap-2 bg-surface p-3 rounded-2xl border border-border my-3 text-xs">
                       <div>
-                        <span className="text-[10px] text-[#bccabb] block font-semibold">Data da Entrega do Atestado</span>
-                        <div className="flex items-center gap-1 text-white font-bold mt-0.5">
+                        <span className="text-[10px] text-muted block font-semibold">Data da Entrega do Atestado</span>
+                        <div className="flex items-center gap-1 text-foreground font-bold mt-0.5">
                           <Calendar className="w-3.5 h-3.5 text-amber-400" />
                           <span>{formatDateBR(record.dataFalta)}</span>
                         </div>
                       </div>
 
                       <div>
-                        <span className="text-[10px] text-[#bccabb] block font-semibold">Data do Atestado</span>
-                        <div className="flex items-center gap-1 text-white font-bold mt-0.5">
+                        <span className="text-[10px] text-muted block font-semibold">Data do Atestado</span>
+                        <div className="flex items-center gap-1 text-foreground font-bold mt-0.5">
                           <FileText className="w-3.5 h-3.5 text-blue-400" />
                           <span>{formatDateBR(record.dataAtestado)}</span>
                         </div>
                       </div>
 
                       <div>
-                        <span className="text-[10px] text-[#bccabb] block font-semibold">Dias Concedidos</span>
-                        <div className="flex items-center gap-1 text-amber-300 font-extrabold mt-0.5">
+                        <span className="text-[10px] text-muted block font-semibold">Dias Concedidos</span>
+                        <div className="flex items-center gap-1 text-amber-600 font-extrabold mt-0.5">
                           <Clock className="w-3.5 h-3.5" />
                           <span>{record.diasAtestado} {record.diasAtestado === 1 ? 'dia' : 'dias'}</span>
                         </div>
                       </div>
 
                       <div>
-                        <span className="text-[10px] text-[#bccabb] block font-semibold">Data Final (Calculada)</span>
-                        <div className="flex items-center gap-1 text-[#4ade80] font-black mt-0.5">
+                        <span className="text-[10px] text-muted block font-semibold">Data Final (Calculada)</span>
+                        <div className="flex items-center gap-1 text-primary font-black mt-0.5">
                           <CalendarDays className="w-3.5 h-3.5" />
                           <span>{formatDateBR(record.dataFinal)}</span>
                         </div>
@@ -594,19 +594,19 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
 
                     {/* Motivo (Opcional) */}
                     {record.motivo && (
-                      <div className="mt-2 text-xs text-[#bccabb] bg-white/5 p-2.5 rounded-xl border border-white/5 italic">
-                        <span className="not-italic font-bold text-white text-[10px] block mb-0.5">Motivo / Justificativa:</span>
+                      <div className="mt-2 text-xs text-muted bg-surface-hover p-2.5 rounded-xl border border-border italic">
+                        <span className="not-italic font-bold text-foreground text-[10px] block mb-0.5">Motivo / Justificativa:</span>
                         &ldquo;{record.motivo}&rdquo;
                       </div>
                     )}
                   </div>
 
                   {/* Card Footer */}
-                  <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-[11px] text-[#bccabb]">
+                  <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-[11px] text-muted">
                     <span>Reg.: {formatDateBR(record.createdAt.split('T')[0])}</span>
                     <button
                       onClick={() => handleDelete(record.id, record.studentName)}
-                      className="p-1.5 text-rose-400 hover:text-white hover:bg-rose-500 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-xs font-semibold"
+                      className="p-1.5 text-rose-400 hover:text-foreground hover:bg-rose-500 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-xs font-semibold"
                       title="Excluir atestado"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -623,23 +623,23 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
       {/* Modal: Registrar Atestado e RAD */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
-          <div className="glass-panel w-full max-w-lg p-6 rounded-3xl border border-white/10 space-y-5 bg-[#0e172a] shadow-2xl relative max-h-[90vh] overflow-y-auto">
+          <div className="glass-panel w-full max-w-lg p-6 rounded-3xl border border-border space-y-5 bg-surface shadow-2xl relative max-h-[90vh] overflow-y-auto">
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+            <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2 text-amber-400 font-bold text-base">
                 <FileSpreadsheet className="w-5 h-5" />
                 <span>Registrar Atestado Médico / RAD</span>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="text-[#bccabb] hover:text-white p-1 rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+                className="text-muted hover:text-foreground p-1 rounded-xl hover:bg-surface-hover transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {errorMsg && (
-              <div className="p-3 bg-rose-500/20 border border-rose-500/40 text-rose-300 rounded-2xl text-xs font-semibold flex items-center gap-2">
+              <div className="p-3 bg-rose-100 border border-rose-200 text-rose-600 rounded-2xl text-xs font-semibold flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{errorMsg}</span>
               </div>
@@ -648,7 +648,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
               {/* Nome do Aluno (Lista Suspensa / Pesquisa) */}
               <div className="relative">
-                <label className="block text-[#bccabb] font-semibold mb-1.5">
+                <label className="block text-muted font-semibold mb-1.5">
                   Nome do Aluno <span className="text-amber-400">*</span>
                 </label>
                 <div className="relative">
@@ -664,7 +664,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
                     onFocus={() => setIsStudentDropdownOpen(true)}
                     onBlur={() => setTimeout(() => setIsStudentDropdownOpen(false), 200)}
                     placeholder="Digite o nome do aluno..."
-                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl pl-10 pr-4 py-3 text-white font-semibold focus:outline-none focus:border-amber-400"
+                    className="w-full bg-surface border border-border rounded-2xl pl-10 pr-4 py-3 text-foreground font-semibold focus:outline-none focus:border-amber-400"
                   />
                   <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-[#869486]" />
                   {selectedStudentId && (
@@ -675,7 +675,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
                         setModalStudentSearch('');
                         setIsStudentDropdownOpen(true);
                       }}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-[#869486] hover:text-white"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-[#869486] hover:text-foreground"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -683,7 +683,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
                 </div>
 
                 {isStudentDropdownOpen && (
-                  <div className="absolute z-50 w-full mt-2 bg-[#0e172a] border border-white/10 rounded-2xl shadow-xl max-h-60 overflow-y-auto custom-scrollbar">
+                  <div className="absolute z-50 w-full mt-2 bg-surface border border-border rounded-2xl shadow-xl max-h-60 overflow-y-auto custom-scrollbar">
                     {filteredModalStudents.length === 0 ? (
                       <div className="p-4 text-center text-[#869486]">Nenhum aluno encontrado.</div>
                     ) : (
@@ -695,10 +695,10 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
                             setModalStudentSearch(`${student.fullName} (${student.turma || 'Sem Turma'})${student.tag ? ` - [${student.tag}]` : ''}`);
                             setIsStudentDropdownOpen(false);
                           }}
-                          className="px-4 py-3 hover:bg-[#131b2e] cursor-pointer text-white border-b border-white/5 last:border-0 flex flex-col"
+                          className="px-4 py-3 hover:bg-surface cursor-pointer text-foreground border-b border-border last:border-0 flex flex-col"
                         >
                           <span className="font-semibold">{student.fullName}</span>
-                          <span className="text-[10px] text-[#bccabb]">
+                          <span className="text-[10px] text-muted">
                             Turma: {student.turma || 'Sem Turma'} {student.tag ? ` • [${student.tag}]` : ''}
                           </span>
                         </div>
@@ -711,7 +711,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
               {/* Grid 2 colunas: Data da Falta e Data do Atestado */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[#bccabb] font-semibold mb-1.5">
+                  <label className="block text-muted font-semibold mb-1.5">
                     Data da Entrega do Atestado <span className="text-amber-400">*</span>
                   </label>
                   <input
@@ -719,12 +719,12 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
                     required
                     value={dataFalta}
                     onChange={(e) => setDataFalta(e.target.value)}
-                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white font-semibold focus:outline-none focus:border-amber-400"
+                    className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-foreground font-semibold focus:outline-none focus:border-amber-400"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[#bccabb] font-semibold mb-1.5">
+                  <label className="block text-muted font-semibold mb-1.5">
                     Data do Atestado <span className="text-amber-400">*</span>
                   </label>
                   <input
@@ -732,7 +732,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
                     required
                     value={dataAtestado}
                     onChange={(e) => setDataAtestado(e.target.value)}
-                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white font-semibold focus:outline-none focus:border-amber-400"
+                    className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-foreground font-semibold focus:outline-none focus:border-amber-400"
                   />
                 </div>
               </div>
@@ -740,7 +740,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
               {/* Dias de Atestado & Data Final Calculada */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[#bccabb] font-semibold mb-1.5">
+                  <label className="block text-muted font-semibold mb-1.5">
                     Dias de Atestado <span className="text-amber-400">*</span>
                   </label>
                   <input
@@ -749,27 +749,27 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
                     required
                     value={diasAtestado}
                     onChange={(e) => setDiasAtestado(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white font-extrabold focus:outline-none focus:border-amber-400"
+                    className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-foreground font-extrabold focus:outline-none focus:border-amber-400"
                     placeholder="Ex: 3, 15, 30..."
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[#bccabb] font-semibold mb-1.5">
-                    Data Final <span className="text-[#4ade80] font-normal">(Calculada)</span>
+                  <label className="block text-muted font-semibold mb-1.5">
+                    Data Final <span className="text-primary font-normal">(Calculada)</span>
                   </label>
-                  <div className="w-full bg-[#131b2e] border border-[#4ade80]/40 rounded-2xl px-4 py-3 text-[#4ade80] font-black flex items-center justify-between">
+                  <div className="w-full bg-surface border border-primary/40 rounded-2xl px-4 py-3 text-primary font-black flex items-center justify-between">
                     <span>{calculatedDataFinal ? formatDateBR(calculatedDataFinal) : 'Aguardando data'}</span>
-                    <Sparkles className="w-4 h-4 text-[#4ade80]" />
+                    <Sparkles className="w-4 h-4 text-primary" />
                   </div>
                 </div>
               </div>
 
               {/* Classificação / Tipo (Atestado vs RAD) */}
-              <div className="bg-[#131b2e] p-3 rounded-2xl border border-white/10 flex items-center justify-between">
+              <div className="bg-surface p-3 rounded-2xl border border-border flex items-center justify-between">
                 <div>
-                  <span className="text-white font-bold block">Classificação do Afastamento:</span>
-                  <span className="text-[11px] text-[#bccabb]">
+                  <span className="text-foreground font-bold block">Classificação do Afastamento:</span>
+                  <span className="text-[11px] text-muted">
                     {Number(diasAtestado) >= 15
                       ? 'Atribuição automática de RAD (≥ 15 dias de afastamento)'
                       : 'Atestado Médico padrão (< 15 dias)'}
@@ -780,8 +780,8 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
                   <span
                     className={`px-3 py-1.5 rounded-xl font-black text-xs border ${
                       effectiveTipo === 'RAD'
-                        ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
-                        : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                        ? 'bg-purple-100 text-purple-600 border-purple-200'
+                        : 'bg-blue-100 text-blue-600 border-blue-200'
                     }`}
                   >
                     {effectiveTipo}
@@ -791,15 +791,15 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
 
               {/* Motivo para Justificar (Opcional) */}
               <div>
-                <label className="block text-[#bccabb] font-semibold mb-1.5">
-                  Motivo para Justificar <span className="text-[#bccabb] font-normal">(Opcional)</span>
+                <label className="block text-muted font-semibold mb-1.5">
+                  Motivo para Justificar <span className="text-muted font-normal">(Opcional)</span>
                 </label>
                 <textarea
                   rows={3}
                   value={motivo}
                   onChange={(e) => setMotivo(e.target.value)}
                   placeholder="Ex: CID, consulta médica, licença de saúde ou observações de justificativa..."
-                  className="w-full bg-[#131b2e] border border-white/10 rounded-2xl p-4 text-white placeholder-[#869486] focus:outline-none focus:border-amber-400"
+                  className="w-full bg-surface border border-border rounded-2xl p-4 text-foreground placeholder-[#869486] focus:outline-none focus:border-amber-400"
                 />
               </div>
 
@@ -808,13 +808,13 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 py-3 bg-[#131b2e] hover:bg-[#1a243b] text-[#bccabb] font-bold rounded-2xl border border-white/10 transition-colors cursor-pointer"
+                  className="flex-1 py-3 bg-surface hover:bg-[#1a243b] text-muted font-bold rounded-2xl border border-border transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-extrabold rounded-2xl transition-all shadow-lg shadow-[#4ade80]/20 cursor-pointer"
+                  className="flex-1 py-3 bg-primary hover:bg-primary-hover text-white font-extrabold rounded-2xl transition-all shadow-lg shadow-primary/20 cursor-pointer"
                 >
                   Registrar Atestado
                 </button>

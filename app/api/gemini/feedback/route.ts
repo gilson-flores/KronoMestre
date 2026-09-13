@@ -231,7 +231,7 @@ ${formatSpecificRulesNinja}
     }
 
     const candidateModels = [
-      'gemini-3.7-flash',
+      'gemini-3.8-flash',
       'gemini-3.1-flash-lite',
       'gemini-flash-latest',
     ];
@@ -249,11 +249,11 @@ ${formatSpecificRulesNinja}
         }
       } catch (err: any) {
         const errMsg = String(err?.message || '');
-        console.warn(`Aviso na tentativa com modelo ${modelName} no feedback:`, errMsg);
         // If API key is invalid, don't keep retrying all models uselessly
         if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid')) {
           break;
         }
+        console.warn(`Tentativa com modelo ${modelName} no feedback:`, errMsg);
       }
     }
 

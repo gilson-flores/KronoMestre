@@ -220,7 +220,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
           doc.open();
           doc.write(`
             <!DOCTYPE html>
-            <html>
+            <div className="print-html">
               <head>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -256,7 +256,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
               <body>
                 ${clone.outerHTML}
               </body>
-            </html>
+            </div>
           `);
           doc.close();
 
@@ -300,13 +300,13 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
         <div className="fixed inset-0 z-[100] flex items-start justify-center p-2 sm:p-4 md:p-6 bg-black/90 backdrop-blur-lg overflow-y-auto animate-fadeIn">
           <div className="dossier-printable-area w-full max-w-3xl bg-white text-slate-900 rounded-2xl shadow-2xl overflow-hidden flex flex-col my-2 sm:my-auto border border-slate-300">
             {/* Header Controls (Hidden on Print) */}
-            <div className="no-print sticky top-0 z-20 p-3 sm:p-4 bg-slate-950 text-white flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-slate-800 shadow-md">
+            <div className="no-print sticky top-0 z-20 p-3 sm:p-4 bg-slate-950 text-foreground flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-slate-800 shadow-md">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30 shrink-0">
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-400 flex items-center justify-center border border-emerald-500/30 shrink-0">
                   <FileCheck2 className="w-4 h-4" />
                 </div>
                 <div>
-                  <span className="font-extrabold text-xs sm:text-sm block leading-tight text-white">
+                  <span className="font-extrabold text-xs sm:text-sm block leading-tight text-foreground">
                     Cópia Impressa da Prova (Dossiê Comprovante)
                   </span>
                   <span className="text-[10px] sm:text-[11px] text-emerald-400 font-mono font-medium">
@@ -327,7 +327,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                     setSelectedActivityForDossier(null);
                     setActiveDossierRecord(null);
                   }}
-                  className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all active:scale-95 cursor-pointer shrink-0"
+                  className="p-2 bg-surface-hover hover:bg-white/20 text-foreground rounded-xl transition-all active:scale-95 cursor-pointer shrink-0"
                   title="Fechar Cópia"
                 >
                   <X className="w-4 h-4" />
@@ -360,15 +360,15 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px] text-slate-700 font-mono mt-3 pt-2.5 border-t border-slate-300 bg-slate-50/80 p-2.5 rounded-lg text-center sm:text-left">
                   <div>
-                    <span className="text-slate-500 block text-[9px]">REGISTRO DO DOSSIÊ:</span>
+                    <span className="text-muted block text-[9px]">REGISTRO DO DOSSIÊ:</span>
                     <strong className="text-slate-900 font-bold break-all">{activeDossierRecord.id}</strong>
                   </div>
                   <div className="sm:text-center">
-                    <span className="text-slate-500 block text-[9px]">STATUS DE EMISSÃO:</span>
+                    <span className="text-muted block text-[9px]">STATUS DE EMISSÃO:</span>
                     <strong className="text-slate-900 font-bold">VIA {activeDossierRecord.issueNumber} DE 3 (MÁXIMO)</strong>
                   </div>
                   <div className="sm:text-right">
-                    <span className="text-slate-500 block text-[9px]">DATA E HORA:</span>
+                    <span className="text-muted block text-[9px]">DATA E HORA:</span>
                     <strong className="text-slate-900 font-bold">{new Date(activeDossierRecord.issuedAt).toLocaleString('pt-BR')}</strong>
                   </div>
                 </div>
@@ -378,16 +378,16 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 p-3.5 sm:p-4 bg-slate-50 rounded-xl border border-slate-300 text-xs shadow-sm">
                 <div className="space-y-1.5">
                   <p className="border-b border-slate-200 pb-1">
-                    <span className="text-slate-500 font-semibold uppercase text-[10px] block">Nome do Aluno(a):</span>
+                    <span className="text-muted font-semibold uppercase text-[10px] block">Nome do Aluno(a):</span>
                     <strong className="text-slate-900 text-xs sm:text-sm break-words">{student.fullName}</strong>
                   </p>
                   <div className="grid grid-cols-2 gap-2 pt-1">
                     <p>
-                      <span className="text-slate-500 font-semibold text-[10px] block">Matrícula:</span>
+                      <span className="text-muted font-semibold text-[10px] block">Matrícula:</span>
                       <strong className="text-slate-900 font-mono">{student.matricula}</strong>
                     </p>
                     <p>
-                      <span className="text-slate-500 font-semibold text-[10px] block">Turma:</span>
+                      <span className="text-muted font-semibold text-[10px] block">Turma:</span>
                       <strong className="text-slate-900">{getTurmaLabel(student.turma)}</strong>
                     </p>
                   </div>
@@ -395,16 +395,16 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
 
                 <div className="space-y-1.5">
                   <p className="border-b border-slate-200 pb-1">
-                    <span className="text-slate-500 font-semibold uppercase text-[10px] block">Atividade / Avaliação:</span>
+                    <span className="text-muted font-semibold uppercase text-[10px] block">Atividade / Avaliação:</span>
                     <strong className="text-slate-900 text-xs sm:text-sm break-words">{selectedActivityForDossier.title}</strong>
                   </p>
                   <div className="grid grid-cols-2 gap-2 pt-1">
                     <p>
-                      <span className="text-slate-500 font-semibold text-[10px] block">Tipo de Prova:</span>
+                      <span className="text-muted font-semibold text-[10px] block">Tipo de Prova:</span>
                       <strong className="text-slate-900">{selectedActivityForDossier.type}</strong>
                     </p>
                     <p>
-                      <span className="text-slate-500 font-semibold text-[10px] block">Valor Máximo:</span>
+                      <span className="text-muted font-semibold text-[10px] block">Valor Máximo:</span>
                       <strong className="text-slate-900 font-bold">{selectedActivityForDossier.maxGrade || 10} pts</strong>
                     </p>
                   </div>
@@ -446,7 +446,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
               <div className="space-y-4">
                 <h3 className="text-xs font-black border-b-2 border-slate-900 pb-1 text-slate-900 uppercase tracking-wider flex items-center justify-between flex-wrap gap-1">
                   <span>RESPOSTAS E CONTEÚDO REGISTRADO NA PROVA</span>
-                  <span className="text-[10px] font-normal text-slate-500 font-mono">
+                  <span className="text-[10px] font-normal text-muted font-mono">
                     {selectedActivityForDossier.questions?.length || 0} QUESTÕES
                   </span>
                 </h3>
@@ -547,7 +547,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-[9px] text-slate-500 font-mono gap-1 text-center sm:text-left">
+                <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-[9px] text-muted font-mono gap-1 text-center sm:text-left">
                   <span>Documento emitido via Sistema Ninja de Gestão Escolar</span>
                   <span className="font-bold text-slate-700">ID Autenticador: {activeDossierRecord.id}</span>
                   <span>Válido como comprovante físico assinado</span>
@@ -563,7 +563,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                   <button
                     onClick={handlePrintWindow}
-                    className="flex-1 sm:flex-none px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer"
+                    className="flex-1 sm:flex-none px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-foreground font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer"
                   >
                     <Printer className="w-4 h-4" />
                     <span>Imprimir Dossiê</span>
@@ -587,24 +587,24 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
       {/* ----------------- ALERT MODAL: EMISSION LIMIT REACHED ----------------- */}
       {limitAlert && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-          <div className="bg-[#131b2e] border-2 border-rose-500/50 rounded-3xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl">
-            <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto border border-rose-500/40">
+          <div className="bg-surface border-2 border-rose-500/50 rounded-3xl p-6 max-w-md w-full text-center space-y-4 shadow-2xl">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-400 flex items-center justify-center mx-auto border border-rose-200">
               <Lock className="w-6 h-6" />
             </div>
             <div className="space-y-2">
-              <h3 className="text-lg font-extrabold text-white">
+              <h3 className="text-lg font-extrabold text-foreground">
                 Limite de Emissões Atingido!
               </h3>
-              <p className="text-xs text-[#bccabb] leading-relaxed">
-                O Dossiê Comprovante da Prova para a atividade <strong className="text-white">&ldquo;{limitAlert.activityTitle}&rdquo;</strong> já foi emitido o limite máximo de <strong className="text-rose-400">3 vezes</strong>.
+              <p className="text-xs text-muted leading-relaxed">
+                O Dossiê Comprovante da Prova para a atividade <strong className="text-foreground">&ldquo;{limitAlert.activityTitle}&rdquo;</strong> já foi emitido o limite máximo de <strong className="text-rose-400">3 vezes</strong>.
               </p>
-              <p className="text-[11px] text-rose-300 bg-rose-500/10 p-3 rounded-xl border border-rose-500/20">
+              <p className="text-[11px] text-rose-600 bg-rose-500/10 p-3 rounded-xl border border-rose-500/20">
                 ⚠️ Conforme a regra do sistema, não é permitido emitir mais de 3 vias do dossiê para a mesma atividade.
               </p>
             </div>
             <button
               onClick={() => setLimitAlert(null)}
-              className="w-full py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-lg"
+              className="w-full py-2.5 bg-rose-500 hover:bg-rose-600 text-foreground font-bold text-xs rounded-xl transition-all cursor-pointer shadow-lg"
             >
               Entendido
             </button>
@@ -613,21 +613,21 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
       )}
 
       {/* ----------------- MAIN SUPERVISOR MODAL CONTAINER ----------------- */}
-      <div className="glass-panel w-full max-w-4xl bg-[#0b1326] border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col my-8 max-h-[90vh]">
+      <div className="glass-panel w-full max-w-4xl bg-background border border-border rounded-3xl shadow-2xl overflow-hidden flex flex-col my-8 max-h-[90vh]">
         {/* Header */}
-        <div className="p-6 bg-[#131b2e] border-b border-white/10 flex items-center justify-between gap-4 shrink-0">
+        <div className="p-6 bg-surface border-b border-border flex items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#4ade80]/20 border border-[#4ade80]/40 flex items-center justify-center text-[#4ade80]">
+            <div className="w-10 h-10 rounded-2xl bg-primary/20 border border-primary/40 flex items-center justify-center text-primary">
               <ShieldCheck className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
+              <h2 className="text-xl font-extrabold text-foreground tracking-tight flex items-center gap-2">
                 <span>Supervisão de Desempenho Ninja</span>
-                <span className="text-xs bg-[#4ade80]/20 text-[#4ade80] px-2.5 py-0.5 rounded-full border border-[#4ade80]/30 font-bold">
+                <span className="text-xs bg-primary/20 text-primary px-2.5 py-0.5 rounded-full border border-primary/30 font-bold">
                   MODO SENSEI
                 </span>
               </h2>
-              <p className="text-xs text-[#bccabb]">
+              <p className="text-xs text-muted">
                 Relatório analítico, conferência de notas e dossiê oficial do aluno
               </p>
             </div>
@@ -635,7 +635,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
 
           <button
             onClick={onClose}
-            className="p-2.5 bg-white/5 hover:bg-white/10 text-[#bccabb] hover:text-white rounded-full transition-colors cursor-pointer"
+            className="p-2.5 bg-surface-hover hover:bg-surface-hover text-muted hover:text-foreground rounded-full transition-colors cursor-pointer"
             aria-label="Fechar"
           >
             <X className="w-5 h-5" />
@@ -645,30 +645,30 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
         {/* Modal Scrollable Content */}
         <div className="p-6 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
           {/* Student Profile Card */}
-          <div className="p-6 bg-[#131b2e]/80 rounded-2xl border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+          <div className="p-6 bg-surface/80 rounded-2xl border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
             <div className="flex items-center gap-4">
               <img
                 src={student.avatarUrl}
                 alt={student.fullName}
-                className="w-16 h-16 rounded-full object-cover border-2 border-[#4ade80]/50 shadow-lg shrink-0"
+                className="w-16 h-16 rounded-full object-cover border-2 border-primary/50 shadow-lg shrink-0"
               />
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-xl font-bold text-white tracking-tight">{student.fullName}</h3>
-                  <span className="text-[11px] font-extrabold bg-[#4ade80]/20 text-[#4ade80] px-3 py-0.5 rounded-full border border-[#4ade80]/30">
+                  <h3 className="text-xl font-bold text-foreground tracking-tight">{student.fullName}</h3>
+                  <span className="text-[11px] font-extrabold bg-primary/20 text-primary px-3 py-0.5 rounded-full border border-primary/30">
                     {student.tag || 'REGULAR'}
                   </span>
                 </div>
-                <div className="flex items-center gap-4 text-xs text-[#bccabb] mt-1 font-medium flex-wrap">
-                  <span>Matrícula: <strong className="text-white">{student.matricula}</strong></span>
+                <div className="flex items-center gap-4 text-xs text-muted mt-1 font-medium flex-wrap">
+                  <span>Matrícula: <strong className="text-foreground">{student.matricula}</strong></span>
                   <span>•</span>
-                  <span>Turma: <strong className="text-white">{getTurmaLabel(student.turma)}</strong></span>
+                  <span>Turma: <strong className="text-foreground">{getTurmaLabel(student.turma)}</strong></span>
                   {student.tag === 'PNE' && (
                     <>
                       {student.pneConditions && student.pneConditions.length > 0 && (
                         <>
                           <span>•</span>
-                          <span className="text-amber-300 bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/30 font-semibold text-[11px]">
+                          <span className="text-amber-600 bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/30 font-semibold text-[11px]">
                             {student.pneConditions.join(', ')}
                           </span>
                         </>
@@ -676,7 +676,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                       <span>•</span>
                       <span className="flex items-center gap-1 text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
                         <HeartHandshake className="w-3.5 h-3.5 text-amber-400" />
-                        <span>2º Professor: <strong className="text-white">{student.secondTeacherName || 'Não vinculado'}</strong></span>
+                        <span>2º Professor: <strong className="text-foreground">{student.secondTeacherName || 'Não vinculado'}</strong></span>
                       </span>
                     </>
                   )}
@@ -688,9 +688,9 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
               {onSendMessage && (
                 <button
                   onClick={() => onSendMessage(student)}
-                  className="flex-1 sm:flex-none py-2.5 px-4 bg-gradient-to-r from-[#172238] to-[#1e2a45] hover:from-[#1e2c4a] hover:to-[#263757] text-[#4ade80] font-bold rounded-xl text-xs border border-[#4ade80]/40 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md hover:shadow-[#4ade80]/10 active:scale-95"
+                  className="flex-1 sm:flex-none py-2.5 px-4 bg-gradient-to-r from-[#172238] to-[#1e2a45] hover:from-[#1e2c4a] hover:to-[#263757] text-primary font-bold rounded-xl text-xs border border-primary/40 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md hover:shadow-[#4ade80]/10 active:scale-95"
                 >
-                  <MessageSquare className="w-4 h-4 text-[#4ade80]" />
+                  <MessageSquare className="w-4 h-4 text-primary" />
                   <span>Enviar Mensagem ao Aluno</span>
                 </button>
               )}
@@ -698,13 +698,13 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
           </div>
 
           {/* Navigation Sub-Tabs */}
-          <div className="grid grid-cols-3 gap-1.5 sm:gap-2 p-1.5 bg-[#131b2e] rounded-2xl border border-white/10 shadow-inner">
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2 p-1.5 bg-surface rounded-2xl border border-border shadow-inner">
             <button
               onClick={() => setActiveSubTab('relatorio')}
               className={`py-2 sm:py-2.5 px-1.5 sm:px-3 rounded-xl text-[10px] sm:text-xs font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 cursor-pointer active:scale-95 text-center leading-tight ${
                 activeSubTab === 'relatorio'
-                  ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-[#003919] shadow-lg shadow-[#4ade80]/20 font-extrabold'
-                  : 'text-[#bccabb] hover:text-white hover:bg-white/5'
+                  ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-lg shadow-primary/20 font-extrabold'
+                  : 'text-muted hover:text-foreground hover:bg-surface-hover'
               }`}
             >
               <BarChart2 className="w-4 h-4 shrink-0" />
@@ -715,8 +715,8 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
               onClick={() => setActiveSubTab('atividades')}
               className={`py-2 sm:py-2.5 px-1.5 sm:px-3 rounded-xl text-[10px] sm:text-xs font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 cursor-pointer active:scale-95 text-center leading-tight ${
                 activeSubTab === 'atividades'
-                  ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-[#003919] shadow-lg shadow-[#4ade80]/20 font-extrabold'
-                  : 'text-[#bccabb] hover:text-white hover:bg-white/5'
+                  ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-lg shadow-primary/20 font-extrabold'
+                  : 'text-muted hover:text-foreground hover:bg-surface-hover'
               }`}
             >
               <BookOpen className="w-4 h-4 shrink-0" />
@@ -727,8 +727,8 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
               onClick={() => setActiveSubTab('anotacoes')}
               className={`py-2 sm:py-2.5 px-1.5 sm:px-3 rounded-xl text-[10px] sm:text-xs font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 cursor-pointer active:scale-95 text-center leading-tight ${
                 activeSubTab === 'anotacoes'
-                  ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-[#003919] shadow-lg shadow-[#4ade80]/20 font-extrabold'
-                  : 'text-[#bccabb] hover:text-white hover:bg-white/5'
+                  ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-lg shadow-primary/20 font-extrabold'
+                  : 'text-muted hover:text-foreground hover:bg-surface-hover'
               }`}
             >
               <FileText className="w-4 h-4 shrink-0" />
@@ -742,98 +742,98 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
               {/* KPI Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Card 1: Média Geral */}
-                <div className="p-5 bg-[#131b2e] rounded-2xl border border-white/10 space-y-2 relative overflow-hidden">
+                <div className="p-5 bg-surface rounded-2xl border border-border space-y-2 relative overflow-hidden">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-[#bccabb] font-semibold">Média de Notas</span>
-                    <div className="w-8 h-8 rounded-xl bg-[#4ade80]/20 text-[#4ade80] flex items-center justify-center">
+                    <span className="text-xs text-muted font-semibold">Média de Notas</span>
+                    <div className="w-8 h-8 rounded-xl bg-primary/20 text-primary flex items-center justify-center">
                       <Award className="w-4 h-4" />
                     </div>
                   </div>
-                  <div className="text-2xl font-black text-white">
-                    {averageGrade} <span className="text-xs text-[#bccabb] font-normal">/ 10.0</span>
+                  <div className="text-2xl font-black text-foreground">
+                    {averageGrade} <span className="text-xs text-muted font-normal">/ 10.0</span>
                   </div>
-                  <p className="text-[11px] text-[#4ade80] font-medium">
+                  <p className="text-[11px] text-primary font-medium">
                     {gradedSubmissions.length} atividade(s) avaliada(s)
                   </p>
                 </div>
 
                 {/* Card 2: Engajamento / Conclusão */}
-                <div className="p-5 bg-[#131b2e] rounded-2xl border border-white/10 space-y-2 relative overflow-hidden">
+                <div className="p-5 bg-surface rounded-2xl border border-border space-y-2 relative overflow-hidden">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-[#bccabb] font-semibold">Conclusão de Missões</span>
+                    <span className="text-xs text-muted font-semibold">Conclusão de Missões</span>
                     <div className="w-8 h-8 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center">
                       <CheckCircle2 className="w-4 h-4" />
                     </div>
                   </div>
-                  <div className="text-2xl font-black text-white">
-                    {completedCount} <span className="text-xs text-[#bccabb] font-normal">/ {studentActivities.length}</span>
+                  <div className="text-2xl font-black text-foreground">
+                    {completedCount} <span className="text-xs text-muted font-normal">/ {studentActivities.length}</span>
                   </div>
                   {/* Progress Bar */}
-                  <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+                  <div className="w-full bg-surface-hover rounded-full h-1.5 overflow-hidden">
                     <div
-                      className="bg-[#4ade80] h-full rounded-full transition-all"
+                      className="bg-primary h-full rounded-full transition-all"
                       style={{ width: `${completionPercentage}%` }}
                     />
                   </div>
                 </div>
 
                 {/* Card 3: Devoluções */}
-                <div className="p-5 bg-[#131b2e] rounded-2xl border border-white/10 space-y-2 relative overflow-hidden">
+                <div className="p-5 bg-surface rounded-2xl border border-border space-y-2 relative overflow-hidden">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-[#bccabb] font-semibold">Devoluções / Refazer</span>
-                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                    <span className="text-xs text-muted font-semibold">Devoluções / Refazer</span>
+                    <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-400 flex items-center justify-center">
                       <RotateCcw className="w-4 h-4" />
                     </div>
                   </div>
-                  <div className="text-2xl font-black text-white">
-                    {returnedCount} <span className="text-xs text-[#bccabb] font-normal">vezes</span>
+                  <div className="text-2xl font-black text-foreground">
+                    {returnedCount} <span className="text-xs text-muted font-normal">vezes</span>
                   </div>
-                  <p className="text-[11px] text-amber-300 font-medium">
+                  <p className="text-[11px] text-amber-600 font-medium">
                     Atividades enviadas para ajuste pelo Sensei
                   </p>
                 </div>
 
                 {/* Card 4: Desempenho Tático */}
-                <div className="p-5 bg-[#131b2e] rounded-2xl border border-white/10 space-y-2 relative overflow-hidden">
+                <div className="p-5 bg-surface rounded-2xl border border-border space-y-2 relative overflow-hidden">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-[#bccabb] font-semibold">Aproveitamento Tático</span>
-                    <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center">
+                    <span className="text-xs text-muted font-semibold">Aproveitamento Tático</span>
+                    <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-400 flex items-center justify-center">
                       <TrendingUp className="w-4 h-4" />
                     </div>
                   </div>
-                  <div className="text-2xl font-black text-white">
+                  <div className="text-2xl font-black text-foreground">
                     {completionPercentage}%
                   </div>
-                  <p className="text-[11px] text-purple-300 font-medium">
+                  <p className="text-[11px] text-purple-600 font-medium">
                     Taxa geral de participação
                   </p>
                 </div>
               </div>
 
               {/* Technical Performance Summary */}
-              <div className="p-6 bg-[#131b2e] rounded-2xl border border-white/10 space-y-4">
-                <h4 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-                  <BarChart2 className="w-4 h-4 text-[#4ade80]" />
+              <div className="p-6 bg-surface rounded-2xl border border-border space-y-4">
+                <h4 className="text-sm font-bold text-foreground tracking-tight flex items-center gap-2">
+                  <BarChart2 className="w-4 h-4 text-primary" />
                   <span>Análise de Desempenho Objetiva vs. Discursiva</span>
                 </h4>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 bg-[#0b1326] rounded-xl border border-white/5 space-y-2">
+                  <div className="p-4 bg-background rounded-xl border border-border space-y-2">
                     <div className="flex justify-between text-xs font-bold">
-                      <span className="text-[#bccabb]">Questões Múltipla Escolha:</span>
+                      <span className="text-muted">Questões Múltipla Escolha:</span>
                       <span className="text-emerald-400 font-black">{totalObjectiveScore.toFixed(1)} pts acumulados</span>
                     </div>
-                    <p className="text-[11px] text-[#bccabb]">
+                    <p className="text-[11px] text-muted">
                       Correção automática instantânea do sistema de treino ninja.
                     </p>
                   </div>
 
-                  <div className="p-4 bg-[#0b1326] rounded-xl border border-white/5 space-y-2">
+                  <div className="p-4 bg-background rounded-xl border border-border space-y-2">
                     <div className="flex justify-between text-xs font-bold">
-                      <span className="text-[#bccabb]">Pergaminhos Discursivos / Redação:</span>
+                      <span className="text-muted">Pergaminhos Discursivos / Redação:</span>
                       <span className="text-sky-400 font-black">{totalEssayScore.toFixed(1)} pts acumulados</span>
                     </div>
-                    <p className="text-[11px] text-[#bccabb]">
+                    <p className="text-[11px] text-muted">
                       Avaliação qualitativa e argumentativa do professor.
                     </p>
                   </div>
@@ -846,7 +846,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
           {activeSubTab === 'atividades' && (
             <div className="space-y-4">
               {studentActivities.length === 0 ? (
-                <div className="p-8 text-center text-[#bccabb] bg-[#131b2e] rounded-2xl border border-white/10">
+                <div className="p-8 text-center text-muted bg-surface rounded-2xl border border-border">
                   Nenhuma atividade atribuída a esta turma até o momento.
                 </div>
               ) : (
@@ -866,24 +866,24 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                   return (
                     <div
                       key={activity.id}
-                      className="p-5 bg-[#131b2e] rounded-2xl border border-white/10 space-y-4"
+                      className="p-5 bg-surface rounded-2xl border border-border space-y-4"
                     >
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[10px] font-bold bg-[#4ade80]/20 text-[#4ade80] px-2.5 py-0.5 rounded-full border border-[#4ade80]/30">
+                            <span className="text-[10px] font-bold bg-primary/20 text-primary px-2.5 py-0.5 rounded-full border border-primary/30">
                               {activity.type}
                             </span>
-                            <span className="text-xs font-bold text-white">{activity.title}</span>
+                            <span className="text-xs font-bold text-foreground">{activity.title}</span>
                           </div>
-                          <p className="text-xs text-[#bccabb]">
+                          <p className="text-xs text-muted">
                             Prazo: {activity.deadline || 'Sem data'} • Valor máximo: {activity.maxGrade || 10} pts
                           </p>
                         </div>
 
                         <div className="flex items-center gap-2 flex-wrap">
                           {isGraded && (
-                            <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 font-black text-xs rounded-full border border-emerald-500/30">
+                            <span className="px-3 py-1 bg-emerald-100 text-emerald-600 font-black text-xs rounded-full border border-emerald-500/30">
                               Nota Lançada: {totalScore !== null ? totalScore.toFixed(1) : '0'}/{activity.maxGrade || 10}
                             </span>
                           )}
@@ -893,12 +893,12 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                             </span>
                           )}
                           {isReturned && (
-                            <span className="px-3 py-1 bg-amber-500/20 text-amber-300 font-bold text-xs rounded-full border border-amber-500/30">
+                            <span className="px-3 py-1 bg-amber-100 text-amber-600 font-bold text-xs rounded-full border border-amber-500/30">
                               ↩️ Devolvida ({submission?.returnCount || 1}x)
                             </span>
                           )}
                           {isNotSubmitted && (
-                            <span className="px-3 py-1 bg-white/10 text-[#bccabb] font-semibold text-xs rounded-full border border-white/10">
+                            <span className="px-3 py-1 bg-surface-hover text-muted font-semibold text-xs rounded-full border border-border">
                               📜 Não Entregue / Pendente
                             </span>
                           )}
@@ -906,23 +906,23 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                       </div>
 
                       {submission?.teacherFeedback && (
-                        <div className="p-3 bg-[#0b1326] rounded-xl border border-white/5 text-xs text-[#bccabb]">
-                          <strong className="text-white">Parecer do Professor:</strong> &ldquo;{submission.teacherFeedback}&rdquo;
+                        <div className="p-3 bg-background rounded-xl border border-border text-xs text-muted">
+                          <strong className="text-foreground">Parecer do Professor:</strong> &ldquo;{submission.teacherFeedback}&rdquo;
                         </div>
                       )}
 
                       {/* DOSSIER ISSUANCE BAR */}
-                      <div className="pt-3 border-t border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#0b1326]/60 p-3 rounded-xl">
+                      <div className="pt-3 border-t border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-background/60 p-3 rounded-xl">
                         <div className="flex items-center gap-2 text-xs">
-                          <FileCheck2 className="w-4 h-4 text-[#4ade80]" />
-                          <span className="text-white font-semibold">Cópia Impressa do Dossiê:</span>
+                          <FileCheck2 className="w-4 h-4 text-primary" />
+                          <span className="text-foreground font-semibold">Cópia Impressa do Dossiê:</span>
                           <span
                             className={`font-mono text-[11px] px-2 py-0.5 rounded-full font-bold border ${
                               isLimitReached
-                                ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                ? 'bg-rose-100 text-rose-600 border-rose-200'
                                 : issuances.length > 0
-                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                                : 'bg-white/10 text-[#bccabb] border-white/10'
+                                ? 'bg-amber-100 text-amber-600 border-amber-200'
+                                : 'bg-surface-hover text-muted border-border'
                             }`}
                           >
                             {issuances.length} / 3 vias emitidas
@@ -935,7 +935,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                             <button
                               key={rec.id}
                               onClick={() => handleViewExistingDossier(activity, rec)}
-                              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 active:scale-95 text-white text-[11px] font-mono font-bold rounded-xl transition-all border border-white/15 hover:border-emerald-400/50 cursor-pointer flex items-center gap-1 shadow-sm"
+                              className="px-3 py-1.5 bg-surface-hover hover:bg-white/20 active:scale-95 text-foreground text-[11px] font-mono font-bold rounded-xl transition-all border border-white/15 hover:border-emerald-400/50 cursor-pointer flex items-center gap-1 shadow-sm"
                               title={`Ver Via ${rec.issueNumber} - ID: ${rec.id}`}
                             >
                               <FileText className="w-3.5 h-3.5 text-emerald-400" />
@@ -949,7 +949,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                             className={`py-2 px-4 rounded-xl font-extrabold text-xs flex items-center gap-2 transition-all cursor-pointer shadow-md active:scale-95 ${
                               isLimitReached
                                 ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30 cursor-not-allowed opacity-80'
-                                : 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] hover:from-[#6bfb9a] hover:to-[#34d399] text-[#003919] shadow-[#4ade80]/20 hover:shadow-lg'
+                                : 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] hover:from-[#6bfb9a] hover:to-[#34d399] text-white shadow-primary/20 hover:shadow-lg'
                             }`}
                           >
                             {isLimitReached ? (
@@ -975,20 +975,20 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
 
           {/* SUB-TAB 3: ANOTAÇÕES PEDAGÓGICAS */}
           {activeSubTab === 'anotacoes' && (
-            <div className="p-6 bg-[#131b2e] rounded-2xl border border-white/10 space-y-4">
+            <div className="p-6 bg-surface rounded-2xl border border-border space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-[#4ade80]" />
+                  <h4 className="text-sm font-bold text-foreground tracking-tight flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-primary" />
                     <span>Caderno de Supervisão Pedagógica & Observações</span>
                   </h4>
-                  <p className="text-xs text-[#bccabb]">
+                  <p className="text-xs text-muted">
                     Registre anotações sigilosas do Sensei sobre o acompanhamento, dificuldades ou destaques deste aluno.
                   </p>
                 </div>
 
                 {isSavedNotes && (
-                  <span className="text-xs font-bold text-[#4ade80] flex items-center gap-1.5 animate-fadeIn bg-[#4ade80]/10 px-3 py-1 rounded-full border border-[#4ade80]/20">
+                  <span className="text-xs font-bold text-primary flex items-center gap-1.5 animate-fadeIn bg-primary/10 px-3 py-1 rounded-full border border-primary/20">
                     <Check className="w-4 h-4" />
                     <span>Anotações Salvas com Sucesso!</span>
                   </span>
@@ -1000,13 +1000,13 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                 value={teacherNotes}
                 onChange={(e) => setTeacherNotes(e.target.value)}
                 placeholder="Escreva aqui observações pedagógicas sobre o progresso, participação, dúvidas frequentes ou histórico do aluno..."
-                className="w-full bg-[#0b1326] border border-white/10 rounded-2xl p-4 text-xs text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80] leading-relaxed resize-none shadow-inner"
+                className="w-full bg-background border border-border rounded-2xl p-4 text-xs text-foreground placeholder-[#869486] focus:outline-none focus:border-primary leading-relaxed resize-none shadow-inner"
               />
 
               <div className="flex justify-end">
                 <button
                   onClick={handleSaveNotes}
-                  className="py-2.5 px-6 bg-gradient-to-r from-[#4ade80] to-[#22c55e] hover:from-[#6bfb9a] hover:to-[#34d399] text-[#003919] font-extrabold text-xs rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-md shadow-[#4ade80]/20 active:scale-95"
+                  className="py-2.5 px-6 bg-gradient-to-r from-[#4ade80] to-[#22c55e] hover:from-[#6bfb9a] hover:to-[#34d399] text-white font-extrabold text-xs rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-md shadow-primary/20 active:scale-95"
                 >
                   <Save className="w-4 h-4" />
                   <span>Salvar Anotações</span>
@@ -1017,10 +1017,10 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 bg-[#131b2e] border-t border-white/10 flex justify-end shrink-0">
+        <div className="p-4 bg-surface border-t border-border flex justify-end shrink-0">
           <button
             onClick={onClose}
-            className="py-2.5 px-6 bg-white/10 hover:bg-white/20 active:scale-95 text-white font-bold text-xs rounded-xl transition-all cursor-pointer border border-white/10 shadow-sm"
+            className="py-2.5 px-6 bg-surface-hover hover:bg-white/20 active:scale-95 text-foreground font-bold text-xs rounded-xl transition-all cursor-pointer border border-border shadow-sm"
           >
             Fechar Janela
           </button>

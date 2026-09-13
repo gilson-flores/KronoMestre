@@ -115,32 +115,32 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-lg glass-panel rounded-3xl border border-white/10 p-6 sm:p-8 space-y-6 shadow-2xl relative animate-fadeIn">
+      <div className="w-full max-w-lg glass-panel rounded-3xl border border-border p-6 sm:p-8 space-y-6 shadow-2xl relative animate-fadeIn">
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 text-[#bccabb] hover:text-white rounded-full hover:bg-white/5 transition-colors cursor-pointer"
+          className="absolute top-5 right-5 p-2 text-muted hover:text-foreground rounded-full hover:bg-surface-hover transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
 
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-[#4ade80]/10 text-[#4ade80] rounded-2xl border border-[#4ade80]/20">
+          <div className="p-3 bg-primary/10 text-primary rounded-2xl border border-primary/20">
             <UserPlus className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white">Cadastrar Novo Aluno</h2>
-            <p className="text-xs text-[#bccabb]">O aluno acessará com Nome Completo (MAIÚSCULAS), Turma e a senha 1234</p>
+            <h2 className="text-xl font-bold text-foreground">Cadastrar Novo Aluno</h2>
+            <p className="text-xs text-muted">O aluno acessará com Nome Completo (MAIÚSCULAS), Turma e a senha 1234</p>
           </div>
         </div>
 
         {/* Note Box */}
-        <div className="flex items-center gap-2 text-xs text-[#4ade80] bg-[#4ade80]/10 p-3 rounded-2xl border border-[#4ade80]/20">
+        <div className="flex items-center gap-2 text-xs text-primary bg-primary/10 p-3 rounded-2xl border border-primary/20">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
           <span>Nome formatado automaticamente em MAIÚSCULAS e sem acentos. Senha padrão: <strong>1234</strong>.</span>
         </div>
 
         {formError && (
-          <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-2xl text-xs flex items-center gap-2">
+          <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-600 rounded-2xl text-xs flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
             <span>{formError}</span>
           </div>
@@ -148,7 +148,7 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-[#bccabb] mb-1">
+            <label className="block text-xs font-semibold text-muted mb-1">
               Nome Completo do Aluno (MAIÚSCULAS SEM ACENTOS)
             </label>
             <input
@@ -157,46 +157,46 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
               value={fullName}
               onChange={handleNameChange}
               placeholder="Ex: CARLOS EDUARDO SILVEIRA"
-              className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80] uppercase tracking-wide font-medium"
+              className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-primary uppercase tracking-wide font-medium"
             />
             <p className="text-[11px] text-[#869486] mt-1">Acentos e caracteres especiais são removidos automaticamente.</p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">Turma (ex: 301, 1001)</label>
+              <label className="block text-xs font-semibold text-muted mb-1">Turma (ex: 301, 1001)</label>
               <input
                 type="text"
                 required
                 value={turma}
                 onChange={(e) => setTurma(e.target.value)}
                 placeholder="Ex: 301, 302, 1001"
-                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-xs text-foreground focus:outline-none focus:border-primary"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[#bccabb] mb-1">Matrícula</label>
+              <label className="block text-xs font-semibold text-muted mb-1">Matrícula</label>
               <input
                 type="text"
                 required
                 value={matricula}
                 onChange={(e) => setMatricula(e.target.value)}
-                className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
+                className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-xs text-foreground focus:outline-none focus:border-primary"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-[#bccabb] mb-1">Categoria / Tag</label>
+            <label className="block text-xs font-semibold text-muted mb-1">Categoria / Tag</label>
             <select
               value={tag}
               onChange={(e) => setTag(e.target.value as any)}
-              className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-xs text-white focus:outline-none focus:border-[#4ade80]"
+              className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-xs text-foreground focus:outline-none focus:border-primary"
             >
-              <option value="REGULAR" className="bg-[#0b1326]">REGULAR</option>
-              <option value="PNE" className="bg-[#0b1326]">PNE (Necessidades Especiais)</option>
-              <option value="RAD" className="bg-[#0b1326]">RAD (Rendimento em Acompanhamento)</option>
+              <option value="REGULAR" className="bg-background">REGULAR</option>
+              <option value="PNE" className="bg-background">PNE (Necessidades Especiais)</option>
+              <option value="RAD" className="bg-background">RAD (Rendimento em Acompanhamento)</option>
             </select>
           </div>
 
@@ -204,7 +204,7 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
           {tag === 'PNE' && (
             <div className="space-y-4 animate-fadeIn">
               {/* Lista suspensa com caixa de seleção de Doenças e Deficiências */}
-              <div className="p-4 bg-[#131b2e] border border-amber-500/30 rounded-2xl space-y-3">
+              <div className="p-4 bg-surface border border-amber-500/30 rounded-2xl space-y-3">
                 <PneConditionsSelect
                   selectedConditions={pneConditions}
                   onChange={setPneConditions}
@@ -215,27 +215,27 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
 
               {/* Vínculo de 2º Professor */}
               <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-2">
-                <label className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
+                <label className="flex items-center gap-1.5 text-xs font-bold text-amber-600">
                   <HeartHandshake className="w-4 h-4 text-amber-400" />
                   <span>Vincular 2º Professor (AEE / Inclusão)</span>
                 </label>
-                <p className="text-[11px] text-[#bccabb]">
+                <p className="text-[11px] text-muted">
                   Selecione o profissional de inclusão responsável pelo acompanhamento deste aluno.
                 </p>
                 <select
                   value={secondTeacherId}
                   onChange={(e) => setSecondTeacherId(e.target.value)}
-                  className="w-full bg-[#0b1326] border border-amber-500/30 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-amber-400 font-medium"
+                  className="w-full bg-background border border-amber-500/30 rounded-xl px-4 py-2.5 text-xs text-foreground focus:outline-none focus:border-amber-400 font-medium"
                 >
                   <option value="">-- Não vincular agora (ou selecionar depois) --</option>
                   {availableSecondTeachers.map((st) => (
-                    <option key={st.id} value={st.id} className="bg-[#0b1326] text-white">
+                    <option key={st.id} value={st.id} className="bg-background text-foreground">
                       {st.name} {st.subject ? `(${st.subject})` : '(AEE)'}
                     </option>
                   ))}
                 </select>
                 {availableSecondTeachers.length === 0 && (
-                  <p className="text-[10px] text-amber-300/80">
+                  <p className="text-[10px] text-amber-600/80">
                     Nenhum 2º Professor cadastrado ainda. Você pode cadastrá-los na aba &quot;2º Professor&quot;.
                   </p>
                 )}
@@ -245,7 +245,7 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
 
           <button
             type="submit"
-            className="w-full py-3.5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-bold rounded-full transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#4ade80]/20 cursor-pointer mt-4 text-sm"
+            className="w-full py-3.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-full transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20 cursor-pointer mt-4 text-sm"
           >
             <UserPlus className="w-5 h-5" />
             <span>Cadastrar Aluno</span>

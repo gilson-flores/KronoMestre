@@ -241,6 +241,29 @@ export default function Home() {
     return [];
   });
 
+  // Theme preference state (default 'dark' para alto contraste)
+  const [themeMode, setThemeMode] = useState<'dark' | 'light'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('app_theme_mode');
+      if (saved === 'light') return 'light';
+    }
+    return 'dark';
+  });
+
+  // Atualizar classe do documento quando tema muda
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      if (themeMode === 'light') {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
+      } else {
+        document.documentElement.classList.remove('light');
+        document.documentElement.classList.add('dark');
+      }
+      localStorage.setItem('app_theme_mode', themeMode);
+    }
+  }, [themeMode]);
+
   // AI Auto-Reply State for Teacher (Prof. Gilson bot)
   const [isAiAutoReplyEnabled, setIsAiAutoReplyEnabled] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -2516,9 +2539,9 @@ export default function Home() {
   // 0. Server-side rendering / initial hydration shell
   if (!isMounted) {
     return (
-      <div className="min-h-screen bg-[#0b1326] text-[#dae2fd] flex flex-col justify-center items-center">
-        <div className="flex items-center gap-3 text-sm font-medium text-[#bccabb] bg-[#131b2e] px-6 py-4 rounded-full border border-white/10 shadow-xl">
-          <div className="w-4 h-4 border-2 border-[#4ade80] border-t-transparent rounded-full animate-spin shrink-0" />
+      <div className="min-h-screen bg-background text-foreground flex flex-col justify-center items-center">
+        <div className="flex items-center gap-3 text-sm font-medium text-muted bg-surface px-6 py-4 rounded-full border border-border shadow-xl">
+          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
           <span>Carregando plataforma de Sociologia On-line...</span>
         </div>
       </div>
@@ -2559,7 +2582,7 @@ export default function Home() {
 
   // 3. Teacher Dashboard Layout
   return (
-    <div className="flex min-h-screen bg-[#0b1326] text-[#dae2fd] overflow-x-hidden">
+    <div className="flex min-h-screen bg-background text-foreground overflow-x-hidden">
       {/* Sidebar Navigation */}
       <Sidebar
         currentTab={currentTab}
@@ -2594,13 +2617,13 @@ export default function Home() {
             <div
               className={`p-4 rounded-2xl text-xs font-bold flex items-center justify-between shadow-lg transition-all animate-fadeIn ${
                 globalDbStatus.type === 'success'
-                  ? 'bg-[#4ade80]/20 text-[#4ade80] border border-[#4ade80]/40'
-                  : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                  ? 'bg-primary/20 text-primary border border-primary/40'
+                  : 'bg-rose-100 text-rose-600 border border-rose-200'
               }`}
             >
               <div className="flex items-center gap-2">
                 {globalDbStatus.type === 'success' ? (
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-[#4ade80]" />
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-primary" />
                 ) : (
                   <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
                 )}
@@ -2608,7 +2631,7 @@ export default function Home() {
               </div>
               <button
                 onClick={() => setGlobalDbStatus(null)}
-                className="text-white hover:opacity-80 ml-3 text-sm cursor-pointer p-1 min-h-[36px] min-w-[36px] flex items-center justify-center"
+                className="text-foreground hover:opacity-80 ml-3 text-sm cursor-pointer p-1 min-h-[36px] min-w-[36px] flex items-center justify-center"
               >
                 ✕
               </button>
@@ -2648,6 +2671,9 @@ export default function Home() {
                   onNavigateToTab={(tab) => setCurrentTab(tab)}
                   onOpenNewActivityModal={() => setIsNewActivityModalOpen(true)}
                   onOpenNewStudentModal={() => setIsNewStudentModalOpen(true)}
+                  onSelectActivityForGrading={handleSelectActivityForGrading}
+                  onOpenParallelRecoveryModal={(act) => setParallelRecoveryParentActivity(act)}
+                  onViewActivity={(act) => setViewingActivity(act)}
                 />
               )}
 
@@ -2742,21 +2768,21 @@ export default function Home() {
               )}
 
               {currentTab === 'configuracoes' && (
-                <div className="glass-panel p-8 rounded-3xl border border-white/10 max-w-2xl space-y-6">
-              <h1 className="text-2xl font-bold text-white">Configurações da Conta</h1>
+                <div className="glass-panel p-8 rounded-3xl border border-border max-w-2xl space-y-6">
+              <h1 className="text-2xl font-bold text-foreground">Configurações da Conta</h1>
 
               {teacherSaveStatus && (
                 <div
                   className={`p-4 rounded-2xl text-xs font-bold flex items-center justify-between transition-all ${
                     teacherSaveStatus.type === 'success'
-                      ? 'bg-[#4ade80]/20 text-[#4ade80] border border-[#4ade80]/40'
-                      : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                      ? 'bg-primary/20 text-primary border border-primary/40'
+                      : 'bg-rose-100 text-rose-600 border border-rose-200'
                   }`}
                 >
                   <span>{teacherSaveStatus.message}</span>
                   <button
                     onClick={() => setTeacherSaveStatus(null)}
-                    className="text-white hover:opacity-80 ml-2"
+                    className="text-foreground hover:opacity-80 ml-2"
                   >
                     ✕
                   </button>
@@ -2765,123 +2791,123 @@ export default function Home() {
 
               <div className="space-y-4 text-xs">
                 <div>
-                  <label className="block text-[#bccabb] font-semibold mb-1">URL da Imagem de Perfil (Avatar)</label>
+                  <label className="block text-muted font-semibold mb-1">URL da Imagem de Perfil (Avatar)</label>
                   <input
                     type="text"
                     value={teacher.avatarUrl}
                     onChange={(e) => setTeacher({ ...teacher, avatarUrl: e.target.value })}
-                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-[#4ade80]"
+                    className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-foreground focus:outline-none focus:border-primary"
                   />
                 </div>
                 <div>
-                  <label className="block text-[#bccabb] font-semibold mb-1">Nome do Professor</label>
+                  <label className="block text-muted font-semibold mb-1">Nome do Professor</label>
                   <input
                     type="text"
                     value={teacher.name}
                     onChange={(e) => setTeacher({ ...teacher, name: e.target.value })}
-                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-[#4ade80]"
+                    className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-foreground focus:outline-none focus:border-primary"
                   />
                 </div>
                 <div>
-                  <label className="block text-[#bccabb] font-semibold mb-1">Disciplina</label>
+                  <label className="block text-muted font-semibold mb-1">Disciplina</label>
                   <input
                     type="text"
                     value={teacher.subject}
                     onChange={(e) => setTeacher({ ...teacher, subject: e.target.value })}
-                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-[#4ade80]"
+                    className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-foreground focus:outline-none focus:border-primary"
                   />
                 </div>
                 <div>
-                  <label className="block text-[#bccabb] font-semibold mb-1">E-mail</label>
+                  <label className="block text-muted font-semibold mb-1">E-mail</label>
                   <input
                     type="email"
                     value={teacher.email}
                     onChange={(e) => setTeacher({ ...teacher, email: e.target.value })}
-                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-[#4ade80]"
+                    className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-foreground focus:outline-none focus:border-primary"
                   />
-                  <p className="text-[10px] text-[#bccabb] mt-1 ml-1">Você pode alterar seu e-mail de contato e acesso do professor por aqui.</p>
+                  <p className="text-[10px] text-muted mt-1 ml-1">Você pode alterar seu e-mail de contato e acesso do professor por aqui.</p>
                 </div>
                 <div>
-                  <label className="block text-[#bccabb] font-semibold mb-1">Telefone</label>
+                  <label className="block text-muted font-semibold mb-1">Telefone</label>
                   <input
                     type="text"
                     value={teacher.phone || ''}
                     onChange={(e) => setTeacher({ ...teacher, phone: e.target.value })}
-                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-[#4ade80]"
+                    className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-foreground focus:outline-none focus:border-primary"
                     placeholder="(00) 00000-0000"
                   />
                 </div>
                 <div>
-                  <label className="block text-[#bccabb] font-semibold mb-1">Escola / Instituição</label>
+                  <label className="block text-muted font-semibold mb-1">Escola / Instituição</label>
                   <input
                     type="text"
                     value={teacher.school || ''}
                     onChange={(e) => setTeacher({ ...teacher, school: e.target.value })}
-                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-[#4ade80]"
+                    className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-foreground focus:outline-none focus:border-primary"
                   />
                 </div>
                 <div>
-                  <label className="block text-[#bccabb] font-semibold mb-1">Matrícula Funcional / Vínculo</label>
+                  <label className="block text-muted font-semibold mb-1">Matrícula Funcional / Vínculo</label>
                   <input
                     type="text"
                     value={teacher.matriculaFuncional || ''}
                     onChange={(e) => setTeacher({ ...teacher, matriculaFuncional: e.target.value })}
-                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-[#4ade80]"
+                    className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-foreground focus:outline-none focus:border-primary"
                     placeholder="Ex: 654.982-1"
                   />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-[#0b1326] border border-white/10">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-background border border-border">
                   <div>
-                    <label className="block text-[#bccabb] font-semibold mb-1">Início da Vigência do Contrato</label>
+                    <label className="block text-muted font-semibold mb-1">Início da Vigência do Contrato</label>
                     <input
                       type="date"
                       value={teacher.contractStartDate || ''}
                       onChange={(e) => setTeacher({ ...teacher, contractStartDate: e.target.value })}
-                      className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-2.5 text-white focus:outline-none focus:border-[#4ade80]"
+                      className="w-full bg-surface border border-border rounded-2xl px-4 py-2.5 text-foreground focus:outline-none focus:border-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-[#bccabb] font-semibold mb-1">Término / Encerramento do Contrato</label>
+                    <label className="block text-muted font-semibold mb-1">Término / Encerramento do Contrato</label>
                     <input
                       type="date"
                       value={teacher.contractEndDate || ''}
                       onChange={(e) => setTeacher({ ...teacher, contractEndDate: e.target.value })}
-                      className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-2.5 text-white focus:outline-none focus:border-[#4ade80]"
+                      className="w-full bg-surface border border-border rounded-2xl px-4 py-2.5 text-foreground focus:outline-none focus:border-primary"
                     />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block text-[#bccabb] font-semibold mb-1">Tipo de Vínculo Contratual</label>
+                    <label className="block text-muted font-semibold mb-1">Tipo de Vínculo Contratual</label>
                     <select
                       value={teacher.contractType || 'ACT / Contratado'}
                       onChange={(e) => setTeacher({ ...teacher, contractType: e.target.value })}
-                      className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-2.5 text-white focus:outline-none focus:border-[#4ade80]"
+                      className="w-full bg-surface border border-border rounded-2xl px-4 py-2.5 text-foreground focus:outline-none focus:border-primary"
                     >
-                      <option value="ACT / Contratado" className="bg-[#131b2e] text-white">ACT / Admitido em Caráter Temporário</option>
-                      <option value="Efetivo" className="bg-[#131b2e] text-white">Professor Efetivo / Concursado</option>
-                      <option value="Substituto" className="bg-[#131b2e] text-white">Professor Substituto</option>
-                      <option value="Outro" className="bg-[#131b2e] text-white">Outro Vínculo</option>
+                      <option value="ACT / Contratado" className="bg-surface text-foreground">ACT / Admitido em Caráter Temporário</option>
+                      <option value="Efetivo" className="bg-surface text-foreground">Professor Efetivo / Concursado</option>
+                      <option value="Substituto" className="bg-surface text-foreground">Professor Substituto</option>
+                      <option value="Outro" className="bg-surface text-foreground">Outro Vínculo</option>
                     </select>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-[#bccabb] font-semibold mb-1">Nova Senha de Acesso</label>
+                  <label className="block text-muted font-semibold mb-1">Nova Senha de Acesso</label>
                   <input
                     type="password"
                     value={newTeacherPassword}
                     onChange={(e) => setNewTeacherPassword(e.target.value)}
-                    className="w-full bg-[#131b2e] border border-white/10 rounded-2xl px-4 py-3 text-white focus:outline-none focus:border-[#4ade80]"
+                    className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-foreground focus:outline-none focus:border-primary"
                     placeholder="Deixe em branco para não alterar"
                   />
-                  <p className="text-[10px] text-[#bccabb] mt-1 ml-1">Preencha apenas se desejar alterar a senha de acesso (Supabase Auth).</p>
+                  <p className="text-[10px] text-muted mt-1 ml-1">Preencha apenas se desejar alterar a senha de acesso (Supabase Auth).</p>
                 </div>
 
                 {role !== 'second_teacher' && (
                   <>
-                    <div className="pt-4 border-t border-white/10 space-y-3">
-                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <div className="pt-4 border-t border-border space-y-3">
+                      <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                         <span>Menu Lateral (Sidebar) do 2º Professor - Opções de Visibilidade</span>
                       </h3>
-                      <p className="text-[11px] text-[#bccabb]">
+                      <p className="text-[11px] text-muted">
                         Selecione quais opções o 2º Professor poderá visualizar ou ocultar na barra de navegação lateral. O seu próprio menu como Professor ADM não será alterado.
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
@@ -2900,9 +2926,9 @@ export default function Home() {
                           return (
                             <label
                               key={item.id}
-                              className="flex items-center justify-between p-3 bg-[#131b2e] rounded-2xl border border-white/10 cursor-pointer hover:border-white/20 transition-all"
+                              className="flex items-center justify-between p-3 bg-surface rounded-2xl border border-border cursor-pointer hover:border-border transition-all"
                             >
-                              <span className="text-xs font-semibold text-white">{item.label}</span>
+                              <span className="text-xs font-semibold text-foreground">{item.label}</span>
                               <div className="relative inline-flex items-center cursor-pointer shrink-0 ml-2">
                                 <input
                                   type="checkbox"
@@ -2910,7 +2936,7 @@ export default function Home() {
                                   onChange={() => toggleSidebarItemVisibility(item.id)}
                                   className="sr-only peer"
                                 />
-                                <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#4ade80]"></div>
+                                <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                               </div>
                             </label>
                           );
@@ -2918,14 +2944,50 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <div className="pt-4 border-t border-white/10 space-y-2">
-                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <div className="pt-4 border-t border-border space-y-2">
+                      <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                        <span>Aparência e Contraste Visual</span>
+                      </h3>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-surface rounded-2xl border border-border gap-3">
+                        <div>
+                          <p className="text-xs font-bold text-foreground">Tema Escuro de Alto Contraste</p>
+                          <p className="text-[11px] text-muted mt-0.5">Letras nítidas e legíveis para conforto visual e uso profissional prolongado.</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setThemeMode('dark')}
+                            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                              themeMode === 'dark'
+                                ? 'bg-primary text-white shadow-md shadow-primary/25 border border-primary'
+                                : 'bg-surface-hover text-muted hover:text-foreground border border-border'
+                            }`}
+                          >
+                            <span>🌙 Tema Escuro (Padrão)</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setThemeMode('light')}
+                            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                              themeMode === 'light'
+                                ? 'bg-primary text-white shadow-md shadow-primary/25 border border-primary'
+                                : 'bg-surface-hover text-muted hover:text-foreground border border-border'
+                            }`}
+                          >
+                            <span>☀️ Tema Claro</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-border space-y-2">
+                      <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                         <span>Segurança da Sessão</span>
                       </h3>
-                      <div className="flex items-center justify-between p-4 bg-[#131b2e] rounded-2xl border border-white/10">
+                      <div className="flex items-center justify-between p-4 bg-surface rounded-2xl border border-border">
                         <div>
-                          <p className="text-xs font-bold text-white">Deslogar por 8 minutos de inatividade</p>
-                          <p className="text-[11px] text-[#bccabb] mt-0.5">Sua sessão será encerrada automaticamente após 8 minutos sem cliques ou movimentação.</p>
+                          <p className="text-xs font-bold text-foreground">Deslogar por 8 minutos de inatividade</p>
+                          <p className="text-[11px] text-muted mt-0.5">Sua sessão será encerrada automaticamente após 8 minutos sem cliques ou movimentação.</p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
                           <input
@@ -2940,7 +3002,7 @@ export default function Home() {
                             }}
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#4ade80]"></div>
+                          <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                         </label>
                       </div>
                     </div>
@@ -3123,7 +3185,7 @@ export default function Home() {
                       });
                     }
                   }}
-                  className="py-3 px-6 bg-[#4ade80] text-[#003919] font-bold rounded-full cursor-pointer hover:bg-[#6bfb9a] transition-all"
+                  className="py-3 px-6 bg-primary text-white font-bold rounded-full cursor-pointer hover:bg-[#6bfb9a] transition-all"
                 >
                   Salvar Alterações
                 </button>
@@ -3163,6 +3225,8 @@ export default function Home() {
         onClose={() => setParallelRecoveryParentActivity(null)}
         parentActivity={parallelRecoveryParentActivity}
         onCreateActivity={handleCreateActivity}
+        students={students}
+        activities={activities}
       />
 
       <ViewActivityModal

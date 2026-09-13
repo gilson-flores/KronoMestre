@@ -135,18 +135,18 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     <div className="space-y-6 animate-fadeIn">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
-            <FolderOpen className="w-8 h-8 text-[#4ade80]" />
+          <h1 className="text-3xl font-extrabold text-foreground tracking-tight flex items-center gap-2">
+            <FolderOpen className="w-8 h-8 text-primary" />
             <span>Arquivos e Biblioteca</span>
           </h1>
-          <p className="text-sm text-[#bccabb] mt-1">
+          <p className="text-sm text-muted mt-1">
             Gerencie o Google Drive e materiais didáticos de Sociologia para os seus alunos
           </p>
         </div>
 
         <button
           onClick={() => setShowAddForm(!showAddForm)}
-          className="py-3 px-6 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-black rounded-2xl text-xs transition-all shadow-lg shadow-[#4ade80]/20 flex items-center justify-center gap-2 cursor-pointer shrink-0 active:scale-95"
+          className="py-3 px-6 bg-primary hover:bg-primary-hover text-white font-black rounded-2xl text-xs transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer shrink-0 active:scale-95"
         >
           {showAddForm ? (
             <span>Fechar Formulário</span>
@@ -160,7 +160,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       </div>
 
       {uploadSuccessMsg && (
-        <div className="p-4 bg-[#4ade80]/20 border border-[#4ade80]/40 text-[#4ade80] rounded-2xl text-xs font-bold flex items-center gap-2 animate-fadeIn">
+        <div className="p-4 bg-primary/20 border border-primary/40 text-primary rounded-2xl text-xs font-bold flex items-center gap-2 animate-fadeIn">
           <CheckCircle2 className="w-5 h-5 shrink-0" />
           <span>{uploadSuccessMsg}</span>
         </div>
@@ -168,20 +168,20 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
       {/* FORMULÁRIO DE CADASTRO DE NOVO ARQUIVO */}
       {showAddForm && (
-        <div className="glass-panel p-6 rounded-3xl border border-[#4ade80]/40 bg-[#131b2e] space-y-4 shadow-2xl animate-fadeIn">
-          <div className="flex items-center gap-3 pb-3 border-b border-white/10">
-            <div className="w-10 h-10 rounded-2xl bg-[#4ade80]/20 border border-[#4ade80]/40 text-[#4ade80] flex items-center justify-center shrink-0">
+        <div className="glass-panel p-6 rounded-3xl border border-primary/40 bg-surface space-y-4 shadow-2xl animate-fadeIn">
+          <div className="flex items-center gap-3 pb-3 border-b border-border">
+            <div className="w-10 h-10 rounded-2xl bg-primary/20 border border-primary/40 text-primary flex items-center justify-center shrink-0">
               <UploadCloud className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">Upload ou Link de Novo Arquivo Didático</h2>
-              <p className="text-xs text-[#bccabb]">Anexe um arquivo local do seu computador ou informe o link direto</p>
+              <h2 className="text-base font-bold text-foreground">Upload ou Link de Novo Arquivo Didático</h2>
+              <p className="text-xs text-muted">Anexe um arquivo local do seu computador ou informe o link direto</p>
             </div>
           </div>
 
           <form onSubmit={handleAddFileSubmit} className="space-y-4 text-xs">
             {/* AREA DE UPLOAD DE ARQUIVO LOCAL */}
-            <div className="p-4 rounded-2xl border-2 border-dashed border-white/20 bg-[#0b1326]/50 hover:border-[#4ade80]/60 transition-all text-center space-y-2">
+            <div className="p-4 rounded-2xl border-2 border-dashed border-border bg-background/50 hover:border-primary/60 transition-all text-center space-y-2">
               <input
                 type="file"
                 ref={fileInputRef}
@@ -189,47 +189,47 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 className="hidden"
                 accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rar,.txt"
               />
-              <FileUp className="w-8 h-8 text-[#4ade80] mx-auto opacity-80" />
+              <FileUp className="w-8 h-8 text-primary mx-auto opacity-80" />
               <div>
-                <p className="font-bold text-white text-sm">
+                <p className="font-bold text-foreground text-sm">
                   {selectedFileName ? selectedFileName : 'Clique para selecionar um arquivo do seu computador'}
                 </p>
-                <p className="text-[11px] text-[#bccabb] mt-0.5">
+                <p className="text-[11px] text-muted mt-0.5">
                   Suporta PDF, Word, PowerPoint, Imagens, ZIP e mais ({selectedFileSize})
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="py-2 px-4 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-xs transition-all border border-white/10 inline-flex items-center gap-1.5 cursor-pointer mt-1"
+                className="py-2 px-4 bg-surface-hover hover:bg-white/20 text-foreground font-bold rounded-xl text-xs transition-all border border-border inline-flex items-center gap-1.5 cursor-pointer mt-1"
               >
-                <UploadCloud className="w-4 h-4 text-[#4ade80]" />
+                <UploadCloud className="w-4 h-4 text-primary" />
                 <span>{selectedFileName ? 'Trocar Arquivo Selecionado' : 'Selecionar Arquivo do Dispositivo'}</span>
               </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-[#bccabb] font-semibold mb-1">Título do Arquivo / Material *</label>
+                <label className="block text-muted font-semibold mb-1">Título do Arquivo / Material *</label>
                 <input
                   type="text"
                   required
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   placeholder="Ex: Apostila Capitulo 3 - Durkheim e Sociedade"
-                  className="w-full bg-[#0b1326] border border-white/15 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-[#4ade80]"
+                  className="w-full bg-background border border-white/15 rounded-xl px-3.5 py-2.5 text-foreground focus:outline-none focus:border-primary"
                 />
               </div>
 
               <div>
-                <label className="block text-[#bccabb] font-semibold mb-1 flex items-center gap-1">
-                  <Tag className="w-3.5 h-3.5 text-[#4ade80]" />
+                <label className="block text-muted font-semibold mb-1 flex items-center gap-1">
+                  <Tag className="w-3.5 h-3.5 text-primary" />
                   <span>Categoria</span>
                 </label>
                 <select
                   value={newCategory}
                   onChange={(e) => setNewCategory(e.target.value)}
-                  className="w-full bg-[#0b1326] border border-white/15 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-[#4ade80]"
+                  className="w-full bg-background border border-white/15 rounded-xl px-3.5 py-2.5 text-foreground focus:outline-none focus:border-primary"
                 >
                   <option value="Apostila">Apostila</option>
                   <option value="Exercício">Exercício / Atividade</option>
@@ -241,14 +241,14 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-[#bccabb] font-semibold mb-1 flex items-center gap-1">
-                  <Users className="w-3.5 h-3.5 text-[#4ade80]" />
+                <label className="block text-muted font-semibold mb-1 flex items-center gap-1">
+                  <Users className="w-3.5 h-3.5 text-primary" />
                   <span>Turma Alvo</span>
                 </label>
                 <select
                   value={newTurma}
                   onChange={(e) => setNewTurma(e.target.value)}
-                  className="w-full bg-[#0b1326] border border-white/15 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-[#4ade80]"
+                  className="w-full bg-background border border-white/15 rounded-xl px-3.5 py-2.5 text-foreground focus:outline-none focus:border-primary"
                 >
                   <option value="Todas">Todas as Turmas</option>
                   <option value="3º Ano B">3º Ano B</option>
@@ -260,8 +260,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-[#bccabb] font-semibold mb-1 flex items-center gap-1">
-                  <Link2 className="w-3.5 h-3.5 text-[#4ade80]" />
+                <label className="block text-muted font-semibold mb-1 flex items-center gap-1">
+                  <Link2 className="w-3.5 h-3.5 text-primary" />
                   <span>Link Externo / Google Drive (Opcional se já anexou arquivo)</span>
                 </label>
                 <input
@@ -269,22 +269,22 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   value={newDriveUrl}
                   onChange={(e) => setNewDriveUrl(e.target.value)}
                   placeholder="https://drive.google.com/file/d/..."
-                  className="w-full bg-[#0b1326] border border-white/15 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-[#4ade80] font-mono text-[11px]"
+                  className="w-full bg-background border border-white/15 rounded-xl px-3.5 py-2.5 text-foreground focus:outline-none focus:border-primary font-mono text-[11px]"
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
               <button
                 type="button"
                 onClick={() => setShowAddForm(false)}
-                className="py-2.5 px-4 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-xs transition-all cursor-pointer"
+                className="py-2.5 px-4 bg-surface-hover hover:bg-white/20 text-foreground font-bold rounded-xl text-xs transition-all cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="py-2.5 px-6 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-black rounded-xl text-xs transition-all shadow-lg flex items-center gap-2 cursor-pointer"
+                className="py-2.5 px-6 bg-primary hover:bg-primary-hover text-white font-black rounded-xl text-xs transition-all shadow-lg flex items-center gap-2 cursor-pointer"
               >
                 <Save className="w-4 h-4" />
                 <span>Salvar e Cadastrar Arquivo</span>
@@ -295,39 +295,39 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       )}
 
       {/* CARD CONFIGURAÇÃO DO REPOSITÓRIO DO GOOGLE DRIVE */}
-      <div className="glass-panel p-6 rounded-3xl border border-[#4ade80]/40 bg-gradient-to-br from-[#131b2e] via-[#0f172a] to-[#0d1527] space-y-4 shadow-xl relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
+      <div className="glass-panel p-6 rounded-3xl border border-primary/40 bg-gradient-to-br from-surface via-surface to-background space-y-4 shadow-xl relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-[#4ade80]/15 border border-[#4ade80]/30 text-[#4ade80] flex items-center justify-center shrink-0 shadow-lg shadow-[#4ade80]/10">
+            <div className="w-12 h-12 rounded-2xl bg-primary/15 border border-primary/30 text-primary flex items-center justify-center shrink-0 shadow-lg shadow-[#4ade80]/10">
               <HardDrive className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white leading-tight flex items-center gap-2">
+              <h2 className="text-lg font-bold text-foreground leading-tight flex items-center gap-2">
                 <span>Repositório do Google Drive</span>
                 {folderInput.trim() ? (
-                  <span className="text-[10px] font-extrabold bg-[#4ade80]/20 text-[#4ade80] border border-[#4ade80]/40 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  <span className="text-[10px] font-extrabold bg-primary/20 text-primary border border-primary/40 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
                     Conectado
                   </span>
                 ) : (
-                  <span className="text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  <span className="text-[10px] font-extrabold bg-amber-100 text-amber-600 border border-amber-200 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
                     Não Configurado
                   </span>
                 )}
               </h2>
-              <p className="text-xs text-[#bccabb] mt-0.5">
+              <p className="text-xs text-muted mt-0.5">
                 Defina o repositório público ou pasta do Google Drive com apostilas, livros e materiais de Sociologia
               </p>
             </div>
           </div>
-          <span className="px-3 py-1 bg-[#4ade80]/20 text-[#4ade80] border border-[#4ade80]/40 rounded-full text-[11px] font-bold tracking-wide uppercase shrink-0 w-fit">
+          <span className="px-3 py-1 bg-primary/20 text-primary border border-primary/40 rounded-full text-[11px] font-bold tracking-wide uppercase shrink-0 w-fit">
             Acesso dos Alunos
           </span>
         </div>
 
         <form onSubmit={handleSaveDriveFolder} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-[#dae2fd] uppercase tracking-wider flex items-center gap-1.5">
-              <Link2 className="w-3.5 h-3.5 text-[#4ade80]" />
+            <label className="block text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+              <Link2 className="w-3.5 h-3.5 text-primary" />
               <span>Link do Repositório do Google Drive (Pasta ou Drive Compartilhado)</span>
             </label>
             <input
@@ -335,7 +335,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               value={folderInput}
               onChange={(e) => setFolderInput(e.target.value)}
               placeholder="https://drive.google.com/drive/folders/sua-pasta-no-drive"
-              className="w-full bg-[#0b1326] border border-white/15 rounded-2xl px-4 py-3 text-sm text-white placeholder-[#869486] focus:outline-none focus:border-[#4ade80] transition-all font-mono"
+              className="w-full bg-background border border-white/15 rounded-2xl px-4 py-3 text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-primary transition-all font-mono"
             />
           </div>
 
@@ -343,7 +343,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             <div className="flex items-center gap-2">
               <button
                 type="submit"
-                className="py-3 px-6 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-black rounded-xl text-xs transition-all shadow-lg shadow-[#4ade80]/20 flex items-center gap-2 cursor-pointer active:scale-95"
+                className="py-3 px-6 bg-primary hover:bg-primary-hover text-white font-black rounded-xl text-xs transition-all shadow-lg shadow-primary/20 flex items-center gap-2 cursor-pointer active:scale-95"
               >
                 <Save className="w-4 h-4" />
                 <span>Salvar Repositório do Drive</span>
@@ -354,17 +354,17 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   href={folderInput.trim()}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="py-3 px-5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl text-xs transition-all border border-white/10 flex items-center gap-2 cursor-pointer active:scale-95"
+                  className="py-3 px-5 bg-surface-hover hover:bg-white/20 text-foreground font-bold rounded-xl text-xs transition-all border border-border flex items-center gap-2 cursor-pointer active:scale-95"
                   title="Abrir Repositório no Google Drive"
                 >
-                  <ExternalLink className="w-4 h-4 text-[#4ade80]" />
+                  <ExternalLink className="w-4 h-4 text-primary" />
                   <span>Acessar Repositório</span>
                 </a>
               )}
             </div>
 
             {savedSuccess && (
-              <div className="flex items-center gap-2 text-[#4ade80] text-xs font-bold animate-fadeIn">
+              <div className="flex items-center gap-2 text-primary text-xs font-bold animate-fadeIn">
                 <CheckCircle2 className="w-4 h-4" />
                 <span>Repositório do Google Drive salvo com sucesso!</span>
               </div>
@@ -376,18 +376,18 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       {/* LISTA DE ARQUIVOS AVULSOS */}
       <div className="space-y-3 pt-2">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-            <FileText className="w-4 h-4 text-[#4ade80]" />
+          <h2 className="text-base font-bold text-foreground tracking-tight flex items-center gap-2">
+            <FileText className="w-4 h-4 text-primary" />
             <span>Arquivos Cadastrados e Materiais Didáticos ({files.length})</span>
           </h2>
         </div>
 
         {files.length === 0 ? (
-          <div className="glass-panel p-8 text-center rounded-3xl border border-white/10 text-[#bccabb] text-xs space-y-3">
+          <div className="glass-panel p-8 text-center rounded-3xl border border-border text-muted text-xs space-y-3">
             <p>Nenhum arquivo individual cadastrado até o momento.</p>
             <button
               onClick={() => setShowAddForm(true)}
-              className="py-2.5 px-5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-black rounded-xl text-xs transition-all inline-flex items-center gap-2 cursor-pointer"
+              className="py-2.5 px-5 bg-primary hover:bg-primary-hover text-white font-black rounded-xl text-xs transition-all inline-flex items-center gap-2 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Cadastrar Primeiro Arquivo</span>
@@ -401,22 +401,22 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               return (
                 <div
                   key={file.id}
-                  className="glass-panel p-4 sm:p-5 rounded-3xl border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-panel-hover"
+                  className="glass-panel p-4 sm:p-5 rounded-3xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-panel-hover"
                 >
                   <div className="flex items-center gap-3.5">
-                    <div className="w-10 h-10 rounded-2xl bg-[#171f33] border border-white/10 text-[#4ade80] flex items-center justify-center shrink-0">
+                    <div className="w-10 h-10 rounded-2xl bg-[#171f33] border border-border text-primary flex items-center justify-center shrink-0">
                       <FileText className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-sm sm:text-base font-bold text-white leading-snug">{file.title}</h3>
+                      <h3 className="text-sm sm:text-base font-bold text-foreground leading-snug">{file.title}</h3>
                       <div className="flex flex-wrap items-center gap-2 mt-1">
                         {file.category && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 bg-[#4ade80]/10 text-[#4ade80] border border-[#4ade80]/30 rounded-full">
+                          <span className="text-[10px] font-bold px-2 py-0.5 bg-primary/10 text-primary border border-primary/30 rounded-full">
                             {file.category}
                           </span>
                         )}
                         {file.turma && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 bg-white/10 text-[#bccabb] rounded-full">
+                          <span className="text-[10px] font-bold px-2 py-0.5 bg-surface-hover text-muted rounded-full">
                             Turma: {file.turma}
                           </span>
                         )}
@@ -433,7 +433,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         href={fileUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="py-2.5 px-5 bg-[#4ade80] hover:bg-[#6bfb9a] text-[#003919] font-extrabold rounded-full text-xs transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer min-h-[40px]"
+                        className="py-2.5 px-5 bg-primary hover:bg-primary-hover text-white font-extrabold rounded-full text-xs transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer min-h-[40px]"
                         title="Baixar ou abrir arquivo"
                       >
                         <ExternalLink className="w-4 h-4" />
@@ -446,7 +446,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     {onDeleteFile && (
                       <button
                         onClick={() => onDeleteFile(file.id)}
-                        className="p-2.5 text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-full transition-colors border border-rose-500/20 cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center"
+                        className="p-2.5 text-rose-400 hover:text-foreground hover:bg-rose-100 rounded-full transition-colors border border-rose-500/20 cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center"
                         title="Excluir arquivo"
                       >
                         <Trash2 className="w-4 h-4" />

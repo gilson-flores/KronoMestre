@@ -164,7 +164,7 @@ Retorne obrigatoriamente um objeto JSON com o formato:
 `;
 
     const candidateModels = [
-      'gemini-3.7-flash',
+      'gemini-3.8-flash',
       'gemini-3.1-flash-lite',
       'gemini-flash-latest',
     ];
@@ -223,10 +223,11 @@ Retorne obrigatoriamente um objeto JSON com o formato:
         }
       } catch (err: any) {
         const errMsg = String(err?.message || '');
-        console.warn(`Aviso na tentativa com modelo ${modelName} na correção:`, errMsg);
         if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid')) {
+          // Chave de API ausente ou inválida: encerra silenciosamente o loop e recorre à avaliação heurística
           break;
         }
+        console.warn(`Tentativa com modelo ${modelName} na correção:`, errMsg);
       }
     }
 
