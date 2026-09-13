@@ -326,7 +326,7 @@ export default function Home() {
     // 3. Persistir de forma garantida no Supabase (Upsert / Update)
     if (isSupabaseConfigured && supabase) {
       try {
-        const cleanEmail = (teacher.email || 'gilson.flores@escola.edu.br').trim().toLowerCase();
+        const cleanEmail = (teacher.email || '').trim().toLowerCase();
         const isValidUUID = (id?: string | null) => !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
         const payload: any = {

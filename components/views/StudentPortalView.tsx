@@ -118,7 +118,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     id: 'teacher-1',
     name: 'Gilson Flores',
     subject: 'Sociologia',
-    email: 'gilson.flores@escola.edu.br',
+    email: '',
     avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
     school: "EEB Prof. Jandira D'Ávila",
   },

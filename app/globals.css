@@ -14,6 +14,13 @@
   
   --font-sans: var(--font-inter);
   --font-display: var(--font-montserrat);
+  
+  --text-body: 1rem;
+  --text-sm: 0.875rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
 }
 
 :root {
@@ -45,11 +52,17 @@
 
 body {
   font-family: var(--font-sans);
+  font-size: var(--text-body);
   background-color: var(--background);
   color: var(--foreground);
   min-height: 100vh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Evitar zoom automático no iOS em campos de formulário */
+input, textarea, select, label {
+  font-size: var(--text-body) !important;
 }
 
 h1, h2, h3, h4, h5, h6 {
