@@ -13,7 +13,8 @@ import {
   BookOpen,
   MessageSquare,
   HeartHandshake,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Database
 } from 'lucide-react';
 import { TeacherUser } from '@/lib/types';
 import { formatAvatarUrl } from '@/lib/utils';
@@ -52,6 +53,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'atestados_rad', label: 'Atestados e RAD', icon: BookOpen },
     { id: 'arquivos', label: 'Arquivos', icon: FolderOpen },
     { id: '2_professor', label: '2º Professor', icon: HeartHandshake },
+    { id: 'backup_recuperacao', label: 'Backup e Recuperação', icon: Database },
   ].filter((item) => !hiddenNavItems.includes(item.id));
 
 

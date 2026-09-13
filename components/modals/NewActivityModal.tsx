@@ -1250,7 +1250,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                 <button
                   type="button"
                   onClick={handleAddEssay}
-                  className="px-3 py-2 bg-blue-500/10 hover:bg-blue-100 text-blue-600 rounded-xl text-xs font-bold border border-blue-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                  className="px-3 py-2 bg-primary/10 hover:bg-blue-100 text-primary-hover rounded-xl text-xs font-bold border border-primary/30 transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <FileText className="w-3.5 h-3.5" />
                   <span>+ Add Redação / Dissertativa</span>
@@ -1333,10 +1333,10 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                 return (
                   <div
                     key={q.id}
-                    className="bg-surface border border-blue-500/20 rounded-2xl p-4 space-y-3 relative"
+                    className="bg-surface border border-primary/20 rounded-2xl p-4 space-y-3 relative"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-blue-600 bg-blue-500/10 px-2.5 py-1 rounded-full border border-blue-500/20">
+                      <span className="text-xs font-bold text-primary-hover bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20">
                         Questão {qIndex + 1} • Redação / Pesquisa Dissertativa
                       </span>
                       <button
@@ -1373,7 +1373,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                           step={50}
                           value={q.minCharacters}
                           onChange={(e) => handleUpdateEssayQuestion(q.id, 'minCharacters', Number(e.target.value))}
-                          className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs text-blue-600 font-bold focus:outline-none focus:border-blue-400"
+                          className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs text-primary-hover font-bold focus:outline-none focus:border-blue-400"
                         />
                       </div>
 

@@ -8,6 +8,7 @@
   --color-surface-hover: var(--surface-hover);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
+  --color-text-muted: var(--text-muted);
   --color-border: var(--border);
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
@@ -21,6 +22,8 @@
   --text-xl: 1.25rem;
   --text-2xl: 1.5rem;
   --text-3xl: 1.875rem;
+
+  --leading-body: 1.5;
 }
 
 :root {
@@ -33,6 +36,7 @@
   --surface-hover: #1f293d;
   --foreground: #f8fafc;
   --muted: #94a3b8;
+  --text-muted: #cbd5e1;
   --border: #1e293b;
   --primary: #3b82f6;
   --primary-hover: #2563eb;
@@ -45,6 +49,7 @@
   --surface-hover: #f1f5f9;
   --foreground: #0f172a;
   --muted: #64748b;
+  --text-muted: #475569;
   --border: #e2e8f0;
   --primary: #2563eb;
   --primary-hover: #1d4ed8;
@@ -53,6 +58,7 @@
 body {
   font-family: var(--font-sans);
   font-size: var(--text-body);
+  line-height: var(--leading-body);
   background-color: var(--background);
   color: var(--foreground);
   min-height: 100vh;
@@ -60,9 +66,19 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Evitar zoom automático no iOS em campos de formulário */
+/* Evitar zoom automático no iOS em campos de formulário e padronizar line-height */
 input, textarea, select, label {
   font-size: var(--text-body) !important;
+  line-height: var(--leading-body) !important;
+}
+
+/* Padronizar line-height do texto de corpo sem quebrar pseudo-títulos */
+p:not(.leading-tight):not(.leading-none):not(.leading-snug), 
+ul:not(.leading-tight):not(.leading-none):not(.leading-snug), 
+ol:not(.leading-tight):not(.leading-none):not(.leading-snug), 
+li:not(.leading-tight):not(.leading-none):not(.leading-snug),
+.leading-relaxed {
+  line-height: var(--leading-body) !important;
 }
 
 h1, h2, h3, h4, h5, h6 {

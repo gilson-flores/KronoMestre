@@ -25,6 +25,7 @@ import { StudentPortalView } from '@/components/views/StudentPortalView';
 import { MessagesView } from '@/components/views/MessagesView';
 import { SecondTeachersView } from '@/components/views/SecondTeachersView';
 import { AtestadosRadView } from '@/components/views/AtestadosRadView';
+import { BackupView } from '@/components/views/BackupView';
 
 
 import { normalizeStudentName, getActivityGradeDistribution } from '@/lib/studentUtils';
@@ -2755,6 +2756,10 @@ export default function Home() {
                   onSubmitAnswer={handleStudentSubmitAnswer}
                   onSaveStudent={handleSaveStudent}
                 />
+              )}
+
+              {currentTab === 'backup_recuperacao' && (
+                <BackupView />
               )}
 
               {currentTab === 'arquivos' && (

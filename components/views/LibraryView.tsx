@@ -47,6 +47,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [selectedFileSize, setSelectedFileSize] = useState('1 MB');
   const [fileDataUrl, setFileDataUrl] = useState('');
   const [uploadSuccessMsg, setUploadSuccessMsg] = useState('');
+  const [fileToDelete, setFileToDelete] = useState<StudyFile | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -445,7 +446,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
                     {onDeleteFile && (
                       <button
-                        onClick={() => onDeleteFile(file.id)}
+                        onClick={() => setFileToDelete(file)}
                         className="p-2.5 text-rose-400 hover:text-foreground hover:bg-rose-100 rounded-full transition-colors border border-rose-500/20 cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center"
                         title="Excluir arquivo"
                       >
@@ -459,6 +460,44 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {fileToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-surface border border-border rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-6">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="p-4 bg-rose-500/10 rounded-full border border-rose-500/20 text-rose-500">
+                <Trash2 className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-foreground">Excluir Arquivo</h3>
+                <p className="text-sm text-text-muted mt-2">
+                  Deseja realmente excluir o material <strong className="text-foreground">{fileToDelete.title}</strong>?
+                  Isso irá removê-lo da biblioteca dos alunos desta turma.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => {
+                  if (onDeleteFile) onDeleteFile(fileToDelete.id);
+                  setFileToDelete(null);
+                }}
+                className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl transition-colors cursor-pointer min-h-[44px]"
+              >
+                Sim, Excluir Arquivo
+              </button>
+              <button
+                onClick={() => setFileToDelete(null)}
+                className="w-full py-3 bg-transparent border border-border hover:bg-surface-hover text-foreground font-bold rounded-xl transition-colors cursor-pointer min-h-[44px]"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

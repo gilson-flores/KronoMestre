@@ -274,7 +274,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
               <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
                 Central de Trabalho
               </h1>
-              <p className="text-sm sm:text-base text-muted font-medium mt-0.5">
+              <p className="text-sm sm:text-base text-text-muted font-medium mt-0.5">
                 O que você precisa fazer agora? Suas pendências pedagógicas e ações rápidas.
               </p>
             </div>
@@ -286,7 +286,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
           <button
             id="btn-central-rco"
             onClick={() => onNavigateToTab('postagem_rco')}
-            className="min-h-[44px] py-2.5 px-4 bg-surface hover:bg-surface-hover text-foreground font-bold rounded-xl border border-border transition-all text-sm flex items-center gap-2 cursor-pointer shadow-sm active:scale-95"
+            className="min-h-[44px] min-w-[44px] py-2.5 px-4 bg-surface hover:bg-surface-hover text-foreground font-bold rounded-xl border border-border transition-all text-sm flex items-center gap-2 cursor-pointer shadow-sm active:scale-95"
           >
             <FileSpreadsheet className="w-4 h-4 text-primary" />
             <span>Lançar RCO</span>
@@ -294,7 +294,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
           <button
             id="btn-central-nova-atividade"
             onClick={onOpenNewActivityModal}
-            className="min-h-[44px] py-2.5 px-4 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl transition-all text-sm flex items-center gap-2 cursor-pointer shadow-md active:scale-95"
+            className="min-h-[44px] min-w-[44px] py-2.5 px-4 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl transition-all text-sm flex items-center gap-2 cursor-pointer shadow-md active:scale-95"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>Nova Atividade</span>
@@ -311,7 +311,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
               Pendências
             </h2>
           </div>
-          <span className="text-xs font-semibold text-muted bg-surface px-2.5 py-1 rounded-full border border-border">
+          <span className="text-xs font-semibold text-text-muted bg-surface px-2.5 py-1 rounded-full border border-border">
             Foco Operacional
           </span>
         </div>
@@ -330,7 +330,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
               </div>
               <div className="text-3xl font-black text-foreground">{pendingCorrections}</div>
               <div className="text-base font-bold text-foreground mt-1">Correções Pendentes</div>
-              <p className="text-xs text-muted mt-1 leading-relaxed">
+              <p className="text-xs text-text-muted mt-1 leading-relaxed">
                 {pendingCorrections === 0
                   ? 'Todas as redações e questões estão em dia!'
                   : `${activitiesWithPendingCorrections.length} atividade(s) aguardando sua correção.`}
@@ -340,7 +340,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
               id="btn-pendencia-corrigir"
               onClick={handleDirectCorrection}
               disabled={pendingCorrections === 0}
-              className="mt-5 w-full min-h-[44px] py-2.5 px-4 bg-amber-500/10 hover:bg-amber-500/20 disabled:opacity-40 disabled:cursor-not-allowed text-amber-600 font-bold rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
+              className="mt-5 w-full min-h-[44px] min-w-[44px] py-2.5 px-4 bg-amber-500/10 hover:bg-amber-500/20 disabled:opacity-40 disabled:cursor-not-allowed text-amber-600 font-bold rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
             >
               <span>Corrigir Agora</span>
               <ArrowRight className="w-4 h-4" />
@@ -360,7 +360,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
               </div>
               <div className="text-3xl font-black text-foreground">{totalSubmissions}</div>
               <div className="text-base font-bold text-foreground mt-1">Entregas Realizadas</div>
-              <p className="text-xs text-muted mt-1 leading-relaxed">
+              <p className="text-xs text-text-muted mt-1 leading-relaxed">
                 {totalExpected > 0
                   ? `${completionRate}% de adesão geral (${totalSubmissions} de ${totalExpected} esperadas).`
                   : 'Nenhuma entrega esperada no momento.'}
@@ -369,7 +369,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
             <button
               id="btn-pendencia-entregas"
               onClick={() => onNavigateToTab('atividades')}
-              className="mt-5 w-full min-h-[44px] py-2.5 px-4 bg-primary/10 hover:bg-primary/20 text-primary font-bold rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
+              className="mt-5 w-full min-h-[44px] min-w-[44px] py-2.5 px-4 bg-primary/10 hover:bg-primary/20 text-primary font-bold rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
             >
               <span>Ver Entregas</span>
               <ArrowRight className="w-4 h-4" />
@@ -389,7 +389,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
               </div>
               <div className="text-3xl font-black text-foreground">{missingSubmissions}</div>
               <div className="text-base font-bold text-foreground mt-1">Alunos Sem Entrega</div>
-              <p className="text-xs text-muted mt-1 leading-relaxed">
+              <p className="text-xs text-text-muted mt-1 leading-relaxed">
                 {missingSubmissions === 0
                   ? 'Nenhum estudante com entrega pendente.'
                   : 'Estudantes com atividades pendentes ou em atraso.'}
@@ -399,7 +399,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
               id="btn-pendencia-alunos-sem-entrega"
               onClick={() => onNavigateToTab('alunos')}
               disabled={missingSubmissions === 0}
-              className="mt-5 w-full min-h-[44px] py-2.5 px-4 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-40 disabled:cursor-not-allowed text-rose-600 font-bold rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
+              className="mt-5 w-full min-h-[44px] min-w-[44px] py-2.5 px-4 bg-rose-500/10 hover:bg-rose-500/20 disabled:opacity-40 disabled:cursor-not-allowed text-rose-600 font-bold rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
             >
               <span>Ver Alunos</span>
               <ArrowRight className="w-4 h-4" />
@@ -421,7 +421,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                 {approachingDeadlineActivities.length}
               </div>
               <div className="text-base font-bold text-foreground mt-1">Atividades Vencendo</div>
-              <p className="text-xs text-muted mt-1 leading-relaxed">
+              <p className="text-xs text-text-muted mt-1 leading-relaxed">
                 {dueTodayActivities.length > 0
                   ? `${dueTodayActivities.length} atividade(s) vencendo hoje!`
                   : approachingDeadlineActivities.length > 0
@@ -433,7 +433,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
               id="btn-pendencia-prazos"
               onClick={() => onNavigateToTab('atividades')}
               disabled={approachingDeadlineActivities.length === 0}
-              className="mt-5 w-full min-h-[44px] py-2.5 px-4 bg-indigo-500/10 hover:bg-indigo-500/20 disabled:opacity-40 disabled:cursor-not-allowed text-indigo-400 font-bold rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
+              className="mt-5 w-full min-h-[44px] min-w-[44px] py-2.5 px-4 bg-indigo-500/10 hover:bg-indigo-500/20 disabled:opacity-40 disabled:cursor-not-allowed text-indigo-400 font-bold rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
             >
               <span>Ver Atividades</span>
               <ArrowRight className="w-4 h-4" />
@@ -455,7 +455,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                 {studentsNeedingRecoveryCount}
               </div>
               <div className="text-base font-bold text-foreground mt-1">Alunos em Recuperação</div>
-              <p className="text-xs text-muted mt-1 leading-relaxed">
+              <p className="text-xs text-text-muted mt-1 leading-relaxed">
                 {studentsNeedingRecoveryCount === 0
                   ? 'Nenhum estudante abaixo da média mínima de 6.0.'
                   : `${activitiesNeedingRecovery.filter((a) => !a.hasRecoveryCreated).length} atividade(s) recomendam plano de recuperação.`}
@@ -472,7 +472,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                 }
               }}
               disabled={studentsNeedingRecoveryCount === 0}
-              className="mt-5 w-full min-h-[44px] py-2.5 px-4 bg-violet-500/10 hover:bg-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed text-violet-600 font-bold rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
+              className="mt-5 w-full min-h-[44px] min-w-[44px] py-2.5 px-4 bg-violet-500/10 hover:bg-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed text-violet-600 font-bold rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
             >
               <span>Organizar Recuperação</span>
               <ArrowRight className="w-4 h-4" />
@@ -494,7 +494,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                 {turmasReadyForRco.length}
               </div>
               <div className="text-base font-bold text-foreground mt-1">Turmas para RCO</div>
-              <p className="text-xs text-muted mt-1 leading-relaxed">
+              <p className="text-xs text-text-muted mt-1 leading-relaxed">
                 {turmasReadyForRco.length > 0
                   ? `${turmasReadyForRco.length} turma(s) com notas prontas para postagem no RCO.`
                   : 'Sem fechamentos pendentes de lançamento no RCO.'}
@@ -504,14 +504,14 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
               <button
                 id="btn-pendencia-rco"
                 onClick={() => onNavigateToTab('postagem_rco')}
-                className="min-h-[44px] py-2.5 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 font-bold rounded-xl text-xs transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-98"
+                className="min-h-[44px] min-w-[44px] py-2.5 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 font-bold rounded-xl text-xs transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-98"
               >
                 <span>Lançar RCO</span>
               </button>
               <button
                 id="btn-pendencia-atestados"
                 onClick={() => onNavigateToTab('atestados_rad')}
-                className="min-h-[44px] py-2.5 px-3 bg-surface-hover hover:bg-border text-foreground font-bold rounded-xl text-xs border border-border transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-98"
+                className="min-h-[44px] min-w-[44px] py-2.5 px-3 bg-surface-hover hover:bg-border text-foreground font-bold rounded-xl text-xs border border-border transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-98"
               >
                 <span>RAD ({radTotal})</span>
               </button>
@@ -527,7 +527,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
             <h2 id="heading-fila-operacional" className="text-xl font-bold text-foreground">
               Ações Prioritárias
             </h2>
-            <p className="text-sm text-muted">
+            <p className="text-sm text-text-muted">
               Tarefas operacionais organizadas por ordem de urgência com ação direta.
             </p>
           </div>
@@ -539,7 +539,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
               className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${
                 activeQueueFilter === 'todas'
                   ? 'bg-primary text-white shadow-sm'
-                  : 'text-muted hover:text-foreground'
+                  : 'text-text-muted hover:text-foreground'
               }`}
             >
               Todas
@@ -549,7 +549,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
               className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
                 activeQueueFilter === 'correcoes'
                   ? 'bg-primary text-white shadow-sm'
-                  : 'text-muted hover:text-foreground'
+                  : 'text-text-muted hover:text-foreground'
               }`}
             >
               <span>Correções</span>
@@ -564,7 +564,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
               className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
                 activeQueueFilter === 'prazos'
                   ? 'bg-primary text-white shadow-sm'
-                  : 'text-muted hover:text-foreground'
+                  : 'text-text-muted hover:text-foreground'
               }`}
             >
               <span>Prazos</span>
@@ -579,7 +579,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
               className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
                 activeQueueFilter === 'recuperacao'
                   ? 'bg-primary text-white shadow-sm'
-                  : 'text-muted hover:text-foreground'
+                  : 'text-text-muted hover:text-foreground'
               }`}
             >
               <span>Recuperação</span>
@@ -594,7 +594,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
               className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
                 activeQueueFilter === 'rco'
                   ? 'bg-primary text-white shadow-sm'
-                  : 'text-muted hover:text-foreground'
+                  : 'text-text-muted hover:text-foreground'
               }`}
             >
               <span>RCO</span>
@@ -625,11 +625,11 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                       <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 text-xs font-bold">
                         Correção Pendente
                       </span>
-                      <span className="text-xs font-semibold text-muted">
+                      <span className="text-xs font-semibold text-text-muted">
                         Turma: {activity.turma || 'Geral'}
                       </span>
                       {activity.deadline && (
-                        <span className="text-xs text-muted">
+                        <span className="text-xs text-text-muted">
                           • Prazo: {new Date(activity.deadline).toLocaleDateString('pt-BR')}
                         </span>
                       )}
@@ -637,7 +637,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                     <h3 className="text-base sm:text-lg font-bold text-foreground mt-1">
                       {activity.title}
                     </h3>
-                    <p className="text-xs sm:text-sm text-muted mt-0.5">
+                    <p className="text-xs sm:text-sm text-text-muted mt-0.5">
                       <strong className="text-amber-600 font-bold">{pendingCount}</strong> de{' '}
                       {subCount} redações/respostas aguardando sua nota e feedback.
                     </p>
@@ -654,7 +654,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                         onNavigateToTab('correcoes');
                       }
                     }}
-                    className="w-full md:w-auto min-h-[44px] py-2.5 px-5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                    className="w-full md:w-auto min-h-[44px] min-w-[44px] py-2.5 px-5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                   >
                     <span>Corrigir Atividade</span>
                     <ArrowRight className="w-4 h-4" />
@@ -689,11 +689,11 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                       >
                         {isToday ? 'Vence Hoje!' : `Vence em ${daysLeft} dia(s)`}
                       </span>
-                      <span className="text-xs font-semibold text-muted">
+                      <span className="text-xs font-semibold text-text-muted">
                         Turma: {activity.turma || 'Geral'}
                       </span>
                       {activity.deadline && (
-                        <span className="text-xs text-muted">
+                        <span className="text-xs text-text-muted">
                           • {new Date(activity.deadline).toLocaleDateString('pt-BR')}
                         </span>
                       )}
@@ -701,7 +701,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                     <h3 className="text-base sm:text-lg font-bold text-foreground mt-1">
                       {activity.title}
                     </h3>
-                    <p className="text-xs sm:text-sm text-muted mt-0.5">
+                    <p className="text-xs sm:text-sm text-text-muted mt-0.5">
                       {activity.submissions?.length || 0} entregas recebidas até o momento.
                     </p>
                   </div>
@@ -716,13 +716,13 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                         onNavigateToTab('atividades');
                       }
                     }}
-                    className="w-full md:w-auto min-h-[44px] py-2.5 px-4 bg-surface hover:bg-surface-hover text-foreground font-bold rounded-xl border border-border text-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                    className="w-full md:w-auto min-h-[44px] min-w-[44px] py-2.5 px-4 bg-surface hover:bg-surface-hover text-foreground font-bold rounded-xl border border-border text-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                   >
                     <span>Ver Atividade</span>
                   </button>
                   <button
                     onClick={() => onNavigateToTab('atividades')}
-                    className="w-full md:w-auto min-h-[44px] py-2.5 px-4 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                    className="w-full md:w-auto min-h-[44px] min-w-[44px] py-2.5 px-4 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                   >
                     <span>Acompanhar</span>
                     <ArrowRight className="w-4 h-4" />
@@ -747,15 +747,15 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                       <span className="px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-600 text-xs font-bold">
                         {hasRecoveryCreated ? 'Recuperação em Andamento' : 'Recuperação Recomendada'}
                       </span>
-                      <span className="text-xs font-semibold text-muted">
+                      <span className="text-xs font-semibold text-text-muted">
                         Turma: {activity.turma || 'Geral'}
                       </span>
-                      <span className="text-xs text-muted">• Média da turma: {average}</span>
+                      <span className="text-xs text-text-muted">• Média da turma: {average}</span>
                     </div>
                     <h3 className="text-base sm:text-lg font-bold text-foreground mt-1">
                       {activity.title}
                     </h3>
-                    <p className="text-xs sm:text-sm text-muted mt-0.5">
+                    <p className="text-xs sm:text-sm text-text-muted mt-0.5">
                       <strong className="text-rose-600 font-bold">{lowScoreCount} estudante(s)</strong>{' '}
                       com nota inferior a 6.0 nesta avaliação.
                     </p>
@@ -772,7 +772,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                           onNavigateToTab('atividades');
                         }
                       }}
-                      className="w-full md:w-auto min-h-[44px] py-2.5 px-4 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                      className="w-full md:w-auto min-h-[44px] min-w-[44px] py-2.5 px-4 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                     >
                       <Sparkles className="w-4 h-4" />
                       <span>Criar Recuperação</span>
@@ -780,7 +780,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                   ) : (
                     <button
                       onClick={() => onNavigateToTab('atividades')}
-                      className="w-full md:w-auto min-h-[44px] py-2.5 px-4 bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                      className="w-full md:w-auto min-h-[44px] min-w-[44px] py-2.5 px-4 bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                     >
                       <span>Ver Andamento</span>
                       <ArrowRight className="w-4 h-4" />
@@ -806,12 +806,12 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                       <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 text-xs font-bold">
                         Pronto para Lançamento
                       </span>
-                      <span className="text-xs font-semibold text-muted">Turma {turma}</span>
+                      <span className="text-xs font-semibold text-text-muted">Turma {turma}</span>
                     </div>
                     <h3 className="text-base sm:text-lg font-bold text-foreground mt-1">
                       Postagem RCO — Turma {turma}
                     </h3>
-                    <p className="text-xs sm:text-sm text-muted mt-0.5">
+                    <p className="text-xs sm:text-sm text-text-muted mt-0.5">
                       Notas consolidadas prontas para cópia formatada ou exportação de relatório para o sistema estadual.
                     </p>
                   </div>
@@ -820,7 +820,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                 <div className="flex items-center gap-2 self-end md:self-center shrink-0 w-full md:w-auto">
                   <button
                     onClick={() => onNavigateToTab('postagem_rco')}
-                    className="w-full md:w-auto min-h-[44px] py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                    className="w-full md:w-auto min-h-[44px] min-w-[44px] py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                   >
                     <span>Lançar no RCO</span>
                     <ArrowRight className="w-4 h-4" />
@@ -839,13 +839,13 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                   <CheckCircle2 className="w-6 h-6" />
                 </div>
                 <h3 className="text-lg font-bold text-foreground">Tudo em dia!</h3>
-                <p className="text-sm text-muted max-w-md mx-auto mt-1">
+                <p className="text-sm text-text-muted max-w-md mx-auto mt-1">
                   Você não possui nenhuma pendência urgente de correção, prazo ou lançamento no
                   momento.
                 </p>
                 <button
                   onClick={onOpenNewActivityModal}
-                  className="mt-5 inline-flex items-center gap-2 min-h-[44px] py-2.5 px-4 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-sm transition-all cursor-pointer shadow-md active:scale-95"
+                  className="mt-5 inline-flex items-center gap-2 min-h-[44px] min-w-[44px] py-2.5 px-4 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-sm transition-all cursor-pointer shadow-md active:scale-95"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Criar Nova Atividade</span>
@@ -857,24 +857,24 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
 
       {/* 4. VISÃO GERAL COMPACTA (Métricas da Turma) */}
       <section aria-labelledby="heading-metricas" className="pt-2">
-        <h2 id="heading-metricas" className="text-sm font-bold uppercase tracking-wider text-muted mb-3">
+        <h2 id="heading-metricas" className="text-sm font-bold uppercase tracking-wider text-text-muted mb-3">
           Resumo Geral das Turmas
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
           <div className="p-4 rounded-2xl bg-surface border border-border">
-            <span className="text-xs text-muted font-medium block">Atividades Criadas</span>
+            <span className="text-xs text-text-muted font-medium block">Atividades Criadas</span>
             <span className="text-2xl font-bold text-foreground block mt-1">{totalActivities}</span>
           </div>
           <div className="p-4 rounded-2xl bg-surface border border-border">
-            <span className="text-xs text-muted font-medium block">Taxa de Conclusão</span>
+            <span className="text-xs text-text-muted font-medium block">Taxa de Conclusão</span>
             <span className="text-2xl font-bold text-foreground block mt-1">{completionRate}%</span>
           </div>
           <div className="p-4 rounded-2xl bg-surface border border-border">
-            <span className="text-xs text-muted font-medium block">Média Geral</span>
+            <span className="text-xs text-text-muted font-medium block">Média Geral</span>
             <span className="text-2xl font-bold text-foreground block mt-1">{overallAverage}</span>
           </div>
           <div className="p-4 rounded-2xl bg-surface border border-border">
-            <span className="text-xs text-muted font-medium block">Total de Alunos</span>
+            <span className="text-xs text-text-muted font-medium block">Total de Alunos</span>
             <span className="text-2xl font-bold text-foreground block mt-1">{students.length}</span>
           </div>
         </div>

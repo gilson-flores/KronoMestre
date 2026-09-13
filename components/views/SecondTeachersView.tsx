@@ -84,6 +84,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [teacherToDelete, setTeacherToDelete] = useState<TeacherUser | null>(null);
 
   // Retractable / Collapsible Menus State for Main Screen
   const [isMetricsRetractableOpen, setIsMetricsRetractableOpen] = useState(false); // Metrics bar collapsible
@@ -225,8 +226,6 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Deseja realmente remover o acesso de ${name}?`)) return;
-
     if (!supabase) return;
 
     try {
@@ -1539,7 +1538,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                       </button>
 
                       <button
-                        onClick={() => handleDelete(st.id, st.name)}
+                        onClick={() => setTeacherToDelete(st)}
                         className="p-1.5 text-rose-400 hover:text-foreground hover:bg-rose-500 rounded-xl transition-all cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -1646,6 +1645,44 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {teacherToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-surface border border-border rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-6">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="p-4 bg-rose-500/10 rounded-full border border-rose-500/20 text-rose-500">
+                <Trash2 className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-foreground">Remover Acesso</h3>
+                <p className="text-sm text-text-muted mt-2">
+                  Deseja realmente remover o acesso de <strong className="text-foreground">{teacherToDelete.name}</strong>?
+                  Esse professor não poderá mais visualizar ou corrigir as atividades dos alunos PNE sob sua tutela.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => {
+                  handleDelete(teacherToDelete.id, teacherToDelete.name);
+                  setTeacherToDelete(null);
+                }}
+                className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl transition-colors cursor-pointer min-h-[44px]"
+              >
+                Sim, Remover Acesso
+              </button>
+              <button
+                onClick={() => setTeacherToDelete(null)}
+                className="w-full py-3 bg-transparent border border-border hover:bg-surface-hover text-foreground font-bold rounded-xl transition-colors cursor-pointer min-h-[44px]"
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       )}

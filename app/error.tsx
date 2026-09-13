@@ -3,7 +3,7 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
   return (
     <div style={{ padding: '20px', textAlign: 'center', color: 'white' }}>
       <h2>Ops! Algo deu errado!</h2>
-      <button onClick={() => reset()} style={{ padding: '10px 20px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '5px' }}>Tentar novamente</button>
+      <button onClick={() => reset()} style={{ padding: '10px 20px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '5px' }}>Tentar novamente</button>
     </div>
   )
 }

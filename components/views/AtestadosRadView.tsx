@@ -68,6 +68,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [recordToDelete, setRecordToDelete] = useState<AtestadoRadRecord | null>(null);
 
   // Form State
   const [selectedStudentId, setSelectedStudentId] = useState('');
@@ -304,11 +305,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
   };
 
   // Delete Handler
-  const handleDelete = async (id: string, studentName: string) => {
-    if (!confirm(`Deseja realmente remover o registro de atestado/RAD do aluno ${studentName}?`)) {
-      return;
-    }
-
+  const handleDelete = async (id: string) => {
     const updated = records.filter((r) => r.id !== id);
     setRecords(updated);
     saveRecordsToLocal(updated);
@@ -456,7 +453,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
               onClick={() => setTipoFilter('Atestado')}
               className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
                 tipoFilter === 'Atestado'
-                  ? 'bg-blue-500 text-white shadow'
+                  ? 'bg-primary text-white shadow'
                   : 'text-muted hover:text-foreground'
               }`}
             >
@@ -542,7 +539,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
                           className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border flex items-center gap-1 ${
                             isRad
                               ? 'bg-purple-100 text-purple-600 border-purple-200 shadow-sm shadow-purple-500/20'
-                              : 'bg-blue-100 text-blue-600 border-blue-200'
+                              : 'bg-blue-100 text-primary-hover border-blue-200'
                           }`}
                         >
                           <Sparkles className="w-3 h-3" />
@@ -605,7 +602,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
                   <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-[11px] text-muted">
                     <span>Reg.: {formatDateBR(record.createdAt.split('T')[0])}</span>
                     <button
-                      onClick={() => handleDelete(record.id, record.studentName)}
+                      onClick={() => setRecordToDelete(record)}
                       className="p-1.5 text-rose-400 hover:text-foreground hover:bg-rose-500 rounded-xl transition-all cursor-pointer flex items-center gap-1 text-xs font-semibold"
                       title="Excluir atestado"
                     >
@@ -781,7 +778,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
                     className={`px-3 py-1.5 rounded-xl font-black text-xs border ${
                       effectiveTipo === 'RAD'
                         ? 'bg-purple-100 text-purple-600 border-purple-200'
-                        : 'bg-blue-100 text-blue-600 border-blue-200'
+                        : 'bg-blue-100 text-primary-hover border-blue-200'
                     }`}
                   >
                     {effectiveTipo}
@@ -820,6 +817,43 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students }) 
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Delete Confirmation Modal */}
+      {recordToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-surface border border-border rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-6">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="p-4 bg-rose-500/10 rounded-full border border-rose-500/20 text-rose-500">
+                <Trash2 className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-foreground">Excluir Atestado/RAD</h3>
+                <p className="text-sm text-text-muted mt-2">
+                  Tem certeza que deseja excluir o registro de {recordToDelete.tipo} do aluno <strong className="text-foreground">{recordToDelete.studentName}</strong>?
+                  Isto irá removê-lo permanentemente do sistema.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => {
+                  handleDelete(recordToDelete.id);
+                  setRecordToDelete(null);
+                }}
+                className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl transition-colors cursor-pointer min-h-[44px]"
+              >
+                Sim, Excluir Registro
+              </button>
+              <button
+                onClick={() => setRecordToDelete(null)}
+                className="w-full py-3 bg-transparent border border-border hover:bg-surface-hover text-foreground font-bold rounded-xl transition-colors cursor-pointer min-h-[44px]"
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       )}

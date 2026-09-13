@@ -142,21 +142,10 @@ export const AuthView: React.FC<AuthViewProps> = ({
         return;
       }
 
-      // 2. Se não autenticou no Supabase Auth, verificar se existe na tabela 'teachers'
-      if (dbTeacher) {
-        onLoginTeacher({
-          id: dbTeacher.id,
-          name: dbTeacher.name,
-          subject: dbTeacher.subject || 'Sociologia',
-          email: dbTeacher.email,
-          avatarUrl: dbTeacher.avatar_url || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
-          phone: dbTeacher.phone || '',
-          school: dbTeacher.school || '',
-        });
-        return;
-      }
+      // 2. Se não autenticou no Supabase Auth, bloqueia o acesso
+      // (Removido bypass inseguro que logava apenas com base no e-mail na tabela teachers)
 
-      // Se não encontrou nem no Supabase Auth nem na tabela 'teachers'
+      // Se não encontrou no Supabase Auth
       setTeacherError(
         'Acesso negado: E-mail ou senha não cadastrados no Supabase. ' +
           (authError?.message || dbError?.message || '')
@@ -207,9 +196,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
       const isPasswordValid =
         authData?.user ||
         (dbTeacher &&
-          (!dbTeacher.password ||
-            dbTeacher.password === secondTeacherPassword ||
-            secondTeacherPassword === '1234'));
+          dbTeacher.password &&
+          dbTeacher.password === secondTeacherPassword);
 
       if (isPasswordValid && (authData?.user || dbTeacher)) {
         const secondTeacherProfile: TeacherUser = {
@@ -394,12 +382,12 @@ export const AuthView: React.FC<AuthViewProps> = ({
       return;
     }
 
-    // Verificar senha digitada obrigatoriamente (padrão 1234 ou matched hash)
-    const expectedPassword = matched.passwordHash || '1234';
-    if (enteredPassword === expectedPassword || (expectedPassword === '1234' && enteredPassword === '1234')) {
+    // Verificar senha digitada obrigatoriamente
+    const expectedPassword = matched.passwordHash;
+    if (expectedPassword && enteredPassword === expectedPassword) {
       onLoginStudent(matched);
     } else {
-      setStudentError('Senha incorreta. A senha padrão cadastrada para alunos é 1234.');
+      setStudentError('Senha incorreta. Verifique sua senha de acesso.');
     }
   };
 

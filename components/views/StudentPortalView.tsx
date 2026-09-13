@@ -642,7 +642,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       <div className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md ${
         pushStatus === 'granted'
           ? 'bg-surface/80 border-primary/30 text-foreground'
-          : 'bg-gradient-to-r from-[#172554]/60 to-[#1e1b4b]/60 border-blue-500/30 text-blue-100'
+          : 'bg-gradient-to-r from-[#172554]/60 to-[#1e1b4b]/60 border-primary/30 text-blue-100'
       }`}>
         <div className="flex items-start sm:items-center gap-3">
           <div className={`p-2.5 rounded-xl shrink-0 ${
@@ -679,7 +679,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           {pushStatus === 'granted' ? (
             <button
               onClick={handleTestPush}
-              className="py-2 px-4 bg-[#171f33] hover:bg-[#222f4c] text-primary border border-primary/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+              className="py-2 px-4 min-h-[44px] min-w-[44px] min-w-[44px] bg-[#171f33] hover:bg-[#222f4c] text-primary border border-primary/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
             >
               <Bell className="w-3.5 h-3.5" />
               <span>Testar Push no Celular</span>
@@ -688,7 +688,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             <button
               onClick={handleActivatePush}
               disabled={isActivatingPush}
-              className="py-2 px-4 bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-foreground rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-md transition-all cursor-pointer active:scale-95"
+              className="py-2 px-4 min-h-[44px] min-w-[44px] min-w-[44px] bg-gradient-to-r from-primary to-emerald-500 hover:from-primary-hover hover:to-emerald-600 text-foreground rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-md transition-all cursor-pointer active:scale-95"
             >
               <Smartphone className="w-3.5 h-3.5" />
               <span>{isActivatingPush ? 'Ativando...' : '📲 Ativar Notificações no Celular'}</span>
@@ -720,7 +720,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             setActiveTab('atividades');
             setSelectedActivityId(null);
           }}
-          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] active:scale-95 ${
+          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] min-w-[44px] active:scale-95 ${
             activeTab === 'atividades'
               ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
               : 'text-muted hover:text-foreground hover:bg-surface-hover'
@@ -748,7 +748,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               onMarkThreadAsRead(student.id, 'student');
             }
           }}
-          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] active:scale-95 ${
+          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] min-w-[44px] active:scale-95 ${
             activeTab === 'mensagens'
               ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
               : 'text-muted hover:text-foreground hover:bg-surface-hover'
@@ -765,7 +765,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
         <button
           onClick={() => setActiveTab('arquivos')}
-          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] active:scale-95 ${
+          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] min-w-[44px] active:scale-95 ${
             activeTab === 'arquivos'
               ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
               : 'text-muted hover:text-foreground hover:bg-surface-hover'
@@ -797,7 +797,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 setStudentFilter('todas');
                 setSelectedActivityId(null);
               }}
-              className={`px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
+              className={`px-3 py-2.5 min-h-[44px] min-w-[44px] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
                 studentFilter === 'todas'
                   ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
                   : 'text-muted hover:text-foreground hover:bg-surface-hover'
@@ -815,7 +815,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 setStudentFilter('a_fazer');
                 setSelectedActivityId(null);
               }}
-              className={`px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
+              className={`px-3 py-2.5 min-h-[44px] min-w-[44px] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
                 studentFilter === 'a_fazer'
                   ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
                   : 'text-muted hover:text-foreground hover:bg-surface-hover'
@@ -833,7 +833,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 setStudentFilter('a_corrigir');
                 setSelectedActivityId(null);
               }}
-              className={`px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
+              className={`px-3 py-2.5 min-h-[44px] min-w-[44px] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
                 studentFilter === 'a_corrigir'
                   ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
                   : 'text-muted hover:text-foreground hover:bg-surface-hover'
@@ -851,7 +851,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 setStudentFilter('corrigidas');
                 setSelectedActivityId(null);
               }}
-              className={`px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
+              className={`px-3 py-2.5 min-h-[44px] min-w-[44px] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
                 studentFilter === 'corrigidas'
                   ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
                   : 'text-muted hover:text-foreground hover:bg-surface-hover'
@@ -955,7 +955,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                                 handleOpenActivity(act.id);
                               }
                             }}
-                            className="w-full sm:w-auto py-3 px-6 bg-primary hover:bg-primary-hover text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-primary/20 active:scale-95"
+                            className="w-full sm:w-auto py-3 px-6 min-h-[44px] min-w-[44px] bg-primary hover:bg-primary-hover text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-primary/20 active:scale-95"
                           >
                             {isPending ? (
                               <>
@@ -984,7 +984,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-surface rounded-2xl border border-border shadow-md">
                 <button
                   onClick={() => setSelectedActivityId(null)}
-                  className="py-2.5 px-4 bg-surface-hover hover:bg-white/20 text-foreground font-bold text-xs rounded-xl flex items-center gap-2 transition-all cursor-pointer border border-border active:scale-95 shrink-0 w-fit"
+                  className="py-2.5 px-4 min-h-[44px] min-w-[44px] bg-surface-hover hover:bg-white/20 text-foreground font-bold text-xs rounded-xl flex items-center gap-2 transition-all cursor-pointer border border-border active:scale-95 shrink-0 w-fit"
                 >
                   <ArrowLeft className="w-4 h-4" />
                   <span>Voltar para Lista</span>
@@ -1224,7 +1224,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                                               href={part}
                                               target="_blank"
                                               rel="noopener noreferrer"
-                                              className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary/20 hover:bg-primary/30 border border-primary/40 text-primary font-bold rounded-xl text-xs transition-all underline cursor-pointer shadow-sm active:scale-95 my-0.5"
+                                              className="inline-flex items-center gap-1.5 px-3 py-1 min-h-[44px] min-w-[44px] bg-primary/20 hover:bg-primary/30 border border-primary/40 text-primary font-bold rounded-xl text-xs transition-all underline cursor-pointer shadow-sm active:scale-95 my-0.5"
                                             >
                                               <Link2 className="w-3.5 h-3.5 shrink-0" />
                                               <span className="truncate max-w-xs">{part}</span>
@@ -1279,7 +1279,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                             <button
                               type="button"
                               onClick={() => setFullscreenGameActivityId(act.id)}
-                              className="px-3.5 py-1.5 bg-[#171f33] hover:bg-[#202b44] text-foreground hover:text-amber-600 font-bold text-xs rounded-full border border-border transition-all flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95"
+                              className="px-3.5 py-1.5 min-h-[44px] min-w-[44px] bg-[#171f33] hover:bg-[#202b44] text-foreground hover:text-amber-600 font-bold text-xs rounded-full border border-border transition-all flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95"
                               title="Expandir para tela cheia"
                             >
                               <Maximize2 className="w-3.5 h-3.5 text-amber-400" />
@@ -1308,7 +1308,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => setFullscreenGameActivityId(null)}
-                                  className="px-4 py-2 bg-[#171f33] hover:bg-[#222c42] text-foreground font-bold text-xs sm:text-sm rounded-full border border-border transition-all flex items-center gap-2 cursor-pointer shadow"
+                                  className="px-4 py-2 min-h-[44px] min-w-[44px] bg-[#171f33] hover:bg-[#222c42] text-foreground font-bold text-xs sm:text-sm rounded-full border border-border transition-all flex items-center gap-2 cursor-pointer shadow"
                                 >
                                   <Minimize2 className="w-4 h-4 text-amber-400" />
                                   <span>Sair da Tela Cheia</span>
@@ -1329,7 +1329,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                                     setFullscreenGameActivityId(null);
                                     handleSubmit(act);
                                   }}
-                                  className="px-5 py-2 bg-primary hover:bg-primary-hover text-white font-black text-xs sm:text-sm rounded-full transition-all shadow-lg shadow-primary/20 cursor-pointer flex items-center gap-2"
+                                  className="px-5 py-2 min-h-[44px] min-w-[44px] bg-primary hover:bg-primary-hover text-white font-black text-xs sm:text-sm rounded-full transition-all shadow-lg shadow-primary/20 cursor-pointer flex items-center gap-2"
                                 >
                                   <Gamepad2 className="w-4 h-4 stroke-[2.5]" />
                                   <span>Concluir e Enviar Nota 🚀</span>
@@ -1389,7 +1389,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                                         key={optIdx}
                                         type="button"
                                         onClick={() => handleSelectOption(act.id, q.id, optIdx)}
-                                        className={`w-full text-left p-3.5 rounded-xl text-xs transition-all flex items-start gap-3 border cursor-pointer ${
+                                        className={`w-full text-left p-3.5 min-h-[44px] min-w-[44px] rounded-xl text-xs transition-all flex items-start gap-3 border cursor-pointer ${
                                           isSelected
                                             ? 'bg-primary/20 border-primary text-foreground font-bold'
                                             : 'bg-[#171f33] border-border text-muted hover:bg-surface-hover hover:text-foreground'
@@ -1530,7 +1530,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                                         }
                                       });
                                     }}
-                                    className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all cursor-pointer border ${
+                                    className={`px-3 py-2 min-h-[44px] min-w-[44px] rounded-xl text-xs font-semibold flex items-center justify-between transition-all cursor-pointer border ${
                                       isSelected
                                         ? 'bg-purple-600/30 border-purple-400 text-purple-200 shadow-md'
                                         : 'bg-background border-border text-muted hover:text-foreground hover:border-border'
@@ -1588,7 +1588,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                     <div className="pt-4 border-t border-border flex justify-end">
                       <button
                         onClick={() => handleSubmit(act)}
-                        className={`py-3.5 px-8 font-black rounded-full text-xs flex items-center gap-2 transition-all shadow-xl cursor-pointer ${
+                        className={`py-3.5 px-8 min-h-[44px] min-w-[44px] font-black rounded-full text-xs flex items-center gap-2 transition-all shadow-xl cursor-pointer ${
                           (act.playfulGameHtml || act.adaptationType === 'severe_playful')
                             ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-amber-400/20'
                             : 'bg-primary hover:bg-primary-hover text-white shadow-primary/20'
@@ -1876,7 +1876,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                         href={driveUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="py-2.5 px-6 bg-primary hover:bg-primary-hover text-white font-extrabold rounded-full text-xs transition-all shadow-md flex items-center gap-2 shrink-0 cursor-pointer"
+                        className="py-2.5 px-6 min-h-[44px] min-w-[44px] bg-primary hover:bg-primary-hover text-white font-extrabold rounded-full text-xs transition-all shadow-md flex items-center gap-2 shrink-0 cursor-pointer"
                         title="Baixar arquivo"
                       >
                         <Download className="w-4 h-4 stroke-[2.5]" />
@@ -1900,7 +1900,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           <p className="text-xs font-semibold">{securityToast}</p>
           <button
             onClick={() => setSecurityToast(null)}
-            className="ml-auto text-rose-600 hover:text-foreground p-1"
+            className="ml-auto text-rose-600 hover:text-foreground p-1 min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             <X className="w-4 h-4" />
           </button>
@@ -1919,7 +1919,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               <button
                 type="button"
                 onClick={() => setFullscreenGameActivityId(null)}
-                className="px-4 py-2.5 bg-[#171f33] hover:bg-[#222c42] text-foreground font-bold text-xs sm:text-sm rounded-xl border border-border transition-all flex items-center gap-2 cursor-pointer shadow active:scale-95 shrink-0"
+                className="px-4 py-2.5 min-h-[44px] min-w-[44px] bg-[#171f33] hover:bg-[#222c42] text-foreground font-bold text-xs sm:text-sm rounded-xl border border-border transition-all flex items-center gap-2 cursor-pointer shadow active:scale-95 shrink-0"
               >
                 <ArrowLeft className="w-4 h-4 text-amber-400" />
                 <span>Voltar</span>
@@ -1944,7 +1944,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                   setFullscreenGameActivityId(null);
                   handleSubmit(act);
                 }}
-                className="px-5 py-2.5 bg-primary hover:bg-primary-hover text-white font-black text-xs sm:text-sm rounded-xl transition-all shadow-lg shadow-primary/20 cursor-pointer flex items-center gap-2 active:scale-95 shrink-0"
+                className="px-5 py-2.5 min-h-[44px] min-w-[44px] bg-primary hover:bg-primary-hover text-white font-black text-xs sm:text-sm rounded-xl transition-all shadow-lg shadow-primary/20 cursor-pointer flex items-center gap-2 active:scale-95 shrink-0"
               >
                 <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
                 <span>Enviar Atividade</span>
@@ -2018,7 +2018,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
             <button
               onClick={() => setSecurityNotice(null)}
-              className={`w-full py-3 px-6 font-extrabold rounded-full text-xs transition-all shadow-md cursor-pointer ${
+              className={`w-full py-3 px-6 min-h-[44px] min-w-[44px] font-extrabold rounded-full text-xs transition-all shadow-md cursor-pointer ${
                 securityNotice.isAutoSubmitted
                   ? 'bg-rose-500 hover:bg-rose-600 text-foreground'
                   : 'bg-amber-400 hover:bg-amber-300 text-slate-950'
@@ -2036,7 +2036,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           <div className="bg-surface border border-border rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl space-y-6 relative max-h-[90vh] flex flex-col">
             <button
               onClick={() => setIsAvatarModalOpen(false)}
-              className="absolute top-4 right-4 p-2 text-muted hover:text-foreground bg-surface hover:bg-rose-100 rounded-full transition-colors cursor-pointer"
+              className="absolute top-4 right-4 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted hover:text-foreground bg-surface hover:bg-rose-100 rounded-full transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -2062,7 +2062,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                         if (onUpdateAvatar) onUpdateAvatar(student.id, avatarUrl);
                         setIsAvatarModalOpen(false);
                       }}
-                      className="aspect-square rounded-2xl border-2 border-transparent hover:border-pink-400 focus:border-pink-400 bg-surface-hover hover:bg-surface-hover transition-all p-2 cursor-pointer relative group"
+                      className="aspect-square min-h-[44px] min-w-[44px] rounded-2xl border-2 border-transparent hover:border-pink-400 focus:border-pink-400 bg-surface-hover hover:bg-surface-hover transition-all p-2 cursor-pointer relative group"
                     >
                       <img src={avatarUrl} alt="Avatar" className="w-full h-full object-contain group-hover:scale-110 transition-transform" />
                       {student.avatarUrl === avatarUrl && (
@@ -2076,7 +2076,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               </div>
 
               <div>
-                <h3 className="text-sm font-bold text-blue-400 mb-3 border-b border-blue-500/20 pb-2">Heróis & Lendas Pop</h3>
+                <h3 className="text-sm font-bold text-blue-400 mb-3 border-b border-primary/20 pb-2">Heróis & Lendas Pop</h3>
                 <div className="grid grid-cols-4 sm:grid-cols-5 gap-4">
                   {POP_AVATARS.slice(10, 20).map((avatarUrl, idx) => (
                     <button
@@ -2085,11 +2085,11 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                         if (onUpdateAvatar) onUpdateAvatar(student.id, avatarUrl);
                         setIsAvatarModalOpen(false);
                       }}
-                      className="aspect-square rounded-2xl border-2 border-transparent hover:border-blue-400 focus:border-blue-400 bg-surface-hover hover:bg-surface-hover transition-all p-2 cursor-pointer relative group"
+                      className="aspect-square min-h-[44px] min-w-[44px] rounded-2xl border-2 border-transparent hover:border-blue-400 focus:border-blue-400 bg-surface-hover hover:bg-surface-hover transition-all p-2 cursor-pointer relative group"
                     >
                       <img src={avatarUrl} alt="Avatar" className="w-full h-full object-contain group-hover:scale-110 transition-transform" />
                       {student.avatarUrl === avatarUrl && (
-                        <div className="absolute -top-2 -right-2 bg-blue-500 text-white p-1 rounded-full border-2 border-[#0e172a]">
+                        <div className="absolute -top-2 -right-2 bg-primary text-white p-1 rounded-full border-2 border-[#0e172a]">
                           <Check className="w-3 h-3 stroke-[3]" />
                         </div>
                       )}

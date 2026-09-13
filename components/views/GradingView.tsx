@@ -645,7 +645,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <button
           onClick={onBack}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-[#171f33] hover:bg-surface-hover text-foreground rounded-full text-xs font-bold transition-all border border-border cursor-pointer"
+          className="inline-flex items-center gap-2 px-4 py-2 min-h-[44px] min-w-[44px] bg-[#171f33] hover:bg-surface-hover text-foreground rounded-full text-xs font-bold transition-all border border-border cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Voltar para Atividades</span>
@@ -667,7 +667,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
           <div className="relative flex-1 sm:flex-initial">
             <button
               onClick={() => setIsActivityDropdownOpen(!isActivityDropdownOpen)}
-              className="w-full inline-flex items-center justify-between gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-full text-xs font-bold transition-all shadow-md cursor-pointer"
+              className="w-full inline-flex items-center justify-between gap-2 px-4 py-2 min-h-[44px] min-w-[44px] bg-primary hover:bg-primary-hover text-white rounded-full text-xs font-bold transition-all shadow-md cursor-pointer"
             >
               <div className="flex items-center gap-1.5 truncate">
                 <FileCheck2 className="w-4 h-4 shrink-0" />
@@ -679,12 +679,12 @@ export const GradingView: React.FC<GradingViewProps> = ({
             {/* Dropdown Menu of Activities */}
             {isActivityDropdownOpen && (
               <div className="absolute right-0 mt-2 w-72 bg-surface border border-border rounded-2xl shadow-2xl p-2 z-50 space-y-1">
-                <div className="px-3 py-2 text-[10px] font-bold text-muted uppercase tracking-wider border-b border-border">
+                <div className="px-3 py-2 text-[10px] font-bold text-text-muted uppercase tracking-wider border-b border-border">
                   Selecione para Corrigir
                 </div>
                 <div className="max-h-60 overflow-y-auto space-y-1">
                   {allActivities.length === 0 ? (
-                    <div className="p-3 text-xs text-muted">Nenhuma outra atividade.</div>
+                    <div className="p-3 text-xs text-text-muted">Nenhuma outra atividade.</div>
                   ) : (
                     allActivities.map((act) => (
                       <button
@@ -700,7 +700,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
                         }`}
                       >
                         <span className="truncate">{act.title}</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-surface-hover text-muted">
+                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-surface-hover text-text-muted">
                           {act.turma}
                         </span>
                       </button>
@@ -742,13 +742,13 @@ export const GradingView: React.FC<GradingViewProps> = ({
           <h1 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight">
             {activity.title}
           </h1>
-          <p className="text-xs md:text-sm text-muted mt-1 font-medium max-w-3xl">
+          <p className="text-xs md:text-sm text-text-muted mt-1 font-medium max-w-3xl">
             {activity.description}
           </p>
 
           {/* Display essay question keywords if defined */}
           {activity.questions?.some((q) => q.type === 'essay' && q.keywords) && (
-            <div className="mt-3 inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/30 px-3 py-1.5 rounded-xl text-xs text-blue-600">
+            <div className="mt-3 inline-flex items-center gap-2 bg-primary/10 border border-primary/30 px-3 py-1.5 rounded-xl text-xs text-primary-hover">
               <span className="font-bold">Palavras-Chave Exigidas:</span>
               <span>
                 {activity.questions
@@ -764,28 +764,28 @@ export const GradingView: React.FC<GradingViewProps> = ({
         <div className="glass-panel px-6 py-3.5 rounded-3xl border border-border flex items-center gap-6 shrink-0 self-start lg:self-center">
           <div className="text-center">
             <span className="text-xl font-extrabold text-primary">{gradedQueue.length}</span>
-            <span className="block text-[10px] font-bold text-muted tracking-wider uppercase">
+            <span className="block text-[10px] font-bold text-text-muted tracking-wider uppercase">
               Já Corrigidas
             </span>
           </div>
           <div className="w-px h-8 bg-surface-hover"></div>
           <div className="text-center">
             <span className="text-xl font-extrabold text-amber-400">{pendingQueue.length}</span>
-            <span className="block text-[10px] font-bold text-muted tracking-wider uppercase">
+            <span className="block text-[10px] font-bold text-text-muted tracking-wider uppercase">
               Na Fila
             </span>
           </div>
           <div className="w-px h-8 bg-surface-hover"></div>
           <div className="text-center">
             <span className="text-xl font-extrabold text-sky-400">{returnedQueue.length}</span>
-            <span className="block text-[10px] font-bold text-muted tracking-wider uppercase">
+            <span className="block text-[10px] font-bold text-text-muted tracking-wider uppercase">
               Devolvidas
             </span>
           </div>
           <div className="w-px h-8 bg-surface-hover"></div>
           <div className="text-center">
             <span className="text-xl font-extrabold text-rose-400">{missingStudents.length}</span>
-            <span className="block text-[10px] font-bold text-muted tracking-wider uppercase">
+            <span className="block text-[10px] font-bold text-text-muted tracking-wider uppercase">
               Não Fizeram
             </span>
           </div>
@@ -808,7 +808,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
                   {childAdaptations.length + childRecoveries.length} filhas vinculadas
                 </span>
               </div>
-              <p className="text-[11px] text-muted">
+              <p className="text-[11px] text-text-muted">
                 {includeChildActivities
                   ? 'Mostrando em conjunto a atividade principal e todas as entregas das adaptações PNE e recuperações.'
                   : 'Modo isolado ativo: exibindo estritamente as entregas desta atividade específica.'}
@@ -819,10 +819,10 @@ export const GradingView: React.FC<GradingViewProps> = ({
           <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
             <button
               onClick={() => setIncludeChildActivities(!includeChildActivities)}
-              className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 border ${
+              className={`px-4 py-2 min-h-[44px] min-w-[44px] rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 border ${
                 includeChildActivities
                   ? 'bg-primary text-white border-primary shadow-sm'
-                  : 'bg-background text-muted hover:text-foreground border-border'
+                  : 'bg-background text-text-muted hover:text-foreground border-border'
               }`}
             >
               <GitFork className="w-3.5 h-3.5" />
@@ -835,7 +835,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
       {/* Turma Filter Bar (Exibido quando a atividade possui mais de uma turma associada ou em visão unificada) */}
       {(hasMultipleTurmas || (includeChildActivities && hasLinkedChildren)) && (
         <div className="flex flex-wrap items-center gap-2 p-3.5 bg-surface rounded-2xl border border-border">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-muted mr-1">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-text-muted mr-1">
             <Filter className="w-3.5 h-3.5 text-primary" />
             <span>Filtrar por Turma:</span>
           </div>
@@ -844,7 +844,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
             className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[36px] ${
               selectedTurmaFilter === 'all'
                 ? 'bg-primary text-white shadow-sm font-extrabold'
-                : 'bg-[#171f33] text-muted hover:text-foreground hover:bg-surface-hover border border-border'
+                : 'bg-[#171f33] text-text-muted hover:text-foreground hover:bg-surface-hover border border-border'
             }`}
           >
             Todas as Turmas ({effectiveSubmissions.length})
@@ -861,7 +861,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer min-h-[36px] ${
                   selectedTurmaFilter === turmaCode
                     ? 'bg-primary text-white shadow-sm font-extrabold'
-                    : 'bg-[#171f33] text-muted hover:text-foreground hover:bg-surface-hover border border-border'
+                    : 'bg-[#171f33] text-text-muted hover:text-foreground hover:bg-surface-hover border border-border'
                 }`}
               >
                 Turma {turmaCode} ({countInTurma})
@@ -878,7 +878,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
           className={`px-4 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
             activeTab === 'fila'
               ? 'bg-primary text-white shadow-md'
-              : 'bg-surface text-muted hover:text-foreground hover:bg-[#1c263f]'
+              : 'bg-surface text-text-muted hover:text-foreground hover:bg-[#1c263f]'
           }`}
         >
           <Clock className="w-4 h-4 shrink-0" />
@@ -890,7 +890,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
           className={`px-4 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
             activeTab === 'corrigidas'
               ? 'bg-primary text-white shadow-md'
-              : 'bg-surface text-muted hover:text-foreground hover:bg-[#1c263f]'
+              : 'bg-surface text-text-muted hover:text-foreground hover:bg-[#1c263f]'
           }`}
         >
           <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -902,7 +902,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
           className={`px-4 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
             activeTab === 'devolvidas'
               ? 'bg-sky-500 text-foreground shadow-md'
-              : 'bg-surface text-muted hover:text-foreground hover:bg-[#1c263f]'
+              : 'bg-surface text-text-muted hover:text-foreground hover:bg-[#1c263f]'
           }`}
         >
           <RotateCcw className="w-4 h-4 shrink-0" />
@@ -914,7 +914,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
           className={`px-4 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
             activeTab === 'nao_fizeram'
               ? 'bg-rose-500 text-white shadow-md'
-              : 'bg-surface text-muted hover:text-foreground hover:bg-[#1c263f]'
+              : 'bg-surface text-text-muted hover:text-foreground hover:bg-[#1c263f]'
           }`}
         >
           <UserX className="w-4 h-4 shrink-0" />
@@ -942,7 +942,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
       {activeTab === 'fila' && (
         <>
           {pendingQueue.length === 0 ? (
-            <div className="glass-panel p-12 text-center rounded-3xl border border-border text-muted space-y-2">
+            <div className="glass-panel p-12 text-center rounded-3xl border border-border text-text-muted space-y-2">
               <CheckCircle2 className="w-10 h-10 text-primary mx-auto opacity-80" />
               <p className="text-sm font-bold text-foreground">Nenhuma entrega pendente na fila!</p>
               <p className="text-xs">Todas as respostas enviadas para esta atividade já foram corrigidas.</p>
@@ -959,7 +959,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
       {activeTab === 'corrigidas' && (
         <>
           {gradedQueue.length === 0 ? (
-            <div className="glass-panel p-12 text-center rounded-3xl border border-border text-muted space-y-2">
+            <div className="glass-panel p-12 text-center rounded-3xl border border-border text-text-muted space-y-2">
               <Clock className="w-10 h-10 text-amber-400 mx-auto opacity-80" />
               <p className="text-sm font-bold text-foreground">Nenhuma atividade corrigida ainda.</p>
               <p className="text-xs">As atividades avaliadas e finalizadas aparecerão nesta aba.</p>
@@ -976,7 +976,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
       {activeTab === 'devolvidas' && (
         <>
           {returnedQueue.length === 0 ? (
-            <div className="glass-panel p-12 text-center rounded-3xl border border-border text-muted space-y-2">
+            <div className="glass-panel p-12 text-center rounded-3xl border border-border text-text-muted space-y-2">
               <RotateCcw className="w-10 h-10 text-sky-400 mx-auto opacity-80" />
               <p className="text-sm font-bold text-foreground">Nenhuma atividade devolvida no momento.</p>
               <p className="text-xs">Quando você clicar em &ldquo;Devolver para Refazer&rdquo;, a atividade aparecerá aqui e o aluno poderá enviar uma nova resposta no portal.</p>
@@ -993,7 +993,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
       {activeTab === 'nao_fizeram' && (
         <div className="space-y-4">
           {missingStudents.length === 0 ? (
-            <div className="glass-panel p-12 text-center rounded-3xl border border-border text-muted">
+            <div className="glass-panel p-12 text-center rounded-3xl border border-border text-text-muted">
               🎉 Todos os alunos da turma enviaram a atividade!
             </div>
           ) : (
@@ -1011,7 +1011,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
                     />
                     <div>
                       <h4 className="text-xs font-bold text-foreground">{st.fullName}</h4>
-                      <p className="text-[10px] text-muted">
+                      <p className="text-[10px] text-text-muted">
                         Turma: {st.turma} • Matrícula: {st.matricula}
                       </p>
                       {st.tag && (
@@ -1145,7 +1145,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
             />
             <div>
               <h3 className="text-sm font-bold text-foreground">{sub.studentName}</h3>
-              <p className="text-[10px] text-muted uppercase tracking-wider">
+              <p className="text-[10px] text-text-muted uppercase tracking-wider">
                 {studentInfo?.turma ? `TURMA: ${studentInfo.turma} • ` : ''}MATRÍCULA: {sub.matricula}
               </p>
               {sub.groupMembers && (
@@ -1193,7 +1193,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
                     ? 'bg-primary/20 text-primary border border-primary/30'
                     : sub.tag === 'RAD'
                     ? 'bg-[#c0c1ff]/20 text-[#c0c1ff] border border-[#c0c1ff]/30'
-                    : 'bg-[#171f33] text-muted'
+                    : 'bg-[#171f33] text-text-muted'
                 }`}
               >
                 {sub.tag}
@@ -1226,10 +1226,10 @@ export const GradingView: React.FC<GradingViewProps> = ({
         {sub.essayAnswer && (
           <div className="bg-surface p-4 rounded-2xl border border-border space-y-2">
             <div className="flex items-center justify-between">
-              <span className="font-semibold text-xs text-muted">
+              <span className="font-semibold text-xs text-text-muted">
                 Resposta Dissertativa do Aluno:
               </span>
-              <span className="text-[10px] text-[#869486]">
+              <span className="text-[10px] text-text-muted">
                 {sub.essayAnswer.length} caracteres
               </span>
             </div>
@@ -1241,7 +1241,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
             <button
               onClick={() => handleAiCorrection(sub)}
               disabled={isLoadingAi}
-              className="w-full mt-2 py-2.5 px-4 bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-foreground font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer disabled:opacity-50"
+              className="w-full mt-2 py-2.5 px-4 min-h-[44px] min-w-[44px] bg-gradient-to-r from-purple-600 via-indigo-600 to-primary-hover hover:from-purple-500 hover:to-primary text-foreground font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer disabled:opacity-50"
             >
               <Sparkles className={`w-4 h-4 ${isLoadingAi ? 'animate-spin' : ''}`} />
               <span>
@@ -1284,22 +1284,22 @@ export const GradingView: React.FC<GradingViewProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-1">
               <div className="bg-surface/80 p-2.5 rounded-xl border border-border">
                 <span className="text-purple-600 font-bold block mb-0.5">🎯 Fidelidade ao Tema:</span>
-                <p className="text-muted">{aiDiag.themeFidelity}</p>
+                <p className="text-text-muted">{aiDiag.themeFidelity}</p>
               </div>
 
               <div className="bg-surface/80 p-2.5 rounded-xl border border-border">
                 <span className="text-purple-600 font-bold block mb-0.5">🔑 Uso de Palavras-Chave:</span>
-                <p className="text-muted">{aiDiag.keywordsCheck}</p>
+                <p className="text-text-muted">{aiDiag.keywordsCheck}</p>
               </div>
 
               <div className="bg-surface/80 p-2.5 rounded-xl border border-border">
                 <span className="text-purple-600 font-bold block mb-0.5">📝 Estrutura Textual:</span>
-                <p className="text-muted">{aiDiag.structureCheck}</p>
+                <p className="text-text-muted">{aiDiag.structureCheck}</p>
               </div>
 
               <div className="bg-surface/80 p-2.5 rounded-xl border border-border">
                 <span className="text-purple-600 font-bold block mb-0.5">✍️ Gramática e Ortografia:</span>
-                <p className="text-muted">{aiDiag.grammarCheck}</p>
+                <p className="text-text-muted">{aiDiag.grammarCheck}</p>
               </div>
 
               {aiDiag.aiUsageAnalysis && (
@@ -1321,19 +1321,19 @@ export const GradingView: React.FC<GradingViewProps> = ({
           {/* Objective Score (Only shown if activity has objective questions) */}
           {distribution.hasObjective && (
             <div className="bg-surface p-3 rounded-2xl border border-border">
-              <span className="block text-[9px] font-bold text-muted uppercase tracking-wider mb-1">
+              <span className="block text-[9px] font-bold text-text-muted uppercase tracking-wider mb-1">
                 Objetivas
               </span>
               <div className="text-lg font-extrabold text-primary">
                 {objectiveScore.toFixed(1)}{' '}
-                <span className="text-xs text-muted font-normal">/ {distribution.maxObjectiveGrade.toFixed(1)}</span>
+                <span className="text-xs text-text-muted font-normal">/ {distribution.maxObjectiveGrade.toFixed(1)}</span>
               </div>
             </div>
           )}
 
           {/* Essay Score */}
           <div className="bg-surface p-3 rounded-2xl border border-border">
-            <span className="block text-[9px] font-bold text-muted uppercase tracking-wider mb-1">
+            <span className="block text-[9px] font-bold text-text-muted uppercase tracking-wider mb-1">
               Dissertativa
             </span>
             <div className="flex items-baseline gap-1">
@@ -1347,7 +1347,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
                 placeholder="-"
                 className="w-14 bg-[#171f33] border border-border rounded-xl px-2 py-1 text-base font-extrabold text-foreground text-center focus:outline-none focus:border-primary"
               />
-              <span className="text-xs text-muted font-normal">/ {maxEssayValue.toFixed(1)}</span>
+              <span className="text-xs text-text-muted font-normal">/ {maxEssayValue.toFixed(1)}</span>
             </div>
           </div>
 
@@ -1376,7 +1376,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
           </span>
           <span className="text-xl font-extrabold text-primary">
             {totalScore.toFixed(1)}{' '}
-            <span className="text-xs text-muted">
+            <span className="text-xs text-text-muted">
               / {distribution.maxGrade.toFixed(1)}
             </span>
           </span>
@@ -1400,7 +1400,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
                     </span>
                   )}
                 </div>
-                <p className="text-[10px] text-muted truncate">
+                <p className="text-[10px] text-text-muted truncate">
                   {recoveryLinkData.isRecoveryView
                     ? `Raiz: "${recoveryLinkData.parentTitle}"`
                     : `Recuperação: "${recoveryLinkData.recoveryTitle}"`}
@@ -1420,7 +1420,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
                   turma: currentStudentUser?.turma || activity.turma,
                 });
               }}
-              className="px-3.5 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0"
+              className="px-3.5 py-1.5 min-h-[44px] min-w-[44px] bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0"
               title="Abrir registros detalhados de consolidação em janela popup"
             >
               <Maximize2 className="w-3.5 h-3.5" />
@@ -1432,7 +1432,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
         {/* Teacher Feedback Textarea */}
         <div>
           <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
-            <label className="block text-[11px] font-bold text-muted uppercase tracking-wider">
+            <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider">
               Feedback Pedagógico ao Aluno
             </label>
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -1441,7 +1441,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
                 type="button"
                 onClick={() => handleGenerateAiFeedback(sub, sub.status === 'returned' ? 'returned' : 'graded', 'ninja')}
                 disabled={Boolean(generatingFeedbackState?.studentId === sub.studentId)}
-                className="px-2.5 py-1 bg-amber-100 hover:bg-amber-500/30 border border-amber-200 text-amber-600 font-bold rounded-lg text-[10px] flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                className="px-2.5 py-1 min-h-[44px] min-w-[44px] bg-amber-100 hover:bg-amber-500/30 border border-amber-200 text-amber-600 font-bold rounded-lg text-[10px] flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
                 title="Gerar feedback temático Ninja (Naruto) limitado a 400 caracteres com Gemini"
               >
                 {generatingFeedbackState?.studentId === sub.studentId && generatingFeedbackState?.type === 'ninja' ? (
@@ -1462,7 +1462,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
                 type="button"
                 onClick={() => handleGenerateAiFeedback(sub, sub.status === 'returned' ? 'returned' : 'graded', 'serious')}
                 disabled={Boolean(generatingFeedbackState?.studentId === sub.studentId)}
-                className="px-2.5 py-1 bg-blue-100 hover:bg-blue-500/30 border border-blue-200 text-blue-600 font-bold rounded-lg text-[10px] flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                className="px-2.5 py-1 min-h-[44px] min-w-[44px] bg-blue-100 hover:bg-primary/30 border border-blue-200 text-primary-hover font-bold rounded-lg text-[10px] flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
                 title="Gerar feedback pedagógico do professor (acolhedor e motivador, limitado a 400 caracteres) com Gemini"
               >
                 {generatingFeedbackState?.studentId === sub.studentId && generatingFeedbackState?.type === 'serious' ? (
@@ -1478,7 +1478,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
                 )}
               </button>
 
-              <span className="text-[10px] text-[#869486] font-medium ml-1">
+              <span className="text-[10px] text-text-muted font-medium ml-1">
                 {(sub.teacherFeedback || '').length}/400
               </span>
             </div>
@@ -1489,7 +1489,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
             value={sub.teacherFeedback || ''}
             onChange={(e) => handleFeedbackChange(sub.studentId, e.target.value)}
             placeholder="Feedback motivacional ou formal, observações sobre a resposta e recomendações de estudo..."
-            className="w-full bg-surface border border-border rounded-2xl p-3.5 text-xs text-foreground placeholder-[#869486] focus:outline-none focus:border-primary transition-all resize-none"
+            className="w-full bg-surface border border-border rounded-2xl p-3.5 text-xs text-foreground placeholder-text-muted focus:outline-none focus:border-primary transition-all resize-none"
           />
         </div>
 
@@ -1526,7 +1526,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
         <div className="grid grid-cols-2 gap-3 pt-2">
           <button
             onClick={() => handleSave(sub.studentId, 'graded')}
-            className="py-3 px-4 bg-primary hover:bg-primary-hover text-white font-bold rounded-full text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
+            className="py-3 px-4 min-h-[44px] min-w-[44px] bg-primary hover:bg-primary-hover text-white font-bold rounded-full text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
           >
             <Save className="w-4 h-4" />
             <span>{sub.status === 'graded' ? 'Salvar Nota' : 'Salvar e Finalizar'}</span>
@@ -1538,7 +1538,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
               onClick={() => {
                 alert('🚨 Bloqueio Ninja: Esta atividade já foi devolvida 3 vezes ao aluno. A 4ª devolução está BLOQUEADA! Por favor, atribua a nota final e clique em Salvar e Finalizar.');
               }}
-              className="py-3 px-4 bg-rose-500/10 text-rose-600 font-bold rounded-full text-xs border border-rose-500/30 flex items-center justify-center gap-2 transition-all cursor-not-allowed opacity-90"
+              className="py-3 px-4 min-h-[44px] min-w-[44px] bg-rose-500/10 text-rose-600 font-bold rounded-full text-xs border border-rose-500/30 flex items-center justify-center gap-2 transition-all cursor-not-allowed opacity-90"
               title="A 4ª devolução está bloqueada pelo sistema. Atribua a nota final."
             >
               <RotateCcw className="w-4 h-4 text-rose-400" />
@@ -1547,7 +1547,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
           ) : (
             <button
               onClick={() => handleSave(sub.studentId, 'returned')}
-              className="py-3 px-4 bg-transparent hover:bg-surface-hover text-foreground font-bold rounded-full text-xs border border-border flex items-center justify-center gap-2 transition-all cursor-pointer"
+              className="py-3 px-4 min-h-[44px] min-w-[44px] bg-transparent hover:bg-surface-hover text-foreground font-bold rounded-full text-xs border border-border flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
               <span>

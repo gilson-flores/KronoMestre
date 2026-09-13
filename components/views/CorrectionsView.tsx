@@ -127,7 +127,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSelectedActivityId(null)}
-              className="p-2.5 bg-[#171f33] hover:bg-surface-hover text-foreground hover:text-foreground rounded-2xl border border-border transition-all cursor-pointer flex items-center gap-2 text-xs font-bold"
+              className="p-2.5 min-h-[44px] min-w-[44px] bg-[#171f33] hover:bg-surface-hover text-foreground hover:text-foreground rounded-2xl border border-border transition-all cursor-pointer flex items-center gap-2 text-xs font-bold"
               title="Voltar para a lista de correções"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -243,7 +243,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setSelectedTurmaFilter('all')}
-              className={`py-2 px-4 rounded-full text-xs font-bold transition-all cursor-pointer ${
+              className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all cursor-pointer ${
                 selectedTurmaFilter === 'all'
                   ? 'bg-primary text-white shadow-md shadow-primary/20'
                   : 'bg-background text-muted hover:text-foreground border border-border'
@@ -258,7 +258,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                 <button
                   key={turmaCode}
                   onClick={() => setSelectedTurmaFilter(turmaCode)}
-                  className={`py-2 px-4 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                     selectedTurmaFilter === turmaCode
                       ? 'bg-primary text-white shadow-md shadow-primary/20'
                       : 'bg-background text-muted hover:text-foreground border border-border'
@@ -288,7 +288,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
           <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto">
             <button
               onClick={() => setStatusFilter('all')}
-              className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+              className={`px-3 py-2 min-h-[44px] min-w-[44px] rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                 statusFilter === 'all'
                   ? 'bg-[#1d273d] text-primary border border-primary/30'
                   : 'bg-background text-muted hover:text-foreground border border-border'
@@ -298,7 +298,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
             </button>
             <button
               onClick={() => setStatusFilter('pending')}
-              className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
+              className={`px-3 py-2 min-h-[44px] min-w-[44px] rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
                 statusFilter === 'pending'
                   ? 'bg-amber-100 text-amber-600 border border-amber-200'
                   : 'bg-background text-muted hover:text-foreground border border-border'
@@ -308,7 +308,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
             </button>
             <button
               onClick={() => setStatusFilter('graded')}
-              className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
+              className={`px-3 py-2 min-h-[44px] min-w-[44px] rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
                 statusFilter === 'graded'
                   ? 'bg-emerald-100 text-emerald-600 border border-emerald-200'
                   : 'bg-background text-muted hover:text-foreground border border-border'

@@ -27,6 +27,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
   const [selectedTurmaFilter, setSelectedTurmaFilter] = useState('all');
   const [selectedTagFilter, setSelectedTagFilter] = useState<'all' | 'PNE' | 'RAD' | 'REGULAR'>('all');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [studentToDelete, setStudentToDelete] = useState<StudentUser | null>(null);
 
   // Only include turmas from registered students (no unlinked deduced classes)
   const turmasSet = new Set(students.map((s) => s.turma).filter(Boolean));
@@ -222,7 +223,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                 </button>
 
                 <button
-                  onClick={() => onDeleteStudent(student.id)}
+                  onClick={() => setStudentToDelete(student)}
                   className="p-2.5 bg-[#171f33] hover:bg-rose-100 text-foreground hover:text-rose-600 rounded-full border border-border transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
                   title="Excluir Aluno"
                   aria-label="Excluir Aluno"
@@ -247,6 +248,44 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
         onClose={() => setIsImportModalOpen(false)}
         onImportStudents={onImportStudents}
       />
+
+      {/* Delete Confirmation Modal */}
+      {studentToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-surface border border-border rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-6">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="p-4 bg-rose-500/10 rounded-full border border-rose-500/20 text-rose-500">
+                <Trash2 className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-foreground">Excluir Aluno</h3>
+                <p className="text-sm text-text-muted mt-2">
+                  Deseja realmente excluir o aluno(a) <strong className="text-foreground">{studentToDelete.fullName}</strong>?
+                  Isso irá remover permanentemente o aluno desta turma.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => {
+                  onDeleteStudent(studentToDelete.id);
+                  setStudentToDelete(null);
+                }}
+                className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl transition-colors cursor-pointer min-h-[44px]"
+              >
+                Sim, Excluir Aluno
+              </button>
+              <button
+                onClick={() => setStudentToDelete(null)}
+                className="w-full py-3 bg-transparent border border-border hover:bg-surface-hover text-foreground font-bold rounded-xl transition-colors cursor-pointer min-h-[44px]"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
