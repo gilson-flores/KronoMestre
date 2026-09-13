@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   initialTeacher,
   initialStudents,
@@ -122,6 +122,9 @@ export default function Home() {
   const [currentStudent, setCurrentStudent] = useState<StudentUser | null>(null);
   const [inactivityTimeoutEnabled, setInactivityTimeoutEnabled] = useState<boolean>(true);
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
+  const [isDataLoading, setIsDataLoading] = useState<boolean>(() => Boolean(isSupabaseConfigured && supabase));
+  const [dataLoadError, setDataLoadError] = useState<boolean>(false);
+  const [loadDataTrigger, setLoadDataTrigger] = useState<number>(0);
 
   // Restaurar sessão e preferências no cliente de forma segura para hidratação
   useEffect(() => {
@@ -204,6 +207,34 @@ export default function Home() {
   const [schedule] = useState(initialSchedule);
   const [library, setLibrary] = useState<LibraryFile[]>(initialLibrary);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
+
+  // Active datasets (filtered by non-archived for the current school cycle / vinculo)
+  const activeStudents = useMemo(() => students.filter((s) => !s.isArchived), [students]);
+  const activeActivities = useMemo(() => activities.filter((a) => !a.isArchived), [activities]);
+
+  const visibleStudentsForRole = useMemo(() => {
+    if (role === 'second_teacher' && teacher) {
+      return activeStudents.filter((s) => {
+        const tId = teacher.id?.toString().trim().toLowerCase();
+        const tName = teacher.name?.trim().toLowerCase();
+        const tEmail = teacher.email?.trim().toLowerCase();
+
+        const stId = s.secondTeacherId?.toString().trim().toLowerCase();
+        const stName = s.secondTeacherName?.trim().toLowerCase();
+
+        const matchId = Boolean(stId && tId && stId === tId);
+        const matchEmail = Boolean(stId && tEmail && stId === tEmail);
+        const matchName = Boolean(
+          stName &&
+            ((tName && (stName === tName || stName.includes(tName) || tName.includes(stName))) ||
+              (tEmail && stName === tEmail))
+        );
+
+        return matchId || matchEmail || matchName;
+      });
+    }
+    return activeStudents;
+  }, [role, teacher, activeStudents]);
 
   // Active view tab: 'painel' | 'atividades' | 'alunos' | 'horarios' | 'arquivos' | 'grading' | 'mensagens' | 'configuracoes'
 
@@ -449,6 +480,8 @@ export default function Home() {
     const client = supabase;
 
     const loadData = async () => {
+      setIsDataLoading(true);
+      setDataLoadError(false);
       try {
         // 0. Carregar Dados do Professor
         const { data: authUser } = await client.auth.getUser();
@@ -483,7 +516,11 @@ export default function Home() {
         }
 
         // 1. Carregar Alunos do Supabase
-        const { data: dbStudents } = await client.from('students').select('*');
+        const { data: dbStudents, error: stuError } = await client.from('students').select('*');
+        if (stuError) {
+          console.error('Erro ao buscar estudantes no Supabase:', stuError);
+          setDataLoadError(true);
+        }
         if (dbStudents && dbStudents.length > 0) {
           // Ler cache local para preservar vínculos que possam não ter colunas no Supabase
           const localMap: Record<string, StudentUser> = {};
@@ -540,6 +577,9 @@ export default function Home() {
               pedagogicalNotes: s.pedagogical_notes || localMatch?.pedagogicalNotes || '',
               secondTeacherId: finalSecondTeacherId,
               secondTeacherName: finalSecondTeacherName,
+              isArchived: Boolean(s.is_archived),
+              archivedAt: s.archived_at || undefined,
+              archivedReason: s.archived_reason || undefined,
             };
           });
 
@@ -575,8 +615,17 @@ export default function Home() {
         }
 
         // 2. Carregar Atividades e Entregas do Supabase
-        const { data: dbActivities } = await client.from('activities').select('*');
-        const { data: dbSubmissions } = await client.from('submissions').select('*');
+        const { data: dbActivities, error: actError } = await client.from('activities').select('*');
+        const { data: dbSubmissions, error: subError } = await client.from('submissions').select('*');
+
+        if (actError) {
+          console.error('Erro ao buscar atividades no Supabase:', actError);
+          setDataLoadError(true);
+        }
+        if (subError) {
+          console.error('Erro ao buscar entregas no Supabase:', subError);
+          setDataLoadError(true);
+        }
 
         // Ler cache local de atividades para preservação de seleção de PNE caso o banco ainda esteja migrando
         let localActivitiesMap: { [id: string]: Activity } = {};
@@ -697,6 +746,9 @@ export default function Home() {
               pendingCorrection: act.pending_correction || subs.filter((s) => s.status === 'pending').length,
               averageGrade: act.average_grade ? Number(act.average_grade) : undefined,
               completedDate: act.completed_date,
+              isArchived: Boolean(act.is_archived),
+              archivedAt: act.archived_at || undefined,
+              archivedReason: act.archived_reason || undefined,
               submissions: subs,
             };
           });
@@ -756,11 +808,14 @@ export default function Home() {
         }
       } catch (err) {
         console.error('Erro ao carregar dados do Supabase:', err);
+        setDataLoadError(true);
+      } finally {
+        setIsDataLoading(false);
       }
     };
 
     loadData();
-  }, []);
+  }, [loadDataTrigger]);
 
   // Auth Handlers
   const handleLoginTeacher = (loggedTeacher: TeacherUser) => {
@@ -2352,6 +2407,118 @@ export default function Home() {
     alert(`Dossiê em PDF/Planilha gerado com sucesso para a atividade: ${act.title}`);
   };
 
+  const handleArchiveVinculo = async (reason: string) => {
+    const nowIso = new Date().toISOString();
+    const trimmedReason = reason.trim() || 'Troca de vínculo';
+
+    const activeStudentsList = students.filter((s) => !s.isArchived);
+    const activeActivitiesList = activities.filter((a) => !a.isArchived);
+    const studentsCount = activeStudentsList.length;
+    const activitiesCount = activeActivitiesList.length;
+
+    if (studentsCount === 0 && activitiesCount === 0) {
+      showGlobalStatus('info', 'Não há alunos ou atividades ativas para arquivar no vínculo atual.');
+      return { success: false, studentsCount: 0, activitiesCount: 0 };
+    }
+
+    try {
+      if (isSupabaseConfigured && supabase) {
+        // Atualizar alunos no Supabase
+        const { error: errStudents } = await supabase
+          .from('students')
+          .update({
+            is_archived: true,
+            archived_at: nowIso,
+            archived_reason: trimmedReason,
+          })
+          .or('is_archived.is.null,is_archived.eq.false');
+
+        if (errStudents) {
+          console.warn('Tentativa com .or falhou para students, usando .eq(is_archived, false):', errStudents);
+          const { error: errStudentsRetry } = await supabase
+            .from('students')
+            .update({
+              is_archived: true,
+              archived_at: nowIso,
+              archived_reason: trimmedReason,
+            })
+            .eq('is_archived', false);
+          if (errStudentsRetry) throw errStudentsRetry;
+        }
+
+        // Atualizar atividades no Supabase
+        const { error: errActivities } = await supabase
+          .from('activities')
+          .update({
+            is_archived: true,
+            archived_at: nowIso,
+            archived_reason: trimmedReason,
+          })
+          .or('is_archived.is.null,is_archived.eq.false');
+
+        if (errActivities) {
+          console.warn('Tentativa com .or falhou para activities, usando .eq(is_archived, false):', errActivities);
+          const { error: errActivitiesRetry } = await supabase
+            .from('activities')
+            .update({
+              is_archived: true,
+              archived_at: nowIso,
+              archived_reason: trimmedReason,
+            })
+            .eq('is_archived', false);
+          if (errActivitiesRetry) throw errActivitiesRetry;
+        }
+      }
+
+      // Atualizar estado em memória e cache local
+      setStudents((prev) => {
+        const updated = prev.map((s) =>
+          !s.isArchived
+            ? { ...s, isArchived: true, archivedAt: nowIso, archivedReason: trimmedReason }
+            : s
+        );
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('local_students_data', JSON.stringify(updated));
+          } catch (e) {}
+        }
+        return updated;
+      });
+
+      setActivities((prev) => {
+        const updated = prev.map((a) =>
+          !a.isArchived
+            ? { ...a, isArchived: true, archivedAt: nowIso, archivedReason: trimmedReason }
+            : a
+        );
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('local_activities_data', JSON.stringify(updated));
+          } catch (e) {}
+        }
+        return updated;
+      });
+
+      const successMsg = `${studentsCount} alunos e ${activitiesCount} atividades arquivados com sucesso.`;
+      showGlobalStatus('success', successMsg);
+
+      return {
+        success: true,
+        studentsCount,
+        activitiesCount,
+      };
+    } catch (err: any) {
+      console.error('Erro ao arquivar vínculo:', err);
+      showGlobalStatus('error', `Falha ao arquivar vínculo: ${err?.message || 'Erro de conexão'}`);
+      return {
+        success: false,
+        studentsCount: 0,
+        activitiesCount: 0,
+        error: err?.message,
+      };
+    }
+  };
+
   // Messaging Handlers
   const handleSendMessage = async (msgData: {
     threadId: string;
@@ -2553,7 +2720,7 @@ export default function Home() {
   if (!role) {
     return (
       <AuthView
-        students={students}
+        students={activeStudents}
         teacher={teacher}
         onLoginTeacher={handleLoginTeacher}
         onLoginStudent={handleLoginStudent}
@@ -2598,7 +2765,7 @@ export default function Home() {
         onCloseMobile={() => setIsMobileMenuOpen(false)}
         unreadMessagesCount={teacherUnreadMessagesCount}
         pendingCorrectionsCount={teacherPendingCorrectionsCount}
-        hiddenNavItems={role === 'second_teacher' ? hiddenSidebarItems : []}
+        hiddenNavItems={role === 'second_teacher' ? [...hiddenSidebarItems, 'backup_recuperacao'] : []}
       />
 
 
@@ -2640,127 +2807,114 @@ export default function Home() {
           </div>
         )}
 
-        {(() => {
-          // Quando o usuário for 2º professor, apenas os estudantes vinculados a ele serão exibidos
-          const visibleStudentsForRole = role === 'second_teacher' && teacher
-            ? students.filter((s) => {
-                const tId = teacher.id?.toString().trim().toLowerCase();
-                const tName = teacher.name?.trim().toLowerCase();
-                const tEmail = teacher.email?.trim().toLowerCase();
+        <main className="flex-1 p-3 sm:p-6 md:p-8 max-w-7xl w-full mx-auto">
+          {(currentTab === 'dashboard' || currentTab === 'painel') && (
+            <DashboardCentralView
+              activities={activeActivities}
+              students={visibleStudentsForRole}
+              isLoading={isDataLoading}
+              hasError={dataLoadError}
+              onRetry={() => setLoadDataTrigger((prev) => prev + 1)}
+              onNavigateToTab={(tab) => setCurrentTab(tab)}
+              onOpenNewActivityModal={() => setIsNewActivityModalOpen(true)}
+              onOpenNewStudentModal={() => setIsNewStudentModalOpen(true)}
+              onSelectActivityForGrading={handleSelectActivityForGrading}
+              onOpenParallelRecoveryModal={(act) => setParallelRecoveryParentActivity(act)}
+              onViewActivity={(act) => setViewingActivity(act)}
+            />
+          )}
 
-                const stId = s.secondTeacherId?.toString().trim().toLowerCase();
-                const stName = s.secondTeacherName?.trim().toLowerCase();
+          {currentTab === 'atividades' && (
+            <DashboardView
+              activities={activeActivities}
+              students={visibleStudentsForRole}
+              title="Atividades"
+              subtitle="Gerencie e acompanhe avaliações, redações e dinâmicas das suas turmas."
+              isCorrecoesTab={false}
+              onOpenNewActivityModal={() => setIsNewActivityModalOpen(true)}
+              onSelectActivityForGrading={handleSelectActivityForGrading}
+              onEditActivity={(act) => {
+                setEditingActivity(act);
+                setIsEditActivityModalOpen(true);
+              }}
+              onViewActivity={(act) => setViewingActivity(act)}
+              onGenerateDossier={handleGenerateDossier}
+              onDeleteActivity={handleDeleteActivity}
+              onSaveActivity={handleSaveActivity}
+              onCreateAdaptedActivity={handleCreateActivity}
+              onOpenParallelRecoveryModal={(act) => setParallelRecoveryParentActivity(act)}
+            />
+          )}
 
-                const matchId = Boolean(stId && tId && stId === tId);
-                const matchEmail = Boolean(stId && tEmail && stId === tEmail);
-                const matchName = Boolean(
-                  stName &&
-                    ((tName && (stName === tName || stName.includes(tName) || tName.includes(stName))) ||
-                      (tEmail && stName === tEmail))
-                );
+          {(currentTab === 'correcoes' || currentTab === 'grading') && (
+            <CorrectionsView
+              activities={activeActivities}
+              students={visibleStudentsForRole}
+              isLoading={isDataLoading}
+              hasError={dataLoadError}
+              onRetry={() => setLoadDataTrigger((prev) => prev + 1)}
+              onUpdateSubmission={handleUpdateSubmission}
+              initialSelectedActivityId={selectedActivityForGrading?.id || null}
+            />
+          )}
 
-                return matchId || matchEmail || matchName;
-              })
-            : students;
+          {currentTab === 'postagem_rco' && (
+            <PostagemRcoView
+              activities={activeActivities}
+              students={visibleStudentsForRole}
+              onSelectActivityForGrading={handleSelectActivityForGrading}
+              teacher={teacher}
+            />
+          )}
 
-          return (
-            <main className="flex-1 p-3 sm:p-6 md:p-8 max-w-7xl w-full mx-auto">
-              {(currentTab === 'dashboard' || currentTab === 'painel') && (
-                <DashboardCentralView
-                  activities={activities}
-                  students={visibleStudentsForRole}
-                  onNavigateToTab={(tab) => setCurrentTab(tab)}
-                  onOpenNewActivityModal={() => setIsNewActivityModalOpen(true)}
-                  onOpenNewStudentModal={() => setIsNewStudentModalOpen(true)}
-                  onSelectActivityForGrading={handleSelectActivityForGrading}
-                  onOpenParallelRecoveryModal={(act) => setParallelRecoveryParentActivity(act)}
-                  onViewActivity={(act) => setViewingActivity(act)}
-                />
-              )}
+          {currentTab === 'mensagens' && (
+            <MessagesView
+              currentUserRole="teacher"
+              teacher={teacher}
+              students={visibleStudentsForRole}
+              activities={activeActivities}
+              messages={chatMessages}
+              isAiAutoReplyEnabled={isAiAutoReplyEnabled}
+              onToggleAiAutoReply={handleToggleAiAutoReply}
+              onSendMessage={handleSendMessage}
+              onMarkThreadAsRead={handleMarkThreadAsRead}
+            />
+          )}
 
-              {currentTab === 'atividades' && (
-                <DashboardView
-                  activities={activities}
-                  students={visibleStudentsForRole}
-                  title="Atividades"
-                  subtitle="Gerencie e acompanhe avaliações, redações e dinâmicas das suas turmas."
-                  isCorrecoesTab={false}
-                  onOpenNewActivityModal={() => setIsNewActivityModalOpen(true)}
-                  onSelectActivityForGrading={handleSelectActivityForGrading}
-                  onEditActivity={(act) => {
-                    setEditingActivity(act);
-                    setIsEditActivityModalOpen(true);
-                  }}
-                  onViewActivity={(act) => setViewingActivity(act)}
-                  onGenerateDossier={handleGenerateDossier}
-                  onDeleteActivity={handleDeleteActivity}
-                  onSaveActivity={handleSaveActivity}
-                  onCreateAdaptedActivity={handleCreateActivity}
-                  onOpenParallelRecoveryModal={(act) => setParallelRecoveryParentActivity(act)}
-                />
-              )}
+          {currentTab === 'alunos' && (
+            <StudentsView
+              students={visibleStudentsForRole}
+              onOpenNewStudentModal={() => setIsNewStudentModalOpen(true)}
+              onEditStudent={(s) => setEditingStudent(s)}
+              onDeleteStudent={handleDeleteStudent}
+              onSuperviseStudent={handleSuperviseStudent}
+              onImportStudents={handleImportStudents}
+            />
+          )}
 
-              {(currentTab === 'correcoes' || currentTab === 'grading') && (
-                <CorrectionsView
-                  activities={activities}
-                  students={visibleStudentsForRole}
-                  onUpdateSubmission={handleUpdateSubmission}
-                  initialSelectedActivityId={selectedActivityForGrading?.id || null}
-                />
-              )}
+          {currentTab === 'atestados_rad' && (
+            <AtestadosRadView students={visibleStudentsForRole} />
+          )}
 
-              {currentTab === 'postagem_rco' && (
-                <PostagemRcoView
-                  activities={activities}
-                  students={visibleStudentsForRole}
-                  onSelectActivityForGrading={handleSelectActivityForGrading}
-                  teacher={teacher}
-                />
-              )}
+          {currentTab === '2_professor' && (
+            <SecondTeachersView
+              teacher={teacher}
+              currentUserRole={role}
+              students={activeStudents}
+              activities={activeActivities}
+              onSubmitAnswer={handleStudentSubmitAnswer}
+              onSaveStudent={handleSaveStudent}
+            />
+          )}
 
-              {currentTab === 'mensagens' && (
-                <MessagesView
-                  currentUserRole="teacher"
-                  teacher={teacher}
-                  students={visibleStudentsForRole}
-                  activities={activities}
-                  messages={chatMessages}
-                  isAiAutoReplyEnabled={isAiAutoReplyEnabled}
-                  onToggleAiAutoReply={handleToggleAiAutoReply}
-                  onSendMessage={handleSendMessage}
-                  onMarkThreadAsRead={handleMarkThreadAsRead}
-                />
-              )}
-
-              {currentTab === 'alunos' && (
-                <StudentsView
-                  students={visibleStudentsForRole}
-                  onOpenNewStudentModal={() => setIsNewStudentModalOpen(true)}
-                  onEditStudent={(s) => setEditingStudent(s)}
-                  onDeleteStudent={handleDeleteStudent}
-                  onSuperviseStudent={handleSuperviseStudent}
-                  onImportStudents={handleImportStudents}
-                />
-              )}
-
-              {currentTab === 'atestados_rad' && (
-                <AtestadosRadView students={visibleStudentsForRole} />
-              )}
-
-              {currentTab === '2_professor' && (
-                <SecondTeachersView
-                  teacher={teacher}
-                  currentUserRole={role}
-                  students={students}
-                  activities={activities}
-                  onSubmitAnswer={handleStudentSubmitAnswer}
-                  onSaveStudent={handleSaveStudent}
-                />
-              )}
-
-              {currentTab === 'backup_recuperacao' && (
-                <BackupView />
-              )}
+          {currentTab === 'backup_recuperacao' && role === 'teacher' && (
+            <BackupView
+              students={students}
+              activities={activities}
+              onArchiveVinculo={handleArchiveVinculo}
+              onNavigateToDashboard={() => setCurrentTab('dashboard')}
+            />
+          )}
 
               {currentTab === 'arquivos' && (
                 <LibraryView
@@ -3198,8 +3352,6 @@ export default function Home() {
             </div>
           )}
         </main>
-          );
-        })()}
       </div>
 
       {/* Global Modals */}
@@ -3207,8 +3359,8 @@ export default function Home() {
         isOpen={isNewActivityModalOpen}
         onClose={() => setIsNewActivityModalOpen(false)}
         onCreateActivity={handleCreateActivity}
-        students={students}
-        activities={activities}
+        students={activeStudents}
+        activities={activeActivities}
         userEmail={teacher?.email}
       />
 
@@ -3220,8 +3372,8 @@ export default function Home() {
         }}
         activity={editingActivity}
         onSaveActivity={handleSaveActivity}
-        students={students}
-        activities={activities}
+        students={activeStudents}
+        activities={activeActivities}
         userEmail={teacher?.email}
       />
 
@@ -3230,8 +3382,8 @@ export default function Home() {
         onClose={() => setParallelRecoveryParentActivity(null)}
         parentActivity={parallelRecoveryParentActivity}
         onCreateActivity={handleCreateActivity}
-        students={students}
-        activities={activities}
+        students={activeStudents}
+        activities={activeActivities}
       />
 
       <ViewActivityModal
@@ -3261,7 +3413,7 @@ export default function Home() {
       <StudentSupervisionModal
         isOpen={Boolean(supervisingStudent)}
         student={supervisingStudent}
-        activities={activities}
+        activities={activeActivities}
         onClose={() => setSupervisingStudent(null)}
         onSaveNotes={handleSavePedagogicalNotes}
         onSendMessage={(st) => {

@@ -42,11 +42,16 @@ import {
 } from '@/lib/studentUtils';
 import { GradeConsolidationModal } from '@/components/modals/GradeConsolidationModal';
 import { Layers, GitFork, CheckCheck, HelpCircle } from 'lucide-react';
+import { GradingLoadingSkeleton, StandardErrorState } from '@/components/LoadingState';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 interface GradingViewProps {
   activity: Activity;
   allActivities?: Activity[];
   students?: StudentUser[];
+  isLoading?: boolean;
+  hasError?: boolean;
+  onRetry?: () => void;
   onSelectActivity?: (activity: Activity) => void;
   onBack: () => void;
   onUpdateSubmission: (
@@ -75,6 +80,9 @@ export const GradingView: React.FC<GradingViewProps> = ({
   activity,
   allActivities = [],
   students = [],
+  isLoading = false,
+  hasError = false,
+  onRetry,
   onSelectActivity,
   onBack,
   onUpdateSubmission,
@@ -89,6 +97,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
 
   const [savedSuccessId, setSavedSuccessId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState(false);
   const [refreshToast, setRefreshToast] = useState(false);
 
   // Sub-tabs: 'fila' | 'corrigidas' | 'devolvidas' | 'nao_fizeram'
@@ -352,14 +361,71 @@ export const GradingView: React.FC<GradingViewProps> = ({
   };
 
   // Action 1: Refresh Deliveries (Atualizar Entregas)
-  const handleRefreshDeliveries = () => {
+  const handleRefreshDeliveries = async () => {
     setIsRefreshing(true);
-    setSubmissions(activity.submissions || []);
-    setTimeout(() => {
-      setIsRefreshing(false);
+    setRefreshError(false);
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const { data: dbSubmissions, error: subError } = await supabase
+          .from('submissions')
+          .select('*')
+          .eq('activity_id', activity.id);
+
+        if (subError) {
+          console.error('Erro ao buscar entregas no Supabase:', subError);
+          setRefreshError(true);
+          return;
+        }
+
+        if (dbSubmissions && dbSubmissions.length > 0) {
+          const distribution = getActivityGradeDistribution({
+            maxGrade: activity.maxGrade || 10,
+            type: activity.type,
+            questions: activity.questions || [],
+          });
+
+          const mapped: ActivitySubmission[] = dbSubmissions.map((sub: any) => ({
+            studentId: sub.student_id,
+            studentName: sub.student_name,
+            matricula: sub.matricula,
+            tag: sub.tag,
+            avatarUrl: sub.avatar_url,
+            objectiveScore: Number(sub.objective_score || 0),
+            maxObjectiveScore:
+              sub.max_objective_score !== undefined && sub.max_objective_score !== null
+                ? Number(sub.max_objective_score)
+                : distribution.maxObjectiveGrade,
+            essayScore:
+              sub.essay_score !== null && sub.essay_score !== undefined
+                ? Number(sub.essay_score)
+                : undefined,
+            maxEssayScore:
+              sub.max_essay_score !== undefined && sub.max_essay_score !== null
+                ? Number(sub.max_essay_score)
+                : distribution.maxEssayGrade,
+            status: sub.status,
+            essayAnswer: sub.essay_answer,
+            teacherFeedback: sub.teacher_feedback,
+            extraPoints: Number(sub.extra_points || 0),
+            registeredInStateSystem: Boolean(sub.registered_in_state_system),
+            groupMembers: sub.group_members,
+            returnCount: Number(sub.return_count || 0),
+          }));
+          setSubmissions(mapped);
+        } else {
+          setSubmissions(activity.submissions || []);
+        }
+      } else {
+        setSubmissions(activity.submissions || []);
+      }
       setRefreshToast(true);
       setTimeout(() => setRefreshToast(false), 3000);
-    }, 400);
+    } catch (err) {
+      console.error('Erro ao atualizar entregas do Supabase:', err);
+      setRefreshError(true);
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   // Action 2: Gemini AI Correction for Essay Response
@@ -642,29 +708,29 @@ export const GradingView: React.FC<GradingViewProps> = ({
   return (
     <div className="space-y-8 animate-fadeIn pb-12">
       {/* Top Header Controls Bar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
         <button
           onClick={onBack}
-          className="inline-flex items-center gap-2 px-4 py-2 min-h-[44px] min-w-[44px] bg-[#171f33] hover:bg-surface-hover text-foreground rounded-full text-xs font-bold transition-all border border-border cursor-pointer"
+          className="w-full sm:w-auto inline-flex items-center justify-center sm:justify-start gap-2 px-4 py-2 min-h-[44px] min-w-[44px] bg-[#171f33] hover:bg-surface-hover text-foreground rounded-full text-xs font-bold transition-all border border-border cursor-pointer"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-4 h-4 shrink-0" />
           <span>Voltar para Atividades</span>
         </button>
 
         {/* Action Buttons: Refresh Deliveries & Select Activity */}
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {/* Botão de Atualizar Entregas */}
           <button
             onClick={handleRefreshDeliveries}
             disabled={isRefreshing}
-            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2 bg-surface hover:bg-[#1c263f] text-primary rounded-full text-xs font-bold transition-all border border-primary/30 cursor-pointer shadow-sm disabled:opacity-50"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 min-h-[44px] bg-surface hover:bg-[#1c263f] text-primary rounded-full text-xs font-bold transition-all border border-primary/30 cursor-pointer shadow-sm disabled:opacity-50"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>{isRefreshing ? 'Sincronizando...' : 'Atualizar Entregas'}</span>
           </button>
 
           {/* Botão de Corrigir Atividade (Seletor) */}
-          <div className="relative flex-1 sm:flex-initial">
+          <div className="relative w-full sm:w-auto">
             <button
               onClick={() => setIsActivityDropdownOpen(!isActivityDropdownOpen)}
               className="w-full inline-flex items-center justify-between gap-2 px-4 py-2 min-h-[44px] min-w-[44px] bg-primary hover:bg-primary-hover text-white rounded-full text-xs font-bold transition-all shadow-md cursor-pointer"
@@ -761,30 +827,54 @@ export const GradingView: React.FC<GradingViewProps> = ({
         </div>
 
         {/* Counter Badge */}
-        <div className="glass-panel px-6 py-3.5 rounded-3xl border border-border flex items-center gap-6 shrink-0 self-start lg:self-center">
+        <div className="glass-panel p-3.5 sm:px-6 sm:py-3.5 rounded-3xl border border-border grid grid-cols-2 sm:grid-cols-4 lg:flex lg:items-center gap-3 sm:gap-4 lg:gap-6 w-full lg:w-auto shrink-0">
           <div className="text-center">
-            <span className="text-xl font-extrabold text-primary">{gradedQueue.length}</span>
+            <span className="text-lg sm:text-xl font-extrabold text-primary flex items-center justify-center min-h-[28px]">
+              {isLoading || isRefreshing ? (
+                <Loader2 className="w-5 h-5 animate-spin text-primary" />
+              ) : (
+                gradedQueue.length
+              )}
+            </span>
             <span className="block text-[10px] font-bold text-text-muted tracking-wider uppercase">
               Já Corrigidas
             </span>
           </div>
-          <div className="w-px h-8 bg-surface-hover"></div>
+          <div className="hidden lg:block w-px h-8 bg-surface-hover"></div>
           <div className="text-center">
-            <span className="text-xl font-extrabold text-amber-400">{pendingQueue.length}</span>
+            <span className="text-lg sm:text-xl font-extrabold text-amber-400 flex items-center justify-center min-h-[28px]">
+              {isLoading || isRefreshing ? (
+                <Loader2 className="w-5 h-5 animate-spin text-amber-400" />
+              ) : (
+                pendingQueue.length
+              )}
+            </span>
             <span className="block text-[10px] font-bold text-text-muted tracking-wider uppercase">
               Na Fila
             </span>
           </div>
-          <div className="w-px h-8 bg-surface-hover"></div>
+          <div className="hidden lg:block w-px h-8 bg-surface-hover"></div>
           <div className="text-center">
-            <span className="text-xl font-extrabold text-sky-400">{returnedQueue.length}</span>
+            <span className="text-lg sm:text-xl font-extrabold text-sky-400 flex items-center justify-center min-h-[28px]">
+              {isLoading || isRefreshing ? (
+                <Loader2 className="w-5 h-5 animate-spin text-sky-400" />
+              ) : (
+                returnedQueue.length
+              )}
+            </span>
             <span className="block text-[10px] font-bold text-text-muted tracking-wider uppercase">
               Devolvidas
             </span>
           </div>
-          <div className="w-px h-8 bg-surface-hover"></div>
+          <div className="hidden lg:block w-px h-8 bg-surface-hover"></div>
           <div className="text-center">
-            <span className="text-xl font-extrabold text-rose-400">{missingStudents.length}</span>
+            <span className="text-lg sm:text-xl font-extrabold text-rose-400 flex items-center justify-center min-h-[28px]">
+              {isLoading || isRefreshing ? (
+                <Loader2 className="w-5 h-5 animate-spin text-rose-400" />
+              ) : (
+                missingStudents.length
+              )}
+            </span>
             <span className="block text-[10px] font-bold text-text-muted tracking-wider uppercase">
               Não Fizeram
             </span>
@@ -816,10 +906,10 @@ export const GradingView: React.FC<GradingViewProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+          <div className="flex items-center gap-2 w-full sm:w-auto sm:self-center shrink-0">
             <button
               onClick={() => setIncludeChildActivities(!includeChildActivities)}
-              className={`px-4 py-2 min-h-[44px] min-w-[44px] rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 border ${
+              className={`w-full sm:w-auto justify-center px-4 py-2 min-h-[44px] min-w-[44px] rounded-2xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 border ${
                 includeChildActivities
                   ? 'bg-primary text-white border-primary shadow-sm'
                   : 'bg-background text-text-muted hover:text-foreground border-border'
@@ -834,9 +924,9 @@ export const GradingView: React.FC<GradingViewProps> = ({
 
       {/* Turma Filter Bar (Exibido quando a atividade possui mais de uma turma associada ou em visão unificada) */}
       {(hasMultipleTurmas || (includeChildActivities && hasLinkedChildren)) && (
-        <div className="flex flex-wrap items-center gap-2 p-3.5 bg-surface rounded-2xl border border-border">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-text-muted mr-1">
-            <Filter className="w-3.5 h-3.5 text-primary" />
+        <div className="flex flex-wrap items-center gap-2 p-3 sm:p-3.5 bg-surface rounded-2xl border border-border">
+          <div className="w-full sm:w-auto flex items-center gap-1.5 text-xs font-bold text-text-muted mr-1">
+            <Filter className="w-3.5 h-3.5 text-primary shrink-0" />
             <span>Filtrar por Turma:</span>
           </div>
           <button
@@ -875,49 +965,49 @@ export const GradingView: React.FC<GradingViewProps> = ({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 border-b border-border pb-2">
         <button
           onClick={() => setActiveTab('fila')}
-          className={`px-4 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
+          className={`px-2.5 sm:px-4 py-2.5 sm:py-3 rounded-2xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer min-h-[44px] ${
             activeTab === 'fila'
               ? 'bg-primary text-white shadow-md'
               : 'bg-surface text-text-muted hover:text-foreground hover:bg-[#1c263f]'
           }`}
         >
-          <Clock className="w-4 h-4 shrink-0" />
+          <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
           <span>Fila ({pendingQueue.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('corrigidas')}
-          className={`px-4 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
+          className={`px-2.5 sm:px-4 py-2.5 sm:py-3 rounded-2xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer min-h-[44px] ${
             activeTab === 'corrigidas'
               ? 'bg-primary text-white shadow-md'
               : 'bg-surface text-text-muted hover:text-foreground hover:bg-[#1c263f]'
           }`}
         >
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
           <span>Corrigidas ({gradedQueue.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('devolvidas')}
-          className={`px-4 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
+          className={`px-2.5 sm:px-4 py-2.5 sm:py-3 rounded-2xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer min-h-[44px] ${
             activeTab === 'devolvidas'
               ? 'bg-sky-500 text-foreground shadow-md'
               : 'bg-surface text-text-muted hover:text-foreground hover:bg-[#1c263f]'
           }`}
         >
-          <RotateCcw className="w-4 h-4 shrink-0" />
+          <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
           <span>Devolvidas ({returnedQueue.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('nao_fizeram')}
-          className={`px-4 py-3 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer min-h-[44px] ${
+          className={`px-2.5 sm:px-4 py-2.5 sm:py-3 rounded-2xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer min-h-[44px] ${
             activeTab === 'nao_fizeram'
               ? 'bg-rose-500 text-white shadow-md'
               : 'bg-surface text-text-muted hover:text-foreground hover:bg-[#1c263f]'
           }`}
         >
-          <UserX className="w-4 h-4 shrink-0" />
+          <UserX className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
           <span>Pendentes ({missingStudents.length})</span>
         </button>
       </div>
@@ -938,101 +1028,122 @@ export const GradingView: React.FC<GradingViewProps> = ({
         </div>
       )}
 
-      {/* TAB 1: FILA DE CORREÇÃO */}
-      {activeTab === 'fila' && (
+      {/* Visualização das Entregas e Fila de Correção */}
+      {isLoading || isRefreshing ? (
+        <GradingLoadingSkeleton
+          title={isRefreshing ? 'Atualizando entregas...' : 'Carregando entregas para correção...'}
+          subtitle="Sincronizando respostas dos alunos e notas com o banco de dados..."
+        />
+      ) : hasError || refreshError ? (
+        <StandardErrorState
+          title="Não conseguimos carregar as entregas para correção agora."
+          message="Verifique sua conexão com a internet e tente novamente."
+          onRetry={() => {
+            setRefreshError(false);
+            if (onRetry) onRetry();
+            handleRefreshDeliveries();
+          }}
+          retryLabel="Tentar novamente"
+        />
+      ) : (
         <>
-          {pendingQueue.length === 0 ? (
-            <div className="glass-panel p-12 text-center rounded-3xl border border-border text-text-muted space-y-2">
-              <CheckCircle2 className="w-10 h-10 text-primary mx-auto opacity-80" />
-              <p className="text-sm font-bold text-foreground">Nenhuma entrega pendente na fila!</p>
-              <p className="text-xs">Todas as respostas enviadas para esta atividade já foram corrigidas.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {pendingQueue.map((sub) => renderSubmissionCard(sub))}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* TAB 2: JÁ CORRIGIDAS */}
-      {activeTab === 'corrigidas' && (
-        <>
-          {gradedQueue.length === 0 ? (
-            <div className="glass-panel p-12 text-center rounded-3xl border border-border text-text-muted space-y-2">
-              <Clock className="w-10 h-10 text-amber-400 mx-auto opacity-80" />
-              <p className="text-sm font-bold text-foreground">Nenhuma atividade corrigida ainda.</p>
-              <p className="text-xs">As atividades avaliadas e finalizadas aparecerão nesta aba.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {gradedQueue.map((sub) => renderSubmissionCard(sub))}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* TAB 3: DEVOLVIDAS PARA REFAZER */}
-      {activeTab === 'devolvidas' && (
-        <>
-          {returnedQueue.length === 0 ? (
-            <div className="glass-panel p-12 text-center rounded-3xl border border-border text-text-muted space-y-2">
-              <RotateCcw className="w-10 h-10 text-sky-400 mx-auto opacity-80" />
-              <p className="text-sm font-bold text-foreground">Nenhuma atividade devolvida no momento.</p>
-              <p className="text-xs">Quando você clicar em &ldquo;Devolver para Refazer&rdquo;, a atividade aparecerá aqui e o aluno poderá enviar uma nova resposta no portal.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {returnedQueue.map((sub) => renderSubmissionCard(sub))}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* TAB 3: NÃO FIZERAM */}
-      {activeTab === 'nao_fizeram' && (
-        <div className="space-y-4">
-          {missingStudents.length === 0 ? (
-            <div className="glass-panel p-12 text-center rounded-3xl border border-border text-text-muted">
-              🎉 Todos os alunos da turma enviaram a atividade!
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {missingStudents.map((st) => (
-                <div
-                  key={st.id}
-                  className="glass-panel p-5 rounded-3xl border border-border flex items-center justify-between gap-4"
-                >
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={st.avatarUrl}
-                      alt={st.fullName}
-                      className="w-11 h-11 rounded-full object-cover border-2 border-rose-500/30"
-                    />
-                    <div>
-                      <h4 className="text-xs font-bold text-foreground">{st.fullName}</h4>
-                      <p className="text-[10px] text-text-muted">
-                        Turma: {st.turma} • Matrícula: {st.matricula}
-                      </p>
-                      {st.tag && (
-                        <span className="inline-block mt-1 text-[9px] font-bold px-2 py-0.5 rounded-md bg-rose-100 text-rose-600 border border-rose-500/30">
-                          {st.tag}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => alert(`Lembrete enviado para o aluno ${st.fullName}!`)}
-                    className="px-3 py-1.5 bg-[#171f33] hover:bg-surface-hover text-rose-600 rounded-xl text-[10px] font-bold border border-rose-500/30 transition-all cursor-pointer"
-                  >
-                    Enviar Lembrete
-                  </button>
+          {/* TAB 1: FILA DE CORREÇÃO */}
+          {activeTab === 'fila' && (
+            <>
+              {pendingQueue.length === 0 ? (
+                <div className="glass-panel p-12 text-center rounded-3xl border border-border text-text-muted space-y-2">
+                  <CheckCircle2 className="w-10 h-10 text-primary mx-auto opacity-80" />
+                  <p className="text-sm font-bold text-foreground">Nenhuma entrega pendente na fila!</p>
+                  <p className="text-xs">Todas as respostas enviadas para esta atividade já foram corrigidas.</p>
                 </div>
-              ))}
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {pendingQueue.map((sub) => renderSubmissionCard(sub))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* TAB 2: JÁ CORRIGIDAS */}
+          {activeTab === 'corrigidas' && (
+            <>
+              {gradedQueue.length === 0 ? (
+                <div className="glass-panel p-12 text-center rounded-3xl border border-border text-text-muted space-y-2">
+                  <Clock className="w-10 h-10 text-amber-400 mx-auto opacity-80" />
+                  <p className="text-sm font-bold text-foreground">Nenhuma atividade corrigida ainda.</p>
+                  <p className="text-xs">As atividades avaliadas e finalizadas aparecerão nesta aba.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {gradedQueue.map((sub) => renderSubmissionCard(sub))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* TAB 3: DEVOLVIDAS PARA REFAZER */}
+          {activeTab === 'devolvidas' && (
+            <>
+              {returnedQueue.length === 0 ? (
+                <div className="glass-panel p-12 text-center rounded-3xl border border-border text-text-muted space-y-2">
+                  <RotateCcw className="w-10 h-10 text-sky-400 mx-auto opacity-80" />
+                  <p className="text-sm font-bold text-foreground">Nenhuma atividade devolvida no momento.</p>
+                  <p className="text-xs">Quando você clicar em &ldquo;Devolver para Refazer&rdquo;, a atividade aparecerá aqui e o aluno poderá enviar uma nova resposta no portal.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {returnedQueue.map((sub) => renderSubmissionCard(sub))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* TAB 3: NÃO FIZERAM */}
+          {activeTab === 'nao_fizeram' && (
+            <div className="space-y-4">
+              {missingStudents.length === 0 ? (
+                <div className="glass-panel p-12 text-center rounded-3xl border border-border text-text-muted">
+                  🎉 Todos os alunos da turma enviaram a atividade!
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {missingStudents.map((st) => (
+                    <div
+                      key={st.id}
+                      className="glass-panel p-4 sm:p-5 rounded-3xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <img
+                          src={st.avatarUrl}
+                          alt={st.fullName}
+                          className="w-10 h-10 sm:w-11 sm:h-11 rounded-full object-cover border-2 border-rose-500/30 shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold text-foreground truncate">{st.fullName}</h4>
+                          <p className="text-[10px] text-text-muted truncate">
+                            Turma: {st.turma} • Matrícula: {st.matricula}
+                          </p>
+                          {st.tag && (
+                            <span className="inline-block mt-1 text-[9px] font-bold px-2 py-0.5 rounded-md bg-rose-100 text-rose-600 border border-rose-500/30">
+                              {st.tag}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => alert(`Lembrete enviado para o aluno ${st.fullName}!`)}
+                        className="w-full sm:w-auto px-3 py-2 min-h-[44px] bg-[#171f33] hover:bg-surface-hover text-rose-600 rounded-xl text-xs font-bold border border-rose-500/30 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                      >
+                        Enviar Lembrete
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
-        </div>
+        </>
       )}
 
       {/* Modal Popup de Consolidação de Notas de Recuperação Paralela */}
@@ -1133,30 +1244,30 @@ export const GradingView: React.FC<GradingViewProps> = ({
     return (
       <div
         key={sub.studentId}
-        className="glass-panel p-6 rounded-3xl border border-border space-y-5 relative flex flex-col justify-between"
+        className="glass-panel p-4 sm:p-6 rounded-3xl border border-border space-y-4 sm:space-y-5 relative flex flex-col justify-between"
       >
         {/* Card Header: Student Info & Badges */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <img
               src={sub.avatarUrl}
               alt={sub.studentName}
-              className="w-12 h-12 rounded-full object-cover border-2 border-border"
+              className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border-2 border-border shrink-0"
             />
-            <div>
-              <h3 className="text-sm font-bold text-foreground">{sub.studentName}</h3>
-              <p className="text-[10px] text-text-muted uppercase tracking-wider">
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-foreground truncate">{sub.studentName}</h3>
+              <p className="text-[10px] text-text-muted uppercase tracking-wider truncate">
                 {studentInfo?.turma ? `TURMA: ${studentInfo.turma} • ` : ''}MATRÍCULA: {sub.matricula}
               </p>
               {sub.groupMembers && (
-                <p className="text-[10px] text-purple-600 mt-0.5 font-medium">
+                <p className="text-[10px] text-purple-600 mt-0.5 font-medium break-words">
                   👥 Grupo: {sub.groupMembers}
                 </p>
               )}
             </div>
           </div>
 
-          <div className="flex flex-col items-end gap-1.5">
+          <div className="flex flex-wrap sm:flex-col sm:items-end gap-1.5 w-full sm:w-auto">
             {/* Return Count Badge */}
             {(sub as any).originKind && (sub as any).originKind !== 'canonical' && (
               <span
@@ -1317,14 +1428,14 @@ export const GradingView: React.FC<GradingViewProps> = ({
         )}
 
         {/* Scores & Extra Points Input Grid */}
-        <div className={`grid ${distribution.hasObjective ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
           {/* Objective Score (Only shown if activity has objective questions) */}
           {distribution.hasObjective && (
-            <div className="bg-surface p-3 rounded-2xl border border-border">
-              <span className="block text-[9px] font-bold text-text-muted uppercase tracking-wider mb-1">
+            <div className="col-span-2 sm:col-span-1 bg-surface p-3 rounded-2xl border border-border flex sm:block items-center justify-between">
+              <span className="block text-[9px] font-bold text-text-muted uppercase tracking-wider sm:mb-1">
                 Objetivas
               </span>
-              <div className="text-lg font-extrabold text-primary">
+              <div className="text-base sm:text-lg font-extrabold text-primary">
                 {objectiveScore.toFixed(1)}{' '}
                 <span className="text-xs text-text-muted font-normal">/ {distribution.maxObjectiveGrade.toFixed(1)}</span>
               </div>
@@ -1345,7 +1456,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
                 value={sub.essayScore !== undefined ? sub.essayScore : ''}
                 onChange={(e) => handleScoreChange(sub.studentId, e.target.value)}
                 placeholder="-"
-                className="w-14 bg-[#171f33] border border-border rounded-xl px-2 py-1 text-base font-extrabold text-foreground text-center focus:outline-none focus:border-primary"
+                className="w-12 sm:w-14 bg-[#171f33] border border-border rounded-xl px-2 py-1 text-base font-extrabold text-foreground text-center focus:outline-none focus:border-primary"
               />
               <span className="text-xs text-text-muted font-normal">/ {maxEssayValue.toFixed(1)}</span>
             </div>
@@ -1353,8 +1464,8 @@ export const GradingView: React.FC<GradingViewProps> = ({
 
           {/* Extra Points by Teacher */}
           <div className="bg-surface p-3 rounded-2xl border border-amber-500/20">
-            <span className="block text-[9px] font-bold text-amber-600 uppercase tracking-wider mb-1 flex items-center gap-1">
-              <Award className="w-3 h-3" /> Ponto Extra
+            <span className="block text-[9px] font-bold text-amber-600 uppercase tracking-wider mb-1 flex items-center gap-1 truncate">
+              <Award className="w-3 h-3 shrink-0" /> Ponto Extra
             </span>
             <input
               type="number"
@@ -1420,10 +1531,10 @@ export const GradingView: React.FC<GradingViewProps> = ({
                   turma: currentStudentUser?.turma || activity.turma,
                 });
               }}
-              className="px-3.5 py-1.5 min-h-[44px] min-w-[44px] bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0"
+              className="w-full sm:w-auto justify-center px-3.5 py-1.5 min-h-[44px] min-w-[44px] bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
               title="Abrir registros detalhados de consolidação em janela popup"
             >
-              <Maximize2 className="w-3.5 h-3.5" />
+              <Maximize2 className="w-3.5 h-3.5 shrink-0" />
               <span>Ver Consolidação Completa</span>
             </button>
           </div>
@@ -1431,7 +1542,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
 
         {/* Teacher Feedback Textarea */}
         <div>
-          <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-1.5 gap-2">
             <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider">
               Feedback Pedagógico ao Aluno
             </label>
@@ -1495,14 +1606,16 @@ export const GradingView: React.FC<GradingViewProps> = ({
 
         {/* Checkbox for Registration in State System */}
         <div className="pt-1">
-          <label className="flex items-center gap-2.5 cursor-pointer text-xs text-foreground select-none bg-surface p-3 rounded-2xl border border-border hover:bg-[#1a243b] transition-colors">
+          <label className="flex items-start sm:items-center gap-2.5 cursor-pointer text-xs text-foreground select-none bg-surface p-3 rounded-2xl border border-border hover:bg-[#1a243b] transition-colors">
             <input
               type="checkbox"
               checked={!!sub.registeredInStateSystem}
               onChange={() => handleToggleStateSystem(sub.studentId)}
-              className="w-4 h-4 accent-[#4ade80] rounded cursor-pointer"
+              className="w-4 h-4 accent-[#4ade80] rounded cursor-pointer shrink-0 mt-0.5 sm:mt-0"
             />
-            <span className="font-semibold">Atividade já registrada no sistema do estado (RCO / SED)</span>
+            <span className="font-semibold leading-tight sm:leading-normal">
+              Atividade já registrada no sistema do estado (RCO / SED)
+            </span>
           </label>
         </div>
 
@@ -1513,7 +1626,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
               ? 'bg-amber-100 border border-amber-200 text-amber-600'
               : 'bg-primary/20 border border-primary/40 text-primary'
           }`}>
-            <UserCheck className="w-4 h-4" />
+            <UserCheck className="w-4 h-4 shrink-0" />
             <span>
               {sub.status === 'returned'
                 ? 'Atividade devolvida ao aluno para refazer!'
@@ -1523,12 +1636,12 @@ export const GradingView: React.FC<GradingViewProps> = ({
         )}
 
         {/* Action Buttons: Save Grade / Return for Re-do */}
-        <div className="grid grid-cols-2 gap-3 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 pt-2">
           <button
             onClick={() => handleSave(sub.studentId, 'graded')}
-            className="py-3 px-4 min-h-[44px] min-w-[44px] bg-primary hover:bg-primary-hover text-white font-bold rounded-full text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
+            className="w-full py-3 px-4 min-h-[44px] min-w-[44px] bg-primary hover:bg-primary-hover text-white font-bold rounded-full text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer text-center"
           >
-            <Save className="w-4 h-4" />
+            <Save className="w-4 h-4 shrink-0" />
             <span>{sub.status === 'graded' ? 'Salvar Nota' : 'Salvar e Finalizar'}</span>
           </button>
 
@@ -1538,18 +1651,18 @@ export const GradingView: React.FC<GradingViewProps> = ({
               onClick={() => {
                 alert('🚨 Bloqueio Ninja: Esta atividade já foi devolvida 3 vezes ao aluno. A 4ª devolução está BLOQUEADA! Por favor, atribua a nota final e clique em Salvar e Finalizar.');
               }}
-              className="py-3 px-4 min-h-[44px] min-w-[44px] bg-rose-500/10 text-rose-600 font-bold rounded-full text-xs border border-rose-500/30 flex items-center justify-center gap-2 transition-all cursor-not-allowed opacity-90"
+              className="w-full py-3 px-4 min-h-[44px] min-w-[44px] bg-rose-500/10 text-rose-600 font-bold rounded-full text-xs border border-rose-500/30 flex items-center justify-center gap-2 transition-all cursor-not-allowed opacity-90 text-center"
               title="A 4ª devolução está bloqueada pelo sistema. Atribua a nota final."
             >
-              <RotateCcw className="w-4 h-4 text-rose-400" />
+              <RotateCcw className="w-4 h-4 text-rose-400 shrink-0" />
               <span>Devolvida 3x (4ª Bloqueada)</span>
             </button>
           ) : (
             <button
               onClick={() => handleSave(sub.studentId, 'returned')}
-              className="py-3 px-4 min-h-[44px] min-w-[44px] bg-transparent hover:bg-surface-hover text-foreground font-bold rounded-full text-xs border border-border flex items-center justify-center gap-2 transition-all cursor-pointer"
+              className="w-full py-3 px-4 min-h-[44px] min-w-[44px] bg-transparent hover:bg-surface-hover text-foreground font-bold rounded-full text-xs border border-border flex items-center justify-center gap-2 transition-all cursor-pointer text-center"
             >
-              <RotateCcw className="w-4 h-4" />
+              <RotateCcw className="w-4 h-4 shrink-0" />
               <span>
                 {sub.returnCount ? `Devolver para Refazer (${sub.returnCount}x)` : 'Devolver para Refazer'}
               </span>

@@ -28,6 +28,9 @@ export interface StudentUser {
   pedagogicalNotes?: string;
   secondTeacherId?: string;
   secondTeacherName?: string;
+  isArchived?: boolean;
+  archivedAt?: string;
+  archivedReason?: string;
 }
 
 export const PNE_CONDITIONS_LIST = [
@@ -125,6 +128,9 @@ export interface Activity {
   pendingCorrection: number;
   averageGrade?: number;
   completedDate?: string;
+  isArchived?: boolean;
+  archivedAt?: string;
+  archivedReason?: string;
   submissions: ActivitySubmission[];
 }
 

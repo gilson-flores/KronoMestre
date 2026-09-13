@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 
 import { Activity, StudentUser } from '@/lib/types';
+import { DashboardLoadingSkeleton, StandardErrorState } from '@/components/LoadingState';
 import {
   getCanonicalActivities,
   getUnifiedActivityMetrics,
@@ -39,6 +40,9 @@ import {
 interface DashboardCentralViewProps {
   activities: Activity[];
   students: StudentUser[];
+  isLoading?: boolean;
+  hasError?: boolean;
+  onRetry?: () => void;
   onNavigateToTab: (tab: string) => void;
   onOpenNewActivityModal: () => void;
   onOpenNewStudentModal: () => void;
@@ -52,6 +56,9 @@ type OperationalTabFilter = 'todas' | 'correcoes' | 'prazos' | 'recuperacao' | '
 export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
   activities = [],
   students = [],
+  isLoading = false,
+  hasError = false,
+  onRetry,
   onNavigateToTab,
   onOpenNewActivityModal,
   onOpenNewStudentModal,
@@ -302,7 +309,18 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
         </div>
       </div>
 
-      {/* 2. ÁREA DE PENDÊNCIAS (6 CARDS OPERACIONAIS COM AÇÃO DIRETA) */}
+      {isLoading ? (
+        <DashboardLoadingSkeleton />
+      ) : hasError ? (
+        <StandardErrorState
+          title="Não conseguimos carregar suas pendências agora."
+          message="Verifique sua conexão com a internet e tente novamente."
+          onRetry={onRetry}
+          retryLabel="Tentar novamente"
+        />
+      ) : (
+        <>
+          {/* 2. ÁREA DE PENDÊNCIAS (6 CARDS OPERACIONAIS COM AÇÃO DIRETA) */}
       <section aria-labelledby="heading-pendencias">
         <div className="flex items-center justify-between gap-2 mb-4">
           <div className="flex items-center gap-2">
@@ -879,6 +897,8 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
           </div>
         </div>
       </section>
+        </>
+      )}
     </div>
   );
 };

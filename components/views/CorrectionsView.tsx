@@ -29,10 +29,14 @@ import {
   getChildAdaptations,
 } from '@/lib/studentUtils';
 import { GradingView } from './GradingView';
+import { GradingLoadingSkeleton, StandardErrorState } from '@/components/LoadingState';
 
 interface CorrectionsViewProps {
   activities: Activity[];
   students: StudentUser[];
+  isLoading?: boolean;
+  hasError?: boolean;
+  onRetry?: () => void;
   onUpdateSubmission: (
     activityId: string,
     studentId: string,
@@ -48,6 +52,9 @@ interface CorrectionsViewProps {
 export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
   activities = [],
   students = [],
+  isLoading = false,
+  hasError = false,
+  onRetry,
   onUpdateSubmission,
   initialSelectedActivityId = null,
 }) => {
@@ -173,6 +180,9 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
           activity={activeGradingActivity}
           allActivities={activities}
           students={students}
+          isLoading={isLoading}
+          hasError={hasError}
+          onRetry={onRetry}
           onBack={() => setSelectedActivityId(null)}
           onSelectActivity={(act) => setSelectedActivityId(act.id)}
           onUpdateSubmission={onUpdateSubmission}
@@ -184,7 +194,21 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
   // Lista/Seletor de Atividades para Correção
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
-      {/* Header com Estatísticas de Correção */}
+      {isLoading ? (
+        <GradingLoadingSkeleton
+          title="Carregando atividades para correção..."
+          subtitle="Sincronizando entregas, pendências e turmas com o banco de dados..."
+        />
+      ) : hasError ? (
+        <StandardErrorState
+          title="Não conseguimos carregar as atividades para correção agora."
+          message="Verifique sua conexão com a internet e tente novamente."
+          onRetry={onRetry}
+          retryLabel="Tentar novamente"
+        />
+      ) : (
+        <>
+          {/* Header com Estatísticas de Correção */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface p-5 sm:p-6 rounded-3xl border border-border shadow-lg">
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
@@ -471,6 +495,8 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
           })
         )}
       </div>
+        </>
+      )}
     </div>
   );
 };
