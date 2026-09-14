@@ -1,5 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function GET(req: NextRequest) {
   // Segurança: Proteção básica para evitar acesso público indesejado
@@ -8,8 +8,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Acesso negado. Token de segurança inválido.' }, { status: 401 });
   }
 
+  const supabase = getSupabaseAdmin();
   if (!supabase) {
-    return NextResponse.json({ error: 'Supabase client not configured' }, { status: 500 });
+    return NextResponse.json({ error: 'Supabase admin client not configured' }, { status: 500 });
   }
 
   try {

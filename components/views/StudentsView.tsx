@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Search, Plus, UserPlus, Pencil, Trash2, Eye, ShieldCheck, Upload, Heart, AlertCircle, HeartHandshake } from 'lucide-react';
+import { Search, Plus, UserPlus, Pencil, Trash2, Eye, ShieldCheck, Upload, Heart, AlertCircle, HeartHandshake, KeyRound } from 'lucide-react';
 import { StudentUser } from '@/lib/types';
 import { ImportCsvModal } from '@/components/modals/ImportCsvModal';
+import { ResetPasswordByTeacherModal } from '@/components/modals/ResetPasswordByTeacherModal';
 import { getTurmaLabel } from '@/lib/studentUtils';
 import { formatAvatarUrl } from '@/lib/utils';
 
@@ -31,6 +32,8 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
   const [selectedTagFilter, setSelectedTagFilter] = useState<'all' | 'PNE' | 'RAD' | 'REGULAR'>('all');
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [studentToDelete, setStudentToDelete] = useState<StudentUser | null>(null);
+  const [studentToResetPassword, setStudentToResetPassword] = useState<StudentUser | null>(null);
+  const [resetSuccessMsg, setResetSuccessMsg] = useState('');
 
   // Only include turmas from registered students (no unlinked deduced classes)
   const turmasSet = new Set(students.map((s) => s.turma).filter(Boolean));
@@ -228,6 +231,15 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                 {!isReadOnly && (
                   <>
                     <button
+                      onClick={() => setStudentToResetPassword(student)}
+                      className="p-2.5 bg-[#171f33] hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 rounded-full border border-amber-500/30 transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+                      title="Redefinir Senha do Aluno"
+                      aria-label="Redefinir Senha do Aluno"
+                    >
+                      <KeyRound className="w-4 h-4" />
+                    </button>
+
+                    <button
                       onClick={() => onEditStudent(student)}
                       className="p-2.5 bg-[#171f33] hover:bg-surface-hover text-foreground hover:text-foreground rounded-full border border-border transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
                       title="Editar Aluno"
@@ -301,6 +313,21 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+      {/* Reset Password Modal */}
+      {studentToResetPassword && (
+        <ResetPasswordByTeacherModal
+          isOpen={Boolean(studentToResetPassword)}
+          onClose={() => setStudentToResetPassword(null)}
+          targetType="student"
+          targetId={studentToResetPassword.id}
+          targetName={studentToResetPassword.fullName}
+          targetDetail={`Turma ${studentToResetPassword.turma}`}
+          onSuccess={(msg) => {
+            setResetSuccessMsg(msg);
+            setTimeout(() => setResetSuccessMsg(''), 4000);
+          }}
+        />
       )}
     </div>
   );

@@ -20,6 +20,7 @@ export interface SessionPayload {
   matricula?: string;
   avatarUrl?: string;
   subject?: string;
+  mustChangePassword?: boolean;
   [key: string]: any;
 }
 

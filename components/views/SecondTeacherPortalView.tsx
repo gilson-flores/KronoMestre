@@ -231,33 +231,17 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
         }
       }
 
-      // Supabase fetch
+      // Fetch from API Route
       try {
-        if (supabase) {
-          const { data, error } = await supabase
-            .from('atestados_rad')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-          if (!error && data) {
-            const dbRecords: AtestadoRadRecord[] = data.map((item: any) => ({
-              id: item.id,
-              studentId: item.student_id,
-              studentName: item.student_name,
-              studentTurma: item.student_turma,
-              dataFalta: item.data_falta,
-              dataAtestado: item.data_atestado,
-              diasAtestado: Number(item.dias_atestado) || 1,
-              dataFinal: item.data_final,
-              motivo: item.motivo || undefined,
-              tipo: item.tipo as 'Atestado' | 'RAD',
-              createdAt: item.created_at,
-            }));
-            loaded = dbRecords;
+        const res = await fetch('/api/atestados-rad');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.data)) {
+            loaded = json.data;
           }
         }
       } catch (err) {
-        console.warn('Erro ao buscar atestados no Supabase:', err);
+        console.warn('Erro ao buscar atestados via API:', err);
       }
 
       // Filter atestados belonging to the derived turmas

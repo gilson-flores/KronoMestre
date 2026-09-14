@@ -20,7 +20,6 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { StudentUser, AtestadoRadRecord } from '@/lib/types';
-import { supabase } from '@/lib/supabase';
 
 const generateRecordId = () => 'atest_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
 
@@ -133,64 +132,34 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students, is
       }
     }
 
-    // 2. Query Supabase (Source of Truth)
-    if (supabase) {
-      try {
-        const { data, error } = await supabase
-          .from('atestados_rad')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (!error && data) {
-          const dbRecords: AtestadoRadRecord[] = data.map((item: any) => ({
-            id: item.id,
-            studentId: item.student_id,
-            studentName: item.student_name,
-            studentTurma: item.student_turma || '',
-            dataFalta: item.data_falta,
-            dataAtestado: item.data_atestado,
-            diasAtestado: Number(item.dias_atestado) || 1,
-            dataFinal: item.data_final,
-            motivo: item.motivo || undefined,
-            tipo: item.tipo as 'Atestado' | 'RAD',
-            createdAt: item.created_at,
-          }));
+    // 2. Query API Route (Source of Truth with secure session & multi-tenant isolation)
+    try {
+      const res = await fetch('/api/atestados-rad');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data)) {
+          const dbRecords: AtestadoRadRecord[] = json.data;
 
           // Merge: DB records take precedence, but keep local items not yet in DB
           const dbIds = new Set(dbRecords.map((r) => r.id));
           const localPending = loaded.filter((l) => !dbIds.has(l.id));
 
-          // If there are local records that were not in DB, sync them up to DB now
+          // If there are local records that were not in DB, sync them up via API now
           if (localPending.length > 0) {
-            const uploadPayload = localPending.map((rec) => ({
-              id: rec.id,
-              student_id: rec.studentId,
-              student_name: rec.studentName,
-              student_turma: rec.studentTurma || '',
-              data_falta: rec.dataFalta,
-              data_atestado: rec.dataAtestado,
-              dias_atestado: rec.diasAtestado,
-              data_final: rec.dataFinal,
-              motivo: rec.motivo || null,
-              tipo: rec.tipo,
-              created_at: rec.createdAt,
-            }));
-
-            supabase
-              .from('atestados_rad')
-              .upsert(uploadPayload, { onConflict: 'id' })
-              .then(({ error: upErr }) => {
-                if (upErr) console.warn('Aviso ao sincronizar atestados locais com o Supabase:', upErr.message);
-              });
+            fetch('/api/atestados-rad', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(localPending),
+            }).catch((syncErr) => console.warn('Aviso ao sincronizar atestados locais com o servidor:', syncErr));
           }
 
           loaded = [...dbRecords, ...localPending];
-        } else if (error) {
-          console.warn('Aviso ao carregar atestados do Supabase:', error.message);
         }
-      } catch (err: any) {
-        console.warn('Conexão com atestados_rad no Supabase:', err?.message || err);
+      } else {
+        console.warn('Aviso ao carregar atestados da API:', res.statusText);
       }
+    } catch (err: any) {
+      console.warn('Conexão com /api/atestados-rad:', err?.message || err);
     }
 
     setRecords(loaded);
@@ -260,29 +229,20 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students, is
     setRecords(updatedRecords);
     saveRecordsToLocal(updatedRecords);
 
-    // Save to Supabase
-    if (supabase) {
-      try {
-        const { error: insertError } = await supabase.from('atestados_rad').upsert({
-          id: newRecord.id,
-          student_id: newRecord.studentId,
-          student_name: newRecord.studentName,
-          student_turma: newRecord.studentTurma || '',
-          data_falta: newRecord.dataFalta,
-          data_atestado: newRecord.dataAtestado,
-          dias_atestado: newRecord.diasAtestado,
-          data_final: newRecord.dataFinal,
-          motivo: newRecord.motivo || null,
-          tipo: newRecord.tipo,
-          created_at: newRecord.createdAt,
-        }, { onConflict: 'id' });
+    // Save to API
+    try {
+      const res = await fetch('/api/atestados-rad', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newRecord),
+      });
 
-        if (insertError) {
-          console.warn('Aviso ao salvar no Supabase:', insertError.message);
-        }
-      } catch (dbErr: any) {
-        console.warn('Erro ao salvar no Supabase:', dbErr?.message || dbErr);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        console.warn('Aviso ao salvar no servidor:', errData.error || res.statusText);
       }
+    } catch (apiErr: any) {
+      console.warn('Erro ao salvar no servidor:', apiErr?.message || apiErr);
     }
 
     setSuccessMsg(`Atestado / RAD de ${student.fullName} registrado com sucesso e sincronizado na nuvem!`);
@@ -307,22 +267,29 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students, is
 
   // Delete Handler
   const handleDelete = async (id: string) => {
+    const target = records.find((r) => r.id === id);
+    const targetName = target?.studentName || 'Aluno';
+
     const updated = records.filter((r) => r.id !== id);
     setRecords(updated);
     saveRecordsToLocal(updated);
 
-    if (supabase) {
-      try {
-        const { error } = await supabase.from('atestados_rad').delete().eq('id', id);
-        if (error) {
-          console.warn('Aviso ao deletar do Supabase:', error.message);
-        }
-      } catch (e: any) {
-        console.warn('Erro ao deletar do Supabase:', e?.message || e);
+    try {
+      const res = await fetch('/api/atestados-rad', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        console.warn('Aviso ao deletar do servidor:', errData.error || res.statusText);
       }
+    } catch (e: any) {
+      console.warn('Erro ao deletar do servidor:', e?.message || e);
     }
 
-    setSuccessMsg(`Registro de ${studentName} removido com sucesso.`);
+    setSuccessMsg(`Registro de ${targetName} removido com sucesso.`);
     setTimeout(() => setSuccessMsg(''), 3000);
   };
 

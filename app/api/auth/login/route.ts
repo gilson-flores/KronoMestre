@@ -143,6 +143,7 @@ export async function POST(req: NextRequest) {
         name: dbSecondTeacher.name,
         email: dbSecondTeacher.email,
         avatarUrl: dbSecondTeacher.avatar_url || 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&q=80&w=250',
+        mustChangePassword: Boolean(dbSecondTeacher.must_change_password),
       };
 
       const token = await signSessionToken(sessionPayload, '7d');
@@ -238,9 +239,10 @@ export async function POST(req: NextRequest) {
         ownerTeacherId: ownerTeacherId,
         name: student.full_name,
         matricula: student.matricula,
-        classRoom: student.class_room,
+        classRoom: student.class_room || student.turma,
         isPne: Boolean(student.is_pne),
         avatarUrl: student.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+        mustChangePassword: Boolean(student.must_change_password),
       };
 
       // Sessão de aluno: validade de 24 horas

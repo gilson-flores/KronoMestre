@@ -14,6 +14,7 @@ export interface TeacherUser {
   contractEndDate?: string; // YYYY-MM-DD
   contractType?: 'ACT / Contratado' | 'Efetivo' | 'Substituto' | string;
   contractStatus?: 'ativo' | 'encerrado' | 'afastado' | string;
+  mustChangePassword?: boolean;
 }
 
 export interface StudentUser {
@@ -31,6 +32,7 @@ export interface StudentUser {
   isArchived?: boolean;
   archivedAt?: string;
   archivedReason?: string;
+  mustChangePassword?: boolean;
 }
 
 export const PNE_CONDITIONS_LIST = [

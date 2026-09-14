@@ -47,6 +47,8 @@ import { EditStudentModal } from '@/components/modals/EditStudentModal';
 import { StudentSupervisionModal } from '@/components/modals/StudentSupervisionModal';
 import { NewSecondTeacherModal } from '@/components/modals/NewSecondTeacherModal';
 import { ParallelRecoveryModal } from '@/components/modals/ParallelRecoveryModal';
+import { ForceChangePasswordModal } from '@/components/modals/ForceChangePasswordModal';
+import { hashPasswordBcrypt } from '@/lib/crypto';
 import { CheckCircle2, AlertTriangle, HeartHandshake, UserPlus } from 'lucide-react';
 
 // Helper de unificação e desduplicação atômica de mensagens de chat
@@ -122,6 +124,7 @@ export default function Home() {
   const [role, setRole] = useState<UserRole>(null);
   const [teacher, setTeacher] = useState<TeacherUser>(initialTeacher);
   const [currentStudent, setCurrentStudent] = useState<StudentUser | null>(null);
+  const [mustChangePassword, setMustChangePassword] = useState<boolean>(false);
   const [inactivityTimeoutEnabled, setInactivityTimeoutEnabled] = useState<boolean>(true);
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [isDataLoading, setIsDataLoading] = useState<boolean>(() => Boolean(isSupabaseConfigured && supabase));
@@ -144,10 +147,16 @@ export default function Home() {
           } else if (session.role === 'second_teacher') {
             setRole('second_teacher');
             if (session.teacherData) setTeacher(session.teacherData);
+            if (session.mustChangePassword || session.teacherData?.mustChangePassword) {
+              setMustChangePassword(true);
+            }
             setCurrentTab('dashboard');
           } else if (session.role === 'student' && session.studentData) {
             setCurrentStudent(session.studentData);
             setRole('student');
+            if (session.mustChangePassword || session.studentData?.mustChangePassword) {
+              setMustChangePassword(true);
+            }
           }
         }
 
@@ -830,6 +839,7 @@ export default function Home() {
   const handleLoginTeacher = (loggedTeacher: TeacherUser) => {
     setTeacher(loggedTeacher);
     setRole('teacher');
+    setMustChangePassword(false);
     setCurrentTab('painel');
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('active_session', JSON.stringify({ role: 'teacher', teacherData: loggedTeacher }));
@@ -840,9 +850,17 @@ export default function Home() {
   const handleLoginSecondTeacher = (loggedTeacher: TeacherUser) => {
     setTeacher(loggedTeacher);
     setRole('second_teacher');
+    setMustChangePassword(Boolean(loggedTeacher.mustChangePassword));
     setCurrentTab('dashboard');
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('active_session', JSON.stringify({ role: 'second_teacher', teacherData: loggedTeacher }));
+      sessionStorage.setItem(
+        'active_session',
+        JSON.stringify({
+          role: 'second_teacher',
+          teacherData: loggedTeacher,
+          mustChangePassword: Boolean(loggedTeacher.mustChangePassword),
+        })
+      );
       requestNotificationPermission().catch(() => {});
     }
   };
@@ -850,6 +868,7 @@ export default function Home() {
   const handleLoginStudent = (loggedStudent: StudentUser) => {
     setCurrentStudent(loggedStudent);
     setRole('student');
+    setMustChangePassword(Boolean(loggedStudent.mustChangePassword));
     if (typeof window !== 'undefined') {
       sessionStorage.setItem(
         'active_session',
@@ -857,6 +876,7 @@ export default function Home() {
           role: 'student',
           studentId: loggedStudent.id,
           studentData: loggedStudent,
+          mustChangePassword: Boolean(loggedStudent.mustChangePassword),
         })
       );
       requestNotificationPermission().catch(() => {});
@@ -865,6 +885,25 @@ export default function Home() {
     setTimeout(() => {
       checkAndNotifyApproachingDeadlines(activities, loggedStudent, showGlobalStatus);
     }, 1200);
+  };
+
+  const handlePasswordChanged = () => {
+    setMustChangePassword(false);
+    showGlobalStatus('success', 'Nova senha pessoal cadastrada com sucesso! Acesso liberado.');
+    if (typeof window !== 'undefined') {
+      try {
+        const sessionStr = sessionStorage.getItem('active_session');
+        if (sessionStr) {
+          const session = JSON.parse(sessionStr);
+          session.mustChangePassword = false;
+          if (session.studentData) session.studentData.mustChangePassword = false;
+          if (session.teacherData) session.teacherData.mustChangePassword = false;
+          sessionStorage.setItem('active_session', JSON.stringify(session));
+        }
+      } catch (e) {
+        console.warn('Erro ao atualizar active_session no cliente:', e);
+      }
+    }
   };
 
   const handleTeacherTabChange = useCallback((tab: string) => {
@@ -2096,9 +2135,25 @@ export default function Home() {
   };
 
   const handleImportStudents = async (newStudents: StudentUser[]) => {
+    // Processar senhas com Bcrypt e marcar mustChangePassword: true
+    const processedStudents: StudentUser[] = await Promise.all(
+      newStudents.map(async (s) => {
+        let hashed = s.passwordHash;
+        if (!hashed || (!hashed.startsWith('$2a$') && !hashed.startsWith('$2b$'))) {
+          const rawPass = hashed || s.matricula || '123456';
+          hashed = await hashPasswordBcrypt(rawPass);
+        }
+        return {
+          ...s,
+          passwordHash: hashed,
+          mustChangePassword: true,
+        };
+      })
+    );
+
     // Sempre insere no estado local e persiste no cache imediatamente
     setStudents((prev) => {
-      const next = [...prev, ...newStudents];
+      const next = [...prev, ...processedStudents];
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem('local_students_data', JSON.stringify(next));
@@ -2110,32 +2165,33 @@ export default function Home() {
     });
 
     if (!isSupabaseConfigured || !supabase) {
-      showGlobalStatus('success', `${newStudents.length} aluno(s) importado(s) com sucesso!`);
+      showGlobalStatus('success', `${processedStudents.length} aluno(s) importado(s) com sucesso!`);
       return;
     }
 
     try {
-      const payloadWithSecondTeacher = newStudents.map((s) => ({
+      const payloadWithSecondTeacher = processedStudents.map((s) => ({
         full_name: s.fullName,
         turma: s.turma,
         matricula: s.matricula,
         tag: s.tag,
         second_teacher_id: s.secondTeacherId || null,
         second_teacher_name: s.secondTeacherName || null,
-        password_hash: s.passwordHash || '', // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui
+        password_hash: s.passwordHash || '',
+        must_change_password: true,
         avatar_url: s.avatarUrl,
       }));
 
       let { error } = await supabase.from('students').insert(payloadWithSecondTeacher);
 
-      // Fallback gracioso se a coluna second_teacher_id ainda não foi criada no banco
-      if (error && (error.code === 'PGRST204' || error.message?.includes('second_teacher') || error.message?.includes('pne_conditions') || error.code === '42703')) {
-        const payloadBase = newStudents.map((s) => ({
+      // Fallback gracioso se colunas opcionais não existirem
+      if (error && (error.code === 'PGRST204' || error.message?.includes('second_teacher') || error.message?.includes('pne_conditions') || error.message?.includes('must_change_password') || error.code === '42703')) {
+        const payloadBase = processedStudents.map((s) => ({
           full_name: s.fullName,
           turma: s.turma,
           matricula: s.matricula,
           tag: s.tag,
-          password_hash: s.passwordHash || '', // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui
+          password_hash: s.passwordHash || '',
           avatar_url: s.avatarUrl,
         }));
         const retryRes = await supabase.from('students').insert(payloadBase);
@@ -2144,21 +2200,34 @@ export default function Home() {
 
       if (error) {
         console.warn('Aviso ao importar alunos no Supabase:', error.message);
-        showGlobalStatus('success', `${newStudents.length} aluno(s) importado(s) com sucesso!`);
+        showGlobalStatus('success', `${processedStudents.length} aluno(s) importado(s) com sucesso!`);
         return;
       }
 
-      showGlobalStatus('success', `${newStudents.length} aluno(s) importado(s) e confirmados no Supabase!`);
+      showGlobalStatus('success', `${processedStudents.length} aluno(s) importado(s) e confirmados no Supabase!`);
     } catch (err: any) {
       console.warn('Erro ao conectar ao Supabase na importação de alunos:', err?.message);
-      showGlobalStatus('success', `${newStudents.length} aluno(s) importado(s) com sucesso!`);
+      showGlobalStatus('success', `${processedStudents.length} aluno(s) importado(s) com sucesso!`);
     }
   };
 
   const handleCreateStudent = async (newStudent: StudentUser) => {
+    // Processar senha com Bcrypt e definir mustChangePassword: true
+    let hashedPass = newStudent.passwordHash;
+    if (!hashedPass || (!hashedPass.startsWith('$2a$') && !hashedPass.startsWith('$2b$'))) {
+      const rawPass = hashedPass || newStudent.matricula || '123456';
+      hashedPass = await hashPasswordBcrypt(rawPass);
+    }
+
+    const studentToSave: StudentUser = {
+      ...newStudent,
+      passwordHash: hashedPass,
+      mustChangePassword: true,
+    };
+
     // Sempre insere no estado local e persiste no cache imediatamente
     setStudents((prev) => {
-      const next = [...prev, newStudent];
+      const next = [...prev, studentToSave];
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem('local_students_data', JSON.stringify(next));
@@ -2170,46 +2239,47 @@ export default function Home() {
     });
 
     if (!isSupabaseConfigured || !supabase) {
-      showGlobalStatus('success', `Aluno "${newStudent.fullName}" cadastrado com sucesso!`);
+      showGlobalStatus('success', `Aluno "${studentToSave.fullName}" cadastrado com sucesso!`);
       return;
     }
 
     try {
       let { error } = await supabase.from('students').insert({
-        full_name: newStudent.fullName,
-        turma: newStudent.turma,
-        matricula: newStudent.matricula,
-        tag: newStudent.tag,
-        pne_conditions: newStudent.pneConditions || null,
-        second_teacher_id: newStudent.secondTeacherId || null,
-        second_teacher_name: newStudent.secondTeacherName || null,
-        password_hash: newStudent.passwordHash || '', // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui
-        avatar_url: newStudent.avatarUrl,
+        full_name: studentToSave.fullName,
+        turma: studentToSave.turma,
+        matricula: studentToSave.matricula,
+        tag: studentToSave.tag,
+        pne_conditions: studentToSave.pneConditions || null,
+        second_teacher_id: studentToSave.secondTeacherId || null,
+        second_teacher_name: studentToSave.secondTeacherName || null,
+        password_hash: studentToSave.passwordHash || '',
+        must_change_password: true,
+        avatar_url: studentToSave.avatarUrl,
       });
 
       // Fallback gracioso se colunas extras ainda não foram criadas no banco
-      if (error && (error.code === 'PGRST204' || error.message?.includes('second_teacher') || error.message?.includes('pne_conditions') || error.code === '42703')) {
+      if (error && (error.code === 'PGRST204' || error.message?.includes('second_teacher') || error.message?.includes('pne_conditions') || error.message?.includes('must_change_password') || error.code === '42703')) {
         const retryRes = await supabase.from('students').insert({
-          full_name: newStudent.fullName,
-          turma: newStudent.turma,
-          matricula: newStudent.matricula,
-          tag: newStudent.tag,
-          password_hash: newStudent.passwordHash || '', // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui
-          avatar_url: newStudent.avatarUrl,
+          full_name: studentToSave.fullName,
+          turma: studentToSave.turma,
+          matricula: studentToSave.matricula,
+          tag: studentToSave.tag,
+          password_hash: studentToSave.passwordHash || '',
+          avatar_url: studentToSave.avatarUrl,
         });
         error = retryRes.error;
       }
 
       if (error) {
         console.warn('Aviso ao cadastrar aluno no Supabase:', error.message);
-        showGlobalStatus('success', `Aluno "${newStudent.fullName}" cadastrado com sucesso!`);
+        showGlobalStatus('success', `Aluno "${studentToSave.fullName}" cadastrado com sucesso!`);
         return;
       }
 
-      showGlobalStatus('success', `Aluno "${newStudent.fullName}" cadastrado com sucesso no Supabase!`);
+      showGlobalStatus('success', `Aluno "${studentToSave.fullName}" cadastrado com sucesso no Supabase!`);
     } catch (err: any) {
       console.warn('Erro de conexão ao cadastrar aluno no Supabase:', err?.message);
-      showGlobalStatus('success', `Aluno "${newStudent.fullName}" cadastrado com sucesso!`);
+      showGlobalStatus('success', `Aluno "${studentToSave.fullName}" cadastrado com sucesso!`);
     }
   };
 
@@ -3430,6 +3500,16 @@ export default function Home() {
               }
         }
       />
+
+      {/* Modal Obrigatório de Troca de Senha no Primeiro Acesso */}
+      {mustChangePassword && role && role !== 'teacher' && (
+        <ForceChangePasswordModal
+          isOpen={mustChangePassword}
+          userName={role === 'student' ? currentStudent?.fullName || 'Aluno' : teacher.name || '2º Professor'}
+          userRole={role === 'student' ? 'student' : 'second_teacher'}
+          onPasswordChanged={handlePasswordChanged}
+        />
+      )}
     </div>
   );
 }

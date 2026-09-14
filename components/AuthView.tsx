@@ -216,6 +216,21 @@ export const AuthView: React.FC<AuthViewProps> = ({
       }
 
       if (isPasswordValid && (authData?.user || dbTeacher)) {
+        // Autenticar sessão no servidor (cookie HttpOnly)
+        try {
+          await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              role: 'second_teacher',
+              email: secondTeacherEmail,
+              password: secondTeacherPassword,
+            }),
+          });
+        } catch (apiErr) {
+          console.warn('Aviso de sessão do servidor:', apiErr);
+        }
+
         const secondTeacherProfile: TeacherUser = {
           id: dbTeacher?.id || authData?.user?.id || '2nd-teacher-id',
           name: dbTeacher?.name || authData?.user?.user_metadata?.full_name || '2º Professor (AEE)',
@@ -224,6 +239,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           avatarUrl: dbTeacher?.avatar_url || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250',
           phone: dbTeacher?.phone || '',
           school: dbTeacher?.school || teacher.school || '',
+          mustChangePassword: Boolean(dbTeacher?.must_change_password),
         };
 
         if (onLoginSecondTeacher) {
@@ -380,7 +396,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
               pneConditions: parsedPneConditions || (matched ? matched.pneConditions : undefined),
               secondTeacherId: dbMatched.second_teacher_id || (matched ? matched.secondTeacherId : undefined),
               secondTeacherName: dbMatched.second_teacher_name || (matched ? matched.secondTeacherName : undefined),
-              passwordHash: dbMatched.password_hash || '', // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui
+              passwordHash: dbMatched.password_hash || '',
+              mustChangePassword: Boolean(dbMatched.must_change_password),
               avatarUrl: dbMatched.avatar_url || (matched ? matched.avatarUrl : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200'),
               pedagogicalNotes: dbMatched.pedagogical_notes || (matched ? matched.pedagogicalNotes : ''),
             };
@@ -408,6 +425,23 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
     const isPassValid = await verifyPassword(enteredPassword, expectedPassword);
     if (isPassValid) {
+      // Autenticar sessão no servidor (cookie HttpOnly)
+      try {
+        await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            role: 'student',
+            fullName: matched.fullName,
+            classRoom: matched.turma,
+            matricula: matched.matricula,
+            password: enteredPassword,
+          }),
+        });
+      } catch (apiErr) {
+        console.warn('Aviso de sessão do servidor para aluno:', apiErr);
+      }
+
       onLoginStudent(matched);
     } else {
       setStudentError('Senha incorreta. Verifique sua senha de acesso.');

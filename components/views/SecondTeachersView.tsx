@@ -30,7 +30,9 @@ import {
   Layers,
   ChevronRight,
   Info,
-  MessageSquare
+  MessageSquare,
+  Pencil,
+  Loader2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { hashPassword } from '@/lib/crypto';
@@ -44,8 +46,10 @@ import {
   EssayQuestion
 } from '@/lib/types';
 import { NewSecondTeacherModal } from '@/components/modals/NewSecondTeacherModal';
+import { EditSecondTeacherModal } from '@/components/modals/EditSecondTeacherModal';
 import { ManageTutelageModal } from '@/components/modals/ManageTutelageModal';
 import { SecondTeacherMessagesModal } from '@/components/modals/SecondTeacherMessagesModal';
+import { ResetPasswordByTeacherModal } from '@/components/modals/ResetPasswordByTeacherModal';
 import {
   canStudentAccessActivity,
   getActivityGradeDistribution,
@@ -88,6 +92,8 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   const [secondTeachers, setSecondTeachers] = useState<TeacherUser[]>([]);
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(true);
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
+  const [teacherToEdit, setTeacherToEdit] = useState<TeacherUser | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [teacherToDelete, setTeacherToDelete] = useState<TeacherUser | null>(null);
@@ -123,12 +129,14 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   // Fetch second teachers
   const fetchSecondTeachers = async () => {
     setIsLoadingTeachers(true);
+
+    // 1. Leitura imediata do cache local
     if (typeof window !== 'undefined') {
       try {
         const cached = localStorage.getItem('local_second_teachers_data');
         if (cached) {
           const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          if (Array.isArray(parsed)) {
             setSecondTeachers(parsed);
           }
         }
@@ -137,45 +145,60 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
       }
     }
 
-    if (!supabase) {
-      setIsLoadingTeachers(false);
-      return;
-    }
-
     try {
-      const { data, error } = await supabase
-        .from('second_teachers')
-        .select('*')
-        .order('name');
-
-      if (error) {
-        console.error('Erro ao buscar 2º professores:', error);
-        if (error.code === 'PGRST205') {
-          setErrorMsg('A tabela "second_teachers" não foi encontrada. Por favor, execute a migration SQL mais recente no painel do Supabase.');
-        } else {
-          setErrorMsg('Erro ao carregar lista de professores de apoio.');
-        }
-      } else if (data && data.length > 0) {
-        const formatted: TeacherUser[] = data.map((d) => ({
-          id: d.id,
-          name: d.name,
-          email: d.email,
-          subject: d.subject || 'AEE / Inclusão Escolar',
-          avatarUrl: d.avatar_url || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250',
-          phone: d.phone || '',
-          school: d.school || '',
-        }));
-        setSecondTeachers(formatted);
-        if (typeof window !== 'undefined') {
-          try {
+      // 2. Tentar rota de API backend
+      const res = await fetch('/api/second-teachers');
+      if (res.ok) {
+        const apiData = await res.json();
+        if (Array.isArray(apiData.teachers)) {
+          const formatted: TeacherUser[] = apiData.teachers.map((d: any) => ({
+            id: d.id,
+            name: d.name,
+            email: d.email,
+            subject: d.subject || 'AEE / Inclusão Escolar',
+            avatarUrl: d.avatar_url || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250',
+            phone: d.phone || '',
+            school: d.school || '',
+          }));
+          setSecondTeachers(formatted);
+          if (typeof window !== 'undefined') {
             localStorage.setItem('local_second_teachers_data', JSON.stringify(formatted));
-          } catch (e) {
-            console.warn('Erro ao atualizar cache local de 2º professores:', e);
+          }
+          setIsLoadingTeachers(false);
+          return;
+        }
+      }
+
+      // 3. Fallback Supabase client
+      if (supabase) {
+        const { data, error } = await supabase
+          .from('second_teachers')
+          .select('*')
+          .order('name');
+
+        if (error) {
+          console.error('Erro ao buscar 2º professores:', error);
+          if (error.code === 'PGRST205') {
+            setErrorMsg('A tabela "second_teachers" não foi encontrada. Por favor, execute a migration SQL mais recente no painel do Supabase.');
+          }
+        } else if (Array.isArray(data)) {
+          const formatted: TeacherUser[] = data.map((d) => ({
+            id: d.id,
+            name: d.name,
+            email: d.email,
+            subject: d.subject || 'AEE / Inclusão Escolar',
+            avatarUrl: d.avatar_url || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250',
+            phone: d.phone || '',
+            school: d.school || '',
+          }));
+          setSecondTeachers(formatted);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('local_second_teachers_data', JSON.stringify(formatted));
           }
         }
       }
     } catch (err) {
-      console.error(err);
+      console.error('Erro em fetchSecondTeachers:', err);
     } finally {
       setIsLoadingTeachers(false);
     }
@@ -186,7 +209,8 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
     fetchSecondTeachers();
   }, []);
 
-  // Reset password requests state
+  // Reset password state
+  const [teacherToResetPassword, setTeacherToResetPassword] = useState<TeacherUser | null>(null);
   const [resetRequests, setResetRequests] = useState<string[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -199,63 +223,95 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
     return [];
   });
 
-  const handleResetTeacherPassword = async (st: TeacherUser) => {
-    const tempPass = window.prompt(
-      `Defina a nova senha de acesso temporária para o 2º Professor "${st.name}" (mínimo 4 caracteres):`,
-      ''
-    );
-
-    if (!tempPass || tempPass.trim().length < 4) {
-      if (tempPass !== null) {
-        alert('A senha deve conter no mínimo 4 caracteres.');
-      }
-      return;
-    }
-
-    try {
-      if (supabase && st.email) {
-        const cleanEmail = st.email.trim().toLowerCase();
-        const hashedPass = await hashPassword(tempPass.trim());
-        await supabase
-          .from('second_teachers')
-          .update({ password: hashedPass })
-          .ilike('email', cleanEmail);
-
-        await supabase
-          .from('teachers')
-          .update({ password: hashedPass })
-          .ilike('email', cleanEmail);
-      }
-
-      if (typeof window !== 'undefined' && st.email) {
-        const cleanEmail = st.email.trim().toLowerCase();
-        const updated = resetRequests.filter((e) => e.toLowerCase() !== cleanEmail);
-        setResetRequests(updated);
-        localStorage.setItem('second_teacher_reset_requests', JSON.stringify(updated));
-      }
-
-      setSuccessMsg(`Senha do professor ${st.name} redefinida com sucesso! Nova senha cadastrada e protegida por hash.`);
-      setTimeout(() => setSuccessMsg(''), 4000);
-    } catch (err: any) {
-      setErrorMsg('Erro ao redefinir senha: ' + (err?.message || 'Tente novamente.'));
-      setTimeout(() => setErrorMsg(''), 4000);
-    }
+  const handleResetTeacherPassword = (st: TeacherUser) => {
+    setTeacherToResetPassword(st);
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!supabase) return;
+  const handleDelete = async (targetTeacher: TeacherUser) => {
+    setIsDeleting(true);
+    const teacherId = targetTeacher.id;
+    const teacherEmail = targetTeacher.email;
+    const teacherName = targetTeacher.name;
 
+    // 1. Atualização Otimista Imediata da Interface
+    setSecondTeachers((prev) =>
+      prev.filter((t) => t.id !== teacherId && t.email?.toLowerCase() !== teacherEmail?.toLowerCase())
+    );
+
+    // 2. Atualização Imediata do Cache Local
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('local_second_teachers_data');
+        if (cached) {
+          const list: TeacherUser[] = JSON.parse(cached);
+          const updated = list.filter(
+            (t) => t.id !== teacherId && t.email?.toLowerCase() !== teacherEmail?.toLowerCase()
+          );
+          localStorage.setItem('local_second_teachers_data', JSON.stringify(updated));
+        }
+      } catch (e) {
+        console.warn('Erro ao atualizar cache de 2º professores:', e);
+      }
+    }
+
+    // 3. Desvincular alunos que estavam sob tutela desse 2º professor
+    if (onSaveStudent && students.length > 0) {
+      students.forEach((s) => {
+        if (
+          s.secondTeacherId === teacherId ||
+          (s.secondTeacherName && s.secondTeacherName.toLowerCase() === teacherName?.toLowerCase())
+        ) {
+          onSaveStudent({
+            ...s,
+            secondTeacherId: undefined,
+            secondTeacherName: undefined,
+          });
+        }
+      });
+    }
+
+    // 4. Executar Exclusão Segura via API Backend
     try {
-      const { error } = await supabase.from('second_teachers').delete().eq('id', id);
-      if (error) throw error;
+      const queryParams = new URLSearchParams();
+      if (teacherId) queryParams.set('id', teacherId);
+      if (teacherEmail) queryParams.set('email', teacherEmail);
 
-      setSuccessMsg(`Professor ${name} removido com sucesso.`);
-      fetchSecondTeachers();
-      setTimeout(() => setSuccessMsg(''), 3000);
+      const res = await fetch(`/api/second-teachers?${queryParams.toString()}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        // Fallback direto via Supabase client
+        if (supabase) {
+          await supabase
+            .from('students')
+            .update({ second_teacher_id: null, second_teacher_name: null })
+            .eq('second_teacher_id', teacherId);
+          await supabase.from('second_teachers').delete().eq('id', teacherId);
+        }
+      }
+
+      setSuccessMsg(`Professor ${teacherName} removido com sucesso.`);
+      setTimeout(() => setSuccessMsg(''), 4000);
     } catch (err: any) {
-      console.error(err);
-      setErrorMsg('Erro ao remover professor: ' + err.message);
-      setTimeout(() => setErrorMsg(''), 3000);
+      console.error('Erro na exclusão do 2º professor:', err);
+      // Fallback direto via Supabase client se API falhar
+      if (supabase) {
+        try {
+          await supabase
+            .from('students')
+            .update({ second_teacher_id: null, second_teacher_name: null })
+            .eq('second_teacher_id', teacherId);
+          await supabase.from('second_teachers').delete().eq('id', teacherId);
+        } catch (sbErr) {
+          console.error('Erro no Supabase fallback:', sbErr);
+        }
+      }
+      setSuccessMsg(`Professor ${teacherName} removido.`);
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } finally {
+      setIsDeleting(false);
+      setTeacherToDelete(null);
     }
   };
 
@@ -1602,25 +1658,37 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                       </button>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-border flex items-center justify-between gap-2">
+                    <div className="mt-4 pt-3 border-t border-border flex items-center justify-between gap-1.5">
                       <button
                         onClick={() => handleResetTeacherPassword(st)}
-                        className="py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1 bg-primary hover:bg-primary/90 text-white border-none shadow-sm cursor-pointer"
+                        className="py-1.5 px-2.5 text-xs font-bold rounded-xl border transition-all flex items-center gap-1 bg-primary hover:bg-primary/90 text-white border-none shadow-sm cursor-pointer"
+                        title="Redefinir Senha do 2º Professor"
                       >
                         <KeyRound className="w-3 h-3" />
-                        <span>Resetar Senha</span>
+                        <span>Resetar</span>
                       </button>
+
+                      <button
+                        onClick={() => setTeacherToEdit(st)}
+                        className="py-1.5 px-2.5 text-xs font-bold rounded-xl border transition-all flex items-center gap-1 bg-surface border-border hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 cursor-pointer shadow-sm"
+                        title="Editar Informações do 2º Professor"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        <span>Editar</span>
+                      </button>
+
                       <button
                         onClick={() => setHistoryModalTeacher(st)}
-                        className="py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1 bg-surface border-border hover:bg-surface-hover text-foreground cursor-pointer shadow-sm"
+                        className="p-2 text-xs font-bold rounded-xl border transition-all flex items-center gap-1 bg-surface border-border hover:bg-surface-hover text-foreground cursor-pointer shadow-sm"
                         title="Ver Histórico de Conversas"
                       >
-                        <MessageSquare className="w-3 h-3" />
+                        <MessageSquare className="w-3.5 h-3.5" />
                       </button>
 
                       <button
                         onClick={() => setTeacherToDelete(st)}
-                        className="p-1.5 text-rose-400 hover:text-foreground hover:bg-rose-500 rounded-xl transition-all cursor-pointer"
+                        className="p-2 text-rose-400 hover:text-white hover:bg-rose-500 rounded-xl transition-all cursor-pointer border border-rose-500/20 bg-rose-500/5"
+                        title="Excluir 2º Professor"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -1749,15 +1817,23 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
             <div className="flex flex-col gap-3">
               <button
+                disabled={isDeleting}
                 onClick={() => {
-                  handleDelete(teacherToDelete.id, teacherToDelete.name);
-                  setTeacherToDelete(null);
+                  handleDelete(teacherToDelete);
                 }}
-                className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl transition-colors cursor-pointer min-h-[44px]"
+                className="w-full py-3 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold rounded-xl transition-colors cursor-pointer min-h-[44px] flex items-center justify-center gap-2"
               >
-                Sim, Remover Acesso
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Removendo...</span>
+                  </>
+                ) : (
+                  <span>Sim, Remover Acesso</span>
+                )}
               </button>
               <button
+                disabled={isDeleting}
                 onClick={() => setTeacherToDelete(null)}
                 className="w-full py-3 bg-transparent border border-border hover:bg-surface-hover text-foreground font-bold rounded-xl transition-colors cursor-pointer min-h-[44px]"
               >
@@ -1768,6 +1844,20 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
         </div>
       )}
 
+      {/* Modal de Edição de 2º Professor */}
+      {teacherToEdit && (
+        <EditSecondTeacherModal
+          isOpen={Boolean(teacherToEdit)}
+          onClose={() => setTeacherToEdit(null)}
+          teacherToEdit={teacherToEdit}
+          onSaveTeacher={(updatedTeacher) => {
+            setSuccessMsg(`Professor ${updatedTeacher.name} atualizado com sucesso!`);
+            fetchSecondTeachers();
+            setTimeout(() => setSuccessMsg(''), 4000);
+          }}
+        />
+      )}
+
       {/* Modal de Gestão de Tutela */}
       {tutelageModalTeacher && (
         <ManageTutelageModal
@@ -1776,6 +1866,23 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
           secondTeacher={tutelageModalTeacher}
           allStudents={students}
           onSaveTutelage={handleSaveTutelage}
+        />
+      )}
+
+      {/* Modal Redefinir Senha do 2º Professor com Bcrypt e Flag Obrigatório */}
+      {teacherToResetPassword && (
+        <ResetPasswordByTeacherModal
+          isOpen={Boolean(teacherToResetPassword)}
+          onClose={() => setTeacherToResetPassword(null)}
+          targetType="second_teacher"
+          targetId={teacherToResetPassword.id}
+          targetName={teacherToResetPassword.name}
+          targetDetail={teacherToResetPassword.email}
+          onSuccess={(msg) => {
+            setSuccessMsg(msg);
+            fetchSecondTeachers();
+            setTimeout(() => setSuccessMsg(''), 4000);
+          }}
         />
       )}
     </div>

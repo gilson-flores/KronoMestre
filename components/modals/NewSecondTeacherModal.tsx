@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { X, UserPlus, HeartHandshake, CheckCircle2, AlertTriangle, Lock } from 'lucide-react';
 import { TeacherUser } from '@/lib/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { hashPassword } from '@/lib/crypto';
+import { hashPasswordBcrypt } from '@/lib/crypto';
 
 interface NewSecondTeacherModalProps {
   isOpen: boolean;
@@ -81,8 +81,8 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
           console.warn('Supabase Auth signUp opcional:', authErr);
         }
 
-        // 2. Inserir ou atualizar na tabela 'second_teachers' com hash seguro
-        const hashedPassword = await hashPassword(password);
+        // 2. Inserir ou atualizar na tabela 'second_teachers' com hash Bcrypt seguro
+        const hashedPassword = await hashPasswordBcrypt(password);
         const { data: dbTeacher, error: dbError } = await supabase
           .from('second_teachers')
           .upsert(
@@ -91,6 +91,7 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
               subject: newTeacher.subject,
               email: newTeacher.email,
               password: hashedPassword,
+              must_change_password: true, // Força troca no primeiro login
               avatar_url: newTeacher.avatarUrl,
               phone: newTeacher.phone,
               school: newTeacher.school,
