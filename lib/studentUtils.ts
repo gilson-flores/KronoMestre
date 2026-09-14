@@ -55,11 +55,12 @@ export function sortTurmas(turmas: string[]): string[] {
 }
 
 /**
- * Extracts only original school classes from registered students (ignoring composite activity strings like "101, 102, 104")
+ * Extracts only original school classes from active registered students (ignoring composite activity strings like "101, 102, 104")
  */
 export function getOriginalTurmas(students: StudentUser[] = []): string[] {
   const set = new Set<string>();
   students.forEach((s) => {
+    if (s.isArchived) return;
     if (!s.turma) return;
     const parts = s.turma.split(/[,;]+/).map((t) => t.trim()).filter(Boolean);
     parts.forEach((t) => {
@@ -68,10 +69,6 @@ export function getOriginalTurmas(students: StudentUser[] = []): string[] {
       }
     });
   });
-
-  if (set.size === 0) {
-    DEFAULT_TURMAS.forEach((t) => set.add(t));
-  }
 
   return sortTurmas(Array.from(set));
 }

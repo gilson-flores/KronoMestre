@@ -54,11 +54,19 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
   }, [students]);
 
   // Selected filters
-  const [selectedTurma, setSelectedTurma] = useState<string>(allTurmas[0] || '');
+  const [userSelectedTurma, setUserSelectedTurma] = useState<string>('');
   const [selectedActivityId, setSelectedActivityId] = useState<string>('all');
   const [searchStudent, setSearchStudent] = useState<string>('');
   const [copiedNotification, setCopiedNotification] = useState<boolean>(false);
   const [isPdfModalOpen, setIsPdfModalOpen] = useState<boolean>(false);
+
+  // Selected turma that dynamically adapts to active turmas (e.g. after archiving)
+  const selectedTurma = useMemo(() => {
+    if (userSelectedTurma && allTurmas.includes(userSelectedTurma)) {
+      return userSelectedTurma;
+    }
+    return allTurmas[0] || '';
+  }, [userSelectedTurma, allTurmas]);
 
   // Filter activities available for the selected turma (todas: ativas e inativas)
   const activitiesForTurma = useMemo(() => {
@@ -365,7 +373,7 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
             <select
               value={selectedTurma}
               onChange={(e) => {
-                setSelectedTurma(e.target.value);
+                setUserSelectedTurma(e.target.value);
                 setSelectedActivityId('all'); // Mantem padrão em 'all'
               }}
               className="w-full bg-background border border-white/15 rounded-2xl px-4 py-3 text-sm text-foreground font-bold focus:outline-none focus:border-primary cursor-pointer"

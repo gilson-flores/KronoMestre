@@ -68,6 +68,11 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'graded'>('all');
 
+  // Derived filter that adapts automatically if active turmas change (e.g. after archiving)
+  const effectiveTurmaFilter = (selectedTurmaFilter === 'all' || originalTurmas.includes(selectedTurmaFilter))
+    ? selectedTurmaFilter
+    : 'all';
+
   // Atividade atualmente aberta para correção
   const activeGradingActivity = useMemo(() => {
     if (!selectedActivityId) return null;
@@ -100,8 +105,8 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
   const filteredActivities = useMemo(() => {
     return activities.filter((act) => {
       // Filtro de turma original
-      if (selectedTurmaFilter !== 'all') {
-        const matchesTurma = canStudentAccessActivity(act.turma, selectedTurmaFilter);
+      if (effectiveTurmaFilter !== 'all') {
+        const matchesTurma = canStudentAccessActivity(act.turma, effectiveTurmaFilter);
         if (!matchesTurma) return false;
       }
 
@@ -123,7 +128,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
 
       return true;
     });
-  }, [activities, selectedTurmaFilter, searchQuery, statusFilter]);
+  }, [activities, effectiveTurmaFilter, searchQuery, statusFilter]);
 
   // Se uma atividade foi selecionada, renderiza o GradingView integrado com navegação facilitada
   if (activeGradingActivity) {
@@ -267,10 +272,10 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setSelectedTurmaFilter('all')}
-              className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all cursor-pointer ${
-                selectedTurmaFilter === 'all'
-                  ? 'bg-primary text-white shadow-md shadow-primary/20'
-                  : 'bg-background text-muted hover:text-foreground border border-border'
+              className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all duration-200 cursor-pointer border active:scale-95 ${
+                effectiveTurmaFilter === 'all'
+                  ? 'bg-primary text-white border-primary shadow-md shadow-primary/20'
+                  : 'bg-background text-muted hover:text-foreground border-border hover:bg-surface-hover'
               }`}
             >
               Todas as Turmas
@@ -282,10 +287,10 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                 <button
                   key={turmaCode}
                   onClick={() => setSelectedTurmaFilter(turmaCode)}
-                  className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                    selectedTurmaFilter === turmaCode
-                      ? 'bg-primary text-white shadow-md shadow-primary/20'
-                      : 'bg-background text-muted hover:text-foreground border border-border'
+                  className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 border active:scale-95 ${
+                    effectiveTurmaFilter === turmaCode
+                      ? 'bg-primary text-white border-primary shadow-md shadow-primary/20'
+                      : 'bg-background text-muted hover:text-foreground border-border hover:bg-surface-hover'
                   }`}
                 >
                   <span>Turma {turmaCode}</span>

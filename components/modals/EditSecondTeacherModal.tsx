@@ -18,6 +18,7 @@ export const EditSecondTeacherModal: React.FC<EditSecondTeacherModalProps> = ({
   teacherToEdit,
   onSaveTeacher,
 }) => {
+  const [prevTeacherId, setPrevTeacherId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [subject, setSubject] = useState('AEE / Inclusão Escolar');
@@ -27,17 +28,16 @@ export const EditSecondTeacherModal: React.FC<EditSecondTeacherModalProps> = ({
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
 
-  useEffect(() => {
-    if (teacherToEdit) {
-      setName(teacherToEdit.name || '');
-      setEmail(teacherToEdit.email || '');
-      setSubject(teacherToEdit.subject || 'AEE / Inclusão Escolar');
-      setPhone(teacherToEdit.phone || '');
-      setSchool(teacherToEdit.school || '');
-      setFormError('');
-      setFormSuccess('');
-    }
-  }, [teacherToEdit]);
+  if (teacherToEdit && teacherToEdit.id !== prevTeacherId) {
+    setPrevTeacherId(teacherToEdit.id);
+    setName(teacherToEdit.name || '');
+    setEmail(teacherToEdit.email || '');
+    setSubject(teacherToEdit.subject || 'AEE / Inclusão Escolar');
+    setPhone(teacherToEdit.phone || '');
+    setSchool(teacherToEdit.school || '');
+    setFormError('');
+    setFormSuccess('');
+  }
 
   if (!isOpen || !teacherToEdit) return null;
 

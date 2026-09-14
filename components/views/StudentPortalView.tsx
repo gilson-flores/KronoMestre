@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { StudentUser, TeacherUser, Activity, LibraryFile, ChatMessage, ActivityQuestion, MultipleChoiceQuestion, EssayQuestion } from '@/lib/types';
 import { canStudentAccessActivity, getActivityGradeDistribution, isStudentPNE } from '@/lib/studentUtils';
 import { extractCleanHtml } from '@/lib/adaptationUtils';
+import { scrollToTop } from '@/lib/utils';
 import {
   getNotificationPermission,
   requestNotificationPermission,
@@ -295,6 +296,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           );
 
           setSubmissionSuccessMsg(`🎉 Atividade Finalizada e Enviada! Nota conquistada: ${recordedScore} / ${maxG} pts.`);
+          scrollToTop();
           setTimeout(() => setSubmissionSuccessMsg(null), 6000);
 
           // Fechar a atividade e retornar à lista inicial com filtros
@@ -416,6 +418,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       );
 
       setSubmissionSuccessMsg(`🎉 Parabéns! Você concluiu a atividade lúdica e conquistou ${finalScore.toFixed(1)} / ${maxScore} pts!`);
+      scrollToTop();
       setTimeout(() => setSubmissionSuccessMsg(null), 6000);
 
       // Fechar visualização da atividade e retornar à lista inicial com filtros
@@ -501,6 +504,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       : `Atividade enviada com sucesso! Acompanhe a correção na aba "Correções".`;
 
     setSubmissionSuccessMsg(msg);
+    scrollToTop();
     setTimeout(() => setSubmissionSuccessMsg(null), 6000);
 
     // Reset focus warnings for this activity on submit
@@ -515,6 +519,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
   const handleOpenActivity = (actId: string) => {
     setSelectedActivityId(actId);
+    scrollToTop();
     // Reset focus warnings for this activity when starting/resuming it
     setFocusWarnings((prev) => ({ ...prev, [actId]: 0 }));
   };

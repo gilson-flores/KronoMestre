@@ -32,6 +32,8 @@ export interface StudentUser {
   isArchived?: boolean;
   archivedAt?: string;
   archivedReason?: string;
+  archivedVinculoId?: string; // Código/numeração única do vínculo (ex: VINC-092026)
+  archivedSchool?: string; // Escola de vinculação
   mustChangePassword?: boolean;
 }
 
@@ -133,7 +135,23 @@ export interface Activity {
   isArchived?: boolean;
   archivedAt?: string;
   archivedReason?: string;
+  archivedVinculoId?: string; // Código/numeração única do vínculo (ex: VINC-092026)
+  archivedSchool?: string; // Escola de vinculação
   submissions: ActivitySubmission[];
+}
+
+export interface ArchivedVinculo {
+  id: string; // Identificador único do vínculo (ex: VINC-092026-...)
+  vinculoCode: string; // Numeração formatada do vínculo (ex: "Vínculo 09/2026")
+  school: string; // Escola associada
+  monthYear: string; // Mês e ano de encerramento (ex: "09/2026")
+  closedAt: string; // Data ISO de encerramento
+  reason: string; // Motivo do arquivamento
+  students: StudentUser[];
+  activities: Activity[];
+  turmas: string[];
+  totalStudents: number;
+  totalActivities: number;
 }
 
 export interface ScheduleItem {

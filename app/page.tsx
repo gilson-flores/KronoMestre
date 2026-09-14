@@ -49,6 +49,7 @@ import { NewSecondTeacherModal } from '@/components/modals/NewSecondTeacherModal
 import { ParallelRecoveryModal } from '@/components/modals/ParallelRecoveryModal';
 import { ForceChangePasswordModal } from '@/components/modals/ForceChangePasswordModal';
 import { hashPasswordBcrypt } from '@/lib/crypto';
+import { scrollToTop } from '@/lib/utils';
 import { CheckCircle2, AlertTriangle, HeartHandshake, UserPlus } from 'lucide-react';
 
 // Helper de unificação e desduplicação atômica de mensagens de chat
@@ -311,6 +312,9 @@ export default function Home() {
   };
 
   const showGlobalStatus = useCallback((type: 'success' | 'error' | 'info', message: string) => {
+    if (type === 'success') {
+      scrollToTop();
+    }
     setGlobalDbStatus({ type: type === 'info' ? 'success' : type, message });
     setTimeout(() => {
       setGlobalDbStatus((current) => (current?.message === message ? null : current));
@@ -566,6 +570,8 @@ export default function Home() {
               isArchived: Boolean(s.is_archived),
               archivedAt: s.archived_at || undefined,
               archivedReason: s.archived_reason || undefined,
+              archivedVinculoId: s.archived_vinculo_id || s.archivedVinculoId || undefined,
+              archivedSchool: s.archived_school || s.archivedSchool || undefined,
             };
           });
 
@@ -735,6 +741,8 @@ export default function Home() {
               isArchived: Boolean(act.is_archived),
               archivedAt: act.archived_at || undefined,
               archivedReason: act.archived_reason || undefined,
+              archivedVinculoId: act.archived_vinculo_id || act.archivedVinculoId || undefined,
+              archivedSchool: act.archived_school || act.archivedSchool || undefined,
               submissions: subs,
             };
           });
@@ -2498,9 +2506,16 @@ export default function Home() {
     alert(`Dossiê em PDF/Planilha gerado com sucesso para a atividade: ${act.title}`);
   };
 
-  const handleArchiveVinculo = async (reason: string) => {
-    const nowIso = new Date().toISOString();
+  const handleArchiveVinculo = async (reason: string, schoolName?: string, vinculoCode?: string) => {
+    const now = new Date();
+    const nowIso = now.toISOString();
     const trimmedReason = reason.trim() || 'Troca de vínculo';
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    const finalMonthYear = `${month}/${year}`;
+    const finalSchool = (schoolName || teacher.school || 'Escola Estadual').trim();
+    const finalVinculoCode = vinculoCode || `Vínculo ${finalMonthYear}`;
+    const finalVinculoId = `VINC-${month}${year}-${Date.now().toString(36)}`;
 
     const activeStudentsList = students.filter((s) => !s.isArchived);
     const activeActivitiesList = activities.filter((a) => !a.isArchived);
@@ -2521,6 +2536,8 @@ export default function Home() {
             is_archived: true,
             archived_at: nowIso,
             archived_reason: trimmedReason,
+            archived_vinculo_id: finalVinculoId,
+            archived_school: finalSchool,
           })
           .or('is_archived.is.null,is_archived.eq.false');
 
@@ -2532,6 +2549,8 @@ export default function Home() {
               is_archived: true,
               archived_at: nowIso,
               archived_reason: trimmedReason,
+              archived_vinculo_id: finalVinculoId,
+              archived_school: finalSchool,
             })
             .eq('is_archived', false);
           if (errStudentsRetry) throw errStudentsRetry;
@@ -2544,6 +2563,8 @@ export default function Home() {
             is_archived: true,
             archived_at: nowIso,
             archived_reason: trimmedReason,
+            archived_vinculo_id: finalVinculoId,
+            archived_school: finalSchool,
           })
           .or('is_archived.is.null,is_archived.eq.false');
 
@@ -2555,6 +2576,8 @@ export default function Home() {
               is_archived: true,
               archived_at: nowIso,
               archived_reason: trimmedReason,
+              archived_vinculo_id: finalVinculoId,
+              archived_school: finalSchool,
             })
             .eq('is_archived', false);
           if (errActivitiesRetry) throw errActivitiesRetry;
@@ -2565,7 +2588,14 @@ export default function Home() {
       setStudents((prev) => {
         const updated = prev.map((s) =>
           !s.isArchived
-            ? { ...s, isArchived: true, archivedAt: nowIso, archivedReason: trimmedReason }
+            ? {
+                ...s,
+                isArchived: true,
+                archivedAt: nowIso,
+                archivedReason: trimmedReason,
+                archivedVinculoId: finalVinculoId,
+                archivedSchool: finalSchool,
+              }
             : s
         );
         if (typeof window !== 'undefined') {
@@ -2579,7 +2609,14 @@ export default function Home() {
       setActivities((prev) => {
         const updated = prev.map((a) =>
           !a.isArchived
-            ? { ...a, isArchived: true, archivedAt: nowIso, archivedReason: trimmedReason }
+            ? {
+                ...a,
+                isArchived: true,
+                archivedAt: nowIso,
+                archivedReason: trimmedReason,
+                archivedVinculoId: finalVinculoId,
+                archivedSchool: finalSchool,
+              }
             : a
         );
         if (typeof window !== 'undefined') {
@@ -2590,7 +2627,7 @@ export default function Home() {
         return updated;
       });
 
-      const successMsg = `${studentsCount} alunos e ${activitiesCount} atividades arquivados com sucesso.`;
+      const successMsg = `${finalVinculoCode} (${finalSchool}) arquivado com sucesso: ${studentsCount} alunos e ${activitiesCount} atividades.`;
       showGlobalStatus('success', successMsg);
 
       return {
@@ -2601,6 +2638,129 @@ export default function Home() {
     } catch (err: any) {
       console.error('Erro ao arquivar vínculo:', err);
       showGlobalStatus('error', `Falha ao arquivar vínculo: ${err?.message || 'Erro de conexão'}`);
+      return {
+        success: false,
+        studentsCount: 0,
+        activitiesCount: 0,
+        error: err?.message,
+      };
+    }
+  };
+
+  const handleRestoreVinculo = async (target: {
+    vinculoId?: string;
+    studentIds?: string[];
+    activityIds?: string[];
+    vinculoCode?: string;
+  }) => {
+    try {
+      const studentIdsToRestore =
+        target.studentIds && target.studentIds.length > 0
+          ? target.studentIds
+          : students
+              .filter((s) => s.isArchived && (!target.vinculoId || s.archivedVinculoId === target.vinculoId))
+              .map((s) => s.id);
+
+      const activityIdsToRestore =
+        target.activityIds && target.activityIds.length > 0
+          ? target.activityIds
+          : activities
+              .filter((a) => a.isArchived && (!target.vinculoId || a.archivedVinculoId === target.vinculoId))
+              .map((a) => a.id);
+
+      if (studentIdsToRestore.length === 0 && activityIdsToRestore.length === 0) {
+        showGlobalStatus('info', 'Nenhum registro encontrado para este vínculo.');
+        return { success: false, studentsCount: 0, activitiesCount: 0 };
+      }
+
+      if (isSupabaseConfigured && supabase) {
+        if (studentIdsToRestore.length > 0) {
+          const { error: errStudents } = await supabase
+            .from('students')
+            .update({
+              is_archived: false,
+              archived_at: null,
+              archived_reason: null,
+              archived_vinculo_id: null,
+              archived_school: null,
+            })
+            .in('id', studentIdsToRestore);
+
+          if (errStudents) console.warn('Supabase restore students warn:', errStudents);
+        }
+
+        if (activityIdsToRestore.length > 0) {
+          const { error: errActivities } = await supabase
+            .from('activities')
+            .update({
+              is_archived: false,
+              archived_at: null,
+              archived_reason: null,
+              archived_vinculo_id: null,
+              archived_school: null,
+            })
+            .in('id', activityIdsToRestore);
+
+          if (errActivities) console.warn('Supabase restore activities warn:', errActivities);
+        }
+      }
+
+      // Atualizar no estado local em memória e no cache
+      setStudents((prev) => {
+        const updated = prev.map((s) => {
+          if (studentIdsToRestore.includes(s.id)) {
+            return {
+              ...s,
+              isArchived: false,
+              archivedAt: undefined,
+              archivedReason: undefined,
+              archivedVinculoId: undefined,
+              archivedSchool: undefined,
+            };
+          }
+          return s;
+        });
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('local_students_data', JSON.stringify(updated));
+          } catch (e) {}
+        }
+        return updated;
+      });
+
+      setActivities((prev) => {
+        const updated = prev.map((a) => {
+          if (activityIdsToRestore.includes(a.id)) {
+            return {
+              ...a,
+              isArchived: false,
+              archivedAt: undefined,
+              archivedReason: undefined,
+              archivedVinculoId: undefined,
+              archivedSchool: undefined,
+            };
+          }
+          return a;
+        });
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('local_activities_data', JSON.stringify(updated));
+          } catch (e) {}
+        }
+        return updated;
+      });
+
+      const msg = `${target.vinculoCode || 'Vínculo'} restaurado com sucesso! ${studentIdsToRestore.length} aluno(s) e ${activityIdsToRestore.length} atividade(s) foram reativados na base de trabalho.`;
+      showGlobalStatus('success', msg);
+
+      return {
+        success: true,
+        studentsCount: studentIdsToRestore.length,
+        activitiesCount: activityIdsToRestore.length,
+      };
+    } catch (err: any) {
+      console.error('Erro ao restaurar vínculo:', err);
+      showGlobalStatus('error', `Falha ao restaurar vínculo: ${err?.message || 'Erro inesperado'}`);
       return {
         success: false,
         studentsCount: 0,
@@ -3030,7 +3190,9 @@ export default function Home() {
             <BackupView
               students={students}
               activities={activities}
+              teacher={teacher}
               onArchiveVinculo={handleArchiveVinculo}
+              onRestoreVinculo={handleRestoreVinculo}
               onNavigateToDashboard={() => setCurrentTab('dashboard')}
             />
           )}

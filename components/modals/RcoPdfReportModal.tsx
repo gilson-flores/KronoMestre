@@ -50,11 +50,19 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
 
   // Configurações do Relatório
   const [scope, setScope] = useState<'all' | 'single'>(selectedTurmaInitial ? 'single' : 'all');
-  const [activeTurma, setActiveTurma] = useState<string>(selectedTurmaInitial || allTurmas[0] || '');
+  const [userActiveTurma, setUserActiveTurma] = useState<string>(selectedTurmaInitial || '');
   const [includeActivityDetails, setIncludeActivityDetails] = useState<boolean>(true);
   const [includeSpecialNeeds, setIncludeSpecialNeeds] = useState<boolean>(true);
   const [includeSignatures, setIncludeSignatures] = useState<boolean>(true);
   const [copiedState, setCopiedState] = useState<boolean>(false);
+
+  // Derived activeTurma ensuring no stale residual turma after archiving
+  const activeTurma = useMemo(() => {
+    if (userActiveTurma && allTurmas.includes(userActiveTurma)) {
+      return userActiveTurma;
+    }
+    return allTurmas[0] || '';
+  }, [userActiveTurma, allTurmas]);
 
   // Turmas a serem incluídas no documento
   const targetTurmas = useMemo(() => {
@@ -576,7 +584,7 @@ export const RcoPdfReportModal: React.FC<RcoPdfReportModalProps> = ({
                   setScope('all');
                 } else {
                   setScope('single');
-                  setActiveTurma(e.target.value);
+                  setUserActiveTurma(e.target.value);
                 }
               }}
               className="bg-background border border-white/15 rounded-xl px-3 py-1.5 text-xs text-foreground font-bold focus:outline-none focus:border-primary cursor-pointer"

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   HeartHandshake,
   UserPlus, Users,
@@ -56,6 +56,7 @@ import {
   isStudentPNE
 } from '@/lib/studentUtils';
 import { extractCleanHtml } from '@/lib/adaptationUtils';
+import { scrollToTop } from '@/lib/utils';
 
 interface SecondTeachersViewProps {
   teacher: TeacherUser;
@@ -342,6 +343,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
       onSaveStudent(updatedStudent);
     }
     
+    scrollToTop();
     setSuccessMsg('Tutela atualizada com sucesso!');
     setTimeout(() => setSuccessMsg(''), 3000);
   };
@@ -390,6 +392,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
         }
       }
 
+      scrollToTop();
       setChangePasswordMsg({
         type: 'success',
         text: 'Sua senha de acesso foi alterada e salva com sucesso!',
@@ -411,7 +414,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   };
 
   // Helper to resolve bound 2nd teacher name for any student
-  const getStudentBoundTeacherName = (s: StudentUser): string | undefined => {
+  const getStudentBoundTeacherName = useCallback((s: StudentUser): string | undefined => {
     if (s.secondTeacherName?.trim()) return s.secondTeacherName.trim();
 
     if (s.secondTeacherId) {
@@ -434,7 +437,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
     }
 
     return undefined;
-  };
+  }, [teacher.id, teacher.email, teacher.name, secondTeachers]);
 
   // Bind student to current logged in 2nd teacher
   const handleBindStudentToMe = async (studentToBind: StudentUser, e?: React.MouseEvent) => {
@@ -486,7 +489,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
       return matchId || matchEmail || matchName;
     });
-  }, [students, teacher.id, teacher.name, teacher.email, secondTeachers]);
+  }, [students, teacher.id, teacher.name, teacher.email, getStudentBoundTeacherName]);
 
   // 2. All PNE/Inclusão students in the school (for regente view)
   const boundOrPneStudents = useMemo(() => {
@@ -495,7 +498,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
       const isBound = Boolean(getStudentBoundTeacherName(s) || s.secondTeacherId);
       return isPne || isBound;
     });
-  }, [students, secondTeachers, teacher.id, teacher.name, teacher.email]);
+  }, [students, getStudentBoundTeacherName]);
 
   // Selected base scope for student list:
   // "Faça com que o segundo professor veja somente os alunos dele" -> isSecondTeacher ALWAYS sees only myTutelageStudents!
@@ -729,6 +732,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
         setSubmissionFeedback(`✅ Atividade enviada com sucesso para ${activeStudent.fullName}! Registrada na fila do professor regente.`);
       }
 
+      scrollToTop();
       setExecutingActivityId(null);
       setTimeout(() => setSubmissionFeedback(null), 5000);
     } catch (err: any) {
@@ -771,53 +775,53 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
         </div>
 
         {/* Header Actions */}
-        <div className="flex items-center gap-2 self-start sm:self-center">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 self-stretch sm:self-center w-full sm:w-auto">
           {isSecondTeacher && (
             <button
               onClick={() => {
                 setChangePasswordMsg(null);
                 setIsChangePasswordOpen(true);
               }}
-              className="py-2 px-3.5 bg-amber-400/15 hover:bg-amber-400/25 text-amber-600 font-bold rounded-xl transition-all border border-amber-400/30 flex items-center gap-1.5 cursor-pointer text-xs shrink-0 shadow-sm active:scale-95"
+              className="min-h-[42px] py-2 px-4 bg-amber-400/15 hover:bg-amber-400/25 text-amber-600 font-bold rounded-xl transition-all duration-200 border border-amber-400/30 flex items-center justify-center gap-2 cursor-pointer text-xs shrink-0 shadow-sm active:scale-95 w-full sm:w-auto"
             >
-              <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+              <KeyRound className="w-4 h-4 text-amber-400" />
               <span>Trocar Senha</span>
             </button>
           )}
 
           {!isSecondTeacher && (
-            <div className="flex bg-background p-1 rounded-2xl border border-border">
+            <div className="flex items-center gap-1.5 p-1 bg-background rounded-2xl border border-border w-full sm:w-auto">
               <button
                 onClick={() => setActiveTab('atividades_alunos')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`min-h-[42px] px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex items-center justify-center gap-2 flex-1 sm:flex-initial min-w-[150px] border active:scale-95 ${
                   activeTab === 'atividades_alunos'
-                    ? 'bg-surface border border-border text-foreground shadow-sm'
-                    : 'text-muted hover:text-foreground border border-transparent'
+                    ? 'bg-surface border-border text-foreground shadow-sm'
+                    : 'text-muted hover:text-foreground border-transparent hover:bg-surface-hover/50'
                 }`}
               >
-                <Smartphone className="w-3.5 h-3.5" />
+                <Smartphone className="w-4 h-4" />
                 <span>Alunos & Atividades</span>
               </button>
               <button
                 onClick={() => setActiveTab('professores_apoio')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`min-h-[42px] px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer flex items-center justify-center gap-2 flex-1 sm:flex-initial min-w-[150px] border active:scale-95 ${
                   activeTab === 'professores_apoio'
-                    ? 'bg-surface border border-border text-foreground shadow-sm'
-                    : 'text-muted hover:text-foreground border border-transparent'
+                    ? 'bg-surface border-border text-foreground shadow-sm'
+                    : 'text-muted hover:text-foreground border-transparent hover:bg-surface-hover/50'
                 }`}
               >
-                <ShieldCheck className="w-3.5 h-3.5" />
+                <ShieldCheck className="w-4 h-4" />
                 <span>Professores AEE ({secondTeachers.length})</span>
               </button>
             </div>
           )}
 
-          {activeTab === 'professores_apoio' && !isSecondTeacher && (
+          {!isSecondTeacher && (
             <button
               onClick={() => setIsNewModalOpen(true)}
-              className="py-2 px-4 bg-amber-400 hover:bg-amber-300 text-black font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-md cursor-pointer text-xs"
+              className="min-h-[42px] py-2 px-4 bg-amber-400 hover:bg-amber-300 text-black font-bold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-md cursor-pointer text-xs border border-amber-400/40 active:scale-95 shrink-0 w-full sm:w-auto"
             >
-              <UserPlus className="w-3.5 h-3.5" />
+              <UserPlus className="w-4 h-4" />
               <span>Novo 2º Professor</span>
             </button>
           )}
@@ -1707,6 +1711,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
         onClose={() => setIsNewModalOpen(false)}
         defaultSchool={teacher.school}
         onCreateSecondTeacher={() => {
+          scrollToTop();
           setSuccessMsg('Professor cadastrado com sucesso!');
           fetchSecondTeachers();
           setTimeout(() => setSuccessMsg(''), 3000);
@@ -1851,6 +1856,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
           onClose={() => setTeacherToEdit(null)}
           teacherToEdit={teacherToEdit}
           onSaveTeacher={(updatedTeacher) => {
+            scrollToTop();
             setSuccessMsg(`Professor ${updatedTeacher.name} atualizado com sucesso!`);
             fetchSecondTeachers();
             setTimeout(() => setSuccessMsg(''), 4000);

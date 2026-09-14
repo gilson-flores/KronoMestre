@@ -19,43 +19,68 @@ import {
   BookOpen,
   Clock,
   Award,
+  GraduationCap,
+  Building2,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
+  FolderArchive,
+  Check,
 } from 'lucide-react';
-import { Activity, StudentUser } from '@/lib/types';
+import { Activity, StudentUser, TeacherUser, ArchivedVinculo } from '@/lib/types';
+import { scrollToTop } from '@/lib/utils';
 
 interface BackupViewProps {
   students?: StudentUser[];
   activities?: Activity[];
+  teacher?: TeacherUser;
   onArchiveVinculo?: (
-    reason: string
+    reason: string,
+    schoolName?: string,
+    vinculoCode?: string
   ) => Promise<{ success: boolean; studentsCount: number; activitiesCount: number; error?: string }>;
+  onRestoreVinculo?: (target: {
+    vinculoId?: string;
+    studentIds?: string[];
+    activityIds?: string[];
+    vinculoCode?: string;
+  }) => Promise<{ success: boolean; studentsCount: number; activitiesCount: number; error?: string }>;
   onNavigateToDashboard?: () => void;
 }
 
 export const BackupView: React.FC<BackupViewProps> = ({
   students = [],
   activities = [],
+  teacher,
   onArchiveVinculo,
+  onRestoreVinculo,
   onNavigateToDashboard,
 }) => {
   const [isDownloading, setIsDownloading] = useState(false);
 
   // Estados do Modal de Arquivamento
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+  const [archiveSchool, setArchiveSchool] = useState(teacher?.school || 'Escola Estadual');
   const [archiveReason, setArchiveReason] = useState('Troca de vínculo');
   const [confirmWord, setConfirmWord] = useState('');
   const [isSubmittingArchive, setIsSubmittingArchive] = useState(false);
+
+  // Estados do Modal de Restauração de Vínculo
+  const [vinculoToRestore, setVinculoToRestore] = useState<ArchivedVinculo | null>(null);
+  const [isSubmittingRestore, setIsSubmittingRestore] = useState(false);
+
+  // Estado para expandir/consultar registros de um vínculo específico
+  const [inspectingVinculoId, setInspectingVinculoId] = useState<string | null>(null);
+  const [inspectTab, setInspectTab] = useState<'students' | 'activities'>('students');
+  const [inspectSearchQuery, setInspectSearchQuery] = useState('');
+
+  // Mensagens de Feedback
   const [feedbackMessage, setFeedbackMessage] = useState<{
     type: 'success' | 'error';
     text: string;
   } | null>(null);
 
-  // Estados da Área de Consulta e Auditoria
-  const [auditTab, setAuditTab] = useState<'students' | 'activities'>('students');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStartDate, setFilterStartDate] = useState('');
-  const [filterEndDate, setFilterEndDate] = useState('');
-
-  // Estados dos Modais de Consulta (Somente Leitura)
+  // Estados dos Modais de Consulta Detalhada (Somente Leitura de dossiês)
   const [viewingArchivedStudent, setViewingArchivedStudent] = useState<StudentUser | null>(null);
   const [viewingArchivedActivity, setViewingArchivedActivity] = useState<Activity | null>(null);
 
@@ -69,6 +94,16 @@ export const BackupView: React.FC<BackupViewProps> = ({
   const archivedStudents = useMemo(() => students.filter((s) => Boolean(s.isArchived)), [students]);
   const archivedActivities = useMemo(() => activities.filter((a) => Boolean(a.isArchived)), [activities]);
   const totalArchivedCount = archivedStudents.length + archivedActivities.length;
+
+  // Cálculo do identificador do próximo vínculo a ser gerado no arquivamento (Mês e Ano de encerramento)
+  const currentMonthYear = useMemo(() => {
+    const now = new Date();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const yyyy = now.getFullYear();
+    return `${mm}/${yyyy}`;
+  }, []);
+
+  const nextVinculoCodePreview = `Vínculo ${currentMonthYear}`;
 
   // Formatação de data amigável e segura
   const formatDateTime = (isoDate?: string) => {
@@ -99,73 +134,142 @@ export const BackupView: React.FC<BackupViewProps> = ({
     }
   };
 
-  // Filtragem de Alunos Arquivados
-  const filteredArchivedStudents = useMemo(() => {
-    return archivedStudents.filter((student) => {
-      // Filtro de Texto (Nome, Matrícula, Turma ou Motivo)
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchName = student.fullName?.toLowerCase().includes(q);
-        const matchMatricula = student.matricula?.toLowerCase().includes(q);
-        const matchTurma = student.turma?.toLowerCase().includes(q);
-        const matchReason = student.archivedReason?.toLowerCase().includes(q);
-        if (!matchName && !matchMatricula && !matchTurma && !matchReason) {
-          return false;
-        }
+  // Agrupamento de Registros Arquivados por Raiz: Escola e Vínculo (com Numeração Mês/Ano de encerramento)
+  const archivedVinculos = useMemo<ArchivedVinculo[]>(() => {
+    const map = new Map<string, ArchivedVinculo>();
+
+    const getMonthYearFromDate = (dateStr?: string) => {
+      if (!dateStr) {
+        return currentMonthYear;
+      }
+      try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return currentMonthYear;
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const yyyy = d.getFullYear();
+        return `${mm}/${yyyy}`;
+      } catch {
+        return currentMonthYear;
+      }
+    };
+
+    // 1. Processar alunos arquivados
+    archivedStudents.forEach((student) => {
+      const monthYear = getMonthYearFromDate(student.archivedAt);
+      const school = (student.archivedSchool || teacher?.school || 'Escola Estadual').trim();
+      const vinculoKey = student.archivedVinculoId || `${school}__${monthYear}`;
+      const vinculoCode = `Vínculo ${monthYear}`;
+
+      if (!map.has(vinculoKey)) {
+        map.set(vinculoKey, {
+          id: vinculoKey,
+          vinculoCode,
+          school,
+          monthYear,
+          closedAt: student.archivedAt || new Date().toISOString(),
+          reason: student.archivedReason || 'Troca de vínculo',
+          students: [],
+          activities: [],
+          turmas: [],
+          totalStudents: 0,
+          totalActivities: 0,
+        });
       }
 
-      // Filtro de Data Inicial
-      if (filterStartDate && student.archivedAt) {
-        const itemDate = new Date(student.archivedAt);
-        const start = new Date(filterStartDate + 'T00:00:00');
-        if (itemDate < start) return false;
+      const v = map.get(vinculoKey)!;
+      v.students.push(student);
+      if (student.turma && !v.turmas.includes(student.turma)) {
+        v.turmas.push(student.turma);
       }
-
-      // Filtro de Data Final
-      if (filterEndDate && student.archivedAt) {
-        const itemDate = new Date(student.archivedAt);
-        const end = new Date(filterEndDate + 'T23:59:59');
-        if (itemDate > end) return false;
+      if (student.archivedAt && new Date(student.archivedAt) > new Date(v.closedAt)) {
+        v.closedAt = student.archivedAt;
       }
-
-      return true;
+      if (student.archivedReason && !v.reason) {
+        v.reason = student.archivedReason;
+      }
     });
-  }, [archivedStudents, searchQuery, filterStartDate, filterEndDate]);
 
-  // Filtragem de Atividades Arquivadas
-  const filteredArchivedActivities = useMemo(() => {
-    return archivedActivities.filter((act) => {
-      // Filtro de Texto (Título, Disciplina, Turma ou Motivo)
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchTitle = act.title?.toLowerCase().includes(q);
-        const matchSubject = act.subject?.toLowerCase().includes(q);
-        const matchTurma = act.turma?.toLowerCase().includes(q);
-        const matchReason = act.archivedReason?.toLowerCase().includes(q);
-        if (!matchTitle && !matchSubject && !matchTurma && !matchReason) {
-          return false;
-        }
+    // 2. Processar atividades arquivadas
+    archivedActivities.forEach((act) => {
+      const monthYear = getMonthYearFromDate(act.archivedAt);
+      const school = (act.archivedSchool || teacher?.school || 'Escola Estadual').trim();
+      const vinculoKey = act.archivedVinculoId || `${school}__${monthYear}`;
+      const vinculoCode = `Vínculo ${monthYear}`;
+
+      if (!map.has(vinculoKey)) {
+        map.set(vinculoKey, {
+          id: vinculoKey,
+          vinculoCode,
+          school,
+          monthYear,
+          closedAt: act.archivedAt || new Date().toISOString(),
+          reason: act.archivedReason || 'Troca de vínculo',
+          students: [],
+          activities: [],
+          turmas: [],
+          totalStudents: 0,
+          totalActivities: 0,
+        });
       }
 
-      // Filtro de Data Inicial
-      if (filterStartDate && act.archivedAt) {
-        const itemDate = new Date(act.archivedAt);
-        const start = new Date(filterStartDate + 'T00:00:00');
-        if (itemDate < start) return false;
+      const v = map.get(vinculoKey)!;
+      v.activities.push(act);
+      if (act.turma && !v.turmas.includes(act.turma)) {
+        v.turmas.push(act.turma);
       }
-
-      // Filtro de Data Final
-      if (filterEndDate && act.archivedAt) {
-        const itemDate = new Date(act.archivedAt);
-        const end = new Date(filterEndDate + 'T23:59:59');
-        if (itemDate > end) return false;
+      if (act.archivedAt && new Date(act.archivedAt) > new Date(v.closedAt)) {
+        v.closedAt = act.archivedAt;
       }
-
-      return true;
+      if (act.archivedReason && !v.reason) {
+        v.reason = act.archivedReason;
+      }
     });
-  }, [archivedActivities, searchQuery, filterStartDate, filterEndDate]);
 
-  // Submissões do aluno atualmente em consulta
+    // Finalizar contagens e ordenar vínculos do mais recente para o mais antigo
+    const list = Array.from(map.values()).map((v) => ({
+      ...v,
+      totalStudents: v.students.length,
+      totalActivities: v.activities.length,
+      turmas: v.turmas.sort(),
+    }));
+
+    list.sort((a, b) => new Date(b.closedAt).getTime() - new Date(a.closedAt).getTime());
+    return list;
+  }, [archivedStudents, archivedActivities, teacher?.school, currentMonthYear]);
+
+  // Vínculo atualmente em inspeção detalhada
+  const activeInspectingVinculo = useMemo(() => {
+    if (!inspectingVinculoId) return null;
+    return archivedVinculos.find((v) => v.id === inspectingVinculoId) || null;
+  }, [inspectingVinculoId, archivedVinculos]);
+
+  // Filtragem de alunos no vínculo em inspeção
+  const filteredInspectingStudents = useMemo(() => {
+    if (!activeInspectingVinculo) return [];
+    if (!inspectSearchQuery.trim()) return activeInspectingVinculo.students;
+    const q = inspectSearchQuery.toLowerCase().trim();
+    return activeInspectingVinculo.students.filter(
+      (s) =>
+        s.fullName?.toLowerCase().includes(q) ||
+        s.matricula?.toLowerCase().includes(q) ||
+        s.turma?.toLowerCase().includes(q)
+    );
+  }, [activeInspectingVinculo, inspectSearchQuery]);
+
+  // Filtragem de atividades no vínculo em inspeção
+  const filteredInspectingActivities = useMemo(() => {
+    if (!activeInspectingVinculo) return [];
+    if (!inspectSearchQuery.trim()) return activeInspectingVinculo.activities;
+    const q = inspectSearchQuery.toLowerCase().trim();
+    return activeInspectingVinculo.activities.filter(
+      (a) =>
+        a.title?.toLowerCase().includes(q) ||
+        a.turma?.toLowerCase().includes(q) ||
+        a.subject?.toLowerCase().includes(q)
+    );
+  }, [activeInspectingVinculo, inspectSearchQuery]);
+
+  // Submissões do aluno atualmente em consulta de dossiê
   const studentArchivedSubmissions = useMemo(() => {
     if (!viewingArchivedStudent) return [];
     const stId = viewingArchivedStudent.id;
@@ -183,26 +287,16 @@ export const BackupView: React.FC<BackupViewProps> = ({
     return list;
   }, [viewingArchivedStudent, activities]);
 
-  const hasActiveFilters = Boolean(searchQuery.trim() || filterStartDate || filterEndDate);
-
-  const handleResetFilters = () => {
-    setSearchQuery('');
-    setFilterStartDate('');
-    setFilterEndDate('');
-  };
-
   const handleDownload = () => {
     setIsDownloading(true);
-    // Dispara o download nativamente chamando a rota de exportação
     window.location.href = '/api/export-backup?token=BACKUP_SEGURO_2026';
-
-    // Feedback rápido para reabilitar o botão
     setTimeout(() => {
       setIsDownloading(false);
     }, 3000);
   };
 
   const handleOpenArchiveModal = () => {
+    setArchiveSchool(teacher?.school || 'Escola Estadual');
     setArchiveReason('Troca de vínculo');
     setConfirmWord('');
     setFeedbackMessage(null);
@@ -232,20 +326,20 @@ export const BackupView: React.FC<BackupViewProps> = ({
     setFeedbackMessage(null);
 
     try {
-      const result = await onArchiveVinculo(archiveReason);
+      const result = await onArchiveVinculo(archiveReason, archiveSchool, nextVinculoCodePreview);
 
       if (result.success) {
         setIsArchiveModalOpen(false);
+        scrollToTop();
         setFeedbackMessage({
           type: 'success',
-          text: `${result.studentsCount} alunos e ${result.activitiesCount} atividades arquivados com sucesso.`,
+          text: `Vínculo ${currentMonthYear} arquivado com sucesso (${result.studentsCount} alunos e ${result.activitiesCount} atividades). Você pode restaurar este vínculo quando retornar à escola.`,
         });
 
-        // Redireciona para o dashboard após breve intervalo de feedback
         if (onNavigateToDashboard) {
           setTimeout(() => {
             onNavigateToDashboard();
-          }, 1200);
+          }, 1500);
         }
       } else {
         setFeedbackMessage({
@@ -263,6 +357,72 @@ export const BackupView: React.FC<BackupViewProps> = ({
     }
   };
 
+  const handleOpenRestoreModal = (vinculo: ArchivedVinculo) => {
+    setVinculoToRestore(vinculo);
+    setFeedbackMessage(null);
+  };
+
+  const handleCloseRestoreModal = () => {
+    if (isSubmittingRestore) return;
+    setVinculoToRestore(null);
+  };
+
+  const handleConfirmRestore = async () => {
+    if (!vinculoToRestore || isSubmittingRestore) return;
+
+    if (!onRestoreVinculo) {
+      setFeedbackMessage({
+        type: 'error',
+        text: 'Ação de restauração de vínculo indisponível.',
+      });
+      return;
+    }
+
+    setIsSubmittingRestore(true);
+    setFeedbackMessage(null);
+
+    try {
+      const studentIds = vinculoToRestore.students.map((s) => s.id);
+      const activityIds = vinculoToRestore.activities.map((a) => a.id);
+
+      const result = await onRestoreVinculo({
+        vinculoId: vinculoToRestore.id,
+        vinculoCode: vinculoToRestore.vinculoCode,
+        studentIds,
+        activityIds,
+      });
+
+      if (result.success) {
+        const restoredName = `${vinculoToRestore.vinculoCode} (${vinculoToRestore.school})`;
+        setVinculoToRestore(null);
+        setInspectingVinculoId(null);
+        scrollToTop();
+        setFeedbackMessage({
+          type: 'success',
+          text: `${restoredName} restaurado com sucesso! ${result.studentsCount} alunos e ${result.activitiesCount} atividades foram reativados na base de trabalho.`,
+        });
+
+        if (onNavigateToDashboard) {
+          setTimeout(() => {
+            onNavigateToDashboard();
+          }, 1500);
+        }
+      } else {
+        setFeedbackMessage({
+          type: 'error',
+          text: result.error || 'Não foi possível restaurar os dados do vínculo.',
+        });
+      }
+    } catch (err: any) {
+      setFeedbackMessage({
+        type: 'error',
+        text: err?.message || 'Erro ao processar a restauração do vínculo.',
+      });
+    } finally {
+      setIsSubmittingRestore(false);
+    }
+  };
+
   return (
     <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 animate-fadeIn text-foreground">
       <div className="max-w-5xl mx-auto space-y-8">
@@ -274,10 +434,10 @@ export const BackupView: React.FC<BackupViewProps> = ({
             </div>
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                Backup e Recuperação
+                Backup e Recuperação de Vínculos
               </h1>
               <p className="text-sm text-text-muted mt-1">
-                Gere cópias de segurança (snapshots) de todos os dados do sistema e gerencie o ciclo dos seus vínculos docentes.
+                Gere cópias de segurança em tempo real, encerre períodos letivos gerando códigos de vínculo por Escola e Mês/Ano, e restaure dados a qualquer momento ao retornar à escola.
               </p>
             </div>
           </div>
@@ -287,7 +447,7 @@ export const BackupView: React.FC<BackupViewProps> = ({
         {feedbackMessage && (
           <div
             id="backup-feedback-banner"
-            className={`p-4 rounded-2xl border flex items-center gap-3 ${
+            className={`p-4 rounded-2xl border flex items-center gap-3 animate-fadeIn ${
               feedbackMessage.type === 'success'
                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
                 : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
@@ -312,11 +472,11 @@ export const BackupView: React.FC<BackupViewProps> = ({
               <Download className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-foreground">Backup em Tempo Real</h2>
+              <h2 className="text-lg font-bold text-foreground">Backup em Tempo Real (Snapshot Completo)</h2>
               <p className="text-sm text-text-muted mt-2 leading-relaxed">
-                Ao clicar em &quot;Exportar Banco de Dados&quot;, o sistema irá varrer todas as tabelas e compilar um arquivo{' '}
-                <strong className="text-foreground">JSON unificado</strong> contendo a base de dados exata deste milissegundo.
-                O arquivo inclui alunos matriculados, configurações de professores de apoio, laudos, histórico do fórum/chat e
+                Ao clicar em &quot;Exportar Banco de Dados&quot;, o sistema compila um arquivo{' '}
+                <strong className="text-foreground">JSON unificado</strong> com a base de dados exata deste instante:
+                alunos matriculados, configurações de 2º professor, laudos PNE, histórico do fórum/chat e
                 todas as atividades ou recuperações cadastradas.
               </p>
             </div>
@@ -344,7 +504,7 @@ export const BackupView: React.FC<BackupViewProps> = ({
           </div>
         </section>
 
-        {/* SEÇÃO 2: ARQUIVAR VÍNCULO ATUAL */}
+        {/* SEÇÃO 2: ARQUIVAR VÍNCULO ATUAL (ENCERRAMENTO DE CICLO / GERAÇÃO DE NOVO VÍNCULO) */}
         <section
           id="section-archive-vinculo"
           className="bg-surface border border-border rounded-3xl p-6 sm:p-8 shadow-sm space-y-6"
@@ -353,23 +513,13 @@ export const BackupView: React.FC<BackupViewProps> = ({
             <div className="p-3 bg-amber-500/10 text-amber-500 rounded-2xl shrink-0">
               <Archive className="w-5 h-5" />
             </div>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h2 className="text-lg font-bold text-foreground">Ciclo de Vínculo Docente</h2>
-                <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                  Troca de Contrato / Fim de Ano
-                </span>
-              </div>
-              <p className="text-sm text-text-muted leading-relaxed">
-                Finalizou seu contrato ACT ou encerrou o período letivo desta escola? Ao arquivar o vínculo, os{' '}
-                <strong className="text-foreground">alunos e atividades atuais</strong> deixam de poluir o seu dia a dia,
-                mas continuam integralmente seguros no banco para futuras consultas e auditorias escolares.
-              </p>
+            <div>
+              <h2 className="text-lg font-bold text-foreground">Ciclo de Vínculo Docente (Escola e Período)</h2>
             </div>
           </div>
 
           {/* INDICADORES DO VÍNCULO ATIVO */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
             <div className="p-4 rounded-2xl bg-background/60 border border-border flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
@@ -381,14 +531,14 @@ export const BackupView: React.FC<BackupViewProps> = ({
                 </div>
               </div>
               <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-                No vínculo
+                Ativo
               </span>
             </div>
 
             <div className="p-4 rounded-2xl bg-background/60 border border-border flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold">
-                  <Archive className="w-4 h-4" />
+                  <FileText className="w-4 h-4" />
                 </div>
                 <div>
                   <div className="text-xs text-text-muted font-medium">Atividades Ativas</div>
@@ -396,7 +546,24 @@ export const BackupView: React.FC<BackupViewProps> = ({
                 </div>
               </div>
               <span className="text-xs font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
-                No vínculo
+                Ativo
+              </span>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-background/60 border border-border flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs text-text-muted font-medium">Unidade Escolar</div>
+                  <div className="text-sm font-bold text-foreground truncate max-w-[140px]" title={teacher?.school || 'Escola Estadual'}>
+                    {teacher?.school || 'Escola Estadual'}
+                  </div>
+                </div>
+              </div>
+              <span className="text-xs font-bold text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-full border border-blue-500/20">
+                Lotação
               </span>
             </div>
           </div>
@@ -404,7 +571,7 @@ export const BackupView: React.FC<BackupViewProps> = ({
           {/* BOTÃO DISPARADOR DE ARQUIVAMENTO */}
           <div className="pt-4 border-t border-border flex flex-col sm:flex-row gap-4 items-center justify-between">
             <p className="text-xs text-text-muted leading-relaxed">
-              * Ação segura: exige confirmação por palavra-chave e não apaga histórico de notas ou mensagens.
+              * O arquivamento gera a numeração de encerramento ({nextVinculoCodePreview}) vinculada à escola, permitindo restaurar integralmente o histórico a qualquer momento.
             </p>
 
             <button
@@ -419,7 +586,7 @@ export const BackupView: React.FC<BackupViewProps> = ({
           </div>
         </section>
 
-        {/* SEÇÃO 3: CONSULTA E AUDITORIA DE REGISTROS ARQUIVADOS (PASSO ARQUIVO 4) */}
+        {/* SEÇÃO 3: VÍNCULOS ARQUIVADOS (HISTÓRICO POR ESCOLA E VÍNCULO COM MÊS/ANO DE ENCERRAMENTO E RESTAURAÇÃO) */}
         <section
           id="section-archive-audit"
           className="bg-surface border border-border rounded-3xl p-6 sm:p-8 shadow-sm space-y-6"
@@ -428,57 +595,26 @@ export const BackupView: React.FC<BackupViewProps> = ({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start gap-4">
               <div className="p-3 bg-blue-500/10 text-blue-400 rounded-2xl shrink-0">
-                <BookOpen className="w-5 h-5" />
+                <FolderArchive className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <h2 className="text-lg font-bold text-foreground">
-                    Consulta e Auditoria de Registros Arquivados
+                    Vínculos Arquivados (Histórico por Escola e Período)
                   </h2>
-                  <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 uppercase tracking-wider">
-                    Somente Leitura
+                  <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                    {archivedVinculos.length} Vínculo(s) Arquivado(s)
                   </span>
                 </div>
                 <p className="text-sm text-text-muted mt-1 leading-relaxed">
-                  Consulte dossiês, notas e entregas de vínculos anteriores com total fidelidade histórica.
+                  A raiz do histórico é organizada por Escola e Vínculo (com numeração de Mês/Ano de encerramento). Você pode restaurar qualquer vínculo para reativar todos os seus dados na base ativa ou consultar dossiês históricos.
                 </p>
               </div>
             </div>
-
-            {/* SELETOR DE SUB-ABAS */}
-            <div className="flex items-center gap-1.5 p-1 bg-background border border-border rounded-2xl shrink-0">
-              <button
-                id="tab-btn-archived-students"
-                type="button"
-                onClick={() => setAuditTab('students')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer min-h-[36px] ${
-                  auditTab === 'students'
-                    ? 'bg-surface border-border text-foreground shadow-sm'
-                    : 'border-transparent text-text-muted hover:text-foreground hover:bg-surface-hover'
-                }`}
-              >
-                <User className="w-3.5 h-3.5" />
-                <span>Alunos Arquivados ({archivedStudents.length})</span>
-              </button>
-
-              <button
-                id="tab-btn-archived-activities"
-                type="button"
-                onClick={() => setAuditTab('activities')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer min-h-[36px] ${
-                  auditTab === 'activities'
-                    ? 'bg-surface border-border text-foreground shadow-sm'
-                    : 'border-transparent text-text-muted hover:text-foreground hover:bg-surface-hover'
-                }`}
-              >
-                <FileText className="w-3.5 h-3.5" />
-                <span>Atividades Arquivadas ({archivedActivities.length})</span>
-              </button>
-            </div>
           </div>
 
-          {/* SE NÃO HOUVER NADA ARQUIVADO NO BANCO INTEIRO -> ESTADO VAZIO LIMPO E CLARO */}
-          {totalArchivedCount === 0 ? (
+          {/* SE NÃO HOUVER NADA ARQUIVADO */}
+          {archivedVinculos.length === 0 ? (
             <div
               id="empty-state-no-archives"
               className="py-12 px-6 rounded-2xl border border-dashed border-border bg-background/40 flex flex-col items-center justify-center text-center space-y-3"
@@ -486,238 +622,340 @@ export const BackupView: React.FC<BackupViewProps> = ({
               <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
                 <Archive className="w-7 h-7" />
               </div>
-              <h3 className="text-base font-bold text-foreground">Nenhum registro arquivado ainda</h3>
+              <h3 className="text-base font-bold text-foreground">Nenhum vínculo arquivado</h3>
               <p className="text-xs text-text-muted max-w-md leading-relaxed">
                 Todos os seus {activeStudentsCount} alunos e {activeActivitiesCount} atividades pertencem ao vínculo ativo atual.
-                Quando você realizar um arquivamento ao término de um contrato ou ano letivo, o histórico completo
-                ficará disponível nesta área para consultas pedagógicas e auditorias escolares permanentes.
+                Quando você realizar um arquivamento ao término de um contrato ou ano letivo, o vínculo será registrado aqui com a identificação da Escola e Mês/Ano para consulta e restauração futura.
               </p>
             </div>
           ) : (
-            <div className="space-y-6">
-              {/* BARRA DE FILTROS: BUSCA POR TEXTO/MOTIVO E INTERVALO DE DATAS */}
-              <div className="p-4 rounded-2xl bg-background/80 border border-border grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                {/* CAMPO DE BUSCA TEXTUAL */}
-                <div className="md:col-span-6 relative">
-                  <Search className="w-4 h-4 text-text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    id="input-search-archived"
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={
-                      auditTab === 'students'
-                        ? 'Buscar por nome, matrícula, turma ou motivo (ex.: ACT 2026)...'
-                        : 'Buscar por título, turma, disciplina ou motivo (ex.: ACT 2026)...'
-                    }
-                    className="w-full pl-9 pr-3 py-2.5 bg-surface border border-border rounded-xl text-xs text-foreground placeholder:text-text-muted focus:outline-none focus:border-primary transition-colors"
-                  />
-                </div>
+            <div className="space-y-4">
+              {/* LISTAGEM DE CARDS DE VÍNCULOS ARQUIVADOS */}
+              <div className="space-y-4">
+                {archivedVinculos.map((vinculo) => {
+                  const isExpanded = inspectingVinculoId === vinculo.id;
 
-                {/* FILTRO DE DATA INICIAL */}
-                <div className="md:col-span-3 flex items-center gap-2">
-                  <span className="text-[11px] font-semibold text-text-muted shrink-0 flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5" /> De:
-                  </span>
-                  <input
-                    id="input-date-start"
-                    type="date"
-                    value={filterStartDate}
-                    onChange={(e) => setFilterStartDate(e.target.value)}
-                    className="w-full px-2.5 py-2 bg-surface border border-border rounded-xl text-xs text-foreground focus:outline-none focus:border-primary transition-colors"
-                  />
-                </div>
-
-                {/* FILTRO DE DATA FINAL */}
-                <div className="md:col-span-3 flex items-center gap-2">
-                  <span className="text-[11px] font-semibold text-text-muted shrink-0 flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5" /> Até:
-                  </span>
-                  <input
-                    id="input-date-end"
-                    type="date"
-                    value={filterEndDate}
-                    onChange={(e) => setFilterEndDate(e.target.value)}
-                    className="w-full px-2.5 py-2 bg-surface border border-border rounded-xl text-xs text-foreground focus:outline-none focus:border-primary transition-colors"
-                  />
-                  {hasActiveFilters && (
-                    <button
-                      id="btn-reset-filters"
-                      type="button"
-                      onClick={handleResetFilters}
-                      title="Limpar filtros"
-                      className="p-2 text-text-muted hover:text-foreground rounded-xl hover:bg-surface border border-border transition-colors shrink-0 cursor-pointer"
-                      aria-label="Limpar filtros"
+                  return (
+                    <div
+                      key={vinculo.id}
+                      className={`rounded-2xl border transition-all ${
+                        isExpanded
+                          ? 'bg-background/90 border-primary/40 shadow-lg'
+                          : 'bg-background/60 border-border hover:border-amber-500/30'
+                      }`}
                     >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
+                      {/* CABEÇALHO DO CARD DO VÍNCULO */}
+                      <div className="p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-bold">
+                              <Building2 className="w-3.5 h-3.5" />
+                              <span>{vinculo.school}</span>
+                            </div>
+
+                            <span className="px-3 py-1 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-black tracking-wide">
+                              {vinculo.vinculoCode}
+                            </span>
+
+                            <span className="text-xs text-text-muted flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-text-muted" /> Encerrado em: {formatDateTime(vinculo.closedAt)}
+                            </span>
+                          </div>
+
+                          <div className="text-xs text-text-muted">
+                            Motivo do arquivamento: <strong className="text-foreground">{vinculo.reason}</strong>
+                          </div>
+
+                          {/* RESUMO DOS REGISTROS DESTE VÍNCULO */}
+                          <div className="flex items-center gap-3 pt-1 flex-wrap text-xs text-foreground font-semibold">
+                            <span className="px-2.5 py-1 rounded-lg bg-surface border border-border flex items-center gap-1.5">
+                              <User className="w-3.5 h-3.5 text-primary" />
+                              {vinculo.totalStudents} Alunos
+                            </span>
+                            <span className="px-2.5 py-1 rounded-lg bg-surface border border-border flex items-center gap-1.5">
+                              <FileText className="w-3.5 h-3.5 text-amber-400" />
+                              {vinculo.totalActivities} Atividades
+                            </span>
+                            {vinculo.turmas.length > 0 && (
+                              <span className="px-2.5 py-1 rounded-lg bg-surface border border-border flex items-center gap-1.5 text-text-muted">
+                                <GraduationCap className="w-3.5 h-3.5 text-blue-400" />
+                                Turmas: {vinculo.turmas.join(', ')}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* AÇÕES DO VÍNCULO */}
+                        <div className="flex items-center gap-3 shrink-0 flex-wrap pt-2 lg:pt-0 border-t lg:border-t-0 border-border">
+                          {/* BOTÃO PRINCIPAL: RESTAURAR VÍNCULO */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenRestoreModal(vinculo)}
+                            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all duration-200 shadow-sm flex items-center justify-center gap-2 cursor-pointer min-h-[44px] min-w-[170px] active:scale-95"
+                            title="Restaurar este vínculo de volta para a base ativa"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                            <span>Restaurar Vínculo</span>
+                          </button>
+
+                          {/* BOTÃO SECUNDÁRIO: CONSULTAR REGISTROS DO VÍNCULO */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isExpanded) {
+                                setInspectingVinculoId(null);
+                              } else {
+                                setInspectingVinculoId(vinculo.id);
+                                setInspectSearchQuery('');
+                              }
+                            }}
+                            className={`px-4 py-2.5 text-xs font-bold rounded-xl border transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer min-h-[44px] min-w-[170px] active:scale-95 ${
+                              isExpanded
+                                ? 'bg-surface border-primary text-primary shadow-sm'
+                                : 'bg-surface border-border text-foreground hover:bg-surface-hover'
+                            }`}
+                          >
+                            <Eye className="w-4 h-4" />
+                            <span>{isExpanded ? 'Ocultar Registros' : 'Consultar Registros'}</span>
+                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* PAINEL EXPANSÍVEL DE CONSULTA DO VÍNCULO ESPECÍFICO */}
+                      {isExpanded && (
+                        <div className="p-5 sm:p-6 border-t border-border bg-surface/50 rounded-b-2xl space-y-4 animate-fadeIn">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1.5 p-1 bg-background border border-border rounded-2xl">
+                                <button
+                                  type="button"
+                                  onClick={() => setInspectTab('students')}
+                                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer min-h-[42px] min-w-[145px] active:scale-95 border ${
+                                    inspectTab === 'students'
+                                      ? 'bg-surface border-border text-foreground shadow-sm'
+                                      : 'text-text-muted hover:text-foreground border-transparent hover:bg-surface-hover/50'
+                                  }`}
+                                >
+                                  <User className="w-3.5 h-3.5" />
+                                  <span>Alunos ({vinculo.totalStudents})</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setInspectTab('activities')}
+                                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer min-h-[42px] min-w-[145px] active:scale-95 border ${
+                                    inspectTab === 'activities'
+                                      ? 'bg-surface border-border text-foreground shadow-sm'
+                                      : 'text-text-muted hover:text-foreground border-transparent hover:bg-surface-hover/50'
+                                  }`}
+                                >
+                                  <FileText className="w-3.5 h-3.5" />
+                                  <span>Atividades ({vinculo.totalActivities})</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="relative w-full sm:w-72">
+                              <Search className="w-3.5 h-3.5 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+                              <input
+                                type="text"
+                                value={inspectSearchQuery}
+                                onChange={(e) => setInspectSearchQuery(e.target.value)}
+                                placeholder="Filtrar por nome, matrícula, turma..."
+                                className="w-full pl-8 pr-3 py-1.5 bg-background border border-border rounded-xl text-xs text-foreground placeholder:text-text-muted focus:outline-none focus:border-primary transition-colors"
+                              />
+                            </div>
+                          </div>
+
+                          {/* LISTAGEM DE ALUNOS DO VÍNCULO */}
+                          {inspectTab === 'students' && (
+                            <div className="space-y-2">
+                              {filteredInspectingStudents.length === 0 ? (
+                                <div className="p-6 text-center rounded-xl border border-dashed border-border text-xs text-text-muted">
+                                  Nenhum aluno encontrado para os critérios de busca.
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-80 overflow-y-auto pr-1">
+                                  {filteredInspectingStudents.map((st) => (
+                                    <div
+                                      key={st.id}
+                                      className="p-3 rounded-xl bg-background border border-border flex items-center justify-between gap-3 hover:border-border/80 transition-colors"
+                                    >
+                                      <div className="flex items-center gap-2.5 min-w-0">
+                                        <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0">
+                                          {st.fullName?.charAt(0) || 'A'}
+                                        </div>
+                                        <div className="min-w-0">
+                                          <div className="text-xs font-bold text-foreground truncate">
+                                            {st.fullName}
+                                          </div>
+                                          <div className="text-[11px] text-text-muted truncate">
+                                            Turma {st.turma} • Matrícula {st.matricula}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => setViewingArchivedStudent(st)}
+                                        className="px-2.5 py-1 rounded-lg bg-surface hover:bg-surface-hover text-foreground border border-border text-[11px] font-semibold transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
+                                      >
+                                        <Eye className="w-3 h-3 text-primary" />
+                                        <span>Dossiê</span>
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* LISTAGEM DE ATIVIDADES DO VÍNCULO */}
+                          {inspectTab === 'activities' && (
+                            <div className="space-y-2">
+                              {filteredInspectingActivities.length === 0 ? (
+                                <div className="p-6 text-center rounded-xl border border-dashed border-border text-xs text-text-muted">
+                                  Nenhuma atividade encontrada para os critérios de busca.
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-80 overflow-y-auto pr-1">
+                                  {filteredInspectingActivities.map((act) => (
+                                    <div
+                                      key={act.id}
+                                      className="p-3 rounded-xl bg-background border border-border flex items-center justify-between gap-3 hover:border-border/80 transition-colors"
+                                    >
+                                      <div className="flex items-center gap-2.5 min-w-0">
+                                        <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold text-xs shrink-0">
+                                          <FileText className="w-3.5 h-3.5" />
+                                        </div>
+                                        <div className="min-w-0">
+                                          <div className="text-xs font-bold text-foreground truncate">
+                                            {act.title}
+                                          </div>
+                                          <div className="text-[11px] text-text-muted truncate">
+                                            Turma {act.turma} • {act.type}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => setViewingArchivedActivity(act)}
+                                        className="px-2.5 py-1 rounded-lg bg-surface hover:bg-surface-hover text-foreground border border-border text-[11px] font-semibold transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
+                                      >
+                                        <Eye className="w-3 h-3 text-primary" />
+                                        <span>Ver</span>
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-
-              {/* LISTAGEM: ABA DE ALUNOS ARQUIVADOS */}
-              {auditTab === 'students' && (
-                <div className="space-y-3">
-                  {filteredArchivedStudents.length === 0 ? (
-                    <div className="p-8 text-center rounded-2xl border border-dashed border-border text-text-muted text-xs">
-                      {hasActiveFilters
-                        ? 'Nenhum aluno arquivado encontrado com os filtros selecionados.'
-                        : 'Nenhum aluno arquivado no momento.'}
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {filteredArchivedStudents.map((student) => (
-                        <div
-                          key={student.id}
-                          className="p-4 rounded-2xl bg-background/60 border border-border hover:border-amber-500/40 transition-all flex flex-col justify-between gap-3 group"
-                        >
-                          <div className="space-y-2">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-400 font-bold flex items-center justify-center shrink-0 text-sm">
-                                  {student.fullName?.charAt(0) || 'A'}
-                                </div>
-                                <div>
-                                  <h4 className="text-sm font-bold text-foreground leading-snug">
-                                    {student.fullName}
-                                  </h4>
-                                  <div className="flex items-center gap-2 text-xs text-text-muted mt-0.5">
-                                    <span>Turma {student.turma}</span>
-                                    <span>•</span>
-                                    <span>Matrícula {student.matricula}</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/30 shrink-0">
-                                Arquivado
-                              </span>
-                            </div>
-
-                            {/* DADOS DO ARQUIVAMENTO */}
-                            <div className="p-2.5 rounded-xl bg-surface border border-border text-xs space-y-1">
-                              <div className="flex items-center justify-between text-text-muted text-[11px]">
-                                <span className="flex items-center gap-1">
-                                  <Clock className="w-3 h-3 text-amber-400" /> Arquivado em:
-                                </span>
-                                <span className="font-semibold text-foreground">
-                                  {formatDateTime(student.archivedAt)}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between text-text-muted text-[11px]">
-                                <span>Motivo:</span>
-                                <span className="font-semibold text-foreground truncate max-w-[200px]" title={student.archivedReason}>
-                                  {student.archivedReason || 'Troca de vínculo'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* BOTÃO DE CONSULTA */}
-                          <div className="pt-2 border-t border-border flex items-center justify-between">
-                            <span className="text-[11px] text-text-muted">Dossiê e Notas</span>
-                            <button
-                              type="button"
-                              onClick={() => setViewingArchivedStudent(student)}
-                              className="px-3 py-1.5 rounded-xl bg-surface hover:bg-surface-hover text-foreground border border-border text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
-                            >
-                              <Eye className="w-3.5 h-3.5 text-primary" />
-                              <span>Consultar Aluno</span>
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* LISTAGEM: ABA DE ATIVIDADES ARQUIVADAS */}
-              {auditTab === 'activities' && (
-                <div className="space-y-3">
-                  {filteredArchivedActivities.length === 0 ? (
-                    <div className="p-8 text-center rounded-2xl border border-dashed border-border text-text-muted text-xs">
-                      {hasActiveFilters
-                        ? 'Nenhuma atividade arquivada encontrada com os filtros selecionados.'
-                        : 'Nenhuma atividade arquivada no momento.'}
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {filteredArchivedActivities.map((act) => (
-                        <div
-                          key={act.id}
-                          className="p-4 rounded-2xl bg-background/60 border border-border hover:border-amber-500/40 transition-all flex flex-col justify-between gap-3 group"
-                        >
-                          <div className="space-y-2">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-400 font-bold flex items-center justify-center shrink-0">
-                                  <FileText className="w-4 h-4" />
-                                </div>
-                                <div>
-                                  <h4 className="text-sm font-bold text-foreground leading-snug line-clamp-1">
-                                    {act.title}
-                                  </h4>
-                                  <div className="flex items-center gap-2 text-xs text-text-muted mt-0.5">
-                                    <span>Turma {act.turma}</span>
-                                    <span>•</span>
-                                    <span>{act.type}</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/30 shrink-0">
-                                Arquivado
-                              </span>
-                            </div>
-
-                            {/* DADOS DO ARQUIVAMENTO */}
-                            <div className="p-2.5 rounded-xl bg-surface border border-border text-xs space-y-1">
-                              <div className="flex items-center justify-between text-text-muted text-[11px]">
-                                <span className="flex items-center gap-1">
-                                  <Clock className="w-3 h-3 text-amber-400" /> Arquivado em:
-                                </span>
-                                <span className="font-semibold text-foreground">
-                                  {formatDateTime(act.archivedAt)}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between text-text-muted text-[11px]">
-                                <span>Motivo:</span>
-                                <span className="font-semibold text-foreground truncate max-w-[200px]" title={act.archivedReason}>
-                                  {act.archivedReason || 'Troca de vínculo'}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between text-text-muted text-[11px] pt-0.5">
-                                <span>Total de Entregas:</span>
-                                <span className="font-semibold text-foreground">
-                                  {act.submissions?.length || 0} submissões
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* BOTÃO DE CONSULTA */}
-                          <div className="pt-2 border-t border-border flex items-center justify-between">
-                            <span className="text-[11px] text-text-muted">Enunciados e Notas</span>
-                            <button
-                              type="button"
-                              onClick={() => setViewingArchivedActivity(act)}
-                              className="px-3 py-1.5 rounded-xl bg-surface hover:bg-surface-hover text-foreground border border-border text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
-                            >
-                              <Eye className="w-3.5 h-3.5 text-primary" />
-                              <span>Consultar Atividade</span>
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           )}
         </section>
       </div>
+
+      {/* MODAL: RESTAURAÇÃO SEGURA DO VÍNCULO */}
+      {vinculoToRestore && (
+        <div
+          id="modal-restore-vinculo-overlay"
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-fadeIn"
+        >
+          <div
+            id="modal-restore-vinculo-content"
+            className="bg-surface border border-border rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-6 shadow-2xl relative"
+          >
+            {/* CABEÇALHO */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20">
+                  <RotateCcw className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-foreground">Restaurar Vínculo Docente</h3>
+                  <p className="text-xs text-text-muted mt-0.5">Reativação completa de dados</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCloseRestoreModal}
+                disabled={isSubmittingRestore}
+                className="p-2 text-text-muted hover:text-foreground rounded-xl hover:bg-surface-hover transition-colors cursor-pointer"
+                aria-label="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* DETALHES DO VÍNCULO A SER RESTAURADO */}
+            <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-foreground space-y-2 text-sm leading-relaxed">
+              <div className="flex items-center gap-2 font-bold text-emerald-400">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{vinculoToRestore.vinculoCode} • {vinculoToRestore.school}</span>
+              </div>
+              <p className="text-xs text-text-muted">
+                Esta ação reativará <strong className="text-foreground">{vinculoToRestore.totalStudents} alunos</strong> e{' '}
+                <strong className="text-foreground">{vinculoToRestore.totalActivities} atividades</strong> deste vínculo histórico, disponibilizando-os imediatamente nas suas turmas ativas.
+              </p>
+              {vinculoToRestore.turmas.length > 0 && (
+                <div className="text-xs text-text-muted">
+                  Turmas que serão reativadas: <strong className="text-foreground">{vinculoToRestore.turmas.join(', ')}</strong>
+                </div>
+              )}
+            </div>
+
+            {/* AVISO DE SEGURANÇA */}
+            <div className="p-3 rounded-xl bg-background border border-border text-xs text-text-muted space-y-1">
+              <div className="font-semibold text-foreground flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-primary" /> Integridade Preservada
+              </div>
+              <p>
+                Todas as notas, submissões e anotações pedagógicas registradas neste vínculo continuam 100% preservadas.
+              </p>
+            </div>
+
+            {/* BOTÕES DE AÇÃO */}
+            <div className="pt-2 flex flex-col sm:flex-row gap-3 items-center justify-end">
+              <button
+                type="button"
+                onClick={handleCloseRestoreModal}
+                disabled={isSubmittingRestore}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-border hover:bg-surface-hover text-foreground font-semibold text-sm transition-colors cursor-pointer min-h-[44px]"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmRestore}
+                disabled={isSubmittingRestore}
+                className="w-full sm:w-auto px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+              >
+                {isSubmittingRestore ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Restaurando vínculo...</span>
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Confirmar Restauração</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL 1: CONSULTA DE ALUNO ARQUIVADO (MODO SOMENTE LEITURA E AUDITORIA) */}
       {viewingArchivedStudent && (
@@ -848,7 +1086,7 @@ export const BackupView: React.FC<BackupViewProps> = ({
               )}
             </div>
 
-            {/* BOTÃO DE FECHAR (SEM BOTÃO DE EDITAR/EXCLUIR) */}
+            {/* BOTÃO DE FECHAR */}
             <div className="pt-3 border-t border-border flex justify-end">
               <button
                 type="button"
@@ -930,7 +1168,7 @@ export const BackupView: React.FC<BackupViewProps> = ({
               </div>
             )}
 
-            {/* QUESTÕES REGISTRADAS (SE HOUVER) */}
+            {/* QUESTÕES REGISTRADAS */}
             {viewingArchivedActivity.questions && viewingArchivedActivity.questions.length > 0 && (
               <div className="space-y-3">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-text-muted">
@@ -1004,7 +1242,7 @@ export const BackupView: React.FC<BackupViewProps> = ({
               )}
             </div>
 
-            {/* BOTÃO DE FECHAR (SEM BOTÃO DE EDITAR/EXCLUIR) */}
+            {/* BOTÃO DE FECHAR */}
             <div className="pt-3 border-t border-border flex justify-end">
               <button
                 type="button"
@@ -1018,7 +1256,7 @@ export const BackupView: React.FC<BackupViewProps> = ({
         </div>
       )}
 
-      {/* MODAL DE CONFIRMAÇÃO EM DUAS ETAPAS COM PALAVRA-CHAVE */}
+      {/* MODAL DE CONFIRMAÇÃO DE ARQUIVAMENTO */}
       {isArchiveModalOpen && (
         <div
           id="modal-archive-vinculo-overlay"
@@ -1036,7 +1274,7 @@ export const BackupView: React.FC<BackupViewProps> = ({
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-foreground">Arquivar Vínculo Atual</h3>
-                  <p className="text-xs text-text-muted mt-0.5">Confirmação de segurança obrigatória</p>
+                  <p className="text-xs text-text-muted mt-0.5">Encerramento de ciclo e vinculação por Escola e Mês/Ano</p>
                 </div>
               </div>
 
@@ -1051,25 +1289,52 @@ export const BackupView: React.FC<BackupViewProps> = ({
               </button>
             </div>
 
-            {/* AVISO EM LINGUAGEM SIMPLES E CLARA */}
+            {/* AVISO EM LINGUAGEM CLARA */}
             <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-foreground space-y-2 text-sm leading-relaxed">
               <p className="font-semibold text-amber-400">
-                Isso vai arquivar {activeStudentsCount} alunos e {activeActivitiesCount} atividades do vínculo atual. Eles deixarão de aparecer nas suas listas ativas, mas continuam salvos e podem ser consultados na área de Backup e Recuperação para auditoria.
+                Isso vai arquivar {activeStudentsCount} alunos e {activeActivitiesCount} atividades sob o identificador <span className="underline font-black">{nextVinculoCodePreview}</span>.
               </p>
               <p className="text-xs text-text-muted">
-                Nenhum dado é apagado do banco de dados. O sistema apenas marca os registros deste vínculo como arquivados para liberar suas turmas para o próximo contrato ou ano letivo.
+                Os dados deixam de aparecer nas turmas ativas, mas ficam salvos permanentemente e podem ser restaurados a qualquer momento quando você voltar a lecionar nesta escola.
               </p>
             </div>
 
             {/* FORMULÁRIO DE ARQUIVAMENTO */}
             <div className="space-y-4">
-              {/* CAMPO 1: MOTIVO DO ARQUIVAMENTO */}
+              {/* CAMPO 1: ESCOLA DO VÍNCULO */}
+              <div>
+                <label
+                  htmlFor="archive-school-input"
+                  className="block text-xs font-bold uppercase tracking-wider text-text-muted mb-2"
+                >
+                  Escola de Vinculação:
+                </label>
+                <input
+                  id="archive-school-input"
+                  type="text"
+                  value={archiveSchool}
+                  onChange={(e) => setArchiveSchool(e.target.value)}
+                  disabled={isSubmittingArchive}
+                  placeholder="Nome da escola (ex: E.E.B. Professor...)"
+                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none focus:border-amber-500 transition-colors"
+                />
+              </div>
+
+              {/* IDENTIFICADOR AUTOMÁTICO DO VÍNCULO */}
+              <div className="p-3 rounded-xl bg-background border border-border flex items-center justify-between text-xs">
+                <span className="text-text-muted font-medium">Identificador gerado (Mês/Ano):</span>
+                <span className="font-black text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                  {nextVinculoCodePreview}
+                </span>
+              </div>
+
+              {/* CAMPO 2: MOTIVO DO ARQUIVAMENTO */}
               <div>
                 <label
                   htmlFor="archive-reason-input"
                   className="block text-xs font-bold uppercase tracking-wider text-text-muted mb-2"
                 >
-                  Motivo do arquivamento:
+                  Motivo do encerramento:
                 </label>
                 <input
                   id="archive-reason-input"
@@ -1077,18 +1342,18 @@ export const BackupView: React.FC<BackupViewProps> = ({
                   value={archiveReason}
                   onChange={(e) => setArchiveReason(e.target.value)}
                   disabled={isSubmittingArchive}
-                  placeholder="Ex.: Troca de vínculo ACT, Fim de Contrato..."
+                  placeholder="Ex.: Troca de vínculo ACT, Fim de Contrato, Fim do Ano Letivo..."
                   className="w-full bg-background border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none focus:border-amber-500 transition-colors"
                 />
               </div>
 
-              {/* CAMPO 2: PALAVRA DE CONFIRMAÇÃO */}
+              {/* CAMPO 3: PALAVRA DE CONFIRMAÇÃO */}
               <div>
                 <label
                   htmlFor="archive-confirm-word-input"
                   className="block text-xs font-bold uppercase tracking-wider text-text-muted mb-2"
                 >
-                  Digite <span className="text-amber-400 font-black underline">ARQUIVAR</span> para liberar a confirmação:
+                  Digite <span className="text-amber-400 font-black underline">ARQUIVAR</span> para confirmar:
                 </label>
                 <input
                   id="archive-confirm-word-input"
@@ -1143,4 +1408,3 @@ export const BackupView: React.FC<BackupViewProps> = ({
 };
 
 export default BackupView;
-

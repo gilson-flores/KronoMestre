@@ -26,7 +26,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { Activity, ActivityQuestion, ActivityType, StudentUser } from '@/lib/types';
-import { DEFAULT_TURMAS, doesTurmaHavePNEStudent, canStudentAccessActivity, isStudentPNE } from '@/lib/studentUtils';
+import { doesTurmaHavePNEStudent, canStudentAccessActivity, isStudentPNE, getOriginalTurmas } from '@/lib/studentUtils';
 import { TurmaMultiSelect } from '@/components/TurmaMultiSelect';
 import {
   createAdaptedMildModerateActivity,
@@ -70,7 +70,26 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   const [description, setDescription] = useState('');
   const [supportMaterial, setSupportMaterial] = useState('');
   const [supportLinkInput, setSupportLinkInput] = useState('');
-  const [selectedTurmas, setSelectedTurmas] = useState<string[]>([DEFAULT_TURMAS[0] || '101']);
+  
+  // Available turmas strictly from active students
+  const availableTurmas = React.useMemo(() => {
+    return getOriginalTurmas(students);
+  }, [students]);
+
+  const [userSelectedTurmas, setUserSelectedTurmas] = useState<string[] | null>(null);
+
+  // Derived selected turmas that adapt to active students
+  const selectedTurmas = React.useMemo(() => {
+    if (userSelectedTurmas !== null) {
+      return userSelectedTurmas;
+    }
+    return availableTurmas.length > 0 ? [availableTurmas[0]] : [];
+  }, [userSelectedTurmas, availableTurmas]);
+
+  const setSelectedTurmas = React.useCallback((turmas: string[]) => {
+    setUserSelectedTurmas(turmas);
+  }, []);
+
   const [type, setType] = useState<ActivityType>('Avaliação');
   const [recoveryFromId, setRecoveryFromId] = useState<string>('');
   
@@ -204,7 +223,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
       finalSupport = finalSupport ? `${finalSupport}\n\n${linkString}` : linkString;
     }
 
-    const resolvedTurma = selectedTurmas.length > 0 ? selectedTurmas.join(', ') : '101';
+    const resolvedTurma = selectedTurmas.length > 0 ? selectedTurmas.join(', ') : 'Geral';
     const formattedDeadline = formatDeadlineDisplay(deadlineDateTime);
 
     const activityId = generateActivityId();
@@ -825,6 +844,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
               <TurmaMultiSelect
                 selectedTurmas={selectedTurmas}
                 onChange={setSelectedTurmas}
+                options={availableTurmas}
               />
             </div>
 

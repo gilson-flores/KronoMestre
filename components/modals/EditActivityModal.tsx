@@ -23,7 +23,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Activity, ActivityQuestion, ActivityType, StudentUser } from '@/lib/types';
-import { DEFAULT_TURMAS, getTurmaLabel, canStudentAccessActivity, isStudentPNE } from '@/lib/studentUtils';
+import { getTurmaLabel, canStudentAccessActivity, isStudentPNE, getOriginalTurmas } from '@/lib/studentUtils';
 import { TurmaMultiSelect } from '@/components/TurmaMultiSelect';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
@@ -52,7 +52,16 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   const [description, setDescription] = useState('');
   const [supportMaterial, setSupportMaterial] = useState('');
   const [supportLinkInput, setSupportLinkInput] = useState('');
-  const [selectedTurmas, setSelectedTurmas] = useState<string[]>(['101']);
+  
+  // Available turmas strictly from active students
+  const availableTurmas = React.useMemo(() => {
+    return getOriginalTurmas(students);
+  }, [students]);
+
+  const [selectedTurmas, setSelectedTurmas] = useState<string[]>(() => {
+    const list = getOriginalTurmas(students);
+    return list.length > 0 ? [list[0]] : [];
+  });
   const [type, setType] = useState<ActivityType>('Avaliação');
   const [recoveryFromId, setRecoveryFromId] = useState<string>('');
   const [status, setStatus] = useState<'Ativo' | 'Prazo Encerrado' | 'Inativo'>('Ativo');
@@ -82,8 +91,14 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
     setSupportMaterial(activity.supportMaterial || '');
     const parsedTurmas = activity.turma
       ? activity.turma.split(/[,;]+/).map((t) => t.trim()).filter(Boolean)
-      : ['101'];
-    setSelectedTurmas(parsedTurmas.length > 0 ? parsedTurmas : ['101']);
+      : [];
+    setSelectedTurmas(
+      parsedTurmas.length > 0
+        ? parsedTurmas
+        : availableTurmas.length > 0
+        ? [availableTurmas[0]]
+        : []
+    );
     setType(activity.type || 'Avaliação');
     setRecoveryFromId(activity.recoveryFromId || '');
     setStatus(activity.status || 'Ativo');
@@ -526,6 +541,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
               <TurmaMultiSelect
                 selectedTurmas={selectedTurmas}
                 onChange={setSelectedTurmas}
+                options={availableTurmas}
               />
             </div>
 

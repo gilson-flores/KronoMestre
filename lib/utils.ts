@@ -18,3 +18,24 @@ export function formatAvatarUrl(url: string | undefined | null): string {
   }
   return trimmed;
 }
+
+/**
+ * Rola suavemente a página e os containers de conteúdo para o topo
+ * ao salvar ou executar ações chave nos ambientes do Aluno, Professor e 2º Professor.
+ */
+export function scrollToTop() {
+  if (typeof window !== 'undefined') {
+    try {
+      window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+      document.documentElement?.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+      document.body?.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+      const scrollableElements = document.querySelectorAll('main, .overflow-y-auto, [data-scroll-container]');
+      scrollableElements.forEach((el) => {
+        try {
+          el.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+        } catch (_) {}
+      });
+    } catch (_) {}
+  }
+}
+

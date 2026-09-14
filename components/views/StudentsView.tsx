@@ -97,10 +97,10 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
 
           <button
             onClick={() => setSelectedTagFilter('all')}
-            className={`py-2 px-4 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer ${
+            className={`py-2 px-4 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer min-h-[36px] flex items-center justify-center gap-1.5 border active:scale-95 ${
               selectedTagFilter === 'all'
-                ? 'bg-primary text-white shadow-md'
-                : 'bg-surface text-muted hover:text-foreground border border-border'
+                ? 'bg-primary text-white border-primary shadow-sm'
+                : 'bg-surface text-muted hover:text-foreground border-border hover:bg-surface-hover'
             }`}
           >
             Todos ({students.length})
@@ -108,10 +108,10 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
 
           <button
             onClick={() => setSelectedTagFilter('PNE')}
-            className={`py-2 px-4 rounded-full text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer ${
+            className={`py-2 px-4 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer min-h-[36px] flex items-center justify-center gap-1.5 border active:scale-95 ${
               selectedTagFilter === 'PNE'
-                ? 'bg-primary text-white shadow-md'
-                : 'bg-surface text-muted hover:text-foreground border border-border'
+                ? 'bg-primary text-white border-primary shadow-sm'
+                : 'bg-surface text-muted hover:text-foreground border-border hover:bg-surface-hover'
             }`}
           >
             <Heart className="w-3.5 h-3.5 text-rose-400" />
@@ -120,10 +120,10 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
 
           <button
             onClick={() => setSelectedTagFilter('RAD')}
-            className={`py-2 px-4 rounded-full text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer ${
+            className={`py-2 px-4 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer min-h-[36px] flex items-center justify-center gap-1.5 border active:scale-95 ${
               selectedTagFilter === 'RAD'
-                ? 'bg-primary text-white shadow-md'
-                : 'bg-surface text-muted hover:text-foreground border border-border'
+                ? 'bg-primary text-white border-primary shadow-sm'
+                : 'bg-surface text-muted hover:text-foreground border-border hover:bg-surface-hover'
             }`}
           >
             <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
@@ -132,10 +132,10 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
 
           <button
             onClick={() => setSelectedTagFilter('REGULAR')}
-            className={`py-2 px-4 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer ${
+            className={`py-2 px-4 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer min-h-[36px] flex items-center justify-center gap-1.5 border active:scale-95 ${
               selectedTagFilter === 'REGULAR'
-                ? 'bg-primary text-white shadow-md'
-                : 'bg-surface text-muted hover:text-foreground border border-border'
+                ? 'bg-primary text-white border-primary shadow-sm'
+                : 'bg-surface text-muted hover:text-foreground border-border hover:bg-surface-hover'
             }`}
           >
             Regular ({students.filter((s) => !s.tag || s.tag.toUpperCase() === 'REGULAR').length})
