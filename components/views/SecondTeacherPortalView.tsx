@@ -30,6 +30,7 @@ import { formatAvatarUrl } from '@/lib/utils';
 import { getTurmaLabel } from '@/lib/studentUtils';
 import { hashPassword } from '@/lib/crypto';
 import { supabase } from '@/lib/supabase';
+import { getScopedLocalStorageItem, setScopedLocalStorageItem } from '@/lib/cacheUtils';
 import { StudentSupervisionModal } from '@/components/modals/StudentSupervisionModal';
 import { LibraryView } from '@/components/views/LibraryView';
 import { MessagesView } from '@/components/views/MessagesView';
@@ -218,11 +219,13 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
     async function loadAtestados() {
       setIsLoadingAtestados(true);
       let loaded: AtestadoRadRecord[] = [];
+      const ownerTeacherId = teacher.ownerTeacherId || (teacher as any).owner_teacher_id || teacher.id;
 
-      // Local storage fallback
+      // Local storage fallback com isolamento por professor titular
       if (typeof window !== 'undefined') {
         try {
-          const raw = localStorage.getItem('atestados_rad_records') || localStorage.getItem('local_atestados_rad_data');
+          const raw = getScopedLocalStorageItem('atestados_rad_records', ownerTeacherId) || 
+                      getScopedLocalStorageItem('local_atestados_rad_data', ownerTeacherId);
           if (raw) {
             loaded = JSON.parse(raw);
           }
@@ -238,6 +241,10 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
           const json = await res.json();
           if (json.success && Array.isArray(json.data)) {
             loaded = json.data;
+            if (typeof window !== 'undefined') {
+              setScopedLocalStorageItem('atestados_rad_records', JSON.stringify(json.data), ownerTeacherId);
+              setScopedLocalStorageItem('local_atestados_rad_data', JSON.stringify(json.data), ownerTeacherId);
+            }
           }
         }
       } catch (err) {

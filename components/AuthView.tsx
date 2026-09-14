@@ -136,7 +136,10 @@ export const AuthView: React.FC<AuthViewProps> = ({
             avatarUrl: upsertedTeacher.avatar_url || teacherProfile.avatarUrl,
             phone: upsertedTeacher.phone || '',
             school: upsertedTeacher.school || '',
+            ownerTeacherId: upsertedTeacher.id,
           };
+        } else {
+          teacherProfile.ownerTeacherId = teacherProfile.id;
         }
 
         onLoginTeacher(teacherProfile);
@@ -217,8 +220,9 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
       if (isPasswordValid && (authData?.user || dbTeacher)) {
         // Autenticar sessão no servidor (cookie HttpOnly)
+        let serverOwnerTeacherId = '';
         try {
-          await fetch('/api/auth/login', {
+          const apiRes = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -227,6 +231,12 @@ export const AuthView: React.FC<AuthViewProps> = ({
               password: secondTeacherPassword,
             }),
           });
+          if (apiRes.ok) {
+            const resJson = await apiRes.json();
+            if (resJson?.user?.ownerTeacherId) {
+              serverOwnerTeacherId = resJson.user.ownerTeacherId;
+            }
+          }
         } catch (apiErr) {
           console.warn('Aviso de sessão do servidor:', apiErr);
         }
@@ -240,6 +250,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           phone: dbTeacher?.phone || '',
           school: dbTeacher?.school || teacher.school || '',
           mustChangePassword: Boolean(dbTeacher?.must_change_password),
+          ownerTeacherId: dbTeacher?.owner_teacher_id || serverOwnerTeacherId || teacher.ownerTeacherId || teacher.id,
         };
 
         if (onLoginSecondTeacher) {
@@ -427,7 +438,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
     if (isPassValid) {
       // Autenticar sessão no servidor (cookie HttpOnly)
       try {
-        await fetch('/api/auth/login', {
+        const apiRes = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -438,6 +449,12 @@ export const AuthView: React.FC<AuthViewProps> = ({
             password: enteredPassword,
           }),
         });
+        if (apiRes.ok) {
+          const resJson = await apiRes.json();
+          if (resJson?.user?.ownerTeacherId) {
+            matched.ownerTeacherId = resJson.user.ownerTeacherId;
+          }
+        }
       } catch (apiErr) {
         console.warn('Aviso de sessão do servidor para aluno:', apiErr);
       }

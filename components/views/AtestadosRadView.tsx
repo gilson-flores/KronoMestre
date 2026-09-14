@@ -20,12 +20,14 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { StudentUser, AtestadoRadRecord } from '@/lib/types';
+import { getScopedLocalStorageItem, setScopedLocalStorageItem, getCurrentOwnerTeacherId } from '@/lib/cacheUtils';
 
 const generateRecordId = () => 'atest_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
 
 interface AtestadosRadViewProps {
   students: StudentUser[];
   isReadOnly?: boolean;
+  ownerTeacherId?: string;
 }
 
 // Utility function to calculate end date (Data Final)
@@ -61,7 +63,8 @@ const getTodayStr = (): string => {
   return `${y}-${m}-${d}`;
 };
 
-export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students, isReadOnly = false }) => {
+export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students, isReadOnly = false, ownerTeacherId }) => {
+  const effectiveOwner = ownerTeacherId || getCurrentOwnerTeacherId();
   const [records, setRecords] = useState<AtestadoRadRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -104,11 +107,11 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students, is
     return (Number(diasAtestado) || 1) >= 15 ? 'RAD' : 'Atestado';
   }, [diasAtestado, customTipo]);
 
-  // Sync to LocalStorage
+  // Sync to LocalStorage com isolamento por professor titular
   const saveRecordsToLocal = (newRecords: AtestadoRadRecord[]) => {
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem('atestados_rad_records', JSON.stringify(newRecords));
+        setScopedLocalStorageItem('atestados_rad_records', JSON.stringify(newRecords), effectiveOwner);
       } catch (e) {
         console.error(e);
       }
@@ -120,10 +123,10 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students, is
     setIsLoading(true);
     let loaded: AtestadoRadRecord[] = [];
 
-    // 1. Try LocalStorage first (instant UI feedback)
+    // 1. Try LocalStorage first (instant UI feedback) com escopo seguro
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem('atestados_rad_records');
+        const saved = getScopedLocalStorageItem('atestados_rad_records', effectiveOwner);
         if (saved) {
           loaded = JSON.parse(saved);
         }

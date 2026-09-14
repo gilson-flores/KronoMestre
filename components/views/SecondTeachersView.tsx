@@ -57,6 +57,7 @@ import {
 } from '@/lib/studentUtils';
 import { extractCleanHtml } from '@/lib/adaptationUtils';
 import { scrollToTop } from '@/lib/utils';
+import { getScopedLocalStorageItem, setScopedLocalStorageItem } from '@/lib/cacheUtils';
 
 interface SecondTeachersViewProps {
   teacher: TeacherUser;
@@ -130,11 +131,12 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   // Fetch second teachers
   const fetchSecondTeachers = async () => {
     setIsLoadingTeachers(true);
+    const ownerTeacherId = teacher.ownerTeacherId || (teacher as any).owner_teacher_id || teacher.id;
 
-    // 1. Leitura imediata do cache local
+    // 1. Leitura imediata do cache local seguro
     if (typeof window !== 'undefined') {
       try {
-        const cached = localStorage.getItem('local_second_teachers_data');
+        const cached = getScopedLocalStorageItem('local_second_teachers_data', ownerTeacherId);
         if (cached) {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed)) {
@@ -163,7 +165,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
           }));
           setSecondTeachers(formatted);
           if (typeof window !== 'undefined') {
-            localStorage.setItem('local_second_teachers_data', JSON.stringify(formatted));
+            setScopedLocalStorageItem('local_second_teachers_data', JSON.stringify(formatted), ownerTeacherId);
           }
           setIsLoadingTeachers(false);
           return;
@@ -194,7 +196,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
           }));
           setSecondTeachers(formatted);
           if (typeof window !== 'undefined') {
-            localStorage.setItem('local_second_teachers_data', JSON.stringify(formatted));
+            setScopedLocalStorageItem('local_second_teachers_data', JSON.stringify(formatted), ownerTeacherId);
           }
         }
       }
@@ -233,6 +235,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
     const teacherId = targetTeacher.id;
     const teacherEmail = targetTeacher.email;
     const teacherName = targetTeacher.name;
+    const ownerTeacherId = teacher.ownerTeacherId || (teacher as any).owner_teacher_id || teacher.id;
 
     // 1. Atualização Otimista Imediata da Interface
     setSecondTeachers((prev) =>
@@ -242,13 +245,13 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
     // 2. Atualização Imediata do Cache Local
     if (typeof window !== 'undefined') {
       try {
-        const cached = localStorage.getItem('local_second_teachers_data');
+        const cached = getScopedLocalStorageItem('local_second_teachers_data', ownerTeacherId);
         if (cached) {
           const list: TeacherUser[] = JSON.parse(cached);
           const updated = list.filter(
             (t) => t.id !== teacherId && t.email?.toLowerCase() !== teacherEmail?.toLowerCase()
           );
-          localStorage.setItem('local_second_teachers_data', JSON.stringify(updated));
+          setScopedLocalStorageItem('local_second_teachers_data', JSON.stringify(updated), ownerTeacherId);
         }
       } catch (e) {
         console.warn('Erro ao atualizar cache de 2º professores:', e);

@@ -5,6 +5,7 @@ import { X, UserPlus, HeartHandshake, CheckCircle2, AlertTriangle, Lock } from '
 import { TeacherUser } from '@/lib/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { hashPasswordBcrypt } from '@/lib/crypto';
+import { getScopedLocalStorageItem, setScopedLocalStorageItem } from '@/lib/cacheUtils';
 
 interface NewSecondTeacherModalProps {
   isOpen: boolean;
@@ -112,10 +113,10 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
 
       if (typeof window !== 'undefined') {
         try {
-          const cached = localStorage.getItem('local_second_teachers_data');
+          const cached = getScopedLocalStorageItem('local_second_teachers_data');
           const list: TeacherUser[] = cached ? JSON.parse(cached) : [];
           const updated = [...list.filter((t) => t.email !== newTeacher.email), newTeacher];
-          localStorage.setItem('local_second_teachers_data', JSON.stringify(updated));
+          setScopedLocalStorageItem('local_second_teachers_data', JSON.stringify(updated));
         } catch (e) {
           console.warn('Erro ao salvar 2º professor em cache local:', e);
         }

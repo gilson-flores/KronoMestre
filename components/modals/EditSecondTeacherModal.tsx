@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Pencil, HeartHandshake, CheckCircle2, AlertTriangle, Save } from 'lucide-react';
 import { TeacherUser } from '@/lib/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { getScopedLocalStorageItem, setScopedLocalStorageItem } from '@/lib/cacheUtils';
 
 interface EditSecondTeacherModalProps {
   isOpen: boolean;
@@ -95,7 +96,7 @@ export const EditSecondTeacherModal: React.FC<EditSecondTeacherModalProps> = ({
       // 2. Atualizar cache local
       if (typeof window !== 'undefined') {
         try {
-          const cached = localStorage.getItem('local_second_teachers_data');
+          const cached = getScopedLocalStorageItem('local_second_teachers_data');
           if (cached) {
             const list: TeacherUser[] = JSON.parse(cached);
             const updatedList = list.map((t) =>
@@ -103,7 +104,7 @@ export const EditSecondTeacherModal: React.FC<EditSecondTeacherModalProps> = ({
                 ? updatedTeacher
                 : t
             );
-            localStorage.setItem('local_second_teachers_data', JSON.stringify(updatedList));
+            setScopedLocalStorageItem('local_second_teachers_data', JSON.stringify(updatedList));
           }
         } catch (e) {
           console.warn('Erro ao atualizar cache local:', e);

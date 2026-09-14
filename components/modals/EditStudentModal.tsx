@@ -10,6 +10,7 @@ import {
   validateStudentName,
   isValidTurmaCode,
 } from '@/lib/studentUtils';
+import { getScopedLocalStorageItem, setScopedLocalStorageItem } from '@/lib/cacheUtils';
 
 interface EditStudentModalProps {
   isOpen: boolean;
@@ -38,10 +39,10 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     const fetchSecondTeachers = async () => {
-      // 1. Carregar cache local de 2º professores
+      // 1. Carregar cache local seguro de 2º professores
       if (typeof window !== 'undefined') {
         try {
-          const cached = localStorage.getItem('local_second_teachers_data');
+          const cached = getScopedLocalStorageItem('local_second_teachers_data');
           if (cached) {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed) && parsed.length > 0) {
@@ -72,7 +73,7 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
           setAvailableSecondTeachers(mapped);
           if (typeof window !== 'undefined') {
             try {
-              localStorage.setItem('local_second_teachers_data', JSON.stringify(mapped));
+              setScopedLocalStorageItem('local_second_teachers_data', JSON.stringify(mapped));
             } catch (e) {
               console.warn('Erro ao salvar cache de 2º professores:', e);
             }

@@ -50,6 +50,12 @@ import { ParallelRecoveryModal } from '@/components/modals/ParallelRecoveryModal
 import { ForceChangePasswordModal } from '@/components/modals/ForceChangePasswordModal';
 import { hashPasswordBcrypt } from '@/lib/crypto';
 import { scrollToTop } from '@/lib/utils';
+import {
+  getScopedLocalStorageItem,
+  setScopedLocalStorageItem,
+  cleanLegacyCacheKeys,
+  getCurrentOwnerTeacherId,
+} from '@/lib/cacheUtils';
 import { CheckCircle2, AlertTriangle, HeartHandshake, UserPlus } from 'lucide-react';
 
 // Helper de unificação e desduplicação atômica de mensagens de chat
@@ -139,6 +145,7 @@ export default function Home() {
       if (typeof window === 'undefined') return;
 
       try {
+        cleanLegacyCacheKeys();
         const sessionStr = sessionStorage.getItem('active_session');
         if (sessionStr) {
           const session = JSON.parse(sessionStr);
@@ -187,7 +194,7 @@ export default function Home() {
   const [students, setStudents] = useState<StudentUser[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem('local_students_data');
+        const saved = getScopedLocalStorageItem('local_students_data');
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
@@ -203,7 +210,7 @@ export default function Home() {
   const [activities, setActivities] = useState<Activity[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem('local_activities_data');
+        const saved = getScopedLocalStorageItem('local_activities_data');
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
@@ -217,7 +224,22 @@ export default function Home() {
     return initialActivities;
   });
   const [schedule] = useState(initialSchedule);
-  const [library, setLibrary] = useState<LibraryFile[]>(initialLibrary);
+  const [library, setLibrary] = useState<LibraryFile[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = getScopedLocalStorageItem('library_files_data');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao restaurar biblioteca local na inicialização:', e);
+      }
+    }
+    return initialLibrary;
+  });
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
 
   // Active datasets (filtered by non-archived for the current school cycle / vinculo)
@@ -415,7 +437,7 @@ export default function Home() {
     if (typeof window !== 'undefined') {
       try {
         const updated = sanitizeLibraryForStorage([newFile, ...library]);
-        localStorage.setItem('library_files_data', JSON.stringify(updated));
+        setScopedLocalStorageItem('library_files_data', JSON.stringify(updated), teacher.id);
       } catch (err) {
         console.warn('Não foi possível salvar os arquivos no localStorage (cota excedida):', err);
       }
@@ -449,7 +471,7 @@ export default function Home() {
     if (typeof window !== 'undefined') {
       try {
         const updated = sanitizeLibraryForStorage(library.filter((f) => f.id !== fileId));
-        localStorage.setItem('library_files_data', JSON.stringify(updated));
+        setScopedLocalStorageItem('library_files_data', JSON.stringify(updated), teacher.id);
       } catch (err) {
         console.warn('Erro ao atualizar localStorage após deleção:', err);
       }
@@ -516,7 +538,7 @@ export default function Home() {
           const localMap: Record<string, StudentUser> = {};
           if (typeof window !== 'undefined') {
             try {
-              const saved = localStorage.getItem('local_students_data');
+              const saved = getScopedLocalStorageItem('local_students_data', teacher.id);
               if (saved) {
                 const parsed: StudentUser[] = JSON.parse(saved);
                 parsed.forEach((s) => {
@@ -578,7 +600,7 @@ export default function Home() {
           setStudents(mappedStudents);
           if (typeof window !== 'undefined') {
             try {
-              localStorage.setItem('local_students_data', JSON.stringify(mappedStudents));
+              setScopedLocalStorageItem('local_students_data', JSON.stringify(mappedStudents), teacher.id);
             } catch (e) {
               console.warn('Erro ao atualizar cache local de estudantes:', e);
             }
@@ -623,7 +645,7 @@ export default function Home() {
         let localActivitiesMap: { [id: string]: Activity } = {};
         if (typeof window !== 'undefined') {
           try {
-            const cachedActs = localStorage.getItem('local_activities_data');
+            const cachedActs = getScopedLocalStorageItem('local_activities_data', teacher.id);
             if (cachedActs) {
               const parsedActs: Activity[] = JSON.parse(cachedActs);
               if (Array.isArray(parsedActs)) {
@@ -749,7 +771,7 @@ export default function Home() {
           setActivities(mappedActivities);
           if (typeof window !== 'undefined') {
             try {
-              localStorage.setItem('local_activities_data', JSON.stringify(mappedActivities));
+              setScopedLocalStorageItem('local_activities_data', JSON.stringify(mappedActivities), teacher.id);
             } catch (e) {
               console.warn('Erro ao atualizar cache local de atividades:', e);
             }
@@ -779,7 +801,7 @@ export default function Home() {
 
         // 4. Carregar Arquivos da Biblioteca via cache local inicialmente (busca no Supabase feita sob demanda ao acessar aba 'arquivos')
         if (typeof window !== 'undefined') {
-          const savedLib = localStorage.getItem('library_files_data');
+          const savedLib = getScopedLocalStorageItem('library_files_data', teacher.id);
           if (savedLib) {
             try {
               setLibrary(JSON.parse(savedLib));
@@ -831,7 +853,7 @@ export default function Home() {
           setLibrary(mappedLibrary);
           if (typeof window !== 'undefined') {
             try {
-              localStorage.setItem('library_files_data', JSON.stringify(mappedLibrary));
+              setScopedLocalStorageItem('library_files_data', JSON.stringify(mappedLibrary), teacher.id);
             } catch (e) {}
           }
         }
@@ -850,9 +872,38 @@ export default function Home() {
     setMustChangePassword(false);
     setCurrentTab('painel');
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('active_session', JSON.stringify({ role: 'teacher', teacherData: loggedTeacher }));
+      sessionStorage.setItem(
+        'active_session',
+        JSON.stringify({
+          role: 'teacher',
+          ownerTeacherId: loggedTeacher.id,
+          teacherData: loggedTeacher,
+        })
+      );
       requestNotificationPermission().catch(() => {});
+
+      // Carregar cache local seguro do professor que está iniciando sessão
+      try {
+        const cachedStudents = getScopedLocalStorageItem('local_students_data', loggedTeacher.id);
+        if (cachedStudents) {
+          const parsed = JSON.parse(cachedStudents);
+          if (Array.isArray(parsed) && parsed.length > 0) setStudents(parsed);
+        }
+        const cachedActs = getScopedLocalStorageItem('local_activities_data', loggedTeacher.id);
+        if (cachedActs) {
+          const parsed = JSON.parse(cachedActs);
+          if (Array.isArray(parsed) && parsed.length > 0) setActivities(parsed);
+        }
+        const cachedLib = getScopedLocalStorageItem('library_files_data', loggedTeacher.id);
+        if (cachedLib) {
+          const parsed = JSON.parse(cachedLib);
+          if (Array.isArray(parsed) && parsed.length > 0) setLibrary(parsed);
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar cache do professor:', e);
+      }
     }
+    setLoadDataTrigger((prev) => prev + 1);
   };
 
   const handleLoginSecondTeacher = (loggedTeacher: TeacherUser) => {
@@ -865,12 +916,14 @@ export default function Home() {
         'active_session',
         JSON.stringify({
           role: 'second_teacher',
+          ownerTeacherId: loggedTeacher.id,
           teacherData: loggedTeacher,
           mustChangePassword: Boolean(loggedTeacher.mustChangePassword),
         })
       );
       requestNotificationPermission().catch(() => {});
     }
+    setLoadDataTrigger((prev) => prev + 1);
   };
 
   const handleLoginStudent = (loggedStudent: StudentUser) => {
@@ -884,11 +937,13 @@ export default function Home() {
           role: 'student',
           studentId: loggedStudent.id,
           studentData: loggedStudent,
+          ownerTeacherId: loggedStudent.secondTeacherId || loggedStudent.ownerTeacherId || '',
           mustChangePassword: Boolean(loggedStudent.mustChangePassword),
         })
       );
       requestNotificationPermission().catch(() => {});
     }
+    setLoadDataTrigger((prev) => prev + 1);
     // Verificar prazos imediatamente no login do aluno
     setTimeout(() => {
       checkAndNotifyApproachingDeadlines(activities, loggedStudent, showGlobalStatus);
@@ -935,6 +990,9 @@ export default function Home() {
     }
     setRole(null);
     setCurrentStudent(null);
+    setStudents(initialStudents);
+    setActivities(initialActivities);
+    setLibrary(initialLibrary);
     if (reason && typeof reason === 'string') {
       showGlobalStatus('error', reason);
     }
@@ -1312,7 +1370,7 @@ export default function Home() {
           const next = [newAct, ...prev];
           if (typeof window !== 'undefined') {
             try {
-              localStorage.setItem('local_activities_data', JSON.stringify(next));
+              setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
             } catch (e) {}
           }
           return next;
@@ -1324,7 +1382,7 @@ export default function Home() {
         const next = [newAct, ...prev];
         if (typeof window !== 'undefined') {
           try {
-            localStorage.setItem('local_activities_data', JSON.stringify(next));
+            setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
           } catch (e) {}
         }
         return next;
@@ -1342,7 +1400,7 @@ export default function Home() {
         const next = [newAct, ...prev];
         if (typeof window !== 'undefined') {
           try {
-            localStorage.setItem('local_activities_data', JSON.stringify(next));
+            setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
           } catch (e) {}
         }
         return next;
@@ -1471,7 +1529,7 @@ export default function Home() {
           const next = prev.map((a) => (a.id === updatedAct.id ? updatedAct : a));
           if (typeof window !== 'undefined') {
             try {
-              localStorage.setItem('local_activities_data', JSON.stringify(next));
+              setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
             } catch (e) {}
           }
           return next;
@@ -1483,7 +1541,7 @@ export default function Home() {
         const next = prev.map((a) => (a.id === updatedAct.id ? updatedAct : a));
         if (typeof window !== 'undefined') {
           try {
-            localStorage.setItem('local_activities_data', JSON.stringify(next));
+            setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
           } catch (e) {}
         }
         return next;
@@ -1527,7 +1585,7 @@ export default function Home() {
         const next = prev.map((a) => (a.id === updatedAct.id ? updatedAct : a));
         if (typeof window !== 'undefined') {
           try {
-            localStorage.setItem('local_activities_data', JSON.stringify(next));
+            setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
           } catch (e) {}
         }
         return next;
@@ -1581,7 +1639,7 @@ export default function Home() {
         const next = prev.filter((a) => a.id !== activity.id);
         if (typeof window !== 'undefined') {
           try {
-            localStorage.setItem('local_activities_data', JSON.stringify(next));
+            setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
           } catch (e) {}
         }
         return next;
@@ -1851,7 +1909,7 @@ export default function Home() {
       );
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem('local_students_data', JSON.stringify(next));
+          setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
         } catch (e) {}
       }
       return next;
@@ -2164,7 +2222,7 @@ export default function Home() {
       const next = [...prev, ...processedStudents];
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem('local_students_data', JSON.stringify(next));
+          setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
         } catch (e) {
           console.warn('Erro ao salvar local_students_data na importação:', e);
         }
@@ -2238,7 +2296,7 @@ export default function Home() {
       const next = [...prev, studentToSave];
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem('local_students_data', JSON.stringify(next));
+          setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
         } catch (e) {
           console.warn('Erro ao salvar local_students_data no cadastro:', e);
         }
@@ -2297,7 +2355,7 @@ export default function Home() {
       const next = prev.map((s) => (s.id === updatedStudent.id || s.matricula === updatedStudent.matricula ? updatedStudent : s));
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem('local_students_data', JSON.stringify(next));
+          setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
         } catch (e) {
           console.warn('Erro ao salvar local_students_data na atualização:', e);
         }
@@ -2417,7 +2475,7 @@ export default function Home() {
         const next = prev.map((s) => (s.id === updatedStudent.id || s.id === finalStudent.id || s.matricula === finalStudent.matricula ? finalStudent : s));
         if (typeof window !== 'undefined') {
           try {
-            localStorage.setItem('local_students_data', JSON.stringify(next));
+            setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
           } catch (e) {
             console.warn('Erro ao atualizar cache local:', e);
           }
@@ -2440,7 +2498,7 @@ export default function Home() {
       const next = prev.map((s) => (s.id === studentId ? { ...s, pedagogicalNotes: notes } : s));
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem('local_students_data', JSON.stringify(next));
+          setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
         } catch (e) {
           console.warn('Erro ao salvar anotações no cache:', e);
         }
@@ -2469,7 +2527,7 @@ export default function Home() {
       const next = prev.filter((s) => s.id !== studentId);
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem('local_students_data', JSON.stringify(next));
+          setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
         } catch (e) {
           console.warn('Erro ao atualizar cache na exclusão:', e);
         }
@@ -2600,7 +2658,7 @@ export default function Home() {
         );
         if (typeof window !== 'undefined') {
           try {
-            localStorage.setItem('local_students_data', JSON.stringify(updated));
+            setScopedLocalStorageItem('local_students_data', JSON.stringify(updated), teacher.id);
           } catch (e) {}
         }
         return updated;
@@ -2621,7 +2679,7 @@ export default function Home() {
         );
         if (typeof window !== 'undefined') {
           try {
-            localStorage.setItem('local_activities_data', JSON.stringify(updated));
+            setScopedLocalStorageItem('local_activities_data', JSON.stringify(updated), teacher.id);
           } catch (e) {}
         }
         return updated;
@@ -2722,7 +2780,7 @@ export default function Home() {
         });
         if (typeof window !== 'undefined') {
           try {
-            localStorage.setItem('local_students_data', JSON.stringify(updated));
+            setScopedLocalStorageItem('local_students_data', JSON.stringify(updated), teacher.id);
           } catch (e) {}
         }
         return updated;
@@ -2744,7 +2802,7 @@ export default function Home() {
         });
         if (typeof window !== 'undefined') {
           try {
-            localStorage.setItem('local_activities_data', JSON.stringify(updated));
+            setScopedLocalStorageItem('local_activities_data', JSON.stringify(updated), teacher.id);
           } catch (e) {}
         }
         return updated;

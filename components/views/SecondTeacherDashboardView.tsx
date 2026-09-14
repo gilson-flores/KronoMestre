@@ -21,6 +21,7 @@ import { TeacherUser, StudentUser, Activity, AtestadoRadRecord } from '@/lib/typ
 import { formatAvatarUrl } from '@/lib/utils';
 import { getTurmaLabel } from '@/lib/studentUtils';
 import { supabase } from '@/lib/supabase';
+import { getScopedLocalStorageItem, setScopedLocalStorageItem } from '@/lib/cacheUtils';
 
 interface SecondTeacherDashboardViewProps {
   teacher: TeacherUser;
@@ -48,11 +49,12 @@ export const SecondTeacherDashboardView: React.FC<SecondTeacherDashboardViewProp
     async function loadAtestados() {
       setIsLoadingAtestados(true);
       let loaded: AtestadoRadRecord[] = [];
+      const ownerTeacherId = teacher.ownerTeacherId || (teacher as any).owner_teacher_id || teacher.id;
 
-      // 1. Local storage fallback
+      // 1. Local storage fallback com isolamento por professor titular
       if (typeof window !== 'undefined') {
         try {
-          const raw = localStorage.getItem('local_atestados_rad_data');
+          const raw = getScopedLocalStorageItem('local_atestados_rad_data', ownerTeacherId);
           if (raw) {
             loaded = JSON.parse(raw);
           }
@@ -66,6 +68,9 @@ export const SecondTeacherDashboardView: React.FC<SecondTeacherDashboardViewProp
           const json = await res.json();
           if (json.success && Array.isArray(json.data)) {
             loaded = json.data;
+            if (typeof window !== 'undefined') {
+              setScopedLocalStorageItem('local_atestados_rad_data', JSON.stringify(json.data), ownerTeacherId);
+            }
           }
         }
       } catch (err) {

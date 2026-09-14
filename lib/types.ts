@@ -15,6 +15,8 @@ export interface TeacherUser {
   contractType?: 'ACT / Contratado' | 'Efetivo' | 'Substituto' | string;
   contractStatus?: 'ativo' | 'encerrado' | 'afastado' | string;
   mustChangePassword?: boolean;
+  ownerTeacherId?: string;
+  owner_teacher_id?: string;
 }
 
 export interface StudentUser {
@@ -35,6 +37,8 @@ export interface StudentUser {
   archivedVinculoId?: string; // Código/numeração única do vínculo (ex: VINC-092026)
   archivedSchool?: string; // Escola de vinculação
   mustChangePassword?: boolean;
+  ownerTeacherId?: string;
+  owner_teacher_id?: string;
 }
 
 export const PNE_CONDITIONS_LIST = [
