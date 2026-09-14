@@ -23,7 +23,7 @@ export interface StudentUser {
   matricula: string;
   tag?: 'REGULAR' | 'PNE' | 'RAD';
   pneConditions?: string[]; // Doenças, deficiências ou necessidades específicas
-  passwordHash: string; // default "1234"
+  passwordHash: string; // SEGURANÇA: Senha real cadastrada (NUNCA reintroduzir senha padrão fixa aqui)
   avatarUrl: string;
   pedagogicalNotes?: string;
   secondTeacherId?: string;

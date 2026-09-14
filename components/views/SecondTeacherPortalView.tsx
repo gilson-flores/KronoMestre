@@ -28,10 +28,13 @@ import {
 import { TeacherUser, StudentUser, Activity, LibraryFile, ChatMessage, AtestadoRadRecord } from '@/lib/types';
 import { formatAvatarUrl } from '@/lib/utils';
 import { getTurmaLabel } from '@/lib/studentUtils';
+import { hashPassword } from '@/lib/crypto';
 import { supabase } from '@/lib/supabase';
 import { StudentSupervisionModal } from '@/components/modals/StudentSupervisionModal';
 import { LibraryView } from '@/components/views/LibraryView';
 import { MessagesView } from '@/components/views/MessagesView';
+import { Sidebar } from '@/components/Sidebar';
+import { Menu } from 'lucide-react';
 
 interface SecondTeacherPortalViewProps {
   teacher: TeacherUser;
@@ -63,6 +66,7 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
   onMarkThreadAsRead,
 }) => {
   // Navigation Tab: 'desempenho' | 'alunos' | 'atestados' | 'biblioteca' | 'mensagens' | 'configuracoes'
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'desempenho' | 'alunos' | 'atestados' | 'biblioteca' | 'mensagens' | 'configuracoes'>('desempenho');
 
   // Modal for Viewing Full Student Dossier (Read-Only)
@@ -133,6 +137,79 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
 
   // Set of tutored IDs for quick lookup
   const tutoredStudentIds = useMemo(() => new Set(tutoredStudents.map((s) => s.id)), [tutoredStudents]);
+
+  const filteredClassRoster = useMemo(() => {
+    return classRoster.filter((s) => {
+      const matchSearch = s.fullName.toLowerCase().includes(rosterSearch.toLowerCase());
+      const matchTurma = rosterTurmaFilter === 'all' || s.turma === rosterTurmaFilter;
+      
+      let matchTag = true;
+      if (rosterTagFilter === 'tutelados') {
+        matchTag = tutoredStudentIds.has(s.id);
+      } else if (rosterTagFilter === 'pne') {
+        matchTag = s.specialNeeds && s.specialNeeds.trim().length > 0;
+      } else if (rosterTagFilter === 'regular') {
+        matchTag = !s.specialNeeds || s.specialNeeds.trim().length === 0;
+      }
+
+      return matchSearch && matchTurma && matchTag;
+    });
+  }, [classRoster, rosterSearch, rosterTurmaFilter, rosterTagFilter, tutoredStudentIds]);
+
+  const tutoredMetrics = useMemo(() => {
+    let totalEntregas = 0;
+    let aguardandoCorrecao = 0;
+    let somaNotas = 0;
+    let qtdNotas = 0;
+
+    activities.forEach(act => {
+      act.submissions?.forEach(sub => {
+        if (tutoredStudentIds.has(sub.studentId)) {
+          totalEntregas++;
+          if (sub.grade === undefined || sub.grade === null) {
+            aguardandoCorrecao++;
+          } else {
+            somaNotas += sub.grade;
+            qtdNotas++;
+          }
+        }
+      });
+    });
+
+    const mediaGeral = qtdNotas > 0 ? (somaNotas / qtdNotas).toFixed(1) : '-';
+
+    return {
+      totalTutelados: tutoredStudents.length,
+      totalEntregas,
+      aguardandoCorrecao,
+      mediaGeral,
+    };
+  }, [tutoredStudents, tutoredStudentIds, activities]);
+
+  const tutoredDeliveries = useMemo(() => {
+    const deliveries = [];
+    activities.forEach(act => {
+      act.submissions?.forEach(sub => {
+        if (tutoredStudentIds.has(sub.studentId)) {
+          const student = tutoredStudents.find(s => s.id === sub.studentId);
+          deliveries.push({
+            activityId: act.id,
+            studentId: sub.studentId,
+            studentName: student?.fullName || student?.name || 'Aluno Desconhecido',
+            activityTitle: act.title,
+            isAdapted: !!act.adaptedContent,
+            turma: student?.turma || 'Sem Turma',
+            status: (sub.grade === undefined || sub.grade === null) ? 'pending' : 'graded',
+            totalGrade: sub.grade,
+            maxGrade: act.maxGrade || 10,
+            teacherFeedback: sub.feedback
+          });
+        }
+      });
+    });
+    // Sort by most recent (assuming ID is loosely chronological or just reversed)
+    return deliveries.reverse();
+  }, [activities, tutoredStudents, tutoredStudentIds]);
 
   // Load atestados for the derived turmas
   useEffect(() => {
@@ -212,401 +289,129 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
 
     loadAtestados();
 
-    return () => {
-      isSubscribed = false;
-    };
-  }, [derivedTurmas, classRoster]);
+    return () => { isSubscribed = false; };
+  }, [derivedTurmas, classRoster, teacher.id]);
 
-  // Compute activities deliveries & performance strictly for TUTORED students
-  const tutoredDeliveries = useMemo(() => {
-    const list: Array<{
-      activityId: string;
-      activityTitle: string;
-      turma: string;
-      isAdapted?: boolean;
-      studentId: string;
-      studentName: string;
-      studentTurma: string;
-      status: 'submitted' | 'graded' | 'returned' | 'pending';
-      submittedAt?: string;
-      totalGrade?: number;
-      maxGrade?: number;
-      teacherFeedback?: string;
-    }> = [];
-
-    tutoredStudents.forEach((student) => {
-      activities.forEach((act) => {
-        const matchesTurma = act.turma === student.turma || act.turma === 'Todas';
-        const isIncludedPne = act.includedPneStudentIds && act.includedPneStudentIds.includes(student.id);
-
-        if (matchesTurma || isIncludedPne) {
-          const submission = (act.submissions || []).find(
-            (sub) => sub.studentId === student.id || sub.matricula === student.matricula
-          );
-
-          if (submission) {
-            const hasGrade = submission.essayScore !== undefined || (submission.objectiveScore || 0) > 0;
-            const objScore = submission.objectiveScore || 0;
-            const essayScore = submission.essayScore || 0;
-            const total = objScore + essayScore;
-
-            list.push({
-              activityId: act.id,
-              activityTitle: act.title,
-              turma: act.turma,
-              isAdapted: Boolean(act.isAdapted || act.adaptationType),
-              studentId: student.id,
-              studentName: student.fullName,
-              studentTurma: student.turma,
-              status: hasGrade ? 'graded' : 'submitted',
-              submittedAt: submission.submittedAt,
-              totalGrade: hasGrade ? total : undefined,
-              maxGrade: (act.maxObjectiveScore || 0) + (act.maxEssayScore || 0) || 10,
-              teacherFeedback: submission.teacherFeedback || submission.feedback,
-            });
-          }
-        }
-      });
-    });
-
-    return list;
-  }, [tutoredStudents, activities]);
-
-  // Tutored Performance Metrics
-  const tutoredMetrics = useMemo(() => {
-    const totalTutelados = tutoredStudents.length;
-    const totalEntregas = tutoredDeliveries.length;
-    const aguardandoCorrecao = tutoredDeliveries.filter((d) => d.status === 'submitted').length;
-    const graded = tutoredDeliveries.filter((d) => d.totalGrade !== undefined);
-    const mediaGeral =
-      graded.length > 0
-        ? (graded.reduce((acc, curr) => acc + (curr.totalGrade || 0), 0) / graded.length).toFixed(1)
-        : '—';
-
-    return {
-      totalTutelados,
-      totalEntregas,
-      aguardandoCorrecao,
-      mediaGeral,
-    };
-  }, [tutoredStudents, tutoredDeliveries]);
-
-  // Filtered Class Roster for the 'alunos' tab
-  const filteredClassRoster = useMemo(() => {
-    return classRoster.filter((s) => {
-      const matchesSearch =
-        s.fullName.toLowerCase().includes(rosterSearch.toLowerCase()) ||
-        (s.matricula && s.matricula.includes(rosterSearch));
-
-      const matchesTurma = rosterTurmaFilter === 'all' || s.turma === rosterTurmaFilter;
-
-      let matchesTag = true;
-      const isTutored = tutoredStudentIds.has(s.id);
-      const isPne = Boolean(s.tag && s.tag.toUpperCase().includes('PNE'));
-
-      if (rosterTagFilter === 'tutelados') {
-        matchesTag = isTutored;
-      } else if (rosterTagFilter === 'pne') {
-        matchesTag = isPne;
-      } else if (rosterTagFilter === 'regular') {
-        matchesTag = !isTutored && !isPne;
-      }
-
-      return matchesSearch && matchesTurma && matchesTag;
-    });
-  }, [classRoster, rosterSearch, rosterTurmaFilter, rosterTagFilter, tutoredStudentIds]);
-
-  // Filtered Atestados for the 'atestados' tab
-  const filteredAtestados = useMemo(() => {
-    return atestados.filter((rec) => {
-      const matchesSearch =
-        rec.studentName.toLowerCase().includes(atestadosSearch.toLowerCase()) ||
-        (rec.motivo && rec.motivo.toLowerCase().includes(atestadosSearch.toLowerCase()));
-
-      const matchesTurma = atestadosTurmaFilter === 'all' || rec.studentTurma === atestadosTurmaFilter;
-
-      const matchesTipo = atestadosTipoFilter === 'all' || rec.tipo === atestadosTipoFilter;
-
-      return matchesSearch && matchesTurma && matchesTipo;
-    });
-  }, [atestados, atestadosSearch, atestadosTurmaFilter, atestadosTipoFilter]);
-
-  // Save Settings handler
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSettingsMsg(null);
     setIsSavingSettings(true);
-
+    setSettingsMsg(null);
     try {
-      if (newPassword && newPassword.length < 4) {
-        setSettingsMsg({ type: 'error', text: 'A nova senha deve ter no mínimo 4 caracteres.' });
-        setIsSavingSettings(false);
-        return;
-      }
-
       if (newPassword && newPassword !== confirmPassword) {
-        setSettingsMsg({ type: 'error', text: 'A confirmação de senha não confere.' });
+        setSettingsMsg({ type: 'error', text: 'As senhas não coincidem.' });
         setIsSavingSettings(false);
         return;
       }
-
+      
       const updates: any = {
-        phone: profilePhone,
         school: profileSchool,
+        phone: profilePhone,
       };
-
+      
       if (newPassword) {
-        updates.password = newPassword;
+        const hashedPass = await hashPassword(newPassword);
+        updates.password = hashedPass;
       }
-
-      if (supabase && teacher.email) {
-        const cleanEmail = teacher.email.trim().toLowerCase();
-        await supabase
-          .from('second_teachers')
-          .update(updates)
-          .ilike('email', cleanEmail);
-
-        await supabase
+      
+      if (supabase) {
+        const { error } = await supabase
           .from('teachers')
           .update(updates)
-          .ilike('email', cleanEmail);
-      }
+          .eq('id', teacher.id);
+          
+        if (error) throw error;
 
-      // Update active session
-      if (typeof window !== 'undefined') {
-        const activeSession = sessionStorage.getItem('active_session');
-        if (activeSession) {
-          try {
-            const parsed = JSON.parse(activeSession);
-            parsed.teacherData = {
-              ...parsed.teacherData,
-              phone: profilePhone,
-              school: profileSchool,
-            };
-            sessionStorage.setItem('active_session', JSON.stringify(parsed));
-          } catch (err) {}
+        // Atualizar também na tabela second_teachers se for o 2º professor
+        if (teacher.email) {
+          const cleanEmail = teacher.email.trim().toLowerCase();
+          await supabase
+            .from('second_teachers')
+            .update(updates)
+            .ilike('email', cleanEmail);
         }
       }
-
-      setSettingsMsg({ type: 'success', text: 'Configurações atualizadas com sucesso!' });
+      
+      setSettingsMsg({ type: 'success', text: 'Configurações salvas com sucesso!' });
       setNewPassword('');
       setConfirmPassword('');
-      setTimeout(() => setSettingsMsg(null), 4000);
-    } catch (err: any) {
-      setSettingsMsg({ type: 'error', text: 'Erro ao salvar alterações: ' + (err?.message || 'Tente novamente.') });
+    } catch (err) {
+      console.error(err);
+      setSettingsMsg({ type: 'error', text: 'Erro ao salvar configurações.' });
     } finally {
       setIsSavingSettings(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Top Header Dedicated to Second Teacher */}
-      <header className="border-b border-border bg-surface/95 backdrop-blur sticky top-0 z-30 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          {/* Teacher Identity */}
-          <div className="flex items-center gap-3.5 min-w-0">
-            <div className="relative shrink-0">
-              <img
-                src={formatAvatarUrl(teacher.avatarUrl || '')}
-                alt={teacher.name}
-                className="w-12 h-12 rounded-2xl object-cover border-2 border-primary/40 shadow-sm"
-              />
-              <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-primary rounded-full border-2 border-surface flex items-center justify-center">
-                <HeartHandshake className="w-2.5 h-2.5 text-white" />
-              </div>
-            </div>
+    <div className="flex min-h-screen bg-background text-foreground overflow-x-hidden">
+      {/* Sidebar Navigation */}
+      <Sidebar
+        currentTab={activeTab}
+        setCurrentTab={setActiveTab as any}
+        teacher={teacher}
+        role="second_teacher"
+        onLogout={onLogout}
+        isMobileOpen={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
+      />
 
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-primary bg-primary/10 px-2.5 py-0.5 rounded-full border border-primary/20 flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" />
-                  Portal do 2º Professor • Apoio à Inclusão
-                </span>
-                <span className="text-xs text-muted font-medium">{teacher.school || "EEB Prof. Jandira D'Ávila"}</span>
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Mobile Header */}
+        <div className="md:hidden sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border shadow-sm px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="p-2 -ml-2 text-foreground hover:bg-surface-hover rounded-xl transition-colors cursor-pointer"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <span className="font-bold text-foreground text-sm truncate max-w-[200px]">
+              Portal PNE
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <img
+              src={formatAvatarUrl(teacher.avatarUrl)}
+              alt={teacher.name || 'Professor'}
+              className="w-8 h-8 rounded-full object-cover border border-primary/30"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250';
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Main Container */}
+        <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 md:p-8">
+          {tutoredStudents.length === 0 && (
+            <div className="p-6 mb-6 rounded-3xl bg-surface border border-border shadow-sm flex flex-col sm:flex-row items-center sm:items-start gap-4 text-center sm:text-left">
+              <div className="p-4 rounded-2xl bg-amber-500/15 text-amber-500 shrink-0">
+                <HeartHandshake className="w-8 h-8" />
               </div>
-              <h1 className="text-lg sm:text-xl font-extrabold text-foreground truncate mt-0.5">
-                {teacher.name}
-              </h1>
-              <div className="flex flex-wrap items-center gap-1.5 mt-0.5 text-xs text-muted">
-                <span>{teacher.subject || 'Segundo Professor (Educação Especial)'}</span>
-                <span>•</span>
-                <div className="flex items-center gap-1">
-                  <span className="font-semibold text-foreground">Turmas Atendidas:</span>
-                  {derivedTurmas.length > 0 ? (
-                    <div className="inline-flex flex-wrap gap-1">
-                      {derivedTurmas.map((t) => (
-                        <span
-                          key={t}
-                          className="bg-primary/15 text-primary text-[11px] font-bold px-2 py-0.5 rounded-md border border-primary/25"
-                        >
-                          {getTurmaLabel(t)}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-[11px] italic text-amber-500 font-medium">Aguardando vínculo de tutelados</span>
-                  )}
+              <div className="flex-1">
+                <h2 className="text-base font-bold text-foreground">Nenhum aluno vinculado à sua tutela ainda</h2>
+                <p className="text-xs text-muted mt-1 leading-relaxed">
+                  Você está autenticado no Portal do 2º Professor. Assim que o Professor Titular vincular os estudantes PNE ao seu cadastro, as turmas correspondentes, o roster completo dos alunos da turma e os indicadores de acompanhamento pedagógico carregarão aqui automaticamente.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2 justify-center sm:justify-start">
+                  <button
+                    onClick={() => setActiveTab('biblioteca')}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-surface border border-border text-foreground hover:bg-surface-hover transition-all"
+                  >
+                    Explorar Biblioteca de Arquivos
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('mensagens')}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-surface border border-border text-foreground hover:bg-surface-hover transition-all"
+                  >
+                    Falar com o Professor Titular
+                  </button>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Header Action Buttons */}
-          <div className="flex items-center gap-2.5 self-end md:self-center shrink-0">
-            <button
-              onClick={onLogout}
-              className="py-2 px-4 rounded-xl text-xs font-bold bg-surface hover:bg-rose-500/10 text-rose-500 hover:text-rose-400 border border-border hover:border-rose-500/30 flex items-center gap-2 transition-all cursor-pointer shadow-sm"
-              title="Encerrar sessão"
-            >
-              <LogOut className="w-4 h-4 shrink-0" />
-              <span>Sair da Conta</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Dedicated Navigation Bar */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <nav className="flex items-center gap-1 overflow-x-auto py-1 border-t border-border scrollbar-none">
-            <button
-              onClick={() => setActiveTab('desempenho')}
-              className={`py-2.5 px-3.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 cursor-pointer ${
-                activeTab === 'desempenho'
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'text-muted hover:text-foreground hover:bg-surface-hover'
-              }`}
-            >
-              <HeartHandshake className="w-4 h-4 shrink-0" />
-              <span>Acompanhamento PNE</span>
-              {tutoredStudents.length > 0 && (
-                <span
-                  className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
-                    activeTab === 'desempenho' ? 'bg-black/20 text-white' : 'bg-primary/20 text-primary'
-                  }`}
-                >
-                  {tutoredStudents.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setActiveTab('alunos')}
-              className={`py-2.5 px-3.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 cursor-pointer ${
-                activeTab === 'alunos'
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'text-muted hover:text-foreground hover:bg-surface-hover'
-              }`}
-            >
-              <Users className="w-4 h-4 shrink-0" />
-              <span>Alunos da Turma</span>
-              {classRoster.length > 0 && (
-                <span
-                  className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
-                    activeTab === 'alunos' ? 'bg-black/20 text-white' : 'bg-surface text-muted border border-border'
-                  }`}
-                >
-                  {classRoster.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setActiveTab('atestados')}
-              className={`py-2.5 px-3.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 cursor-pointer ${
-                activeTab === 'atestados'
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'text-muted hover:text-foreground hover:bg-surface-hover'
-              }`}
-            >
-              <BookOpen className="w-4 h-4 shrink-0" />
-              <span>Atestados e RAD</span>
-              {atestados.length > 0 && (
-                <span
-                  className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
-                    activeTab === 'atestados' ? 'bg-black/20 text-white' : 'bg-surface text-muted border border-border'
-                  }`}
-                >
-                  {atestados.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setActiveTab('biblioteca')}
-              className={`py-2.5 px-3.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 cursor-pointer ${
-                activeTab === 'biblioteca'
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'text-muted hover:text-foreground hover:bg-surface-hover'
-              }`}
-            >
-              <FolderOpen className="w-4 h-4 shrink-0" />
-              <span>Biblioteca de Arquivos</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveTab('mensagens');
-                if (onMarkThreadAsRead && teacher.id) {
-                  onMarkThreadAsRead(teacher.id, 'teacher');
-                }
-              }}
-              className={`py-2.5 px-3.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 cursor-pointer ${
-                activeTab === 'mensagens'
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'text-muted hover:text-foreground hover:bg-surface-hover'
-              }`}
-            >
-              <MessageSquare className="w-4 h-4 shrink-0" />
-              <span>Mensagens</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('configuracoes')}
-              className={`py-2.5 px-3.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 cursor-pointer ${
-                activeTab === 'configuracoes'
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'text-muted hover:text-foreground hover:bg-surface-hover'
-              }`}
-            >
-              <Settings className="w-4 h-4 shrink-0" />
-              <span>Minha Conta</span>
-            </button>
-          </nav>
-        </div>
-      </header>
-
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
-        {/* Notice of Empty Tutored Students state if applicable */}
-        {tutoredStudents.length === 0 && (
-          <div className="p-6 mb-6 rounded-3xl bg-surface border border-border shadow-sm flex flex-col sm:flex-row items-center sm:items-start gap-4 text-center sm:text-left">
-            <div className="p-4 rounded-2xl bg-amber-500/15 text-amber-500 shrink-0">
-              <HeartHandshake className="w-8 h-8" />
-            </div>
-            <div className="flex-1">
-              <h2 className="text-base font-bold text-foreground">Nenhum aluno vinculado à sua tutela ainda</h2>
-              <p className="text-xs text-muted mt-1 leading-relaxed">
-                Você está autenticado no Portal do 2º Professor. Assim que o Professor Titular vincular os estudantes PNE ao seu cadastro, as turmas correspondentes, o roster completo dos alunos da turma e os indicadores de acompanhamento pedagógico carregarão aqui automaticamente.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2 justify-center sm:justify-start">
-                <button
-                  onClick={() => setActiveTab('biblioteca')}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-surface border border-border text-foreground hover:bg-surface-hover transition-all"
-                >
-                  Explorar Biblioteca de Arquivos
-                </button>
-                <button
-                  onClick={() => setActiveTab('mensagens')}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-surface border border-border text-foreground hover:bg-surface-hover transition-all"
-                >
-                  Falar com o Professor Titular
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 1: DESEMPENHO & ACOMPANHAMENTO PNE (STRICTLY TUTORED) */}
+          {/* TAB 1: DESEMPENHO & ACOMPANHAMENTO PNE (STRICTLY TUTORED) */}
         {activeTab === 'desempenho' && (
           <div className="space-y-6">
             {/* Top Cards with Summary Metrics */}
@@ -1105,7 +910,7 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
             </div>
 
             <LibraryView
-              files={libraryFiles}
+              files={accessibleLibraryFiles}
               isReadOnly={true}
               onAddFile={() => {}}
               onDeleteFile={() => {}}
@@ -1118,6 +923,7 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
           <div className="space-y-4">
             <MessagesView
               currentUserRole="teacher"
+              isSecondTeacher={true}
               teacher={teacher}
               students={allStudents}
               activities={activities}
@@ -1228,7 +1034,10 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
             </form>
           </div>
         )}
-      </main>
+      
+        </main>
+      </div>
+      
 
       {/* Student Dossier Modal (Read-Only) */}
       <StudentSupervisionModal
@@ -1240,3 +1049,4 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
     </div>
   );
 };
+

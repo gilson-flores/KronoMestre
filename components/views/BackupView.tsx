@@ -453,8 +453,8 @@ export const BackupView: React.FC<BackupViewProps> = ({
                 onClick={() => setAuditTab('students')}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer min-h-[36px] ${
                   auditTab === 'students'
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'text-text-muted hover:text-foreground'
+                    ? 'bg-surface border-border text-foreground shadow-sm'
+                    : 'border-transparent text-text-muted hover:text-foreground hover:bg-surface-hover'
                 }`}
               >
                 <User className="w-3.5 h-3.5" />
@@ -467,8 +467,8 @@ export const BackupView: React.FC<BackupViewProps> = ({
                 onClick={() => setAuditTab('activities')}
                 className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer min-h-[36px] ${
                   auditTab === 'activities'
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'text-text-muted hover:text-foreground'
+                    ? 'bg-surface border-border text-foreground shadow-sm'
+                    : 'border-transparent text-text-muted hover:text-foreground hover:bg-surface-hover'
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />

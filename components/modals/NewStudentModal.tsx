@@ -27,6 +27,7 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
   const [customTurma, setCustomTurma] = useState('');
   const [isCustomTurma, setIsCustomTurma] = useState(false);
   const [matricula, setMatricula] = useState('2023854');
+  const [password, setPassword] = useState('');
   const [tag, setTag] = useState<'REGULAR' | 'PNE' | 'RAD'>('REGULAR');
   const [pneConditions, setPneConditions] = useState<string[]>([]);
   const [secondTeacherId, setSecondTeacherId] = useState('');
@@ -91,6 +92,7 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
 
     const matchedTeacher = availableSecondTeachers.find((st) => st.id === secondTeacherId);
 
+    const initialPassword = password.trim() || matricula.trim();
     const newStudent: StudentUser = {
       id: `s-${Date.now()}`,
       fullName: nameVal.normalized, // GUARANTEED UPPERCASE AND NO SPECIAL CHARACTERS
@@ -100,13 +102,13 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
       pneConditions: tag === 'PNE' && pneConditions.length > 0 ? pneConditions : undefined,
       secondTeacherId: secondTeacherId ? secondTeacherId : undefined,
       secondTeacherName: matchedTeacher ? matchedTeacher.name : undefined,
-      passwordHash: '1234', // default password rule
+      passwordHash: initialPassword, // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui
       avatarUrl:
         'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
     };
-
     onCreateStudent(newStudent);
     setFullName('');
+    setPassword('');
     setPneConditions([]);
     setSecondTeacherId('');
     setFormError('');
@@ -129,14 +131,14 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
           </div>
           <div>
             <h2 className="text-xl font-bold text-foreground">Cadastrar Novo Aluno</h2>
-            <p className="text-xs text-muted">O aluno acessará com Nome Completo (MAIÚSCULAS), Turma e a senha 1234</p>
+            <p className="text-xs text-muted">O aluno acessará com Nome Completo (MAIÚSCULAS), Turma e senha cadastrada</p>
           </div>
         </div>
 
         {/* Note Box */}
         <div className="flex items-center gap-2 text-xs text-primary bg-primary/10 p-3 rounded-2xl border border-primary/20">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>Nome formatado automaticamente em MAIÚSCULAS e sem acentos. Senha padrão: <strong>1234</strong>.</span>
+          <span>Nome formatado automaticamente em MAIÚSCULAS e sem acentos.</span>
         </div>
 
         {formError && (
@@ -174,7 +176,6 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
                 className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-xs text-foreground focus:outline-none focus:border-primary"
               />
             </div>
-
             <div>
               <label className="block text-xs font-semibold text-muted mb-1">Matrícula</label>
               <input
@@ -185,6 +186,17 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
                 className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-xs text-foreground focus:outline-none focus:border-primary"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-muted mb-1">Senha de Acesso do Aluno (Opcional - padrão: Matrícula)</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Deixe em branco para usar a Matrícula como senha"
+              className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-xs text-foreground focus:outline-none focus:border-primary"
+            />
           </div>
 
           <div>

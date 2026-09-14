@@ -36,6 +36,7 @@ import {
 
 interface MessagesViewProps {
   currentUserRole: 'teacher' | 'student';
+  isSecondTeacher?: boolean;
   teacher: TeacherUser;
   student?: StudentUser | null;
   students: StudentUser[];
@@ -59,6 +60,7 @@ interface MessagesViewProps {
 }
 
 export const MessagesView: React.FC<MessagesViewProps> = ({
+  isSecondTeacher,
   currentUserRole,
   teacher,
   student,
@@ -416,7 +418,8 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                 </span>
               </div>
 
-              {/* Filtros: Aluno, Turma e Status */}
+              {!isSecondTeacher && (<>
+{/* Filtros: Aluno, Turma e Status */}
               <div className="space-y-2">
                 {/* 1. Filtro por Aluno */}
                 <div className="space-y-1">
@@ -485,9 +488,9 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
                   </select>
                 </div>
               </div>
+            </>)}
             </div>
-
-            {/* Student Thread Scroll Area */}
+{/* Student Thread Scroll Area */}
             <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-white/5 min-h-0">
               <button
                 onClick={() => handleSelectStudent('broadcast')}

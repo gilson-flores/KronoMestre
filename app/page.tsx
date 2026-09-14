@@ -547,7 +547,7 @@ export default function Home() {
               matricula: s.matricula,
               tag: s.tag,
               pneConditions: finalPneConditions,
-              passwordHash: s.password_hash || '1234',
+              passwordHash: s.password_hash || '', // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui
               avatarUrl:
                 s.avatar_url ||
                 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
@@ -1878,7 +1878,7 @@ export default function Home() {
           turma: matchedStudentObj.turma,
           matricula: matchedStudentObj.matricula,
           tag: matchedStudentObj.tag,
-          password_hash: matchedStudentObj.passwordHash || '1234',
+          password_hash: matchedStudentObj.passwordHash || '', // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui
           avatar_url: newAvatarUrl,
         };
         const resInsert = await supabase
@@ -2122,7 +2122,7 @@ export default function Home() {
         tag: s.tag,
         second_teacher_id: s.secondTeacherId || null,
         second_teacher_name: s.secondTeacherName || null,
-        password_hash: s.passwordHash || '1234',
+        password_hash: s.passwordHash || '', // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui
         avatar_url: s.avatarUrl,
       }));
 
@@ -2135,7 +2135,7 @@ export default function Home() {
           turma: s.turma,
           matricula: s.matricula,
           tag: s.tag,
-          password_hash: s.passwordHash || '1234',
+          password_hash: s.passwordHash || '', // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui
           avatar_url: s.avatarUrl,
         }));
         const retryRes = await supabase.from('students').insert(payloadBase);
@@ -2183,7 +2183,7 @@ export default function Home() {
         pne_conditions: newStudent.pneConditions || null,
         second_teacher_id: newStudent.secondTeacherId || null,
         second_teacher_name: newStudent.secondTeacherName || null,
-        password_hash: newStudent.passwordHash || '1234',
+        password_hash: newStudent.passwordHash || '', // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui
         avatar_url: newStudent.avatarUrl,
       });
 
@@ -2194,7 +2194,7 @@ export default function Home() {
           turma: newStudent.turma,
           matricula: newStudent.matricula,
           tag: newStudent.tag,
-          password_hash: newStudent.passwordHash || '1234',
+          password_hash: newStudent.passwordHash || '', // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui
           avatar_url: newStudent.avatarUrl,
         });
         error = retryRes.error;
@@ -2306,7 +2306,7 @@ export default function Home() {
       if (!error && (!data || data.length === 0)) {
         const insertPayload: any = {
           ...payload,
-          password_hash: updatedStudent.passwordHash || '1234',
+          password_hash: updatedStudent.passwordHash || '', // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui
           avatar_url: updatedStudent.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
         };
         const isValidUUID = (id?: string) => !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -2946,6 +2946,7 @@ export default function Home() {
 
           {activeTeacherTab === '2_professor' && role !== 'second_teacher' && (
             <SecondTeachersView
+              messages={chatMessages}
               teacher={teacher}
               currentUserRole={role}
               students={activeStudents}

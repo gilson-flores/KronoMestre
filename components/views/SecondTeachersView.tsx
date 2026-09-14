@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   HeartHandshake,
-  UserPlus,
+  UserPlus, Users,
   Trash2,
   ShieldCheck,
   Mail,
@@ -29,9 +29,11 @@ import {
   FileText,
   Layers,
   ChevronRight,
-  Info
+  Info,
+  MessageSquare
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { hashPassword } from '@/lib/crypto';
 import {
   TeacherUser,
   StudentUser,
@@ -42,6 +44,8 @@ import {
   EssayQuestion
 } from '@/lib/types';
 import { NewSecondTeacherModal } from '@/components/modals/NewSecondTeacherModal';
+import { ManageTutelageModal } from '@/components/modals/ManageTutelageModal';
+import { SecondTeacherMessagesModal } from '@/components/modals/SecondTeacherMessagesModal';
 import {
   canStudentAccessActivity,
   getActivityGradeDistribution,
@@ -54,6 +58,7 @@ interface SecondTeachersViewProps {
   currentUserRole?: UserRole;
   students?: StudentUser[];
   activities?: Activity[];
+  messages: ChatMessage[];
   onSubmitAnswer?: (
     activityId: string,
     studentId: string,
@@ -72,6 +77,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   currentUserRole = 'second_teacher',
   students = [],
   activities = [],
+  messages = [],
   onSubmitAnswer,
   onSaveStudent,
 }) => {
@@ -85,6 +91,8 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [teacherToDelete, setTeacherToDelete] = useState<TeacherUser | null>(null);
+  const [tutelageModalTeacher, setTutelageModalTeacher] = useState<TeacherUser | null>(null);
+  const [historyModalTeacher, setHistoryModalTeacher] = useState<TeacherUser | null>(null);
 
   // Retractable / Collapsible Menus State for Main Screen
   const [isMetricsRetractableOpen, setIsMetricsRetractableOpen] = useState(false); // Metrics bar collapsible
@@ -192,21 +200,30 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   });
 
   const handleResetTeacherPassword = async (st: TeacherUser) => {
-    if (!confirm(`Deseja redefinir a senha do 2º Professor "${st.name}" para "1234"?`)) {
+    const tempPass = window.prompt(
+      `Defina a nova senha de acesso temporária para o 2º Professor "${st.name}" (mínimo 4 caracteres):`,
+      ''
+    );
+
+    if (!tempPass || tempPass.trim().length < 4) {
+      if (tempPass !== null) {
+        alert('A senha deve conter no mínimo 4 caracteres.');
+      }
       return;
     }
 
     try {
       if (supabase && st.email) {
         const cleanEmail = st.email.trim().toLowerCase();
+        const hashedPass = await hashPassword(tempPass.trim());
         await supabase
           .from('second_teachers')
-          .update({ password: '1234' })
+          .update({ password: hashedPass })
           .ilike('email', cleanEmail);
 
         await supabase
           .from('teachers')
-          .update({ password: '1234' })
+          .update({ password: hashedPass })
           .ilike('email', cleanEmail);
       }
 
@@ -217,7 +234,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
         localStorage.setItem('second_teacher_reset_requests', JSON.stringify(updated));
       }
 
-      setSuccessMsg(`Senha do professor ${st.name} redefinida para "1234" com sucesso!`);
+      setSuccessMsg(`Senha do professor ${st.name} redefinida com sucesso! Nova senha cadastrada e protegida por hash.`);
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (err: any) {
       setErrorMsg('Erro ao redefinir senha: ' + (err?.message || 'Tente novamente.'));
@@ -240,6 +257,37 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
       setErrorMsg('Erro ao remover professor: ' + err.message);
       setTimeout(() => setErrorMsg(''), 3000);
     }
+  };
+
+  const handleSaveTutelage = async (updates: { student: StudentUser; isAssigned: boolean }[]) => {
+    if (!tutelageModalTeacher || !onSaveStudent) return;
+    
+    for (const update of updates) {
+      const { student, isAssigned } = update;
+      const updatedStudent: StudentUser = {
+        ...student,
+        secondTeacherId: isAssigned ? tutelageModalTeacher.id : undefined,
+        secondTeacherName: isAssigned ? tutelageModalTeacher.name : undefined,
+      };
+
+      if (supabase) {
+        try {
+          await supabase
+            .from('students')
+            .update({
+              second_teacher_id: isAssigned ? tutelageModalTeacher.id : null,
+              second_teacher_name: isAssigned ? tutelageModalTeacher.name : null,
+            })
+            .eq('id', student.id);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      onSaveStudent(updatedStudent);
+    }
+    
+    setSuccessMsg('Tutela atualizada com sucesso!');
+    setTimeout(() => setSuccessMsg(''), 3000);
   };
 
   // Change Password State
@@ -267,15 +315,17 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
 
     try {
       if (supabase && teacher.email) {
+        const cleanEmail = teacher.email.trim().toLowerCase();
+        const hashedPass = await hashPassword(changePasswordNewPass);
         await supabase
           .from('second_teachers')
-          .update({ password: changePasswordNewPass })
-          .ilike('email', teacher.email.trim().toLowerCase());
+          .update({ password: hashedPass })
+          .ilike('email', cleanEmail);
 
         await supabase
           .from('teachers')
-          .update({ password: changePasswordNewPass })
-          .ilike('email', teacher.email.trim().toLowerCase());
+          .update({ password: hashedPass })
+          .ilike('email', cleanEmail);
 
         try {
           await supabase.auth.updateUser({ password: changePasswordNewPass });
@@ -685,8 +735,8 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                 onClick={() => setActiveTab('atividades_alunos')}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                   activeTab === 'atividades_alunos'
-                    ? 'bg-amber-400 text-black shadow-md'
-                    : 'text-muted hover:text-foreground'
+                    ? 'bg-surface border border-border text-foreground shadow-sm'
+                    : 'text-muted hover:text-foreground border border-transparent'
                 }`}
               >
                 <Smartphone className="w-3.5 h-3.5" />
@@ -696,8 +746,8 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                 onClick={() => setActiveTab('professores_apoio')}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                   activeTab === 'professores_apoio'
-                    ? 'bg-amber-400 text-black shadow-md'
-                    : 'text-muted hover:text-foreground'
+                    ? 'bg-surface border border-border text-foreground shadow-sm'
+                    : 'text-muted hover:text-foreground border border-transparent'
                 }`}
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
@@ -842,7 +892,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                       className={`py-1 px-2 rounded-xl font-bold transition-all cursor-pointer text-center text-[10px] ${
                         tutelaScope === 'minha_tutela'
                           ? 'bg-amber-400 text-black shadow'
-                          : 'text-muted hover:text-foreground'
+                          : 'text-muted hover:text-foreground border border-transparent'
                       }`}
                     >
                       Minha Tutela ({myTutelageStudents.length})
@@ -852,7 +902,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                       className={`py-1 px-2 rounded-xl font-bold transition-all cursor-pointer text-center text-[10px] ${
                         tutelaScope === 'todos_pne'
                           ? 'bg-amber-400 text-black shadow'
-                          : 'text-muted hover:text-foreground'
+                          : 'text-muted hover:text-foreground border border-transparent'
                       }`}
                     >
                       Todos AEE ({boundOrPneStudents.length})
@@ -1512,7 +1562,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                       {isPendingReset && (
                         <div className="mt-1 text-[10px] font-bold text-amber-600 bg-amber-100 border border-amber-200 px-2 py-1 rounded-lg flex items-center gap-1">
                           <KeyRound className="w-3 h-3 text-amber-400 shrink-0" />
-                          <span>Solicitação de Reset (Senha 1234)</span>
+                          <span>Solicitação de Redefinição de Senha</span>
                         </div>
                       )}
 
@@ -1536,13 +1586,36 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                       </div>
                     </div>
 
+                    <div className="mt-3">
+                      <button
+                        onClick={() => setTutelageModalTeacher(st)}
+                        className="w-full py-1.5 px-3 bg-amber-400 hover:bg-amber-300 border-none text-black shadow-md rounded-xl text-xs font-bold transition-all cursor-pointer flex justify-center items-center gap-1.5"
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        <span>
+                          Gerenciar Tutela (
+                          {students.filter(s => 
+                            (s.secondTeacherId && s.secondTeacherId === st.id) || 
+                            (s.secondTeacherName && s.secondTeacherName.toLowerCase() === st.name?.toLowerCase())
+                          ).length} alunos)
+                        </span>
+                      </button>
+                    </div>
+
                     <div className="mt-4 pt-3 border-t border-border flex items-center justify-between gap-2">
                       <button
                         onClick={() => handleResetTeacherPassword(st)}
-                        className="py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1 bg-amber-400/20 hover:bg-amber-400/30 text-amber-600 border-amber-400/30 cursor-pointer"
+                        className="py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1 bg-primary hover:bg-primary/90 text-white border-none shadow-sm cursor-pointer"
                       >
                         <KeyRound className="w-3 h-3" />
                         <span>Resetar Senha</span>
+                      </button>
+                      <button
+                        onClick={() => setHistoryModalTeacher(st)}
+                        className="py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1 bg-surface border-border hover:bg-surface-hover text-foreground cursor-pointer shadow-sm"
+                        title="Ver Histórico de Conversas"
+                      >
+                        <MessageSquare className="w-3 h-3" />
                       </button>
 
                       <button
@@ -1693,6 +1766,17 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Gestão de Tutela */}
+      {tutelageModalTeacher && (
+        <ManageTutelageModal
+          isOpen={true}
+          onClose={() => setTutelageModalTeacher(null)}
+          secondTeacher={tutelageModalTeacher}
+          allStudents={students}
+          onSaveTutelage={handleSaveTutelage}
+        />
       )}
     </div>
   );

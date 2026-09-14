@@ -182,7 +182,7 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
       turma: r.turma,
       matricula: r.matricula,
       tag: r.tag,
-      passwordHash: '1234',
+      passwordHash: r.matricula, // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui (usa matrícula individual do aluno)
       avatarUrl:
         'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
     }));

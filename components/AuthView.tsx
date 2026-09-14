@@ -5,6 +5,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { StudentUser, TeacherUser, UserRole } from '@/lib/types';
 import { BookOpen, User, GraduationCap, Lock, ArrowRight, ShieldCheck, CheckCircle2, HeartHandshake, KeyRound, X } from 'lucide-react';
 import { DEFAULT_TURMAS, getTurmaLabel, normalizeStudentName } from '@/lib/studentUtils';
+import { hashPassword, verifyPassword, isHashed } from '@/lib/crypto';
 
 interface AuthViewProps {
   students: StudentUser[];
@@ -193,11 +194,26 @@ export const AuthView: React.FC<AuthViewProps> = ({
         .ilike('email', cleanEmail)
         .maybeSingle();
 
-      const isPasswordValid =
-        authData?.user ||
-        (dbTeacher &&
-          dbTeacher.password &&
-          dbTeacher.password === secondTeacherPassword);
+      let isPasswordValid = Boolean(authData?.user);
+      if (!isPasswordValid && dbTeacher?.password) {
+        isPasswordValid = await verifyPassword(secondTeacherPassword, dbTeacher.password);
+        // Migração transparente automática: se a senha no banco estava em texto puro, atualiza para hash SHA-256
+        if (isPasswordValid && !isHashed(dbTeacher.password)) {
+          try {
+            const hashed = await hashPassword(secondTeacherPassword);
+            await supabase
+              .from('second_teachers')
+              .update({ password: hashed })
+              .eq('id', dbTeacher.id);
+            await supabase
+              .from('teachers')
+              .update({ password: hashed })
+              .ilike('email', cleanEmail);
+          } catch (migErr) {
+            console.warn('Aviso de migração de hash para 2º professor:', migErr);
+          }
+        }
+      }
 
       if (isPasswordValid && (authData?.user || dbTeacher)) {
         const secondTeacherProfile: TeacherUser = {
@@ -257,7 +273,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
             student_id: 'broadcast',
             student_name: '2º Professor (Reset de Senha)',
             sender_role: 'second_teacher',
-            text: `[CHAMADO RESET DE SENHA] O 2º Professor (${cleanEmail}) solicitou o reset de sua senha para "1234".`,
+            text: `[CHAMADO RESET DE SENHA] O 2º Professor (${cleanEmail}) solicitou a redefinição de sua senha de acesso.`,
             created_at: new Date().toISOString(),
           });
         } catch (msgErr) {
@@ -267,7 +283,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
       setForgotPasswordMsg({
         type: 'success',
-        text: 'Chamado enviado com sucesso ao Professor ADM! A solicitação para redefinir sua senha para 1234 foi registrada.',
+        text: 'Chamado enviado com sucesso ao Professor ADM! A solicitação para redefinir sua senha foi registrada.',
       });
 
       setTimeout(() => {
@@ -364,7 +380,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
               pneConditions: parsedPneConditions || (matched ? matched.pneConditions : undefined),
               secondTeacherId: dbMatched.second_teacher_id || (matched ? matched.secondTeacherId : undefined),
               secondTeacherName: dbMatched.second_teacher_name || (matched ? matched.secondTeacherName : undefined),
-              passwordHash: dbMatched.password_hash || '1234',
+              passwordHash: dbMatched.password_hash || '', // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui
               avatarUrl: dbMatched.avatar_url || (matched ? matched.avatarUrl : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200'),
               pedagogicalNotes: dbMatched.pedagogical_notes || (matched ? matched.pedagogicalNotes : ''),
             };
@@ -382,9 +398,16 @@ export const AuthView: React.FC<AuthViewProps> = ({
       return;
     }
 
-    // Verificar senha digitada obrigatoriamente
+    // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui
+    // Exigir estritamente a senha real cadastrada do aluno
     const expectedPassword = matched.passwordHash;
-    if (expectedPassword && enteredPassword === expectedPassword) {
+    if (!expectedPassword || expectedPassword.trim() === '') {
+      setStudentError('Aluno sem senha cadastrada. Solicite a definição da sua senha individual junto ao professor.');
+      return;
+    }
+
+    const isPassValid = await verifyPassword(enteredPassword, expectedPassword);
+    if (isPassValid) {
       onLoginStudent(matched);
     } else {
       setStudentError('Senha incorreta. Verifique sua senha de acesso.');
@@ -567,7 +590,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 <Lock className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-[#869486]" />
               </div>
               <p className="text-[11px] text-muted mt-1 ml-1">
-                A senha padrão inicial cadastrada para alunos é <span className="font-bold text-foreground">1234</span>
+                Digite a senha de acesso individual cadastrada pelo professor.
               </p>
             </div>
 
@@ -665,7 +688,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
               </div>
 
               <p className="text-xs text-muted leading-relaxed">
-                Informe seu e-mail cadastrado de 2º Professor. Um chamado será enviado diretamente ao Professor ADM para redefinir sua senha para <strong className="text-foreground font-bold">1234</strong>.
+                Informe seu e-mail cadastrado de 2º Professor. Um chamado será enviado diretamente ao Professor ADM para redefinir sua senha de acesso.
               </p>
 
               {forgotPasswordMsg && (
