@@ -18,13 +18,6 @@ on:
         default: false
         type: boolean
 
-  # Disparo automático quando novos arquivos de migration forem aprovados e commitados na branch main
-  push:
-    branches:
-      - main
-    paths:
-      - 'supabase/migrations/*.sql'
-
 jobs:
   apply-migrations:
     name: Aplicar Migrations com Versionamento Único
