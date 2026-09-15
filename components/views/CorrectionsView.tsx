@@ -1,37 +1,42 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useLocalDraft } from '@/hooks/use-local-draft';
-
-interface Submission {
-  id: string;
-  student_id: string;
-  student_name: string;
-  turma: string;
-  activity_id: string;
-  activity_title: string;
-  activity_type: string;
-  submitted_at: string;
-  content: string;
-  grade?: number | null;
-  feedback?: string | null;
-  status: 'pending' | 'graded' | 'returned';
-  is_pne?: boolean;
-  recovery_grade?: number | null;
-}
+import { CheckCircle2, RotateCcw } from 'lucide-react';
 
 interface CorrectionsViewProps {
-  submissions?: Submission[];
-  onSaveGrade?: (submissionId: string, grade: number, feedback: string) => Promise<void>;
+  submissions: any[];
+  activities: any[];
+  students: any[];
+  onSaveCorrection: (submissionId: string, grade: number, feedback: string) => Promise<void>;
 }
 
 export default function CorrectionsView({
   submissions = [],
-  onSaveGrade,
+  activities = [],
+  students = [],
+  onSaveCorrection,
 }: CorrectionsViewProps) {
-  // Estado da submissão atualmente ativa na tela de correção
+  
+  // 1. Unifica os dados cruzando Entregas + Alunos + Atividades para evitar crash
+  const enrichedSubmissions = useMemo(() => {
+    return submissions.map(sub => {
+      const student = students.find(s => s.id === sub.student_id) || {};
+      const activity = activities.find(a => a.id === sub.activity_id) || {};
+      
+      return {
+        ...sub,
+        student_name: student.name || 'Aluno Desconhecido',
+        turma: student.turma || 'Sem Turma',
+        is_pne: student.is_pne || false,
+        activity_title: activity.title || 'Atividade Excluída',
+        activity_type: activity.type || 'Atividade Regular',
+      };
+    });
+  }, [submissions, students, activities]);
+
   const [selectedId, setSelectedId] = useState<string | null>(
-    submissions.length > 0 ? submissions[0].id : null
+    enrichedSubmissions.length > 0 ? enrichedSubmissions[0].id : null
   );
 
   const [filterTurma, setFilterTurma] = useState<string>('todas');
@@ -39,12 +44,12 @@ export default function CorrectionsView({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [gradeInput, setGradeInput] = useState<string>('');
 
-  // Localiza a submissão em foco
+  // 2. Localiza a submissão ativa com segurança
   const activeSubmission = useMemo(() => {
-    return submissions.find((s) => s.id === selectedId) || null;
-  }, [submissions, selectedId]);
+    return enrichedSubmissions.find((s) => s.id === selectedId) || null;
+  }, [enrichedSubmissions, selectedId]);
 
-  // Hook de autosave local (anti-perda de dados) indexado por ID da submissão
+  // 3. Hook de Autosave Local (Anti-perda de dados)
   const draftKey = activeSubmission ? `draft_feedback_${activeSubmission.id}` : 'temp_draft';
   const {
     draft: feedbackText,
@@ -57,15 +62,21 @@ export default function CorrectionsView({
     debounceMs: 400,
   });
 
-  // Lista de turmas distintas para filtro rápido
-  const turmasDisponiveis = useMemo(() => {
-    const list = Array.from(new Set(submissions.map((s) => s.turma).filter(Boolean)));
-    return list.sort();
-  }, [submissions]);
+  // Atualiza os inputs quando o professor clica em outro aluno
+  useEffect(() => {
+    if (activeSubmission) {
+      setGradeInput(activeSubmission.grade !== null && activeSubmission.grade !== undefined ? String(activeSubmission.grade) : '');
+      setFeedbackText(activeSubmission.feedback || '');
+    }
+  }, [activeSubmission?.id]);
 
-  // Filtragem de fila de trabalho
+  const turmasDisponiveis = useMemo(() => {
+    const list = Array.from(new Set(enrichedSubmissions.map((s) => s.turma).filter(Boolean)));
+    return list.sort();
+  }, [enrichedSubmissions]);
+
   const filteredSubmissions = useMemo(() => {
-    return submissions.filter((s) => {
+    return enrichedSubmissions.filter((s) => {
       const matchTurma = filterTurma === 'todas' || s.turma === filterTurma;
       const matchStatus =
         filterStatus === 'todos' ||
@@ -73,15 +84,12 @@ export default function CorrectionsView({
         (filterStatus === 'graded' && s.status === 'graded');
       return matchTurma && matchStatus;
     });
-  }, [submissions, filterTurma, filterStatus]);
+  }, [enrichedSubmissions, filterTurma, filterStatus]);
 
-  // Sincroniza nota ao alternar de submissão
-  const handleSelectSubmission = (sub: Submission) => {
+  const handleSelectSubmission = (sub: any) => {
     setSelectedId(sub.id);
-    setGradeInput(sub.grade !== null && sub.grade !== undefined ? String(sub.grade) : '');
   };
 
-  // Envio seguro da nota e parecer
   const handleConfirmCorrection = async () => {
     if (!activeSubmission) return;
 
@@ -93,14 +101,14 @@ export default function CorrectionsView({
 
     try {
       setIsSubmitting(true);
-      if (onSaveGrade) {
-        await onSaveGrade(activeSubmission.id, parsedGrade, feedbackText);
+      if (onSaveCorrection) {
+        await onSaveCorrection(activeSubmission.id, parsedGrade, feedbackText);
       }
-      clearDraft(); // Limpa rascunho apenas após confirmação do servidor
+      clearDraft(); 
       alert('Avaliação consolidada com sucesso no sistema.');
     } catch (err: any) {
       console.error('Falha ao registrar correção:', err);
-      alert('Não foi possível gravar no servidor. O rascunho continua seguro no aparelho.');
+      alert('Não foi possível gravar no servidor. Seu texto continua salvo no aparelho.');
     } finally {
       setIsSubmitting(false);
     }
@@ -108,18 +116,14 @@ export default function CorrectionsView({
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-6 text-slate-100 min-h-[calc(100vh-80px)] flex flex-col gap-6">
-      {/* Cabeçalho de Controle de Fluxo */}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">
-            Mesa de Correções Pedagógicas
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight text-white">Mesa de Correções</h1>
           <p className="text-sm text-slate-400 mt-1">
-            Fila ativa de produções dissertativas, tarefas adaptadas e recuperações paralelas.
+            Fila ativa de produções, tarefas adaptadas e recuperações.
           </p>
         </div>
 
-        {/* Filtros em Pílula (Touch-friendly 44px+) */}
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={filterTurma}
@@ -128,15 +132,12 @@ export default function CorrectionsView({
           >
             <option value="todas">Todas as Turmas</option>
             {turmasDisponiveis.map((t) => (
-              <option key={t} value={t}>
-                Turma {t}
-              </option>
+              <option key={t as string} value={t as string}>Turma {t as string}</option>
             ))}
           </select>
 
           <div className="flex bg-slate-900 p-1 border border-slate-800 rounded-xl h-11">
             <button
-              type="button"
               onClick={() => setFilterStatus('pending')}
               className={`px-3.5 h-full rounded-lg text-xs font-semibold transition-all ${
                 filterStatus === 'pending'
@@ -144,10 +145,9 @@ export default function CorrectionsView({
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Pendentes ({submissions.filter((s) => s.status === 'pending').length})
+              Pendentes
             </button>
             <button
-              type="button"
               onClick={() => setFilterStatus('graded')}
               className={`px-3.5 h-full rounded-lg text-xs font-semibold transition-all ${
                 filterStatus === 'graded'
@@ -157,24 +157,11 @@ export default function CorrectionsView({
             >
               Corrigidas
             </button>
-            <button
-              type="button"
-              onClick={() => setFilterStatus('todos')}
-              className={`px-3.5 h-full rounded-lg text-xs font-semibold transition-all ${
-                filterStatus === 'todos'
-                  ? 'bg-slate-800 text-white'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Todas
-            </button>
           </div>
         </div>
       </header>
 
-      {/* Grade Principal: Lista de Chamada à Esquerda + Prancheta de Leitura à Direita */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-start">
-        {/* Painel Esquerdo: Fila de Entregas (4 colunas) */}
         <aside className="lg:col-span-4 bg-slate-900/90 border border-slate-800 rounded-2xl p-3 flex flex-col gap-2 max-h-[780px] overflow-y-auto">
           <div className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
             Alunos aguardando avaliação ({filteredSubmissions.length})
@@ -210,14 +197,9 @@ export default function CorrectionsView({
                     <span className="text-slate-400 truncate max-w-[180px]">
                       {sub.activity_title}
                     </span>
-                    {sub.is_pne && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-950/60 text-purple-300 border border-purple-800/60">
-                        PNE
-                      </span>
-                    )}
                     {sub.grade !== null && sub.grade !== undefined && (
                       <span className="text-xs font-mono font-bold text-emerald-400">
-                        {sub.grade.toFixed(1)}
+                        {Number(sub.grade).toFixed(1)}
                       </span>
                     )}
                   </div>
@@ -227,84 +209,48 @@ export default function CorrectionsView({
           )}
         </aside>
 
-        {/* Painel Direito: Prancheta de Leitura e Atribuição de Nota (8 colunas) */}
         <main className="lg:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col gap-6 shadow-xl">
           {activeSubmission ? (
             <>
-              {/* Cabeçalho da Atividade Selecionada */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
-                <div>
-                  <span className="text-xs font-mono uppercase tracking-widest text-amber-400">
-                    {activeSubmission.turma} • {activeSubmission.activity_type}
-                  </span>
-                  <h2 className="text-xl font-bold text-white mt-0.5">
-                    {activeSubmission.student_name}
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Atividade: {activeSubmission.activity_title} • Enviado em:{' '}
-                    {new Date(activeSubmission.submitted_at).toLocaleDateString('pt-BR')}
-                  </p>
-                </div>
-
-                {/* Bloco de Comparação de Notas para Fechamento de RCO */}
-                {activeSubmission.recovery_grade !== null &&
-                  activeSubmission.recovery_grade !== undefined && (
-                    <div className="bg-slate-950 px-3.5 py-2 rounded-xl border border-slate-800 flex items-center gap-4 text-xs">
-                      <div>
-                        <div className="text-slate-500">Regular</div>
-                        <div className="font-mono font-bold text-slate-300">
-                          {activeSubmission.grade?.toFixed(1) || '—'}
-                        </div>
-                      </div>
-                      <div className="h-6 w-px bg-slate-800" />
-                      <div>
-                        <div className="text-amber-500">Recuperação</div>
-                        <div className="font-mono font-bold text-amber-300">
-                          {activeSubmission.recovery_grade.toFixed(1)}
-                        </div>
-                      </div>
-                      <div className="h-6 w-px bg-slate-800" />
-                      <div>
-                        <div className="text-emerald-500 font-semibold">Válida (RCO)</div>
-                        <div className="font-mono font-bold text-emerald-400">
-                          {Math.max(
-                            activeSubmission.grade || 0,
-                            activeSubmission.recovery_grade || 0
-                          ).toFixed(1)}
-                        </div>
-                      </div>
-                    </div>
-                  )}
+              <div className="flex flex-col border-b border-slate-800/80 pb-4">
+                <span className="text-xs font-mono uppercase tracking-widest text-amber-400">
+                  Turma {activeSubmission.turma} • {activeSubmission.activity_type}
+                </span>
+                <h2 className="text-xl font-bold text-white mt-1">
+                  {activeSubmission.student_name}
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  Atividade: {activeSubmission.activity_title} • Enviado em:{' '}
+                  {activeSubmission.submitted_at ? new Date(activeSubmission.submitted_at).toLocaleDateString('pt-BR') : 'Data não registrada'}
+                </p>
               </div>
 
-              {/* Texto da Produção Textual do Aluno */}
               <div className="flex flex-col gap-2">
                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
                   Produção Textual do Estudante
                 </span>
-                <div className="bg-slate-950 p-5 rounded-xl border border-slate-800/90 text-slate-200 font-serif text-base leading-relaxed whitespace-pre-wrap max-h-[380px] overflow-y-auto selection:bg-amber-500/30">
+                <div className="bg-slate-950 p-5 rounded-xl border border-slate-800/90 text-slate-200 font-serif text-base leading-relaxed whitespace-pre-wrap max-h-[380px] overflow-y-auto">
                   {activeSubmission.content || (
-                    <span className="text-slate-600 italic">
-                      Nenhum texto submetido nesta entrega.
-                    </span>
+                    <span className="text-slate-600 italic">O aluno enviou a tarefa em branco.</span>
                   )}
                 </div>
               </div>
 
-              {/* Área de Avaliação do Professor com Autosave */}
               <div className="flex flex-col gap-3 pt-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-                    Devolutiva Pedagógica & Parecer ao Aluno
+                    Devolutiva Pedagógica & Parecer
                   </span>
                   {hasDraft && (
                     <div className="flex items-center gap-2 text-xs text-amber-300/90 bg-amber-500/10 px-2.5 py-1 rounded-md border border-amber-500/20">
-                      <span>● Rascunho salvo no aparelho</span>
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Rascunho salvo no aparelho</span>
                       <button
                         type="button"
                         onClick={clearDraft}
-                        className="underline text-slate-400 hover:text-slate-200"
+                        className="underline text-slate-400 hover:text-slate-200 ml-1"
                       >
+                        <RotateCcw className="w-3 h-3 inline mr-1" />
                         Descartar
                       </button>
                     </div>
@@ -314,22 +260,17 @@ export default function CorrectionsView({
                 <textarea
                   value={feedbackText}
                   onChange={(e) => setFeedbackText(e.target.value)}
-                  placeholder="Escreva aqui apontamentos formativos, pontos fortes e recomendações conceituais de Sociologia..."
+                  placeholder="Escreva aqui apontamentos formativos, pontos fortes e recomendações ao aluno..."
                   rows={4}
-                  className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500/70 leading-relaxed resize-none"
+                  className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500/70 resize-none"
                 />
 
-                {/* Barra de Ação Inferior: Atribuição de Nota e Gravação */}
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mt-2 bg-slate-950 p-3.5 rounded-xl border border-slate-800">
                   <div className="flex items-center gap-3">
-                    <label
-                      htmlFor="notaFinalInput"
-                      className="text-xs font-semibold text-slate-300 whitespace-nowrap"
-                    >
+                    <label className="text-xs font-semibold text-slate-300">
                       Nota Final (0 a 10):
                     </label>
                     <input
-                      id="notaFinalInput"
                       type="text"
                       inputMode="decimal"
                       value={gradeInput}
@@ -343,7 +284,7 @@ export default function CorrectionsView({
                     type="button"
                     disabled={isSubmitting}
                     onClick={handleConfirmCorrection}
-                    className="h-12 px-6 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold text-sm rounded-xl transition-all shadow-md shadow-amber-500/10 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="h-12 px-6 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold text-sm rounded-xl transition-all shadow-md shadow-amber-500/10 disabled:opacity-50 flex items-center justify-center"
                   >
                     {isSubmitting ? 'Gravando no Sistema...' : 'Salvar e Lançar Nota'}
                   </button>
@@ -352,12 +293,8 @@ export default function CorrectionsView({
             </>
           ) : (
             <div className="py-24 text-center text-slate-500 flex flex-col items-center justify-center gap-2">
-              <span className="text-base font-medium text-slate-400">
-                Nenhuma redação selecionada
-              </span>
-              <span className="text-xs">
-                Selecione um aluno na lista ao lado para iniciar a conferência.
-              </span>
+              <span className="text-base font-medium text-slate-400">Nenhuma redação selecionada</span>
+              <span className="text-xs">Selecione um aluno na lista ao lado para iniciar a conferência.</span>
             </div>
           )}
         </main>
