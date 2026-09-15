@@ -1,304 +1,507 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { useLocalDraft } from '@/hooks/use-local-draft';
-import { CheckCircle2, RotateCcw } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import {
+  FileCheck2,
+  Users,
+  BookOpen,
+  Search,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  Sparkles,
+  ChevronRight,
+  ArrowLeft,
+  RotateCcw,
+  Star,
+  Award,
+  Filter,
+  CheckCheck,
+  GitFork,
+  Layers,
+} from 'lucide-react';
+import { Activity, ActivitySubmission, StudentUser } from '@/lib/types';
+import {
+  getOriginalTurmas,
+  sortTurmas,
+  canStudentAccessActivity,
+  getChildRecoveryActivities,
+  getChildAdaptations,
+} from '@/lib/studentUtils';
+import { GradingView } from './GradingView';
+import { GradingLoadingSkeleton, StandardErrorState } from '@/components/LoadingState';
 
 interface CorrectionsViewProps {
-  submissions: any[];
-  activities: any[];
-  students: any[];
-  onSaveCorrection: (submissionId: string, grade: number, feedback: string) => Promise<void>;
+  activities: Activity[];
+  students: StudentUser[];
+  isLoading?: boolean;
+  hasError?: boolean;
+  onRetry?: () => void;
+  onUpdateSubmission: (
+    activityId: string,
+    studentId: string,
+    essayScore: number,
+    feedback: string,
+    status: 'graded' | 'returned' | 'draft',
+    extraPoints?: number,
+    registeredInStateSystem?: boolean
+  ) => void;
+  initialSelectedActivityId?: string | null;
 }
 
-export default function CorrectionsView({
-  submissions = [],
+export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
   activities = [],
   students = [],
-  onSaveCorrection,
-}: CorrectionsViewProps) {
-  
-  // 1. Unifica os dados cruzando Entregas + Alunos + Atividades para evitar crash
-  const enrichedSubmissions = useMemo(() => {
-    return submissions.map(sub => {
-      const student = students.find(s => s.id === sub.student_id) || {};
-      const activity = activities.find(a => a.id === sub.activity_id) || {};
-      
-      return {
-        ...sub,
-        student_name: student.name || 'Aluno Desconhecido',
-        turma: student.turma || 'Sem Turma',
-        is_pne: student.is_pne || false,
-        activity_title: activity.title || 'Atividade Excluída',
-        activity_type: activity.type || 'Atividade Regular',
-      };
+  isLoading = false,
+  hasError = false,
+  onRetry,
+  onUpdateSubmission,
+  initialSelectedActivityId = null,
+}) => {
+  // Lista de Turmas Originais dos alunos ordenadas por ano (1ºs, depois 2ºs, depois 3ºs)
+  const originalTurmas = useMemo(() => {
+    return getOriginalTurmas(students);
+  }, [students]);
+
+  const [selectedTurmaFilter, setSelectedTurmaFilter] = useState<string>('all');
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(initialSelectedActivityId);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'graded'>('all');
+
+  // Derived filter that adapts automatically if active turmas change (e.g. after archiving)
+  const effectiveTurmaFilter = (selectedTurmaFilter === 'all' || originalTurmas.includes(selectedTurmaFilter))
+    ? selectedTurmaFilter
+    : 'all';
+
+  // Atividade atualmente aberta para correção
+  const activeGradingActivity = useMemo(() => {
+    if (!selectedActivityId) return null;
+    return activities.find((a) => a.id === selectedActivityId) || null;
+  }, [activities, selectedActivityId]);
+
+  // Contadores globais de correção
+  const { totalPendingCount, totalGradedCount, totalDeliveriesCount } = useMemo(() => {
+    let pending = 0;
+    let graded = 0;
+    let deliveries = 0;
+
+    activities.forEach((act) => {
+      const subs = act.submissions || [];
+      deliveries += subs.length;
+      subs.forEach((s) => {
+        if (s.status === 'pending' || s.status === 'draft') pending++;
+        else if (s.status === 'graded') graded++;
+      });
     });
-  }, [submissions, students, activities]);
 
-  const [selectedId, setSelectedId] = useState<string | null>(
-    enrichedSubmissions.length > 0 ? enrichedSubmissions[0].id : null
-  );
+    return {
+      totalPendingCount: pending,
+      totalGradedCount: graded,
+      totalDeliveriesCount: deliveries,
+    };
+  }, [activities]);
 
-  const [filterTurma, setFilterTurma] = useState<string>('todas');
-  const [filterStatus, setFilterStatus] = useState<string>('pending');
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [gradeInput, setGradeInput] = useState<string>('');
-
-  // 2. Localiza a submissão ativa com segurança
-  const activeSubmission = useMemo(() => {
-    return enrichedSubmissions.find((s) => s.id === selectedId) || null;
-  }, [enrichedSubmissions, selectedId]);
-
-  // 3. Hook de Autosave Local (Anti-perda de dados)
-  const draftKey = activeSubmission ? `draft_feedback_${activeSubmission.id}` : 'temp_draft';
-  const {
-    draft: feedbackText,
-    setDraft: setFeedbackText,
-    hasDraft,
-    clearDraft,
-  } = useLocalDraft<string>({
-    key: draftKey,
-    initialValue: activeSubmission?.feedback || '',
-    debounceMs: 400,
-  });
-
-  // Atualiza os inputs quando o professor clica em outro aluno
-  useEffect(() => {
-    if (activeSubmission) {
-      setGradeInput(activeSubmission.grade !== null && activeSubmission.grade !== undefined ? String(activeSubmission.grade) : '');
-      setFeedbackText(activeSubmission.feedback || '');
-    }
-  }, [activeSubmission?.id]);
-
-  const turmasDisponiveis = useMemo(() => {
-    const list = Array.from(new Set(enrichedSubmissions.map((s) => s.turma).filter(Boolean)));
-    return list.sort();
-  }, [enrichedSubmissions]);
-
-  const filteredSubmissions = useMemo(() => {
-    return enrichedSubmissions.filter((s) => {
-      const matchTurma = filterTurma === 'todas' || s.turma === filterTurma;
-      const matchStatus =
-        filterStatus === 'todos' ||
-        (filterStatus === 'pending' && s.status === 'pending') ||
-        (filterStatus === 'graded' && s.status === 'graded');
-      return matchTurma && matchStatus;
-    });
-  }, [enrichedSubmissions, filterTurma, filterStatus]);
-
-  const handleSelectSubmission = (sub: any) => {
-    setSelectedId(sub.id);
-  };
-
-  const handleConfirmCorrection = async () => {
-    if (!activeSubmission) return;
-
-    const parsedGrade = parseFloat(gradeInput.replace(',', '.'));
-    if (isNaN(parsedGrade) || parsedGrade < 0 || parsedGrade > 10) {
-      alert('Por favor, insira uma nota válida entre 0,0 e 10,0.');
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      if (onSaveCorrection) {
-        await onSaveCorrection(activeSubmission.id, parsedGrade, feedbackText);
+  // Filtrar atividades pela turma selecionada e busca
+  const filteredActivities = useMemo(() => {
+    return activities.filter((act) => {
+      // Filtro de turma original
+      if (effectiveTurmaFilter !== 'all') {
+        const matchesTurma = canStudentAccessActivity(act.turma, effectiveTurmaFilter);
+        if (!matchesTurma) return false;
       }
-      clearDraft(); 
-      alert('Avaliação consolidada com sucesso no sistema.');
-    } catch (err: any) {
-      console.error('Falha ao registrar correção:', err);
-      alert('Não foi possível gravar no servidor. Seu texto continua salvo no aparelho.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
-  return (
-    <div className="w-full max-w-7xl mx-auto px-4 py-6 text-slate-100 min-h-[calc(100vh-80px)] flex flex-col gap-6">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Mesa de Correções</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Fila ativa de produções, tarefas adaptadas e recuperações.
-          </p>
-        </div>
+      // Filtro de busca por título ou descrição
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchesTitle = act.title.toLowerCase().includes(q);
+        const matchesSubject = act.subject?.toLowerCase().includes(q);
+        if (!matchesTitle && !matchesSubject) return false;
+      }
 
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={filterTurma}
-            onChange={(e) => setFilterTurma(e.target.value)}
-            className="h-11 px-3.5 bg-slate-900 border border-slate-750 rounded-xl text-sm font-medium text-slate-200 focus:ring-2 focus:ring-amber-500 focus:outline-none"
-          >
-            <option value="todas">Todas as Turmas</option>
-            {turmasDisponiveis.map((t) => (
-              <option key={t as string} value={t as string}>Turma {t as string}</option>
-            ))}
-          </select>
+      // Filtro de status de correção
+      const subs = act.submissions || [];
+      const pendingInAct = subs.filter((s) => s.status === 'pending' || s.status === 'draft').length;
+      const gradedInAct = subs.filter((s) => s.status === 'graded').length;
 
-          <div className="flex bg-slate-900 p-1 border border-slate-800 rounded-xl h-11">
+      if (statusFilter === 'pending' && pendingInAct === 0) return false;
+      if (statusFilter === 'graded' && gradedInAct === 0) return false;
+
+      return true;
+    });
+  }, [activities, effectiveTurmaFilter, searchQuery, statusFilter]);
+
+  // Se uma atividade foi selecionada, renderiza o GradingView integrado com navegação facilitada
+  if (activeGradingActivity) {
+    return (
+      <div className="space-y-6 animate-fadeIn pb-12">
+        {/* Barra superior de contexto da Correção */}
+        <div className="bg-surface p-4 sm:p-5 rounded-3xl border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg">
+          <div className="flex items-center gap-3">
             <button
-              onClick={() => setFilterStatus('pending')}
-              className={`px-3.5 h-full rounded-lg text-xs font-semibold transition-all ${
-                filterStatus === 'pending'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
+              onClick={() => setSelectedActivityId(null)}
+              className="p-2.5 min-h-[44px] min-w-[44px] bg-[#171f33] hover:bg-surface-hover text-foreground hover:text-foreground rounded-2xl border border-border transition-all cursor-pointer flex items-center gap-2 text-xs font-bold"
+              title="Voltar para a lista de correções"
             >
-              Pendentes
+              <ArrowLeft className="w-4 h-4" />
+              <span>Ver Todas as Atividades</span>
             </button>
-            <button
-              onClick={() => setFilterStatus('graded')}
-              className={`px-3.5 h-full rounded-lg text-xs font-semibold transition-all ${
-                filterStatus === 'graded'
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Corrigidas
-            </button>
-          </div>
-        </div>
-      </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 items-start">
-        <aside className="lg:col-span-4 bg-slate-900/90 border border-slate-800 rounded-2xl p-3 flex flex-col gap-2 max-h-[780px] overflow-y-auto">
-          <div className="px-3 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            Alunos aguardando avaliação ({filteredSubmissions.length})
-          </div>
+            <div className="h-6 w-px bg-surface-hover hidden sm:block" />
 
-          {filteredSubmissions.length === 0 ? (
-            <div className="py-12 text-center text-slate-500 text-sm">
-              Nenhuma entrega encontrada para o filtro selecionado.
+            <div>
+              <span className="text-[11px] font-bold text-primary uppercase tracking-wider block">
+                Painel de Correção & Atribuição de Notas
+              </span>
+              <h2 className="text-lg sm:text-xl font-black text-foreground truncate max-w-md sm:max-w-xl">
+                {activeGradingActivity.title}
+              </h2>
             </div>
-          ) : (
-            filteredSubmissions.map((sub) => {
-              const isSelected = sub.id === selectedId;
+          </div>
+
+          {/* Seletor rápido de atividade para alternar sem voltar */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <label className="text-xs font-bold text-muted whitespace-nowrap hidden md:inline">
+              Trocar Atividade:
+            </label>
+            <select
+              value={activeGradingActivity.id}
+              onChange={(e) => setSelectedActivityId(e.target.value)}
+              className="bg-background border border-white/15 rounded-2xl px-3 py-2 text-xs text-foreground font-bold focus:outline-none focus:border-primary cursor-pointer w-full sm:w-64"
+            >
+              {activities.map((a) => {
+                const pend = (a.submissions || []).filter((s) => s.status === 'pending' || s.status === 'draft').length;
+                return (
+                  <option key={a.id} value={a.id} className="bg-background text-foreground">
+                    {a.title} {pend > 0 ? `(⏳ ${pend} pendentes)` : ''}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        </div>
+
+        {/* View Completa de Correção */}
+        <GradingView
+          activity={activeGradingActivity}
+          allActivities={activities}
+          students={students}
+          isLoading={isLoading}
+          hasError={hasError}
+          onRetry={onRetry}
+          onBack={() => setSelectedActivityId(null)}
+          onSelectActivity={(act) => setSelectedActivityId(act.id)}
+          onUpdateSubmission={onUpdateSubmission}
+        />
+      </div>
+    );
+  }
+
+  // Lista/Seletor de Atividades para Correção
+  return (
+    <div className="space-y-6 animate-fadeIn pb-12">
+      {isLoading ? (
+        <GradingLoadingSkeleton
+          title="Carregando atividades para correção..."
+          subtitle="Sincronizando entregas, pendências e turmas com o banco de dados..."
+        />
+      ) : hasError ? (
+        <StandardErrorState
+          title="Não conseguimos carregar as atividades para correção agora."
+          message="Verifique sua conexão com a internet e tente novamente."
+          onRetry={onRetry}
+          retryLabel="Tentar novamente"
+        />
+      ) : (
+        <>
+          {/* Header com Estatísticas de Correção */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface p-5 sm:p-6 rounded-3xl border border-border shadow-lg">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+            <FileCheck2 className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
+                Central de Correções
+              </h1>
+              {totalPendingCount > 0 && (
+                <span className="px-3 py-0.5 rounded-full text-xs font-black bg-amber-100 text-amber-600 border border-amber-200 animate-pulse">
+                  ⏳ {totalPendingCount} pendentes
+                </span>
+              )}
+            </div>
+            <p className="text-xs sm:text-sm text-muted font-medium mt-0.5">
+              Selecione uma atividade para corrigir redações, atribuir notas, gerar feedback e lançar avaliações.
+            </p>
+          </div>
+        </div>
+
+        {/* Resumo Rápido em Cartões Compactos */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="px-4 py-2.5 rounded-2xl bg-background border border-amber-500/30 text-left">
+            <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
+              A Corrigir
+            </span>
+            <span className="text-lg font-black text-amber-600">{totalPendingCount}</span>
+          </div>
+
+          <div className="px-4 py-2.5 rounded-2xl bg-background border border-emerald-500/30 text-left">
+            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">
+              Corrigidas
+            </span>
+            <span className="text-lg font-black text-emerald-600">{totalGradedCount}</span>
+          </div>
+
+          <div className="px-4 py-2.5 rounded-2xl bg-background border border-border text-left">
+            <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">
+              Total Entregas
+            </span>
+            <span className="text-lg font-black text-foreground">{totalDeliveriesCount}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Barra de Filtros: Turmas Originais e Busca */}
+      <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-border bg-surface space-y-4 shadow-md">
+        {/* Seletor de Turmas Originais em Abas/Pills */}
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-muted flex items-center gap-1.5 uppercase tracking-wider">
+            <Users className="w-3.5 h-3.5 text-primary" />
+            <span>Filtrar por Turma:</span>
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setSelectedTurmaFilter('all')}
+              className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all duration-200 cursor-pointer border active:scale-95 ${
+                effectiveTurmaFilter === 'all'
+                  ? 'bg-primary text-white border-primary shadow-md shadow-primary/20'
+                  : 'bg-background text-muted hover:text-foreground border-border hover:bg-surface-hover'
+              }`}
+            >
+              Todas as Turmas
+            </button>
+
+            {originalTurmas.map((turmaCode) => {
+              const countStudents = students.filter((s) => s.turma === turmaCode).length;
               return (
                 <button
-                  key={sub.id}
-                  onClick={() => handleSelectSubmission(sub)}
-                  className={`w-full text-left p-3.5 rounded-xl border transition-all min-h-[64px] flex flex-col justify-between ${
-                    isSelected
-                      ? 'bg-slate-800 border-amber-500/80 shadow-lg shadow-black/40 ring-1 ring-amber-500/50'
-                      : 'bg-slate-950/40 border-slate-850 hover:bg-slate-850/60 hover:border-slate-700'
+                  key={turmaCode}
+                  onClick={() => setSelectedTurmaFilter(turmaCode)}
+                  className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 border active:scale-95 ${
+                    effectiveTurmaFilter === turmaCode
+                      ? 'bg-primary text-white border-primary shadow-md shadow-primary/20'
+                      : 'bg-background text-muted hover:text-foreground border-border hover:bg-surface-hover'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-sm text-slate-100 truncate">
-                      {sub.student_name}
-                    </span>
-                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                      {sub.turma}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-2 mt-2 text-xs">
-                    <span className="text-slate-400 truncate max-w-[180px]">
-                      {sub.activity_title}
-                    </span>
-                    {sub.grade !== null && sub.grade !== undefined && (
-                      <span className="text-xs font-mono font-bold text-emerald-400">
-                        {Number(sub.grade).toFixed(1)}
-                      </span>
-                    )}
-                  </div>
+                  <span>Turma {turmaCode}</span>
+                  <span className="text-[10px] opacity-75 font-mono">({countStudents})</span>
                 </button>
               );
-            })
-          )}
-        </aside>
+            })}
+          </div>
+        </div>
 
-        <main className="lg:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col gap-6 shadow-xl">
-          {activeSubmission ? (
-            <>
-              <div className="flex flex-col border-b border-slate-800/80 pb-4">
-                <span className="text-xs font-mono uppercase tracking-widest text-amber-400">
-                  Turma {activeSubmission.turma} • {activeSubmission.activity_type}
-                </span>
-                <h2 className="text-xl font-bold text-white mt-1">
-                  {activeSubmission.student_name}
-                </h2>
-                <p className="text-xs text-slate-400 mt-1">
-                  Atividade: {activeSubmission.activity_title} • Enviado em:{' '}
-                  {activeSubmission.submitted_at ? new Date(activeSubmission.submitted_at).toLocaleDateString('pt-BR') : 'Data não registrada'}
-                </p>
-              </div>
+        {/* Linha de Busca e Subfiltros */}
+        <div className="flex flex-col sm:flex-row items-center gap-3 pt-3 border-t border-border">
+          <div className="relative flex-1 w-full">
+            <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-[#869486]" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar atividade por título..."
+              className="w-full bg-background border border-border rounded-full pl-11 pr-4 py-2.5 text-xs sm:text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-primary"
+            />
+          </div>
 
-              <div className="flex flex-col gap-2">
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-                  Produção Textual do Estudante
-                </span>
-                <div className="bg-slate-950 p-5 rounded-xl border border-slate-800/90 text-slate-200 font-serif text-base leading-relaxed whitespace-pre-wrap max-h-[380px] overflow-y-auto">
-                  {activeSubmission.content || (
-                    <span className="text-slate-600 italic">O aluno enviou a tarefa em branco.</span>
-                  )}
-                </div>
-              </div>
+          <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto">
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`px-3 py-2 min-h-[44px] min-w-[44px] rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                statusFilter === 'all'
+                  ? 'bg-[#1d273d] text-primary border border-primary/30'
+                  : 'bg-background text-muted hover:text-foreground border border-border'
+              }`}
+            >
+              Todas ({activities.length})
+            </button>
+            <button
+              onClick={() => setStatusFilter('pending')}
+              className={`px-3 py-2 min-h-[44px] min-w-[44px] rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
+                statusFilter === 'pending'
+                  ? 'bg-amber-100 text-amber-600 border border-amber-200'
+                  : 'bg-background text-muted hover:text-foreground border border-border'
+              }`}
+            >
+              <span>⏳ Pendentes</span>
+            </button>
+            <button
+              onClick={() => setStatusFilter('graded')}
+              className={`px-3 py-2 min-h-[44px] min-w-[44px] rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
+                statusFilter === 'graded'
+                  ? 'bg-emerald-100 text-emerald-600 border border-emerald-200'
+                  : 'bg-background text-muted hover:text-foreground border border-border'
+              }`}
+            >
+              <span>✅ Concluídas</span>
+            </button>
+          </div>
+        </div>
+      </div>
 
-              <div className="flex flex-col gap-3 pt-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-                    Devolutiva Pedagógica & Parecer
-                  </span>
-                  {hasDraft && (
-                    <div className="flex items-center gap-2 text-xs text-amber-300/90 bg-amber-500/10 px-2.5 py-1 rounded-md border border-amber-500/20">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Rascunho salvo no aparelho</span>
-                      <button
-                        type="button"
-                        onClick={clearDraft}
-                        className="underline text-slate-400 hover:text-slate-200 ml-1"
-                      >
-                        <RotateCcw className="w-3 h-3 inline mr-1" />
-                        Descartar
-                      </button>
+      {/* Lista de Atividades para Correção */}
+      <div className="space-y-3">
+        {filteredActivities.length === 0 ? (
+          <div className="glass-panel p-12 text-center rounded-3xl border border-border bg-surface text-muted space-y-2">
+            <CheckCircle2 className="w-12 h-12 text-primary mx-auto opacity-80" />
+            <p className="font-bold text-foreground text-base">
+              Nenhuma atividade encontrada com os filtros selecionados.
+            </p>
+            <p className="text-xs text-muted">
+              Selecione outra turma ou limpe o termo de busca para visualizar as atividades.
+            </p>
+          </div>
+        ) : (
+          filteredActivities.map((act) => {
+            const subs = act.submissions || [];
+            const pendingCount = subs.filter((s) => s.status === 'pending' || s.status === 'draft').length;
+            const gradedCount = subs.filter((s) => s.status === 'graded').length;
+            const totalSubs = subs.length;
+
+            // Atividades filhas associadas (Adaptações PNE e Recuperações Paralelas)
+            const childRecs = getChildRecoveryActivities(act, activities);
+            const childAdaps = getChildAdaptations(act, activities);
+            const totalChildCount = childRecs.length + childAdaps.length;
+
+            // Total de pendências incluindo filhas
+            let totalPendingWithChildren = pendingCount;
+            childRecs.forEach((c) => {
+              totalPendingWithChildren += (c.submissions || []).filter((s) => s.status === 'pending' || s.status === 'draft').length;
+            });
+            childAdaps.forEach((c) => {
+              totalPendingWithChildren += (c.submissions || []).filter((s) => s.status === 'pending' || s.status === 'draft').length;
+            });
+
+            // Calcular média real das notas lançadas
+            const gradedSubs = subs.filter((s) => s.status === 'graded');
+            let avgScore = 0;
+            if (gradedSubs.length > 0) {
+              const sum = gradedSubs.reduce((acc, curr) => {
+                const total = (Number(curr.objectiveScore) || 0) + (Number(curr.essayScore) || 0) + (Number(curr.extraPoints) || 0);
+                return acc + total;
+              }, 0);
+              avgScore = Number((sum / gradedSubs.length).toFixed(1));
+            }
+
+            return (
+              <div
+                key={act.id}
+                onClick={() => setSelectedActivityId(act.id)}
+                className="glass-panel p-4 sm:p-5 rounded-3xl border border-border bg-surface hover:border-primary/40 transition-all cursor-pointer shadow-md hover:shadow-xl hover:scale-[1.005] group"
+              >
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  {/* Informações da Atividade */}
+                  <div className="space-y-2 flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[11px] font-bold bg-[#171f33] text-muted px-3 py-0.5 rounded-full border border-border">
+                        Turma: <strong className="text-foreground">{act.turma}</strong>
+                      </span>
+                      <span className="text-[11px] font-bold bg-[#171f33] text-primary px-3 py-0.5 rounded-full border border-border">
+                        {act.type}
+                      </span>
+                      {act.isAdapted && (
+                        <span className="text-[10px] font-bold bg-amber-100 text-amber-600 px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-amber-400" />
+                          <span>PNE Adaptada</span>
+                        </span>
+                      )}
+                      {totalChildCount > 0 && (
+                        <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-2.5 py-0.5 rounded-full border border-purple-300 flex items-center gap-1">
+                          <GitFork className="w-3 h-3 text-purple-600" />
+                          <span>{totalChildCount} Filha(s) Vinculada(s)</span>
+                        </span>
+                      )}
                     </div>
-                  )}
-                </div>
 
-                <textarea
-                  value={feedbackText}
-                  onChange={(e) => setFeedbackText(e.target.value)}
-                  placeholder="Escreva aqui apontamentos formativos, pontos fortes e recomendações ao aluno..."
-                  rows={4}
-                  className="w-full p-4 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500/70 resize-none"
-                />
+                    <h3 className="text-base sm:text-lg font-black text-foreground group-hover:text-primary transition-colors leading-tight">
+                      {act.title}
+                    </h3>
 
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mt-2 bg-slate-950 p-3.5 rounded-xl border border-slate-800">
-                  <div className="flex items-center gap-3">
-                    <label className="text-xs font-semibold text-slate-300">
-                      Nota Final (0 a 10):
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={gradeInput}
-                      onChange={(e) => setGradeInput(e.target.value)}
-                      placeholder="Ex: 8.5"
-                      className="w-24 h-12 px-3 bg-slate-900 border border-slate-700 rounded-lg text-center font-mono text-base font-bold text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
+                    {act.description && (
+                      <p className="text-xs text-muted line-clamp-1">
+                        {act.description}
+                      </p>
+                    )}
                   </div>
 
-                  <button
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={handleConfirmCorrection}
-                    className="h-12 px-6 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold text-sm rounded-xl transition-all shadow-md shadow-amber-500/10 disabled:opacity-50 flex items-center justify-center"
-                  >
-                    {isSubmitting ? 'Gravando no Sistema...' : 'Salvar e Lançar Nota'}
-                  </button>
+                  {/* Badges de Entregas, Pendências e Notas */}
+                  <div className="flex flex-wrap items-center gap-3 shrink-0">
+                    {/* Status da Fila de Correção */}
+                    {totalPendingWithChildren > 0 ? (
+                      <div className="px-3.5 py-2 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-600 flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider block leading-none">
+                            Aguardando
+                          </span>
+                          <span className="text-sm font-black">
+                            {pendingCount} a corrigir
+                            {totalPendingWithChildren > pendingCount && (
+                              <span className="text-[10px] font-bold text-purple-600 ml-1">
+                                (+{totalPendingWithChildren - pendingCount} filhas)
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="px-3.5 py-2 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 flex items-center gap-2">
+                        <CheckCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider block leading-none">
+                            Correções
+                          </span>
+                          <span className="text-sm font-black">Em dia</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Total de Entregas e Corrigidas */}
+                    <div className="px-3.5 py-2 rounded-2xl bg-background border border-border text-left">
+                      <span className="text-[10px] font-bold text-muted uppercase tracking-wider block leading-none">
+                        Entregas
+                      </span>
+                      <span className="text-sm font-black text-foreground">
+                        {gradedCount}/{totalSubs} <span className="text-xs text-[#869486]">corrigidas</span>
+                      </span>
+                    </div>
+
+                    {/* Média da Atividade (Notas) */}
+                    {gradedSubs.length > 0 && (
+                      <div className="px-3.5 py-2 rounded-2xl bg-sky-500/10 border border-sky-500/30 text-sky-300 text-left">
+                        <span className="text-[10px] font-bold uppercase tracking-wider block leading-none flex items-center gap-1">
+                          <Star className="w-3 h-3 text-sky-400" />
+                          <span>Média</span>
+                        </span>
+                        <span className="text-sm font-black">
+                          {avgScore.toFixed(1)} <span className="text-[10px] opacity-75">/ {act.maxGrade || 10}</span>
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Botão de Acesso */}
+                    <div className="p-3 rounded-2xl bg-primary text-white font-bold group-hover:bg-[#6bfb9a] transition-all flex items-center justify-center shadow-md">
+                      <ChevronRight className="w-5 h-5 stroke-[2.5]" />
+                    </div>
+                  </div>
                 </div>
               </div>
-            </>
-          ) : (
-            <div className="py-24 text-center text-slate-500 flex flex-col items-center justify-center gap-2">
-              <span className="text-base font-medium text-slate-400">Nenhuma redação selecionada</span>
-              <span className="text-xs">Selecione um aluno na lista ao lado para iniciar a conferência.</span>
-            </div>
-          )}
-        </main>
+            );
+          })
+        )}
       </div>
+        </>
+      )}
     </div>
   );
-}
+};

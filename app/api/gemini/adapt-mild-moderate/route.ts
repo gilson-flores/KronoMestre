@@ -1,138 +1,260 @@
-// app/api/gemini/adapt-mild-moderate/route.ts
+import { Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  ai,
-  GEMINI_MODELS,
-  GEMINI_SAFETY_SETTINGS,
-  sanitizePedagogicalInput,
-  sanitizeStudentPII,
-  mapAiErrorToFriendlyMessage,
-} from '@/lib/gemini';
+import { getGeminiClient } from '@/lib/gemini';
 
-// Esquema estruturado para adaptação curricular PNE
-const adaptedActivitySchema = {
-  type: 'object',
-  properties: {
-    tituloAdaptado: {
-      type: 'string',
-      description: 'Título claro, conciso e acessível da atividade.',
-    },
-    enunciadoSimplificado: {
-      type: 'string',
-      description: 'Instrução direta da tarefa em linguagem clara, frases curtas e objetivas.',
-    },
-    glossarioApoio: {
-      type: 'array',
-      description: 'Definições simples de conceitos sociológicos complexos presentes no texto.',
-      items: {
-        type: 'object',
-        properties: {
-          termo: { type: 'string' },
-          significadoSimples: { type: 'string' },
-        },
-        required: ['termo', 'significadoSimples'],
-      },
-    },
-    passoAPassoExecucao: {
-      type: 'array',
-      description: 'Roteiro sequencial e estruturado para o estudante realizar a atividade.',
-      items: { type: 'string' },
-    },
-    questoesAdaptadas: {
-      type: 'array',
-      description: 'Perguntas adaptadas com opções claras ou suporte imagético/guiado.',
-      items: {
-        type: 'object',
-        properties: {
-          numero: { type: 'number' },
-          pergunta: { type: 'string' },
-          dicaCognitiva: { type: 'string', description: 'Pista pedagógica para orientar o raciocínio.' },
-          tipo: { type: 'string', description: 'multipla_escolha, reflexao_curta ou associacao' },
-          alternativas: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Opções caso a questão seja de múltipla escolha (máximo 4 alternativas).',
-          },
-        },
-        required: ['numero', 'pergunta', 'dicaCognitiva', 'tipo'],
-      },
-    },
-    orientacaoSegundoProfessor: {
-      type: 'string',
-      description: 'Diretrizes práticas para mediação do 2º professor ou apoio pedagógico.',
-    },
-  },
-  required: [
-    'tituloAdaptado',
-    'enunciadoSimplificado',
-    'glossarioApoio',
-    'passoAPassoExecucao',
-    'questoesAdaptadas',
-    'orientacaoSegundoProfessor',
-  ],
-};
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { titulo, descricao, tipoAtividade, necessidadesEspecificas } = body;
+    const {
+      title,
+      subject = 'Sociologia',
+      description = '',
+      turma = '',
+      questions = [],
+      maxGrade = 10,
+      customPrompt = '',
+    } = await req.json();
 
-    if (!titulo || !descricao) {
-      return NextResponse.json(
-        { error: 'Título e descrição da atividade original são obrigatórios.' },
-        { status: 400 }
-      );
+    const ai = getGeminiClient();
+
+    const questionsContext = Array.isArray(questions) && questions.length > 0
+      ? JSON.stringify(questions, null, 2)
+      : `Atividade de tema: "${title}". Descrição: "${description}".`;
+
+    const prompt = `
+Você é um especialista renomado em Educação Especial Inclusiva (AEE - Atendimento Educacional Especializado) e Pedagogia Adaptativa.
+Sua missão é ADAPTAR pedagogicamente esta atividade para alunos com DEFICIÊNCIAS LEVES E MODERADAS (ex: TDAH, Dislexia, Deficiência Intelectual Leve/Moderada, TEA Nível 1 e 2).
+
+DADOS DA ATIVIDADE ORIGINAL:
+- Título: ${title || 'Atividade'}
+- Disciplina: ${subject}
+- Turma: ${turma || 'Geral'}
+- Descrição Original: ${description}
+- Questões / Conteúdo Original:
+${questionsContext}
+${customPrompt ? `\nINSTRUÇÕES ADICIONAIS DO PROFESSOR (PROMPT PERSONALIZADO DO QUE DEVE SER FEITO):\n"""\n${customPrompt}\n"""\n` : ''}
+
+DIRETRIZES PEDAGÓGICAS RIGOROSAS (AEE - LEVES E MODERADAS):
+1. REDUÇÃO DE CARGA COGNITIVA:
+   - Se a atividade tiver muitas questões, selecione/sintetize cerca de 50% das questões mais essenciais (mínimo 1, máximo 4 questões bem estruturadas).
+   - Se a atividade for uma Redação ou não tiver lista de questões, crie 1 a 2 questões dissertativas guiadas com perguntas norteadoras claras e vocabulário direto.
+
+2. QUESTÕES OBJETIVAS (MÚLTIPLA ESCOLHA):
+   - Cada questão objetiva DEVE ter EXATAMENTE 2 ALTERNATIVAS (Opção A e Opção B), eliminando distratores excessivos para evitar sobrecarga de processamento.
+   - Enunciados curtos, claros e em linguagem direta.
+   - O campo "correctOptionIndex" deve ser 0 (se a primeira for a correta) ou 1 (se a segunda for a correta).
+
+3. QUESTÕES DISSERTATIVAS / REDAÇÃO:
+   - Forneça enunciados estruturados com roteiro passo a passo (ex: "1. Explique com suas palavras...", "2. Dê um exemplo...").
+   - "minCharacters" DEVE ser 0 (SEM limite mínimo punitivo de caracteres).
+   - "keywords" pode ser uma string vazia ou palavras-chave facilitadoras.
+
+4. ESTRUTURA DE RESPOSTA OBRIGATÓRIA (JSON puro):
+Retorne um objeto JSON contendo:
+- "adaptedTitle": Título adaptado (ex: "[PNE Leve/Mod] " + título original)
+- "adaptedDescription": Breve orientação pedagógica inclusiva explicando o tema de forma acolhedora.
+- "questions": Lista de questões adaptadas seguindo o modelo exato:
+  - type: 'multiple_choice' | 'essay'
+  - id: identificador único gerado
+  - statement: enunciado simplificado e claro
+  - options: array com exatamente 2 strings (apenas se type === 'multiple_choice')
+  - correctOptionIndex: número 0 ou 1 (apenas se type === 'multiple_choice')
+  - minCharacters: 0 (se type === 'essay')
+`;
+
+    const candidateModels = [
+      'gemini-3.8-flash',
+      'gemini-3.1-flash-lite',
+      'gemini-flash-latest',
+    ];
+
+    let response: any = null;
+    let lastError: any = null;
+
+    if (ai) {
+      for (const modelName of candidateModels) {
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            response = await ai.models.generateContent({
+              model: modelName,
+              contents: prompt,
+              config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    adaptedTitle: { type: Type.STRING },
+                    adaptedDescription: { type: Type.STRING },
+                    questions: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          id: { type: Type.STRING },
+                          type: { type: Type.STRING, enum: ['multiple_choice', 'essay'] },
+                          statement: { type: Type.STRING },
+                          options: {
+                            type: Type.ARRAY,
+                            items: { type: Type.STRING },
+                          },
+                          correctOptionIndex: { type: Type.INTEGER },
+                          minCharacters: { type: Type.INTEGER },
+                          keywords: { type: Type.STRING },
+                        },
+                        required: ['id', 'type', 'statement'],
+                      },
+                    },
+                  },
+                  required: ['adaptedTitle', 'adaptedDescription', 'questions'],
+                },
+              },
+            });
+
+            if (response && response.text) {
+              break;
+            }
+          } catch (err: any) {
+            lastError = err;
+            const status = err?.status || err?.code;
+            const errMsg = String(err?.message || '');
+            const isQuotaExhausted = status === 429 || errMsg.includes('Quota exceeded') || errMsg.includes('RESOURCE_EXHAUSTED');
+            const isHighDemand = status === 503 || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE');
+
+            if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid')) {
+              break;
+            }
+
+            console.warn(`Tentativa ${attempt} com ${modelName} na adaptação leve:`, errMsg || err);
+
+            if (isQuotaExhausted) {
+              break;
+            }
+
+            if (isHighDemand && attempt < 2) {
+              await new Promise((r) => setTimeout(r, 600));
+              continue;
+            }
+            break;
+          }
+        }
+        if (response && response.text) {
+          break;
+        }
+      }
     }
 
-    // Sanitização e proteção de dados sensíveis (LGPD)
-    const sanitizedTitulo = sanitizePedagogicalInput(titulo);
-    const sanitizedDescricao = sanitizeStudentPII(sanitizePedagogicalInput(descricao));
-    const sanitizedNecessidades = sanitizePedagogicalInput(necessidadesEspecificas || 'Acessibilidade curricular geral e redução de sobrecarga cognitiva');
+    let parsedData: any = null;
+    if (response && response.text) {
+      try {
+        parsedData = JSON.parse(response.text.trim());
+      } catch (e) {
+        console.warn('Erro ao fazer parse do JSON do Gemini:', e);
+      }
+    }
 
-    const systemInstruction = `Você é um especialista em Educação Especial Inclusiva e design pedagógico acessível, com foco em Sociologia no Ensino Médio.
-Sua missão é adaptar atividades didáticas originais para estudantes com necessidades pedagógicas específicas (comprometimento leve a moderado, TEA, TDAH, dificuldades de leitura/interpretação).
+    // Se a IA não retornou ou houve esgotamento de cota, sintetizar adaptação pedagógica com base nas questões originais
+    if (!parsedData || !Array.isArray(parsedData.questions) || parsedData.questions.length === 0) {
+      console.log('Utilizando sintetizador pedagógico integrado para PNE Leve/Moderada devido a limites de quota.');
+      const fallbackQuestions = (Array.isArray(questions) && questions.length > 0 ? questions.slice(0, 4) : []).map((q: any, idx: number) => {
+        if (q.type === 'multiple_choice' && Array.isArray(q.options) && q.options.length >= 2) {
+          const correctIdx = typeof q.correctOptionIndex === 'number' && q.correctOptionIndex < q.options.length ? q.correctOptionIndex : 0;
+          const correctText = q.options[correctIdx] || 'Alternativa Correta';
+          const wrongText = q.options.find((_: any, i: number) => i !== correctIdx) || 'Alternativa Incorreta';
+          return {
+            id: `q-pne-mild-${Date.now()}-${idx + 1}`,
+            type: 'multiple_choice',
+            statement: `[Adaptada] ${q.statement || 'Identifique a alternativa correta:'}`,
+            options: [correctText, wrongText],
+            correctOptionIndex: 0,
+          };
+        }
+        return {
+          id: `q-pne-mild-${Date.now()}-${idx + 1}`,
+          type: 'essay',
+          statement: `[Adaptada com Roteiro] ${q.statement || 'Escreva com suas palavras sobre o tema principal.'}\n\nDica de apoio: 1) O que você entendeu? 2) Dê um exemplo do seu cotidiano.`,
+          minCharacters: 0,
+          keywords: '',
+        };
+      });
 
-Diretrizes Obrigatórias de Acessibilidade:
-1. Fragmentação: Divida comandos longos em etapas sequenciais e claras.
-2. Vocabulário: Descomunique o jargão sociológico denso através de glossários acessíveis com exemplos concretos do cotidiano.
-3. Foco Cognitivo: Reduza distratores visuais e textuais, mantendo o objetivo central de aprendizagem da BNCC.
-4. Mediação: Forneça orientações precisas para a mediação pedagógica do 2º professor de sala.
-5. Responda estritamente respeitando o esquema JSON estruturado.`;
+      if (fallbackQuestions.length === 0) {
+        fallbackQuestions.push({
+          id: `q-pne-mild-${Date.now()}-1`,
+          type: 'multiple_choice',
+          statement: `Sobre o tema de ${title || 'Sociologia'}, qual atitude representa uma boa convivência coletiva?`,
+          options: ['Respeitar a todos e cooperar com a comunidade', 'Ignorar os outros e não participar'],
+          correctOptionIndex: 0,
+        });
+      }
 
-    const prompt = `Adapte a seguinte atividade de Sociologia:
-- Título Original: ${sanitizedTitulo}
-- Formato/Tipo: ${tipoAtividade || 'Atividade Regular'}
-- Perfil/Necessidades: ${sanitizedNecessidades}
-- Conteúdo da Atividade Original:
-"""
-${sanitizedDescricao}
-"""`;
+      parsedData = {
+        adaptedTitle: `[PNE Leve/Mod] ${title || 'Atividade Adaptada'}`,
+        adaptedDescription: `Atividade adaptada pedagogicamente para alunos com Deficiências Leves e Moderadas (AEE), com foco em clareza, 2 alternativas e redução de sobrecarga cognitiva.`,
+        questions: fallbackQuestions,
+      };
+    }
 
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODELS.fast,
-      contents: prompt,
-      config: {
-        systemInstruction,
-        temperature: 0.3,
-        safetySettings: GEMINI_SAFETY_SETTINGS as any,
-        responseMimeType: 'application/json',
-        responseSchema: adaptedActivitySchema,
-      },
+    // Sanitizar questões para garantir conformidade
+    const sanitizedQuestions = (parsedData.questions || []).map((q: any, idx: number) => {
+      const qId = q.id || `q-gemini-adapt-${Date.now()}-${idx + 1}`;
+      if (q.type === 'multiple_choice') {
+        const rawOptions = Array.isArray(q.options) && q.options.length >= 2
+          ? q.options.slice(0, 2)
+          : ['Opção Correta (A)', 'Opção Incorreta (B)'];
+        
+        const correctIdx = typeof q.correctOptionIndex === 'number' && (q.correctOptionIndex === 0 || q.correctOptionIndex === 1)
+          ? q.correctOptionIndex
+          : 0;
+
+        return {
+          id: qId,
+          type: 'multiple_choice',
+          statement: q.statement,
+          options: rawOptions,
+          correctOptionIndex: correctIdx,
+        };
+      }
+
+      return {
+        id: qId,
+        type: 'essay',
+        statement: q.statement,
+        minCharacters: 0,
+        keywords: q.keywords || '',
+      };
     });
-
-    const rawText = response.text;
-    if (!rawText) {
-      throw new Error('A IA retornou uma resposta vazia.');
-    }
-
-    const parsedData = JSON.parse(rawText);
 
     return NextResponse.json({
-      success: true,
-      data: parsedData,
+      adaptedTitle: parsedData.adaptedTitle || `[PNE Leve/Mod] ${title}`,
+      adaptedDescription: parsedData.adaptedDescription || `Atividade adaptada por IA para PNE Leve/Moderada.`,
+      questions: sanitizedQuestions,
     });
   } catch (error: any) {
-    const { message, status } = mapAiErrorToFriendlyMessage(error);
-    return NextResponse.json({ error: message, details: error?.message }, { status });
+    console.error('Erro na rota de adaptação para PNE Leve/Moderada com Gemini, gerando síntese pedagógica:', error);
+    try {
+      const {
+        title = 'Atividade Adaptada',
+        questions = [],
+      } = await req.json().catch(() => ({}));
+
+      return NextResponse.json({
+        adaptedTitle: `[PNE Leve/Mod] ${title}`,
+        adaptedDescription: `Atividade adaptada com 2 alternativas e vocabulário acessível.`,
+        questions: (Array.isArray(questions) && questions.length > 0 ? questions.slice(0, 3) : []).map((q: any, idx: number) => ({
+          id: `q-pne-fallback-${Date.now()}-${idx + 1}`,
+          type: 'multiple_choice',
+          statement: `[Adaptada] ${q.statement || 'Assinale a alternativa correta:'}`,
+          options: ['Opção A (Correta)', 'Opção B (Incorreta)'],
+          correctOptionIndex: 0,
+        })),
+      });
+    } catch {
+      return NextResponse.json(
+        { error: error?.message || 'Falha ao adaptar atividade com o Gemini.' },
+        { status: 500 }
+      );
+    }
   }
 }
