@@ -59,103 +59,50 @@ export const AuthView: React.FC<AuthViewProps> = ({
     setTeacherLoading(true);
 
     try {
-      if (!isSupabaseConfigured || !supabase) {
-        setTeacherError(
-          'Supabase não está configurado. Configure as variáveis NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY no seu ambiente.'
-        );
+      const cleanEmail = (teacherEmail || '').trim().toLowerCase();
+
+      const apiRes = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role: 'teacher',
+          email: cleanEmail,
+          password: teacherPassword,
+        }),
+      });
+
+      if (!apiRes.ok) {
+        let errorMsg = 'Acesso negado: E-mail ou senha incorretos.';
+        try {
+          const errData = await apiRes.json();
+          if (errData.error) errorMsg = errData.error;
+        } catch (_) {}
+        setTeacherError(errorMsg);
         setTeacherLoading(false);
         return;
       }
 
-      const cleanEmail = (teacherEmail || '').trim().toLowerCase();
-
-      // 1. Tentar autenticação via Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: teacherPassword,
-      });
-
-      // Buscar perfil na tabela 'teachers'
-      const { data: dbTeacher, error: dbError } = await supabase
-        .from('teachers')
-        .select('*')
-        .ilike('email', cleanEmail)
-        .maybeSingle();
-
-      if (authData?.user) {
-        let teacherProfile: TeacherUser = {
-          id: dbTeacher?.id || authData.user.id,
-          name: dbTeacher?.name || authData.user.user_metadata?.full_name || teacherEmail.split('@')[0],
-          subject: dbTeacher?.subject || 'Sociologia',
-          email: authData.user.email || teacherEmail,
-          avatarUrl: dbTeacher?.avatar_url || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
-          phone: dbTeacher?.phone || '',
-          school: dbTeacher?.school || '',
+      const resJson = await apiRes.json();
+      
+      if (resJson.success && resJson.user) {
+        const u = resJson.user;
+        const teacherProfile: TeacherUser = {
+          id: u.sub || u.id,
+          name: u.name || cleanEmail.split('@')[0],
+          subject: u.subject || 'Sociologia',
+          email: u.email || cleanEmail,
+          avatarUrl: u.avatarUrl || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
+          phone: u.phone || '', 
+          school: u.school || '',
+          ownerTeacherId: u.ownerTeacherId || u.sub || u.id,
         };
-
-        const isValidUUID = (id?: string | null) => !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-
-        const updateFields = {
-          email: teacherProfile.email,
-          name: teacherProfile.name,
-          subject: teacherProfile.subject,
-          avatar_url: teacherProfile.avatarUrl,
-          phone: teacherProfile.phone || null,
-          school: teacherProfile.school || null,
-        };
-
-        let upsertedTeacher = null;
-
-        if (dbTeacher?.id) {
-          const { data } = await supabase
-            .from('teachers')
-            .update(updateFields)
-            .eq('id', dbTeacher.id)
-            .select('*')
-            .maybeSingle();
-          upsertedTeacher = data;
-        } else {
-          const insertPayload: any = { ...updateFields };
-          if (teacherProfile.id && isValidUUID(teacherProfile.id)) {
-            insertPayload.id = teacherProfile.id;
-          }
-          const { data } = await supabase
-            .from('teachers')
-            .insert(insertPayload)
-            .select('*')
-            .maybeSingle();
-          upsertedTeacher = data;
-        }
-
-        if (upsertedTeacher) {
-          teacherProfile = {
-            id: upsertedTeacher.id,
-            name: upsertedTeacher.name,
-            subject: upsertedTeacher.subject || 'Sociologia',
-            email: upsertedTeacher.email,
-            avatarUrl: upsertedTeacher.avatar_url || teacherProfile.avatarUrl,
-            phone: upsertedTeacher.phone || '',
-            school: upsertedTeacher.school || '',
-            ownerTeacherId: upsertedTeacher.id,
-          };
-        } else {
-          teacherProfile.ownerTeacherId = teacherProfile.id;
-        }
 
         onLoginTeacher(teacherProfile);
-        return;
+      } else {
+        setTeacherError('Formato de resposta inválido do servidor.');
       }
-
-      // 2. Se não autenticou no Supabase Auth, bloqueia o acesso
-      // (Removido bypass inseguro que logava apenas com base no e-mail na tabela teachers)
-
-      // Se não encontrou no Supabase Auth
-      setTeacherError(
-        'Acesso negado: E-mail ou senha não cadastrados no Supabase. ' +
-          (authError?.message || dbError?.message || '')
-      );
     } catch (err: any) {
-      setTeacherError('Erro de conexão com o Supabase: ' + (err.message || 'Verifique sua rede.'));
+      setTeacherError('Erro de conexão com o servidor: ' + (err.message || 'Verifique sua rede.'));
     } finally {
       setTeacherLoading(false);
     }
