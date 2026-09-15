@@ -5,7 +5,10 @@ export const AUTH_COOKIE_NAME = 'auth_session_token';
 
 // Segredo JWT: busca da variável AUTH_JWT_SECRET ou usa chave derivada estável
 function getJwtSecret(): Uint8Array {
-  const secret = process.env.AUTH_JWT_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || 'default-secret-sociologia-online-2026-fallback-salt';
+  const secret = process.env.AUTH_JWT_SECRET;
+  if (!secret || secret.length < 16) {
+    throw new Error('AUTH_JWT_SECRET environment variable is missing or too short. It must be at least 16 characters long.');
+  }
   return new TextEncoder().encode(secret);
 }
 
