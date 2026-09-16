@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       essayScore = null,
       objectiveSummary = { total: 0, correct: 0, score: 0 },
       customInstructions = "",
-      feedbackType = "ninja",
+      feedbackType = "creative",
     } = body;
 
     const isReturned = statusAction === "returned";
@@ -67,16 +67,16 @@ export async function POST(req: NextRequest) {
     } else {
       if (evaluationFormat === 'objective_only') {
         defaultFallback = isReturned
-          ? `Sensei: Quase lá, ${studentName}! Concentre seu chakra para revisar as alternativas de "${activityTitle}" e gabaritar as questões objetivas. Dattebayo! 🍃📜`
-          : `Sensei: Excelente precisão nos pergaminhos objetivos de "${activityTitle}", ${studentName}! Sua pontaria com os conceitos de Sociologia foi certeira. Dattebayo! 🍃✨`;
+          ? `Professor: Quase lá, ${studentName}! Concentre-se para revisar as alternativas de "${activityTitle}" e gabaritar as questões objetivas. 📚`
+          : `Professor: Excelente precisão nas questões objetivas de "${activityTitle}", ${studentName}! Sua compreensão com os conceitos de Sociologia foi certeira. ✨`;
       } else if (evaluationFormat === 'essay_only') {
         defaultFallback = isReturned
-          ? `Sensei: Concentre seu chakra na escrita, ${studentName}! Aprofunde seus argumentos sociológicos em "${activityTitle}" antes de reenviar o pergaminho. Dattebayo! 📜⚡`
-          : `Sensei: Que reflexão poderosa no seu pergaminho dissertativo de "${activityTitle}", ${studentName}! Sua Vontade do Fogo brilhou na argumentação sociológica. Dattebayo! 🍃🔥`;
+          ? `Professor: Concentre-se na escrita, ${studentName}! Aprofunde seus argumentos sociológicos em "${activityTitle}" antes de reenviar a atividade. 📝`
+          : `Professor: Que reflexão poderosa na sua resposta dissertativa de "${activityTitle}", ${studentName}! Sua capacidade crítica brilhou na argumentação sociológica. 💡`;
       } else {
         defaultFallback = isReturned
-          ? `Sensei: Calibre seu chakra nas questões objetivas e aprofunde o pergaminho dissertativo em "${activityTitle}" para reenviar a missão com força total, ${studentName}! Dattebayo! 📜🍃`
-          : `Sensei: Missão cumprida com maestria em "${activityTitle}", ${studentName}! Excelente domínio no gabarito e sabedoria na dissertação. Continue com a Vontade do Fogo acesa! Dattebayo! 🍃🏆`;
+          ? `Professor: Atenção nas questões objetivas e aprofunde sua resposta dissertativa em "${activityTitle}" para reenviar a atividade com força total, ${studentName}! 📚📝`
+          : `Professor: Atividade cumprida com maestria em "${activityTitle}", ${studentName}! Excelente domínio no gabarito e sabedoria na dissertação. Continue com esse foco! 🏆`;
       }
     }
 
@@ -159,74 +159,74 @@ ${formatSpecificRules}
 3. REGRA OBRIGATÓRIA DE TAMANHO: O feedback gerado DEVE ter no MÁXIMO 400 caracteres no total (incluindo espaços e pontuação). Seja direto, caloroso e conciso.
 4. Responda estritamente em Português do Brasil com linguagem acessível ao jovem do Ensino Médio.`;
     } else {
-      let formatContextNinja = "";
-      let formatSpecificRulesNinja = "";
+      let formatContextCreative = "";
+      let formatSpecificRulesCreative = "";
 
       if (evaluationFormat === 'objective_only') {
-        formatContextNinja = `
-FORMATO DA MISSÃO: TESTE 100% OBJETIVO (Pergaminhos de Múltipla Escolha / Gabarito)
+        formatContextCreative = `
+FORMATO DA TAREFA: TESTE 100% OBJETIVO (Múltipla Escolha / Gabarito)
 - Total de Questões Objetivas: ${objectiveSummary.total}
 - Acertos no Gabarito: ${objectiveSummary.correct} de ${objectiveSummary.total} acertos
-- Nota da Missão: ${grade !== null ? `${grade}/${maxGrade}` : "Em análise"}
-- ATENÇÃO: NÃO HÁ QUESTÕES DISSERTATIVAS nesta missão.`;
+- Nota da Tarefa: ${grade !== null ? `${grade}/${maxGrade}` : "Em análise"}
+- ATENÇÃO: NÃO HÁ QUESTÕES DISSERTATIVAS nesta tarefa.`;
 
-        formatSpecificRulesNinja = `
-DIRETRIZES ESPECÍFICAS PARA MISSÃO 100% OBJETIVA:
-- Foque EXCLUSIVAMENTE nos acertos das questões objetivas, na precisão do jutsu no gabarito e no domínio dos conceitos sociológicos.
-- REGRA CRÍTICA E ABSOLUTA: É ESTRITAMENTE PROIBIDO falar de questões dissertativas, redação ou escrita de texto. A missão foi apenas de múltipla escolha.
+        formatSpecificRulesCreative = `
+DIRETRIZES ESPECÍFICAS PARA TAREFA 100% OBJETIVA:
+- Foque EXCLUSIVAMENTE nos acertos das questões objetivas, na precisão do gabarito e no domínio dos conceitos sociológicos.
+- REGRA CRÍTICA E ABSOLUTA: É ESTRITAMENTE PROIBIDO falar de questões dissertativas, redação ou escrita de texto. A tarefa foi apenas de múltipla escolha.
 - ${
           isReturned
-            ? "Como a missão está sendo DEVOLVIDA para refazer, aponte onde concentrar o chakra para revisar as alternativas e gabaritar as questões objetivas."
-            : "Como a missão foi APROVADA, elogie a precisão nos pergaminhos objetivos com a força da Vontade do Fogo."
+            ? "Como a tarefa está sendo DEVOLVIDA para refazer, oriente a revisar as alternativas e focar para gabaritar as questões objetivas."
+            : "Como a tarefa foi APROVADA, elogie a precisão nas questões objetivas."
         }`;
       } else if (evaluationFormat === 'essay_only') {
-        formatContextNinja = `
-FORMATO DA MISSÃO: MISSÃO 100% DISSERTATIVA (Pergaminho de Escrita / Reflexão Crítica)
-- Resposta Dissertativa enviada pelo aluno Shinobi: "${essayAnswer || "Não enviada"}"
-- Nota da Missão: ${grade !== null ? `${grade}/${maxGrade}` : "Em análise"}
-- ATENÇÃO: NÃO HÁ QUESTÕES OBJETIVAS (múltipla escolha) nesta missão.`;
+        formatContextCreative = `
+FORMATO DA TAREFA: TAREFA 100% DISSERTATIVA (Escrita / Reflexão Crítica)
+- Resposta Dissertativa enviada pelo estudante: "${essayAnswer || "Não enviada"}"
+- Nota da Tarefa: ${grade !== null ? `${grade}/${maxGrade}` : "Em análise"}
+- ATENÇÃO: NÃO HÁ QUESTÕES OBJETIVAS (múltipla escolha) nesta tarefa.`;
 
-        formatSpecificRulesNinja = `
-DIRETRIZES ESPECÍFICAS PARA MISSÃO 100% DISSERTATIVA:
+        formatSpecificRulesCreative = `
+DIRETRIZES ESPECÍFICAS PARA TAREFA 100% DISSERTATIVA:
 - Foque EXCLUSIVAMENTE na escrita, na profundidade das ideias, na argumentação e na reflexão crítica sociológica.
 - REGRA CRÍTICA E ABSOLUTA: É ESTRITAMENTE PROIBIDO falar de alternativas de múltipla escolha ou acertos de gabarito.
 - ${
           isReturned
-            ? "Como a missão está sendo DEVOLVIDA para refazer, aponte onde concentrar o chakra para aprofundar os argumentos do texto antes de reenviar."
-            : "Como a missão foi APROVADA, elogie a força da escrita, a reflexão crítica e a dedicação demonstrada no pergaminho."
+            ? "Como a tarefa está sendo DEVOLVIDA para refazer, oriente a aprofundar os argumentos do texto antes de reenviar."
+            : "Como a tarefa foi APROVADA, elogie a força da escrita, a reflexão crítica e a dedicação demonstrada na resposta."
         }`;
       } else {
-        formatContextNinja = `
-FORMATO DA MISSÃO: MISSÃO MESCLADA / MISTA (Questões Objetivas + Questão Dissertativa)
+        formatContextCreative = `
+FORMATO DA TAREFA: TAREFA MESCLADA / MISTA (Questões Objetivas + Questão Dissertativa)
 - Questões Objetivas: ${objectiveSummary.correct} de ${objectiveSummary.total} acertos
-- Resposta Dissertativa enviada pelo aluno Shinobi: "${essayAnswer || "Não enviada"}"
+- Resposta Dissertativa enviada pelo estudante: "${essayAnswer || "Não enviada"}"
 - Nota Total: ${grade !== null ? `${grade}/${maxGrade}` : "Em análise"}`;
 
-        formatSpecificRulesNinja = `
-DIRETRIZES ESPECÍFICAS PARA MISSÃO MESCLADA:
-- Avalie o conjunto: comente a precisão nos pergaminhos objetivos e o poder da escrita na questão dissertativa.
+        formatSpecificRulesCreative = `
+DIRETRIZES ESPECÍFICAS PARA TAREFA MESCLADA:
+- Avalie o conjunto: comente a precisão nas questões objetivas e o poder da escrita na questão dissertativa.
 - ${
           isReturned
-            ? "Como a missão foi devolvida para refazer, oriente onde calibrar o chakra tanto nas questões objetivas quanto no aprofundamento dissertativo."
-            : "Como a missão foi aprovada, elogie o equilíbrio ninja entre a pontaria no gabarito e a sabedoria no pergaminho dissertativo."
+            ? "Como a tarefa foi devolvida para refazer, oriente onde melhorar tanto nas questões objetivas quanto no aprofundamento dissertativo."
+            : "Como a tarefa foi aprovada, elogie o equilíbrio entre a precisão no gabarito e a sabedoria na resposta dissertativa."
         }`;
       }
 
-      prompt = `Você é o Sensei de Sociologia da Vila da Folha (universo de Naruto Shippuden, combinando sabedoria pedagógica, acolhimento e humor de mestres como Kakashi e Jiraiya Sensei).
-Sua missão é gerar um feedback pedagógico ninja, motivador e instrutivo para a atividade de Sociologia entregue pelo aluno.
+      prompt = `Você é um Professor de Sociologia inspirador, carismático e entusiasmado.
+Sua missão é gerar um feedback pedagógico animado, criativo e motivador para a atividade de Sociologia entregue pelo aluno. Use uma linguagem mais descontraída, lúdica e engajadora para cativar o aluno, mas mantendo a utilidade pedagógica.
 
 DADOS DA ENTREGA:
-- Aluno Shinobi: ${studentName}
-- Missão / Atividade: ${activityTitle}
+- Aluno: ${studentName}
+- Tarefa / Atividade: ${activityTitle}
 - Situação da Avaliação: ${isReturned ? "Devolvendo para o aluno REFAZER e aprimorar" : "Atividade Concluída e Aprovada"}
-${formatContextNinja}
+${formatContextCreative}
 ${customInstructions ? `- Instrução extra do Professor: ${customInstructions}` : ""}
 
-DIRETRIZES DE ESTILO E CONTEÚDO (FEEDBACK NINJA):
-1. Mantenha o tom de um Sensei sábio e encorajador da Vila da Folha.
-2. Integre termos de Naruto (Chakra, Vontade do Fogo, Jutsu, Treino, Ichiraku, Pergaminhos) com conceitos sociológicos de forma divertida e pedagógica.
-${formatSpecificRulesNinja}
-3. REGRA OBRIGATÓRIA DE TAMANHO: O feedback gerado DEVE ter no MÁXIMO 400 caracteres no total (incluindo espaços e emojis como 🍃, ⚡, 📜). Seja extremamente conciso, direto e dinâmico.
+DIRETRIZES DE ESTILO E CONTEÚDO (FEEDBACK GAMIFICADO/DESCONTRAÍDO):
+1. Mantenha o tom de um mentor sábio, entusiasmado e acolhedor.
+2. Use analogias lúdicas, elogiando o "nível", "poder analítico" e "sabedoria" do aluno, de forma criativa.
+${formatSpecificRulesCreative}
+3. REGRA OBRIGATÓRIA DE TAMANHO: O feedback gerado DEVE ter no MÁXIMO 400 caracteres no total (incluindo espaços e emojis). Seja conciso, direto e dinâmico.
 4. Responda estritamente em Português do Brasil.`;
     }
 

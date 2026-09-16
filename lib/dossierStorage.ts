@@ -13,7 +13,7 @@ export interface DossierIssuanceRecord {
   teacherName?: string;
 }
 
-const STORAGE_KEY = 'ninja_dossier_issuance_records_v1';
+const STORAGE_KEY = 'dossier_issuance_records_v1';
 
 export function getAllDossierRecords(): DossierIssuanceRecord[] {
   if (typeof window === 'undefined') return [];
@@ -55,7 +55,7 @@ export function emitNewDossier(
   studentName: string,
   matricula: string,
   activityTitle: string,
-  teacherName: string = 'Sensei Responsável'
+  teacherName: string = 'Professor Responsável'
 ): {
   success: boolean;
   record?: DossierIssuanceRecord;

@@ -332,7 +332,7 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
               <span className="text-[10px] sm:text-xs font-bold text-primary uppercase tracking-wider bg-primary/10 px-2.5 sm:px-3 py-0.5 rounded-full border border-primary/20 shrink-0">
                 Mensagens
               </span>
-              <span className="text-[10px] sm:text-xs font-semibold text-muted truncate">Sociologia On-line • Comunicação Direta</span>
+              <span className="text-[10px] sm:text-xs font-semibold text-muted truncate">KronoMestre • Comunicação Direta</span>
             </div>
             <h1 className="text-lg sm:text-2xl font-extrabold text-foreground mt-1 truncate">
               {currentUserRole === 'teacher' ? 'Central de Mensagens e Atendimento' : 'Atendimento com o Prof. Gilson'}

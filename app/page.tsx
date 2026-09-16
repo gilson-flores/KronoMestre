@@ -530,8 +530,10 @@ export default function Home() {
         // 1. Carregar Alunos do Supabase
         const { data: dbStudents, error: stuError } = await client.from('students').select('*');
         if (stuError) {
-          console.error('Erro ao buscar estudantes no Supabase:', stuError);
-          setDataLoadError(true);
+          if (!stuError.message?.includes('API key')) {
+            console.error('Erro ao buscar estudantes no Supabase:', stuError);
+            setDataLoadError(true);
+          }
         }
         if (dbStudents && dbStudents.length > 0) {
           // Ler cache local para preservar vínculos que possam não ter colunas no Supabase
@@ -633,12 +635,16 @@ export default function Home() {
         const { data: dbSubmissions, error: subError } = await client.from('submissions').select('*');
 
         if (actError) {
-          console.error('Erro ao buscar atividades no Supabase:', actError);
-          setDataLoadError(true);
+          if (!actError.message?.includes('API key')) {
+            console.error('Erro ao buscar atividades no Supabase:', actError);
+            setDataLoadError(true);
+          }
         }
         if (subError) {
-          console.error('Erro ao buscar entregas no Supabase:', subError);
-          setDataLoadError(true);
+          if (!subError.message?.includes('API key')) {
+            console.error('Erro ao buscar entregas no Supabase:', subError);
+            setDataLoadError(true);
+          }
         }
 
         // Ler cache local de atividades para preservação de seleção de PNE caso o banco ainda esteja migrando
@@ -810,9 +816,11 @@ export default function Home() {
             }
           }
         }
-      } catch (err) {
-        console.error('Erro ao carregar dados do Supabase:', err);
-        setDataLoadError(true);
+      } catch (err: any) {
+        if (!err?.message?.includes('API key')) {
+          console.error('Erro ao carregar dados do Supabase:', err);
+          setDataLoadError(true);
+        }
       } finally {
         setIsDataLoading(false);
       }
@@ -1679,7 +1687,7 @@ export default function Home() {
       const currentReturnCount = currentSub?.returnCount || 0;
 
       if (status === 'returned' && currentReturnCount >= 3) {
-        showGlobalStatus('error', '🚨 Bloqueio Ninja: Esta atividade já foi devolvida 3 vezes. A 4ª devolução está bloqueada! Atribua a nota final e conclua a avaliação.');
+        showGlobalStatus('error', '🚨 Bloqueio: Esta atividade já foi devolvida 3 vezes. A 4ª devolução está bloqueada! Atribua a nota final e conclua a avaliação.');
         return;
       }
 
@@ -3019,7 +3027,7 @@ export default function Home() {
       <div className="min-h-screen bg-background text-foreground flex flex-col justify-center items-center">
         <div className="flex items-center gap-3 text-sm font-medium text-muted bg-surface px-6 py-4 rounded-full border border-border shadow-xl">
           <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
-          <span>Carregando plataforma de Sociologia On-line...</span>
+          <span>Carregando plataforma KronoMestre...</span>
         </div>
       </div>
     );

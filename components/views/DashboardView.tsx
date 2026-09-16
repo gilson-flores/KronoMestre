@@ -677,7 +677,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                             {pendingCount > 0 && (
                               <span className="px-3 py-1 rounded-xl text-xs font-extrabold bg-amber-100 text-amber-600 border border-amber-200 flex items-center gap-1.5">
-                                ⏳ {pendingCount} A Corrigir pelo Sensei
+                                ⏳ {pendingCount} A Corrigir pelo Professor
                               </span>
                             )}
 

@@ -43,7 +43,7 @@ export const NavbarTop: React.FC<NavbarTopProps> = ({
         </div>
         <div className="min-w-0">
           <h1 className="text-sm sm:text-base font-bold text-primary tracking-tight truncate">
-            Sociologia On-line
+            KronoMestre
           </h1>
           <p className="text-xs text-muted hidden sm:block truncate">Ensino Médio e Plataforma Pedagógica</p>
         </div>

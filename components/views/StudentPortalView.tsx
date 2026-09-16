@@ -93,8 +93,6 @@ const POP_AVATARS = [
   'https://api.dicebear.com/9.x/adventurer/svg?seed=Eowyn',        // Senhor dos Anéis (Guerreira/Brava)
   'https://api.dicebear.com/9.x/avataaars/svg?seed=SpiderGwen',    // Homem-Aranha
   'https://api.dicebear.com/9.x/micah/svg?seed=MaryJane',          // Homem-Aranha (Inspirada)
-  'https://api.dicebear.com/9.x/adventurer/svg?seed=Sakura',       // Naruto (Focada)
-  'https://api.dicebear.com/9.x/fun-emoji/svg?seed=Hinata',        // Naruto (Fofinha/Tímida)
   'https://api.dicebear.com/9.x/adventurer/svg?seed=Nami',         // One Piece
   'https://api.dicebear.com/9.x/micah/svg?seed=NicoRobin',         // One Piece (Séria)
   'https://api.dicebear.com/9.x/adventurer/svg?seed=Nezuko',       // Demon Slayer
@@ -105,8 +103,6 @@ const POP_AVATARS = [
   'https://api.dicebear.com/9.x/adventurer/svg?seed=Aragorn',      // Senhor dos Anéis (Bravo/Corajoso)
   'https://api.dicebear.com/9.x/avataaars/svg?seed=PeterParker',   // Homem-Aranha
   'https://api.dicebear.com/9.x/micah/svg?seed=MilesMorales',      // Homem-Aranha (Estiloso)
-  'https://api.dicebear.com/9.x/adventurer/svg?seed=NarutoUzumaki',// Naruto (Determinado)
-  'https://api.dicebear.com/9.x/avataaars/svg?seed=UchihaSasuke',  // Naruto (Frio/Sério)
   'https://api.dicebear.com/9.x/adventurer/svg?seed=Luffy',        // One Piece (Feliz)
   'https://api.dicebear.com/9.x/micah/svg?seed=RoronoaZoro',       // One Piece (Sério)
   'https://api.dicebear.com/9.x/adventurer/svg?seed=Tanjiro',      // Demon Slayer (Focado)
@@ -905,14 +901,14 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                               {act.type === 'Simulado'
                                 ? 'Treinamento Tático'
                                 : act.type === 'Redação'
-                                ? 'Pergaminho de Redação'
+                                ? 'Redação'
                                 : act.type === 'Dinâmica'
                                 ? 'Treino em Equipe'
                                 : act.type === 'Trabalho em grupo'
                                 ? 'Trabalho em Grupo'
                                 : act.type === 'Projeto de pesquisa'
                                 ? 'Projeto de Pesquisa'
-                                : 'Exame Ninja'}
+                                : 'Exame'}
                             </span>
 
                             <span className="text-[10px] sm:text-[11px] font-bold text-amber-600 flex items-center gap-1.5 bg-surface px-2.5 sm:px-3 py-0.5 rounded-full border border-amber-500/30">
@@ -927,7 +923,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                             )}
                             {isToCorrect && (
                               <span className="text-[10px] sm:text-[11px] font-extrabold bg-sky-500/20 text-sky-300 px-2.5 sm:px-3 py-0.5 rounded-full border border-sky-500/40">
-                                ⏳ A Corrigir pelo Sensei
+                                ⏳ A Corrigir pelo Professor
                               </span>
                             )}
                             {isGraded && (
@@ -1063,7 +1059,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                           </p>
                           {sub.teacherFeedback ? (
                             <p className="text-foreground">
-                              <strong>Orientações / Observações do Sensei:</strong> &ldquo;{sub.teacherFeedback}&rdquo;
+                              <strong>Orientações / Observações do Professor:</strong> &ldquo;{sub.teacherFeedback}&rdquo;
                             </p>
                           ) : (
                             <p className="text-muted">
@@ -1089,7 +1085,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                               ? 'Trabalho em Grupo'
                               : act.type === 'Projeto de pesquisa'
                               ? 'Projeto de Pesquisa'
-                              : 'Exame Ninja (Avaliação)'}
+                              : 'Exame (Avaliação)'}
                           </span>
 
                           {/* Subtle Highlighted Deadline Badge */}
@@ -1632,14 +1628,14 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                             {act.type === 'Simulado'
                               ? 'Treinamento Tático'
                               : act.type === 'Redação'
-                              ? 'Pergaminho de Redação'
+                              ? 'Redação'
                               : act.type === 'Dinâmica'
                               ? 'Treino em Equipe'
                               : act.type === 'Trabalho em grupo'
                               ? 'Trabalho em Grupo'
                               : act.type === 'Projeto de pesquisa'
                               ? 'Projeto de Pesquisa'
-                              : 'Exame Ninja'}
+                              : 'Exame'}
                           </span>
 
                           {/* Subtle Highlighted Deadline Badge */}
@@ -1651,11 +1647,11 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                           {/* Status Badge */}
                           {sub.status === 'graded' ? (
                             <span className="text-[10px] sm:text-[11px] font-bold text-emerald-600 bg-emerald-100 px-2.5 sm:px-3 py-0.5 rounded-full border border-emerald-200">
-                              ✅ Corrigida pelo Sensei
+                              ✅ Corrigida pelo Professor
                             </span>
                           ) : sub.status === 'pending' ? (
                             <span className="text-[10px] sm:text-[11px] font-bold text-sky-300 bg-sky-500/20 px-2.5 sm:px-3 py-0.5 rounded-full border border-sky-500/40">
-                              ⏳ A Corrigir pelo Sensei
+                              ⏳ A Corrigir pelo Professor
                             </span>
                           ) : (
                             <span className="text-[10px] sm:text-[11px] font-bold text-orange-300 bg-orange-500/20 px-2.5 sm:px-3 py-0.5 rounded-full border border-orange-500/40">

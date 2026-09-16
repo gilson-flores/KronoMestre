@@ -174,7 +174,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
       student.fullName,
       student.matricula,
       act.title,
-      'Sensei Responsável'
+      'Professor Responsável'
     );
 
     if (result.success && result.record) {
@@ -349,10 +349,10 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
               <div className="border-b-2 border-slate-900 pb-3 sm:pb-4 text-center space-y-1.5 relative">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 rounded-full text-[9px] sm:text-[10px] font-black uppercase text-slate-700 tracking-widest mb-1 border border-slate-300">
                   <ShieldCheck className="w-3.5 h-3.5 text-slate-900 shrink-0" />
-                  <span>Sistema Escolar da Vila da Folha</span>
+                  <span>Sistema Escolar</span>
                 </div>
                 <h1 className="text-lg sm:text-2xl font-black uppercase tracking-wider text-slate-900 leading-tight">
-                  ESCOLA NINJA DE FORMAÇÃO ACADÊMICA
+                  ESCOLA DE FORMAÇÃO ACADÊMICA
                 </h1>
                 <h2 className="text-[10px] sm:text-xs font-extrabold uppercase text-slate-700 tracking-widest leading-normal">
                   COMPROVANTE PEDAGÓGICO DE PROVA & NOTA FINAL (DOSSIÊ OFICIAL)
@@ -421,7 +421,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                     <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
                     <span>
                       {currentDossierSubmission?.status === 'graded'
-                        ? 'NOTA OFICIAL LANÇADA E VALIDADA PELO SENSEI'
+                        ? 'NOTA OFICIAL LANÇADA E VALIDADA PELO PROFESSOR'
                         : currentDossierSubmission?.status === 'pending'
                         ? 'PROVA ENTREGUE - EM FASE DE CORREÇÃO'
                         : 'PROVA CONCLUÍDA PELO ALUNO'}
@@ -521,7 +521,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                 {/* Teacher Feedback / Observations */}
                 {currentDossierSubmission?.teacherFeedback && (
                   <div className="p-3 bg-slate-100 border border-slate-300 rounded-lg text-xs text-slate-800 space-y-1">
-                    <strong className="text-slate-900 uppercase text-[10px] block font-extrabold">Parecer Pedagógico do Sensei:</strong>
+                    <strong className="text-slate-900 uppercase text-[10px] block font-extrabold">Parecer Pedagógico do Professor:</strong>
                     <p className="italic font-medium">&ldquo;{currentDossierSubmission.teacherFeedback}&rdquo;</p>
                   </div>
                 )}
@@ -542,13 +542,13 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
 
                   <div className="text-center space-y-1">
                     <div className="border-b-2 border-slate-900 w-full mb-2"></div>
-                    <p className="text-xs font-black text-slate-900 uppercase">{activeDossierRecord.teacherName || 'Sensei Responsável'}</p>
-                    <p className="text-[10px] font-bold text-slate-600">Assinatura do Professor / Sensei</p>
+                    <p className="text-xs font-black text-slate-900 uppercase">{activeDossierRecord.teacherName || 'Professor Responsável'}</p>
+                    <p className="text-[10px] font-bold text-slate-600">Assinatura do Professor</p>
                   </div>
                 </div>
 
                 <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-[9px] text-muted font-mono gap-1 text-center sm:text-left">
-                  <span>Documento emitido via Sistema Ninja de Gestão Escolar</span>
+                  <span>Documento emitido via Sistema de Gestão Escolar</span>
                   <span className="font-bold text-slate-700">ID Autenticador: {activeDossierRecord.id}</span>
                   <span>Válido como comprovante físico assinado</span>
                 </div>
@@ -622,9 +622,9 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
             </div>
             <div>
               <h2 className="text-xl font-extrabold text-foreground tracking-tight flex items-center gap-2">
-                <span>Supervisão de Desempenho Ninja</span>
+                <span>Supervisão de Desempenho</span>
                 <span className="text-xs bg-primary/20 text-primary px-2.5 py-0.5 rounded-full border border-primary/30 font-bold">
-                  MODO SENSEI
+                  MODO PROFESSOR
                 </span>
               </h2>
               <p className="text-xs text-muted">
@@ -791,7 +791,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                     {returnedCount} <span className="text-xs text-muted font-normal">vezes</span>
                   </div>
                   <p className="text-[11px] text-amber-600 font-medium">
-                    Atividades enviadas para ajuste pelo Sensei
+                    Atividades enviadas para ajuste pelo Professor
                   </p>
                 </div>
 
@@ -826,7 +826,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                       <span className="text-emerald-400 font-black">{totalObjectiveScore.toFixed(1)} pts acumulados</span>
                     </div>
                     <p className="text-[11px] text-muted">
-                      Correção automática instantânea do sistema de treino ninja.
+                      Correção automática instantânea do sistema.
                     </p>
                   </div>
 
@@ -891,7 +891,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                           )}
                           {isPending && (
                             <span className="px-3 py-1 bg-sky-500/20 text-sky-300 font-bold text-xs rounded-full border border-sky-500/30">
-                              ⏳ A Corrigir pelo Sensei
+                              ⏳ A Corrigir pelo Professor
                             </span>
                           )}
                           {isReturned && (
@@ -985,7 +985,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                     <span>Caderno de Supervisão Pedagógica & Observações</span>
                   </h4>
                   <p className="text-xs text-muted">
-                    Registre anotações sigilosas do Sensei sobre o acompanhamento, dificuldades ou destaques deste aluno.
+                    Registre anotações sigilosas do professor sobre o acompanhamento, dificuldades ou destaques deste aluno.
                   </p>
                 </div>
 

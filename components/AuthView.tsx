@@ -114,90 +114,43 @@ export const AuthView: React.FC<AuthViewProps> = ({
     setSecondTeacherLoading(true);
 
     try {
-      if (!isSupabaseConfigured || !supabase) {
-        const secondTeacherProfile: TeacherUser = {
-          id: 'second-teacher-demo',
-          name: 'Professor(a) de Inclusão',
-          subject: 'AEE / Inclusão Escolar',
-          email: secondTeacherEmail || 'segundoprofessor@escola.edu.br',
-          avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250',
-          school: teacher.school || 'Escola Estadual',
-        };
-        if (onLoginSecondTeacher) onLoginSecondTeacher(secondTeacherProfile);
-        else onLoginTeacher(secondTeacherProfile);
+      const cleanEmail = (secondTeacherEmail || '').trim().toLowerCase();
+
+      const apiRes = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role: 'second_teacher',
+          email: cleanEmail,
+          password: secondTeacherPassword,
+        }),
+      });
+
+      if (!apiRes.ok) {
+        let errorMsg = 'Acesso negado: E-mail ou senha incorretos.';
+        try {
+          const errData = await apiRes.json();
+          if (errData.error) errorMsg = errData.error;
+        } catch (_) {}
+        setSecondTeacherError(errorMsg);
         setSecondTeacherLoading(false);
         return;
       }
 
-      const cleanEmail = (secondTeacherEmail || '').trim().toLowerCase();
-
-      // 1. Tentar autenticação via Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: secondTeacherPassword,
-      });
-
-      // Buscar perfil na tabela 'second_teachers'
-      const { data: dbTeacher, error: dbError } = await supabase
-        .from('second_teachers')
-        .select('*')
-        .ilike('email', cleanEmail)
-        .maybeSingle();
-
-      let isPasswordValid = Boolean(authData?.user);
-      if (!isPasswordValid && dbTeacher?.password) {
-        isPasswordValid = await verifyPassword(secondTeacherPassword, dbTeacher.password);
-        // Migração transparente automática: se a senha no banco estava em texto puro, atualiza para hash SHA-256
-        if (isPasswordValid && !isHashed(dbTeacher.password)) {
-          try {
-            const hashed = await hashPassword(secondTeacherPassword);
-            await supabase
-              .from('second_teachers')
-              .update({ password: hashed })
-              .eq('id', dbTeacher.id);
-            await supabase
-              .from('teachers')
-              .update({ password: hashed })
-              .ilike('email', cleanEmail);
-          } catch (migErr) {
-            console.warn('Aviso de migração de hash para 2º professor:', migErr);
-          }
-        }
-      }
-
-      if (isPasswordValid && (authData?.user || dbTeacher)) {
-        // Autenticar sessão no servidor (cookie HttpOnly)
-        let serverOwnerTeacherId = '';
-        try {
-          const apiRes = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              role: 'second_teacher',
-              email: secondTeacherEmail,
-              password: secondTeacherPassword,
-            }),
-          });
-          if (apiRes.ok) {
-            const resJson = await apiRes.json();
-            if (resJson?.user?.ownerTeacherId) {
-              serverOwnerTeacherId = resJson.user.ownerTeacherId;
-            }
-          }
-        } catch (apiErr) {
-          console.warn('Aviso de sessão do servidor:', apiErr);
-        }
-
+      const resJson = await apiRes.json();
+      
+      if (resJson.success && resJson.user) {
+        const u = resJson.user;
         const secondTeacherProfile: TeacherUser = {
-          id: dbTeacher?.id || authData?.user?.id || '2nd-teacher-id',
-          name: dbTeacher?.name || authData?.user?.user_metadata?.full_name || '2º Professor (AEE)',
-          subject: dbTeacher?.subject || 'AEE / Inclusão Escolar',
-          email: dbTeacher?.email || authData?.user?.email || secondTeacherEmail,
-          avatarUrl: dbTeacher?.avatar_url || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250',
-          phone: dbTeacher?.phone || '',
-          school: dbTeacher?.school || teacher.school || '',
-          mustChangePassword: Boolean(dbTeacher?.must_change_password),
-          ownerTeacherId: dbTeacher?.owner_teacher_id || serverOwnerTeacherId || teacher.ownerTeacherId || teacher.id,
+          id: u.sub || u.id,
+          name: u.name || cleanEmail.split('@')[0],
+          subject: u.subject || 'AEE / Inclusão Escolar',
+          email: u.email || cleanEmail,
+          avatarUrl: u.avatarUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250',
+          phone: u.phone || '',
+          school: u.school || teacher.school || '',
+          mustChangePassword: Boolean(u.mustChangePassword),
+          ownerTeacherId: u.ownerTeacherId || teacher.ownerTeacherId || teacher.id,
         };
 
         if (onLoginSecondTeacher) {
@@ -205,14 +158,11 @@ export const AuthView: React.FC<AuthViewProps> = ({
         } else {
           onLoginTeacher(secondTeacherProfile);
         }
-        return;
+      } else {
+        setSecondTeacherError('Formato de resposta inválido do servidor.');
       }
-
-      setSecondTeacherError(
-        'Acesso negado: E-mail ou senha do 2º Professor incorretos ou não cadastrados. Verifique os dados ou utilize a opção de trocar senha.'
-      );
     } catch (err: any) {
-      setSecondTeacherError('Erro de conexão com o Supabase: ' + (err.message || 'Verifique sua rede.'));
+      setSecondTeacherError('Erro de conexão com o servidor: ' + (err.message || 'Verifique sua rede.'));
     } finally {
       setSecondTeacherLoading(false);
     }
@@ -381,34 +331,40 @@ export const AuthView: React.FC<AuthViewProps> = ({
       return;
     }
 
-    const isPassValid = await verifyPassword(enteredPassword, expectedPassword);
-    if (isPassValid) {
-      // Autenticar sessão no servidor (cookie HttpOnly)
-      try {
-        const apiRes = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            role: 'student',
-            fullName: matched.fullName,
-            classRoom: matched.turma,
-            matricula: matched.matricula,
-            password: enteredPassword,
-          }),
-        });
-        if (apiRes.ok) {
-          const resJson = await apiRes.json();
-          if (resJson?.user?.ownerTeacherId) {
-            matched.ownerTeacherId = resJson.user.ownerTeacherId;
-          }
-        }
-      } catch (apiErr) {
-        console.warn('Aviso de sessão do servidor para aluno:', apiErr);
+    try {
+      const apiRes = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          role: 'student',
+          fullName: matched.fullName,
+          classRoom: matched.turma,
+          matricula: matched.matricula,
+          password: enteredPassword,
+        }),
+      });
+
+      if (!apiRes.ok) {
+        let errorMsg = 'Senha incorreta. Verifique sua senha de acesso.';
+        try {
+          const errData = await apiRes.json();
+          if (errData.error) errorMsg = errData.error;
+        } catch (_) {}
+        setStudentError(errorMsg);
+        return;
       }
 
-      onLoginStudent(matched);
-    } else {
-      setStudentError('Senha incorreta. Verifique sua senha de acesso.');
+      const resJson = await apiRes.json();
+      if (resJson.success && resJson.user) {
+         if (resJson.user.ownerTeacherId) {
+            matched.ownerTeacherId = resJson.user.ownerTeacherId;
+         }
+         onLoginStudent(matched);
+      } else {
+         setStudentError('Formato de resposta inválido do servidor.');
+      }
+    } catch (err: any) {
+      setStudentError('Erro de conexão com o servidor: ' + (err.message || 'Verifique sua rede.'));
     }
   };
 
@@ -424,7 +380,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           <div className="w-14 h-14 sm:w-16 sm:h-16 bg-[#171f33] border-2 border-primary rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4 text-primary shadow-lg shadow-[#4ade80]/10">
             <BookOpen className="w-7 h-7 sm:w-8 sm:h-8" />
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Sociologia On-line</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">KronoMestre</h1>
           <p className="text-xs sm:text-sm text-muted mt-1">Acesso ao portal escolar</p>
         </div>
 

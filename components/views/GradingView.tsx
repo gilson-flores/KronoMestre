@@ -111,8 +111,8 @@ export const GradingView: React.FC<GradingViewProps> = ({
   const [aiDiagnosticMap, setAiDiagnosticMap] = useState<Record<string, AIDiagnostic>>({});
   const [aiErrorMessage, setAiErrorMessage] = useState<string | null>(null);
 
-  // Gemini AI Feedback state (Ninja / Serious)
-  const [generatingFeedbackState, setGeneratingFeedbackState] = useState<{ studentId: string; type: 'ninja' | 'serious' } | null>(null);
+  // Gemini AI Feedback state (Gamified / Serious)
+  const [generatingFeedbackState, setGeneratingFeedbackState] = useState<{ studentId: string; type: 'gamified' | 'serious' } | null>(null);
 
   // Modal de Consolidação de Notas da Recuperação Paralela
   const [consolidationModalData, setConsolidationModalData] = useState<{
@@ -134,7 +134,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
   const handleGenerateAiFeedback = async (
     sub: ActivitySubmission,
     statusAction: 'graded' | 'returned',
-    feedbackType: 'ninja' | 'serious' = 'ninja'
+    feedbackType: 'gamified' | 'serious' = 'gamified'
   ) => {
     try {
       setGeneratingFeedbackState({ studentId: sub.studentId, type: feedbackType });
@@ -1554,23 +1554,23 @@ export const GradingView: React.FC<GradingViewProps> = ({
               Feedback Pedagógico ao Aluno
             </label>
             <div className="flex items-center gap-1.5 flex-wrap">
-              {/* Botão Feedback Ninja (400 chars) */}
+              {/* Botão Feedback Gamificado (400 chars) */}
               <button
                 type="button"
-                onClick={() => handleGenerateAiFeedback(sub, sub.status === 'returned' ? 'returned' : 'graded', 'ninja')}
+                onClick={() => handleGenerateAiFeedback(sub, sub.status === 'returned' ? 'returned' : 'graded', 'gamified')}
                 disabled={Boolean(generatingFeedbackState?.studentId === sub.studentId)}
                 className="px-2.5 py-1 min-h-[44px] min-w-[44px] bg-amber-100 hover:bg-amber-500/30 border border-amber-200 text-amber-600 font-bold rounded-lg text-[10px] flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
-                title="Gerar feedback temático Ninja (Naruto) limitado a 400 caracteres com Gemini"
+                title="Gerar feedback pedagógico e descontraído limitado a 400 caracteres com Gemini"
               >
-                {generatingFeedbackState?.studentId === sub.studentId && generatingFeedbackState?.type === 'ninja' ? (
+                {generatingFeedbackState?.studentId === sub.studentId && generatingFeedbackState?.type === 'gamified' ? (
                   <>
                     <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
-                    <span>Invocando Ninja... 🍃</span>
+                    <span>Gerando criatividade... 🚀</span>
                   </>
                 ) : (
                   <>
                     <Zap className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Feedback Ninja ⚡</span>
+                    <span>Feedback Descontraído ⚡</span>
                   </>
                 )}
               </button>
@@ -1656,7 +1656,7 @@ export const GradingView: React.FC<GradingViewProps> = ({
             <button
               type="button"
               onClick={() => {
-                alert('🚨 Bloqueio Ninja: Esta atividade já foi devolvida 3 vezes ao aluno. A 4ª devolução está BLOQUEADA! Por favor, atribua a nota final e clique em Salvar e Finalizar.');
+                alert('🚨 Bloqueio: Esta atividade já foi devolvida 3 vezes ao aluno. A 4ª devolução está BLOQUEADA! Por favor, atribua a nota final e clique em Salvar e Finalizar.');
               }}
               className="w-full py-3 px-4 min-h-[44px] min-w-[44px] bg-rose-500/10 text-rose-600 font-bold rounded-full text-xs border border-rose-500/30 flex items-center justify-center gap-2 transition-all cursor-not-allowed opacity-90 text-center"
               title="A 4ª devolução está bloqueada pelo sistema. Atribua a nota final."
