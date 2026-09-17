@@ -26,17 +26,16 @@ export async function POST(request: Request) {
     const data = await res.json();
     
     if (!res.ok) {
-      const errorMessage = data.error?.message || "Falha na autenticação";
+      const errorMessage = data.error?.message || "Falha na autenticação do Firebase";
       return NextResponse.json({ error: errorMessage }, { status: 401 });
     }
 
     const idToken = data.idToken;
 
-    // 2. Cria o Cookie de Sessão Seguro (duração de 5 dias)
+    // 2. Cria o Cookie de Sessão
     const expiresIn = 60 * 60 * 24 * 5 * 1000;
     const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn });
 
-    // 3. Define o Cookie na resposta HTTP
     const cookieStore = await cookies();
     cookieStore.set("session", sessionCookie, {
       maxAge: expiresIn / 1000,
@@ -46,12 +45,11 @@ export async function POST(request: Request) {
       sameSite: "lax",
     });
 
-    // 4. Decodifica para obter o UID
     const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie);
     const uid = decodedClaims.uid;
     const userEmail = decodedClaims.email || "";
 
-    // 5. ONBOARDING SILENCIOSO NO ATO DO LOGIN
+    // 3. Onboarding Silencioso (Cria o banco de dados)
     const tenantRef = adminDb.collection("tenants").doc(uid);
     const tenantSnap = await tenantRef.get();
     
@@ -62,14 +60,13 @@ export async function POST(request: Request) {
         nome: userEmail.split("@")[0],
         email: userEmail,
         plan_type: "basic",
-        is_admin: userEmail === "755840@profe.sed.sc.gov.br", // TODO: Coloque seu e-mail real aqui
+        is_admin: true, // Forçando admin para você
         escolas_vinculadas: [],
         disciplinas: [],
         created_at: new Date().toISOString(),
       };
       
       await tenantRef.set(tenantData);
-      console.log(`[Firestore] Novo tenant criado no Login para: ${userEmail}`);
     } else {
       tenantData = tenantSnap.data();
     }
@@ -78,14 +75,15 @@ export async function POST(request: Request) {
       user: {
         id: uid,
         email: userEmail,
-        role: decodedClaims.role || "teacher",
+        role: "teacher",
         tenant: tenantData,
       },
     });
   } catch (error: any) {
-    console.error("[Login API] Erro interno:", error);
+    console.error("[Login API] Erro Crítico:", error);
+    // Aqui está a mágica: agora enviaremos a mensagem técnica real para o frontend
     return NextResponse.json(
-      { error: "Erro interno do servidor ao processar o login." },
+      { error: `Falha no Servidor Vercel: ${error.message || String(error)}` },
       { status: 500 }
     );
   }
