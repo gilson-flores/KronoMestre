@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import LoadingState from "./LoadingState";
 
-export const AuthView = ({ children }: { children: React.ReactNode }) => {
+export function AuthView({ children }: { children?: React.ReactNode }) {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
@@ -21,7 +20,6 @@ export const AuthView = ({ children }: { children: React.ReactNode }) => {
           setSession(null);
         }
       } catch (err) {
-        console.error("Erro ao verificar sessão:", err);
         setSession(null);
       } finally {
         setLoading(false);
@@ -58,7 +56,12 @@ export const AuthView = ({ children }: { children: React.ReactNode }) => {
   };
 
   if (loading) {
-    return <LoadingState message="Verificando acesso..." />;
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+        <span className="ml-3 text-slate-600 font-medium">Verificando acesso...</span>
+      </div>
+    );
   }
 
   if (!session) {
@@ -77,7 +80,7 @@ export const AuthView = ({ children }: { children: React.ReactNode }) => {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all outline-none"
+                className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all outline-none text-slate-800"
                 placeholder="professor@escola.com"
                 required
               />
@@ -88,7 +91,7 @@ export const AuthView = ({ children }: { children: React.ReactNode }) => {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all outline-none"
+                className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all outline-none text-slate-800"
                 placeholder="••••••••"
                 required
               />
@@ -114,7 +117,7 @@ export const AuthView = ({ children }: { children: React.ReactNode }) => {
   }
 
   return <>{children}</>;
-};
+}
 
-// Precisamos manter o export default também caso algum componente o utilize dessa forma
+// Mantido para garantir compatibilidade com as importações do page.tsx antigo
 export default AuthView;
