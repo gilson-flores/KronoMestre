@@ -1,10 +1,16 @@
-import * as admin from "firebase-admin";
+import { initializeApp, getApps, getApp, cert } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+import { getFirestore } from "firebase-admin/firestore";
 
-// Inicialização segura para ambientes Serverless (como Vercel)
-if (!admin.apps || admin.apps.length === 0) {
+function initializeFirebaseAdmin() {
+  if (getApps().length > 0) {
+    return getApp();
+  }
+
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  // O replace é necessário para o Vercel lidar corretamente com as quebras de linha na chave privada
+  
+  // Format the private key securely, handling the \n escape characters
   const privateKey = process.env.FIREBASE_PRIVATE_KEY
     ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
     : undefined;
@@ -13,24 +19,27 @@ if (!admin.apps || admin.apps.length === 0) {
     console.warn(
       "[Firebase Admin] Aviso: Credenciais incompletas. Verifique as variáveis de ambiente FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL e FIREBASE_PRIVATE_KEY."
     );
-  } else {
-    try {
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId,
-          clientEmail,
-          privateKey,
-        }),
-      });
-      console.log("[Firebase Admin] Inicializado com sucesso.");
-    } catch (error) {
-      console.error("[Firebase Admin] Erro durante a inicialização:", error);
-    }
+    // Initialize with a dummy config to prevent aggressive crashes during build
+    // It will fail gracefully later if actually used in production without keys
+    return initializeApp({ projectId: "demo-project" });
+  }
+
+  try {
+    return initializeApp({
+      credential: cert({
+        projectId,
+        clientEmail,
+        privateKey,
+      }),
+    });
+  } catch (error) {
+    console.error("[Firebase Admin] Erro durante a inicialização:", error);
+    return initializeApp({ projectId: "demo-project" });
   }
 }
 
-// Exporta os serviços já inicializados
-const adminAuth = admin.auth();
-const adminDb = admin.firestore();
+const adminApp = initializeFirebaseAdmin();
+const adminAuth = getAuth(adminApp);
+const adminDb = getFirestore(adminApp);
 
 export { adminAuth, adminDb };
