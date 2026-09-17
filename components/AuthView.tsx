@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import LoadingState from "./LoadingState";
 
-export default function AuthView({ children }: { children: React.ReactNode }) {
+export const AuthView = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
@@ -11,7 +11,6 @@ export default function AuthView({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Agora o frontend pergunta para a NOSSA api, e não para o Supabase
     const checkSession = async () => {
       try {
         const res = await fetch("/api/auth/session");
@@ -115,4 +114,7 @@ export default function AuthView({ children }: { children: React.ReactNode }) {
   }
 
   return <>{children}</>;
-}
+};
+
+// Precisamos manter o export default também caso algum componente o utilize dessa forma
+export default AuthView;
