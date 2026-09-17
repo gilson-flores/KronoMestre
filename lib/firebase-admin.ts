@@ -1,45 +1,45 @@
 import { initializeApp, getApps, getApp, cert } from "firebase-admin/app";
-import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
+import { getAuth, Auth } from "firebase-admin/auth";
+import { getFirestore, Firestore } from "firebase-admin/firestore";
 
-function initializeFirebaseAdmin() {
+function cleanPrivateKey(key?: string): string | undefined {
+  if (!key) return undefined;
+  let cleaned = key.trim();
+  // Remove aspas acidentais no início e no fim
+  if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+    cleaned = cleaned.slice(1, -1);
+  }
+  return cleaned.replace(/\\n/g, "\n");
+}
+
+function getFirebaseAdminApp() {
   if (getApps().length > 0) {
     return getApp();
   }
 
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  
-  // Format the private key securely, handling the \n escape characters
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY
-    ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
-    : undefined;
+  const privateKey = cleanPrivateKey(process.env.FIREBASE_PRIVATE_KEY);
 
   if (!projectId || !clientEmail || !privateKey) {
-    console.warn(
-      "[Firebase Admin] Aviso: Credenciais incompletas. Verifique as variáveis de ambiente FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL e FIREBASE_PRIVATE_KEY."
+    throw new Error(
+      `[Firebase Admin] Chaves ausentes: projectId=${Boolean(projectId)}, clientEmail=${Boolean(clientEmail)}, privateKey=${Boolean(privateKey)}`
     );
-    // Initialize with a dummy config to prevent aggressive crashes during build
-    // It will fail gracefully later if actually used in production without keys
-    return initializeApp({ projectId: "demo-project" });
   }
 
-  try {
-    return initializeApp({
-      credential: cert({
-        projectId,
-        clientEmail,
-        privateKey,
-      }),
-    });
-  } catch (error) {
-    console.error("[Firebase Admin] Erro durante a inicialização:", error);
-    return initializeApp({ projectId: "demo-project" });
-  }
+  return initializeApp({
+    credential: cert({
+      projectId,
+      clientEmail,
+      privateKey,
+    }),
+  });
 }
 
-const adminApp = initializeFirebaseAdmin();
-const adminAuth = getAuth(adminApp);
-const adminDb = getFirestore(adminApp);
+export function getAdminAuth(): Auth {
+  return getAuth(getFirebaseAdminApp());
+}
 
-export { adminAuth, adminDb };
+export function getAdminDb(): Firestore {
+  return getFirestore(getFirebaseAdminApp());
+}
