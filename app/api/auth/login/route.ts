@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
@@ -8,12 +10,15 @@ export async function POST(request: Request) {
     const { email, password } = body;
 
     if (!email || !password) {
-      return NextResponse.json({ error: "E-mail e senha são obrigatórios" }, { status: 400 });
+      return NextResponse.json({ error: "E-mail e senha são obrigatórios." }, { status: 400 });
     }
 
     const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-    
-    // 1. Autentica via Firebase REST API
+    if (!apiKey) {
+      return NextResponse.json({ error: "Variável NEXT_PUBLIC_FIREBASE_API_KEY não encontrada." }, { status: 500 });
+    }
+
+    // 1. Valida as credenciais na REST API do Firebase Auth
     const res = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
       {
@@ -24,16 +29,21 @@ export async function POST(request: Request) {
     );
 
     const data = await res.json();
-    
+
     if (!res.ok) {
-      const errorMessage = data.error?.message || "Falha na autenticação do Firebase";
+      const errorMessage = data.error?.message || "Falha na autenticação.";
       return NextResponse.json({ error: errorMessage }, { status: 401 });
     }
 
     const idToken = data.idToken;
+    const uid = data.localId;
+    const userEmail = data.email || email;
 
-    // 2. Cria o Cookie de Sessão
-    const expiresIn = 60 * 60 * 24 * 5 * 1000;
+    // 2. Criação do Cookie de Sessão Protegido
+    const adminAuth = getAdminAuth();
+    const adminDb = getAdminDb();
+
+    const expiresIn = 60 * 60 * 24 * 5 * 1000; // 5 dias
     const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn });
 
     const cookieStore = await cookies();
@@ -45,28 +55,23 @@ export async function POST(request: Request) {
       sameSite: "lax",
     });
 
-    const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie);
-    const uid = decodedClaims.uid;
-    const userEmail = decodedClaims.email || "";
-
-    // 3. Onboarding Silencioso (Cria o banco de dados)
+    // 3. Onboarding Silencioso (Gravação do Tenant no Firestore)
     const tenantRef = adminDb.collection("tenants").doc(uid);
     const tenantSnap = await tenantRef.get();
-    
-    let tenantData;
 
+    let tenantData;
     if (!tenantSnap.exists) {
       tenantData = {
         nome: userEmail.split("@")[0],
         email: userEmail,
         plan_type: "basic",
-        is_admin: true, // Forçando admin para você
+        is_admin: true,
         escolas_vinculadas: [],
         disciplinas: [],
         created_at: new Date().toISOString(),
       };
-      
       await tenantRef.set(tenantData);
+      console.log(`[Firestore] Tenant criado com sucesso: ${uid}`);
     } else {
       tenantData = tenantSnap.data();
     }
@@ -80,10 +85,9 @@ export async function POST(request: Request) {
       },
     });
   } catch (error: any) {
-    console.error("[Login API] Erro Crítico:", error);
-    // Aqui está a mágica: agora enviaremos a mensagem técnica real para o frontend
+    console.error("[Login API] Erro fatal:", error);
     return NextResponse.json(
-      { error: `Falha no Servidor Vercel: ${error.message || String(error)}` },
+      { error: `Erro no Servidor: ${error.message || String(error)}` },
       { status: 500 }
     );
   }
