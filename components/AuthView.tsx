@@ -19,7 +19,7 @@ export function AuthView({ children }: { children?: React.ReactNode }) {
         } else {
           setSession(null);
         }
-      } catch (err) {
+      } catch {
         setSession(null);
       } finally {
         setLoading(false);
@@ -41,15 +41,27 @@ export function AuthView({ children }: { children?: React.ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setSession(data.user);
-      } else {
-        const errData = await res.json();
-        setError(errData.error || "Erro ao fazer login");
+      const rawText = await res.text();
+      let data: any = null;
+
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        // Se a Vercel cuspir HTML de erro 500/504, mostramos o status real sem quebrar
+        setError(`Erro ${res.status}: ${rawText.slice(0, 120)}`);
+        setLoading(false);
+        return;
       }
-    } catch (err) {
-      setError("Erro de conexão ao tentar fazer login.");
+
+      if (res.ok) {
+        setSession(data.user);
+        // Recarrega para que a aplicação principal inicialize com os dados do Firestore
+        window.location.reload();
+      } else {
+        setError(data.error || `Erro ${res.status}: Falha no acesso.`);
+      }
+    } catch (err: any) {
+      setError(`Falha na requisição: ${err.message || "Sem resposta do servidor"}`);
     } finally {
       setLoading(false);
     }
@@ -59,7 +71,7 @@ export function AuthView({ children }: { children?: React.ReactNode }) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-950">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
-        <span className="ml-3 text-slate-300 font-medium">Autenticando...</span>
+        <span className="ml-3 text-slate-300 font-medium">Conectando...</span>
       </div>
     );
   }
@@ -98,7 +110,7 @@ export function AuthView({ children }: { children?: React.ReactNode }) {
             </div>
 
             {error && (
-              <div className="p-4 bg-rose-500/10 border border-rose-500/50 rounded-xl text-sm text-rose-400 font-bold text-center">
+              <div className="p-4 bg-rose-500/10 border border-rose-500/50 rounded-xl text-xs text-rose-300 font-mono text-center break-words">
                 {error}
               </div>
             )}
@@ -106,9 +118,9 @@ export function AuthView({ children }: { children?: React.ReactNode }) {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-colors shadow-lg shadow-emerald-900/50 disabled:opacity-70"
+              className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-colors shadow-lg shadow-emerald-900/50 disabled:opacity-70 font-sans"
             >
-              {loading ? "Processando..." : "Entrar no Sistema"}
+              {loading ? "Entrando..." : "Entrar no Sistema"}
             </button>
           </form>
         </div>
