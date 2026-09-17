@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { adminAuth } from "@/lib/firebase-admin";
+import { adminAuth, adminDb } from "@/lib/firebase-admin";
 
 export async function POST(request: Request) {
   try {
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
 
     const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
     
-    // 1. Autentica via Firebase REST API para obter o idToken mantendo o frontend intacto
+    // 1. Autentica via Firebase REST API
     const res = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
       {
@@ -46,14 +46,40 @@ export async function POST(request: Request) {
       sameSite: "lax",
     });
 
-    // 4. Decodifica para devolver os dados básicos ao frontend
+    // 4. Decodifica para obter o UID
     const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie);
+    const uid = decodedClaims.uid;
+    const userEmail = decodedClaims.email || "";
+
+    // 5. ONBOARDING SILENCIOSO NO ATO DO LOGIN
+    const tenantRef = adminDb.collection("tenants").doc(uid);
+    const tenantSnap = await tenantRef.get();
+    
+    let tenantData;
+
+    if (!tenantSnap.exists) {
+      tenantData = {
+        nome: userEmail.split("@")[0],
+        email: userEmail,
+        plan_type: "basic",
+        is_admin: userEmail === "755840@profe.sed.sc.gov.br", // TODO: Coloque seu e-mail real aqui
+        escolas_vinculadas: [],
+        disciplinas: [],
+        created_at: new Date().toISOString(),
+      };
+      
+      await tenantRef.set(tenantData);
+      console.log(`[Firestore] Novo tenant criado no Login para: ${userEmail}`);
+    } else {
+      tenantData = tenantSnap.data();
+    }
 
     return NextResponse.json({
       user: {
-        id: decodedClaims.uid,
-        email: decodedClaims.email,
-        role: decodedClaims.role || "teacher", // Fallback inicial caso a claim ainda não exista
+        id: uid,
+        email: userEmail,
+        role: decodedClaims.role || "teacher",
+        tenant: tenantData,
       },
     });
   } catch (error: any) {
