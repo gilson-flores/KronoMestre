@@ -1,20 +1,51 @@
-import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
-import { getAuth, Auth } from "firebase/auth";
-import { getFirestore, Firestore } from "firebase/firestore";
-import { getStorage, FirebaseStorage } from "firebase/storage";
+import { initializeApp, getApps, getApp, cert } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+import { getFirestore } from "firebase-admin/firestore";
 
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-};
+function cleanPrivateKey(key?: string) {
+  if (!key) return undefined;
+  let formattedKey = key.trim();
+  // Se a chave veio com aspas duplas ou simples em volta, nós as removemos
+  if (formattedKey.startsWith('"') && formattedKey.endsWith('"')) {
+    formattedKey = formattedKey.slice(1, -1);
+  } else if (formattedKey.startsWith("'") && formattedKey.endsWith("'")) {
+    formattedKey = formattedKey.slice(1, -1);
+  }
+  // Força a conversão do texto "\n" para quebras de linha reais que o certificado exige
+  return formattedKey.replace(/\\n/g, '\n');
+}
 
-const app: FirebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-const auth: Auth = getAuth(app);
-const db: Firestore = getFirestore(app);
-const storage: FirebaseStorage = getStorage(app);
+function initializeFirebaseAdmin() {
+  if (getApps().length > 0) {
+    return getApp();
+  }
 
-export { app, auth, db, storage };
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = cleanPrivateKey(process.env.FIREBASE_PRIVATE_KEY);
+
+  if (!projectId || !clientEmail || !privateKey) {
+    console.warn("[Firebase Admin] AVISO: Credenciais ausentes no .env.local");
+    // Inicializa um app vazio apenas para não quebrar a compilação do Next.js
+    return initializeApp({ projectId: "demo-project" });
+  }
+
+  try {
+    return initializeApp({
+      credential: cert({
+        projectId,
+        clientEmail,
+        privateKey,
+      }),
+    });
+  } catch (error) {
+    console.error("[Firebase Admin] Erro fatal no Certificado:", error);
+    return initializeApp({ projectId: "demo-project" });
+  }
+}
+
+const adminApp = initializeFirebaseAdmin();
+const adminAuth = getAuth(adminApp);
+const adminDb = getFirestore(adminApp);
+
+export { adminAuth, adminDb };
