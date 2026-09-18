@@ -3,6 +3,7 @@ import type {NextConfig} from 'next';
 const nextConfig: NextConfig = {
   // ACRESCENTE ESTA LINHA AQUI:
   serverExternalPackages: ["firebase-admin"],
+  
   reactStrictMode: true,
   typescript: {
     ignoreBuildErrors: true, // Ignorar temporariamente erros de TypeScript para evitar bloqueio no build
