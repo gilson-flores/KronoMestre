@@ -1,8 +1,8 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
-  // ACRESCENTE ESTA LINHA AQUI:
-  serverExternalPackages: ["firebase-admin"],
+  // Bloqueio completo: Firebase Admin e seus sub-módulos de criptografia
+  serverExternalPackages: ["firebase-admin", "jose", "jwks-rsa"],
   
   reactStrictMode: true,
   typescript: {
