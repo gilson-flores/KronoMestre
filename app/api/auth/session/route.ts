@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
@@ -10,6 +12,10 @@ export async function GET() {
     if (!sessionCookie) {
       return NextResponse.json({ user: null }, { status: 401 });
     }
+
+    // Usando as novas funções seguras de inicialização
+    const adminAuth = getAdminAuth();
+    const adminDb = getAdminDb();
 
     // 1. Valida o cookie e extrai dados básicos do Auth
     const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie);
@@ -22,20 +28,19 @@ export async function GET() {
 
     let tenantData;
 
-    // 3. Se o documento não existir, faz a criação silenciosa (Onboarding)
+    // 3. Se por acaso o documento não existir, faz a criação silenciosa
     if (!tenantSnap.exists) {
       tenantData = {
-        nome: email.split("@")[0], // Nome provisório baseado no e-mail
+        nome: email.split("@")[0],
         email: email,
         plan_type: "basic",
-        is_admin: email === "755840@profe.sed.sc.gov.br", // TODO: Coloque seu e-mail real aqui
+        is_admin: true,
         escolas_vinculadas: [],
         disciplinas: [],
         created_at: new Date().toISOString(),
       };
       
       await tenantRef.set(tenantData);
-      console.log(`[Firestore] Novo tenant criado para: ${email}`);
     } else {
       tenantData = tenantSnap.data();
     }
