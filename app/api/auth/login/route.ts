@@ -1,269 +1,93 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase-admin';
-import { signSessionToken, setSessionCookie, SessionPayload } from '@/lib/auth-server';
-import { verifyPasswordBcrypt, hashPasswordBcrypt } from '@/lib/crypto';
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 
-export async function POST(req: NextRequest) {
+export const dynamic = "force-dynamic";
+
+export async function POST(request: Request) {
   try {
-    const body = await req.json();
-    const { role } = body;
+    const body = await request.json();
+    const { email, password } = body;
 
-    const supabaseAdmin = getSupabaseAdmin();
-    if (!supabaseAdmin) {
-      return NextResponse.json(
-        { error: 'Serviço de banco de dados não configurado no servidor.' },
-        { status: 500 }
-      );
+    if (!email || !password) {
+      return NextResponse.json({ error: "E-mail e senha são obrigatórios." }, { status: 400 });
     }
 
-    // ==========================================
-    // 1. FLUXO DE LOGIN: PROFESSOR TITULAR
-    // ==========================================
-    if (role === 'teacher') {
-      const email = (body.email || '').trim().toLowerCase();
-      const password = body.password || '';
-
-      if (!email || !password) {
-        return NextResponse.json(
-          { error: 'E-mail e senha são obrigatórios.' },
-          { status: 400 }
-        );
-      }
-
-      // Tenta autenticação via Supabase Auth
-      const { data: authData, error: authError } = await supabaseAdmin.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (authError || !authData?.user) {
-        return NextResponse.json(
-          { error: 'Credenciais inválidas. Verifique seu e-mail e senha.' },
-          { status: 401 }
-        );
-      }
-
-      // Busca dados na tabela teachers
-      const { data: dbTeacher, error: dbError } = await supabaseAdmin
-        .from('teachers')
-        .select('*')
-        .ilike('email', email)
-        .maybeSingle();
-
-      const teacherId = dbTeacher?.id || authData?.user?.id;
-      if (!teacherId) {
-        return NextResponse.json(
-          { error: 'Professor não encontrado no sistema.' },
-          { status: 404 }
-        );
-      }
-
-      const sessionPayload: SessionPayload = {
-        sub: teacherId,
-        role: 'teacher',
-        ownerTeacherId: teacherId, // O Titular é o próprio dono da assinatura
-        name: dbTeacher?.name || authData?.user?.user_metadata?.full_name || email.split('@')[0],
-        email: dbTeacher?.email || email,
-        subject: dbTeacher?.subject || 'Sociologia',
-        avatarUrl: dbTeacher?.avatar_url || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
-      };
-
-      const token = await signSessionToken(sessionPayload, '7d');
-      const response = NextResponse.json({
-        success: true,
-        user: sessionPayload,
-      });
-
-      setSessionCookie(response, token, 7 * 24 * 60 * 60);
-      return response;
+    const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: "Variável NEXT_PUBLIC_FIREBASE_API_KEY não encontrada." }, { status: 500 });
     }
 
-    // ==========================================
-    // 2. FLUXO DE LOGIN: 2º PROFESSOR
-    // ==========================================
-    if (role === 'second_teacher') {
-      const email = (body.email || '').trim().toLowerCase();
-      const password = body.password || '';
-
-      if (!email || !password) {
-        return NextResponse.json(
-          { error: 'E-mail e senha são obrigatórios.' },
-          { status: 400 }
-        );
+    // 1. Valida as credenciais na REST API do Firebase Auth
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, returnSecureToken: true }),
       }
-
-      // Busca o 2º professor no banco
-      const { data: dbSecondTeacher, error: secError } = await supabaseAdmin
-        .from('second_teachers')
-        .select('*')
-        .ilike('email', email)
-        .maybeSingle();
-
-      if (secError || !dbSecondTeacher) {
-        return NextResponse.json(
-          { error: '2º Professor não encontrado com este e-mail.' },
-          { status: 404 }
-        );
-      }
-
-      const storedPassword = dbSecondTeacher.password || '';
-      const isValid = await verifyPasswordBcrypt(password, storedPassword);
-
-      if (!isValid) {
-        return NextResponse.json(
-          { error: 'Senha incorreta. Verifique os dados digitados.' },
-          { status: 401 }
-        );
-      }
-
-      // Migração transparente de senha para bcrypt se ainda não estiver no padrão $2a$ / $2b$
-      if (!storedPassword.startsWith('$2a$') && !storedPassword.startsWith('$2b$')) {
-        try {
-          const bcryptHash = await hashPasswordBcrypt(password);
-          await supabaseAdmin
-            .from('second_teachers')
-            .update({ password: bcryptHash })
-            .eq('id', dbSecondTeacher.id);
-        } catch (upgradeErr) {
-          console.warn('Erro na migração transparente para bcrypt do 2º prof:', upgradeErr);
-        }
-      }
-
-      // Descobre o owner_teacher_id (titular dono deste 2º professor)
-      let ownerTeacherId = dbSecondTeacher.owner_teacher_id;
-      if (!ownerTeacherId) {
-        const { data: firstTeacher } = await supabaseAdmin.from('teachers').select('id').limit(1).maybeSingle();
-        ownerTeacherId = firstTeacher?.id || dbSecondTeacher.id;
-      }
-
-      const sessionPayload: SessionPayload = {
-        sub: dbSecondTeacher.id,
-        role: 'second_teacher',
-        ownerTeacherId: ownerTeacherId,
-        name: dbSecondTeacher.name,
-        email: dbSecondTeacher.email,
-        avatarUrl: dbSecondTeacher.avatar_url || 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&q=80&w=250',
-        mustChangePassword: Boolean(dbSecondTeacher.must_change_password),
-      };
-
-      const token = await signSessionToken(sessionPayload, '7d');
-      const response = NextResponse.json({
-        success: true,
-        user: sessionPayload,
-      });
-
-      setSessionCookie(response, token, 7 * 24 * 60 * 60);
-      return response;
-    }
-
-    // ==========================================
-    // 3. FLUXO DE LOGIN: ALUNO
-    // ==========================================
-    if (role === 'student') {
-      const fullName = (body.fullName || '').trim();
-      const classRoom = (body.classRoom || '').trim();
-      const matricula = (body.matricula || '').trim();
-      const password = body.password || '';
-
-      if (!password) {
-        return NextResponse.json(
-          { error: 'Por favor, informe a senha de acesso.' },
-          { status: 400 }
-        );
-      }
-
-      let query = supabaseAdmin.from('students').select('*');
-
-      if (matricula) {
-        query = query.eq('matricula', matricula);
-      } else if (fullName && classRoom) {
-        query = query.ilike('full_name', fullName);
-      } else {
-        return NextResponse.json(
-          { error: 'Informe Nome e Turma ou a Matrícula do aluno.' },
-          { status: 400 }
-        );
-      }
-
-      const { data: studentRecords, error: stuError } = await query;
-      const student = (studentRecords || []).find(
-        (s) => !classRoom || (s.turma && s.turma.toLowerCase() === classRoom.toLowerCase()) || (s.class_room && s.class_room.toLowerCase() === classRoom.toLowerCase())
-      ) || studentRecords?.[0];
-
-      if (stuError || !student) {
-        return NextResponse.json(
-          { error: 'Aluno não encontrado para a turma/matrícula informada.' },
-          { status: 404 }
-        );
-      }
-
-      const storedPassword = student.password_hash || '';
-      if (!storedPassword) {
-        return NextResponse.json(
-          { error: 'Aluno sem senha cadastrada. Solicite ao professor titular a definição da sua senha.' },
-          { status: 401 }
-        );
-      }
-
-      const isValid = await verifyPasswordBcrypt(password, storedPassword);
-      if (!isValid) {
-        return NextResponse.json(
-          { error: 'Senha incorreta. Verifique sua senha de acesso.' },
-          { status: 401 }
-        );
-      }
-
-      // Migração transparente de senha para bcrypt se ainda não estiver no padrão $2a$ / $2b$
-      if (!storedPassword.startsWith('$2a$') && !storedPassword.startsWith('$2b$')) {
-        try {
-          const bcryptHash = await hashPasswordBcrypt(password);
-          await supabaseAdmin
-            .from('students')
-            .update({ password_hash: bcryptHash })
-            .eq('id', student.id);
-        } catch (upgradeErr) {
-          console.warn('Erro na migração transparente de senha do aluno para bcrypt:', upgradeErr);
-        }
-      }
-
-      // Descobre o owner_teacher_id (titular dono deste aluno)
-      let ownerTeacherId = student.owner_teacher_id;
-      if (!ownerTeacherId) {
-        const { data: firstTeacher } = await supabaseAdmin.from('teachers').select('id').limit(1).maybeSingle();
-        ownerTeacherId = firstTeacher?.id || '';
-      }
-
-      const sessionPayload: SessionPayload = {
-        sub: student.id,
-        role: 'student',
-        ownerTeacherId: ownerTeacherId,
-        name: student.full_name,
-        matricula: student.matricula,
-        classRoom: student.class_room || student.turma,
-        isPne: Boolean(student.is_pne),
-        avatarUrl: student.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
-        mustChangePassword: Boolean(student.must_change_password),
-      };
-
-      // Sessão de aluno: validade de 24 horas
-      const token = await signSessionToken(sessionPayload, '24h');
-      const response = NextResponse.json({
-        success: true,
-        user: sessionPayload,
-      });
-
-      setSessionCookie(response, token, 24 * 60 * 60);
-      return response;
-    }
-
-    return NextResponse.json(
-      { error: 'Perfil de usuário não reconhecido.' },
-      { status: 400 }
     );
-  } catch (err: any) {
-    console.error('Erro no endpoint de login:', err);
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      const errorMessage = data.error?.message || "Falha na autenticação.";
+      return NextResponse.json({ error: errorMessage }, { status: 401 });
+    }
+
+    const idToken = data.idToken;
+    const uid = data.localId;
+    const userEmail = data.email || email;
+
+    // 2. Criação do Cookie de Sessão Protegido
+    const adminAuth = getAdminAuth();
+    const adminDb = getAdminDb();
+
+    const expiresIn = 60 * 60 * 24 * 5 * 1000; // 5 dias
+    const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn });
+
+    const cookieStore = await cookies();
+    cookieStore.set("session", sessionCookie, {
+      maxAge: expiresIn / 1000,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      sameSite: "lax",
+    });
+
+    // 3. Onboarding Silencioso (Gravação do Tenant no Firestore)
+    const tenantRef = adminDb.collection("tenants").doc(uid);
+    const tenantSnap = await tenantRef.get();
+
+    let tenantData;
+    if (!tenantSnap.exists) {
+      tenantData = {
+        nome: userEmail.split("@")[0],
+        email: userEmail,
+        plan_type: "basic",
+        is_admin: true,
+        escolas_vinculadas: [],
+        disciplinas: [],
+        created_at: new Date().toISOString(),
+      };
+      await tenantRef.set(tenantData);
+      console.log(`[Firestore] Tenant criado com sucesso: ${uid}`);
+    } else {
+      tenantData = tenantSnap.data();
+    }
+
+    return NextResponse.json({
+      user: {
+        id: uid,
+        email: userEmail,
+        role: "teacher",
+        tenant: tenantData,
+      },
+    });
+  } catch (error: any) {
+    console.error("[Login API] Erro fatal:", error);
     return NextResponse.json(
-      { error: 'Erro interno durante autenticação.', details: err.message },
+      { error: `Erro no Servidor: ${error.message || String(error)}` },
       { status: 500 }
     );
   }

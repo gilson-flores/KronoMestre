@@ -1,12 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { clearSessionCookie } from '@/lib/auth-server';
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
-export async function POST(_req: NextRequest) {
-  const response = NextResponse.json({
-    success: true,
-    message: 'Sessão encerrada com sucesso.',
-  });
+export async function POST() {
+  try {
+    const cookieStore = await cookies();
+    
+    // Deleta o cookie de sessão do Firebase
+    cookieStore.delete("session");
 
-  clearSessionCookie(response);
-  return response;
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("[Logout API] Erro ao encerrar sessão:", error);
+    return NextResponse.json(
+      { error: "Erro ao encerrar sessão" },
+      { status: 500 }
+    );
+  }
 }

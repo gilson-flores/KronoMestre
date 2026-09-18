@@ -1,21 +1,17 @@
 import { initializeApp, getApps, getApp, cert } from "firebase-admin/app";
-import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
+import { getAuth, Auth } from "firebase-admin/auth";
+import { getFirestore, Firestore } from "firebase-admin/firestore";
 
-function cleanPrivateKey(key?: string) {
+function cleanPrivateKey(key?: string): string | undefined {
   if (!key) return undefined;
-  let formattedKey = key.trim();
-  // Se a chave veio com aspas duplas ou simples em volta, nós as removemos
-  if (formattedKey.startsWith('"') && formattedKey.endsWith('"')) {
-    formattedKey = formattedKey.slice(1, -1);
-  } else if (formattedKey.startsWith("'") && formattedKey.endsWith("'")) {
-    formattedKey = formattedKey.slice(1, -1);
+  let cleaned = key.trim();
+  if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+    cleaned = cleaned.slice(1, -1);
   }
-  // Força a conversão do texto "\n" para quebras de linha reais que o certificado exige
-  return formattedKey.replace(/\\n/g, '\n');
+  return cleaned.replace(/\\n/g, "\n");
 }
 
-function initializeFirebaseAdmin() {
+function getFirebaseAdminApp() {
   if (getApps().length > 0) {
     return getApp();
   }
@@ -25,27 +21,24 @@ function initializeFirebaseAdmin() {
   const privateKey = cleanPrivateKey(process.env.FIREBASE_PRIVATE_KEY);
 
   if (!projectId || !clientEmail || !privateKey) {
-    console.warn("[Firebase Admin] AVISO: Credenciais ausentes no .env.local");
-    // Inicializa um app vazio apenas para não quebrar a compilação do Next.js
-    return initializeApp({ projectId: "demo-project" });
+    throw new Error(
+      `[Firebase Admin] Chaves ausentes: projectId=${Boolean(projectId)}, clientEmail=${Boolean(clientEmail)}, privateKey=${Boolean(privateKey)}`
+    );
   }
 
-  try {
-    return initializeApp({
-      credential: cert({
-        projectId,
-        clientEmail,
-        privateKey,
-      }),
-    });
-  } catch (error) {
-    console.error("[Firebase Admin] Erro fatal no Certificado:", error);
-    return initializeApp({ projectId: "demo-project" });
-  }
+  return initializeApp({
+    credential: cert({
+      projectId,
+      clientEmail,
+      privateKey,
+    }),
+  });
 }
 
-const adminApp = initializeFirebaseAdmin();
-const adminAuth = getAuth(adminApp);
-const adminDb = getFirestore(adminApp);
+export function getAdminAuth(): Auth {
+  return getAuth(getFirebaseAdminApp());
+}
 
-export { adminAuth, adminDb };
+export function getAdminDb(): Firestore {
+  return getFirestore(getFirebaseAdminApp());
+}
