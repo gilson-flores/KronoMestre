@@ -2220,165 +2220,75 @@ export default function Home() {
   };
 
   const handleImportStudents = async (newStudents: StudentUser[]) => {
-    // Processar senhas com Bcrypt e marcar mustChangePassword: true
-    const processedStudents: StudentUser[] = await Promise.all(
+    const processedStudents = await Promise.all(
       newStudents.map(async (s) => {
         let hashed = s.passwordHash;
         if (!hashed || (!hashed.startsWith('$2a$') && !hashed.startsWith('$2b$'))) {
-          const rawPass = hashed || s.matricula || '123456';
-          hashed = await hashPasswordBcrypt(rawPass);
+          hashed = await hashPasswordBcrypt(hashed || s.matricula || '123456');
         }
-        return {
-          ...s,
-          passwordHash: hashed,
-          mustChangePassword: true,
-        };
+        return { ...s, passwordHash: hashed, mustChangePassword: true };
       })
     );
 
-    // Sempre insere no estado local e persiste no cache imediatamente
+    // 1. Otimismo UI: Atualiza a tela instantaneamente
     setStudents((prev) => {
       const next = [...prev, ...processedStudents];
-      if (typeof window !== 'undefined') {
-        try {
-          setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
-        } catch (e) {
-          console.warn('Erro ao salvar local_students_data na importação:', e);
-        }
-      }
+      if (typeof window !== 'undefined') setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
       return next;
     });
 
-    if (!isSupabaseConfigured || !supabase) {
-      showGlobalStatus('success', `${processedStudents.length} aluno(s) importado(s) com sucesso!`);
-      return;
-    }
-
+    // 2. Transplante: Envia para o Firebase (POST /api/students)
     try {
-      const payloadWithSecondTeacher = processedStudents.map((s) => ({
-        full_name: s.fullName,
-        turma: s.turma,
-        matricula: s.matricula,
-        tag: s.tag,
-        second_teacher_id: s.secondTeacherId || null,
-        second_teacher_name: s.secondTeacherName || null,
-        password_hash: s.passwordHash || '',
-        must_change_password: true,
-        avatar_url: s.avatarUrl,
-      }));
-
-      let { error } = await supabase!.from('students').insert(payloadWithSecondTeacher);
-
-      // Fallback gracioso se colunas opcionais não existirem
-      if (error && (error.code === 'PGRST204' || error.message?.includes('second_teacher') || error.message?.includes('pne_conditions') || error.message?.includes('must_change_password') || error.code === '42703')) {
-        const payloadBase = processedStudents.map((s) => ({
-          full_name: s.fullName,
-          turma: s.turma,
-          matricula: s.matricula,
-          tag: s.tag,
-          password_hash: s.passwordHash || '',
-          avatar_url: s.avatarUrl,
-        }));
-        const retryRes = await supabase!.from('students').insert(payloadBase);
-        error = retryRes.error;
-      }
-
-      if (error) {
-        console.warn('Aviso ao importar alunos no Supabase:', error.message);
-        showGlobalStatus('success', `${processedStudents.length} aluno(s) importado(s) com sucesso!`);
-        return;
-      }
-
-      showGlobalStatus('success', `${processedStudents.length} aluno(s) importado(s) e confirmados no Supabase!`);
-    } catch (err: any) {
-      console.warn('Erro ao conectar ao Supabase na importação de alunos:', err?.message);
-      showGlobalStatus('success', `${processedStudents.length} aluno(s) importado(s) com sucesso!`);
+      // Como o backend aceita lote ou único, enviamos um por um de forma segura (ou lote se preferir otimizar no futuro)
+      await Promise.all(processedStudents.map(student => 
+        fetch('/api/students', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(student)
+        })
+      ));
+      showGlobalStatus('success', `${processedStudents.length} aluno(s) importado(s) e confirmados no Banco!`);
+    } catch (err) {
+      console.warn('Erro ao conectar na importação de alunos:', err);
+      showGlobalStatus('error', 'A importação ocorreu na tela, mas houve falha ao salvar na nuvem.');
     }
   };
 
   const handleCreateStudent = async (newStudent: StudentUser) => {
-    // Processar senha com Bcrypt e definir mustChangePassword: true
     let hashedPass = newStudent.passwordHash;
     if (!hashedPass || (!hashedPass.startsWith('$2a$') && !hashedPass.startsWith('$2b$'))) {
-      const rawPass = hashedPass || newStudent.matricula || '123456';
-      hashedPass = await hashPasswordBcrypt(rawPass);
+      hashedPass = await hashPasswordBcrypt(hashedPass || newStudent.matricula || '123456');
     }
 
-    const studentToSave: StudentUser = {
-      ...newStudent,
-      passwordHash: hashedPass,
-      mustChangePassword: true,
-    };
+    const studentToSave: StudentUser = { ...newStudent, passwordHash: hashedPass, mustChangePassword: true };
 
-    // Sempre insere no estado local e persiste no cache imediatamente
+    // 1. Otimismo UI
     setStudents((prev) => {
       const next = [...prev, studentToSave];
-      if (typeof window !== 'undefined') {
-        try {
-          setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
-        } catch (e) {
-          console.warn('Erro ao salvar local_students_data no cadastro:', e);
-        }
-      }
+      if (typeof window !== 'undefined') setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
       return next;
     });
 
-    if (!isSupabaseConfigured || !supabase) {
-      showGlobalStatus('success', `Aluno "${studentToSave.fullName}" cadastrado com sucesso!`);
-      return;
-    }
-
+    // 2. Transplante Firebase
     try {
-      let { error } = await supabase!.from('students').insert({
-        full_name: studentToSave.fullName,
-        turma: studentToSave.turma,
-        matricula: studentToSave.matricula,
-        tag: studentToSave.tag,
-        pne_conditions: studentToSave.pneConditions || null,
-        second_teacher_id: studentToSave.secondTeacherId || null,
-        second_teacher_name: studentToSave.secondTeacherName || null,
-        password_hash: studentToSave.passwordHash || '',
-        must_change_password: true,
-        avatar_url: studentToSave.avatarUrl,
+      const res = await fetch('/api/students', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(studentToSave)
       });
-
-      // Fallback gracioso se colunas extras ainda não foram criadas no banco
-      if (error && (error.code === 'PGRST204' || error.message?.includes('second_teacher') || error.message?.includes('pne_conditions') || error.message?.includes('must_change_password') || error.code === '42703')) {
-        const retryRes = await supabase!.from('students').insert({
-          full_name: studentToSave.fullName,
-          turma: studentToSave.turma,
-          matricula: studentToSave.matricula,
-          tag: studentToSave.tag,
-          password_hash: studentToSave.passwordHash || '',
-          avatar_url: studentToSave.avatarUrl,
-        });
-        error = retryRes.error;
-      }
-
-      if (error) {
-        console.warn('Aviso ao cadastrar aluno no Supabase:', error.message);
-        showGlobalStatus('success', `Aluno "${studentToSave.fullName}" cadastrado com sucesso!`);
-        return;
-      }
-
-      showGlobalStatus('success', `Aluno "${studentToSave.fullName}" cadastrado com sucesso no Supabase!`);
-    } catch (err: any) {
-      console.warn('Erro de conexão ao cadastrar aluno no Supabase:', err?.message);
+      if (!res.ok) throw new Error('Falha ao salvar no banco.');
       showGlobalStatus('success', `Aluno "${studentToSave.fullName}" cadastrado com sucesso!`);
+    } catch (err) {
+      console.warn('Erro ao cadastrar aluno:', err);
+      showGlobalStatus('error', 'O aluno aparece na tela, mas falhou ao salvar na nuvem.');
     }
   };
 
   const handleSaveStudent = async (updatedStudent: StudentUser) => {
-    // 1. Sempre atualiza o estado local imediatamente e persiste em cache local
+    // 1. Otimismo UI
     setStudents((prev) => {
       const next = prev.map((s) => (s.id === updatedStudent.id || s.matricula === updatedStudent.matricula ? updatedStudent : s));
-      if (typeof window !== 'undefined') {
-        try {
-          setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
-        } catch (e) {
-          console.warn('Erro ao salvar local_students_data na atualização:', e);
-        }
-      }
+      if (typeof window !== 'undefined') setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
       return next;
     });
 
@@ -2386,192 +2296,65 @@ export default function Home() {
       setSupervisingStudent(updatedStudent);
     }
 
-    if (!isSupabaseConfigured || !supabase) {
-      showGlobalStatus('success', `Vínculo do aluno "${updatedStudent.fullName}" salvo com sucesso!`);
-      return;
-    }
-
+    // 2. Transplante Firebase
     try {
-      const payload: any = {
-        full_name: updatedStudent.fullName,
-        turma: updatedStudent.turma,
-        matricula: updatedStudent.matricula,
-        tag: updatedStudent.tag,
-        avatar_url: updatedStudent.avatarUrl || null,
-        pne_conditions: updatedStudent.pneConditions || null,
-        second_teacher_id: updatedStudent.secondTeacherId || null,
-        second_teacher_name: updatedStudent.secondTeacherName || null,
-      };
-
-      // 1. Tentar atualização por ID no Supabase
-      let { data, error } = await supabase
-        .from('students')
-        .update(payload)
-        .eq('id', updatedStudent.id)
-        .select('*');
-
-      // Fallback A: Se o Supabase acusar falta das colunas pne_conditions/second_teacher
-      if (error && (error.code === 'PGRST204' || error.message?.includes('second_teacher') || error.message?.includes('pne_conditions') || error.code === '42703')) {
-        const basicPayload = {
-          full_name: updatedStudent.fullName,
-          turma: updatedStudent.turma,
-          matricula: updatedStudent.matricula,
-          tag: updatedStudent.tag,
-        };
-        const basicRes = await supabase
-          .from('students')
-          .update(basicPayload)
-          .eq('id', updatedStudent.id)
-          .select('*');
-        if (!basicRes.error) {
-          data = basicRes.data;
-          error = null;
-        }
-      }
-
-      // Fallback B: Se não encontrou por ID (ex: ID provisório ou não-UUID), tentar por matrícula
-      if ((!error && (!data || data.length === 0)) || (error && (error.code === '22P02' || error.code === 'PGRST116'))) {
-        if (updatedStudent.matricula) {
-          const resByMatricula = await supabase
-            .from('students')
-            .update(payload)
-            .eq('matricula', updatedStudent.matricula)
-            .select('*');
-          if (!resByMatricula.error && resByMatricula.data && resByMatricula.data.length > 0) {
-            data = resByMatricula.data;
-            error = null;
-          }
-        }
-      }
-
-      // Fallback C: Se ainda não encontrou, tentar por nome completo
-      if (!error && (!data || data.length === 0)) {
-        const resByName = await supabase
-          .from('students')
-          .update(payload)
-          .ilike('full_name', updatedStudent.fullName)
-          .select('*');
-        if (!resByName.error && resByName.data && resByName.data.length > 0) {
-          data = resByName.data;
-          error = null;
-        }
-      }
-
-      // Fallback D: Se o aluno não existia no Supabase (0 linhas afetadas), inserir novo registro
-      if (!error && (!data || data.length === 0)) {
-        const insertPayload: any = {
-          ...payload,
-          password_hash: updatedStudent.passwordHash || '', // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui
-          avatar_url: updatedStudent.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
-        };
-        const isValidUUID = (id?: string) => !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-        if (isValidUUID(updatedStudent.id)) {
-          insertPayload.id = updatedStudent.id;
-        }
-        const insertRes = await supabase
-          .from('students')
-          .insert(insertPayload)
-          .select('*');
-        if (!insertRes.error && insertRes.data && insertRes.data.length > 0) {
-          data = insertRes.data;
-          error = null;
-        }
-      }
-
-      if (error) {
-        console.warn('Aviso no Supabase ao atualizar aluno:', error.message);
-        showGlobalStatus('success', `Vínculo do aluno "${updatedStudent.fullName}" salvo com sucesso!`);
-        return;
-      }
-
-      // Se o Supabase retornou o ID oficial persistido, sincroniza o estado local e o cache
-      const finalStudent: StudentUser = {
-        ...updatedStudent,
-        id: data && data[0] ? data[0].id : updatedStudent.id,
-      };
-
-      setStudents((prev) => {
-        const next = prev.map((s) => (s.id === updatedStudent.id || s.id === finalStudent.id || s.matricula === finalStudent.matricula ? finalStudent : s));
-        if (typeof window !== 'undefined') {
-          try {
-            setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
-          } catch (e) {
-            console.warn('Erro ao atualizar cache local:', e);
-          }
-        }
-        return next;
+      const res = await fetch('/api/students', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedStudent)
       });
-
-      if (supervisingStudent && (supervisingStudent.id === updatedStudent.id || supervisingStudent.id === finalStudent.id)) {
-        setSupervisingStudent(finalStudent);
-      }
-      showGlobalStatus('success', `Vínculo do aluno "${finalStudent.fullName}" salvo e gravado com sucesso!`);
-    } catch (err: any) {
-      console.warn('Erro de conexão com o Supabase ao salvar aluno:', err?.message);
-      showGlobalStatus('success', `Vínculo do aluno "${updatedStudent.fullName}" salvo com sucesso!`);
+      if (!res.ok) throw new Error('Falha na atualização.');
+      showGlobalStatus('success', `Vínculo do aluno "${updatedStudent.fullName}" salvo e gravado com sucesso!`);
+    } catch (err) {
+      console.warn('Erro ao atualizar aluno:', err);
+      showGlobalStatus('error', 'Dados alterados na tela, mas não salvos na nuvem.');
     }
   };
 
   const handleSavePedagogicalNotes = async (studentId: string, notes: string) => {
+    // Atualiza estado local
+    const targetStudent = students.find((s) => s.id === studentId);
+    if (!targetStudent) return;
+    const updatedStudent = { ...targetStudent, pedagogicalNotes: notes };
+
     setStudents((prev) => {
-      const next = prev.map((s) => (s.id === studentId ? { ...s, pedagogicalNotes: notes } : s));
-      if (typeof window !== 'undefined') {
-        try {
-          setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
-        } catch (e) {
-          console.warn('Erro ao salvar anotações no cache:', e);
-        }
-      }
+      const next = prev.map((s) => (s.id === studentId ? updatedStudent : s));
+      if (typeof window !== 'undefined') setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
       return next;
     });
 
     if (supervisingStudent && supervisingStudent.id === studentId) {
-      setSupervisingStudent((prev) => (prev ? { ...prev, pedagogicalNotes: notes } : null));
+      setSupervisingStudent(updatedStudent);
     }
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase
-          .from('students')
-          .update({ pedagogical_notes: notes })
-          .eq('id', studentId);
-      } catch (err) {
-        console.error('Erro ao salvar anotações pedagógicas no Supabase:', err);
-      }
+
+    // Envia o objeto inteiro atualizado (a API de PUT do Firebase sobrescreve o nó do aluno)
+    try {
+      await fetch('/api/students', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedStudent)
+      });
+    } catch (err) {
+      console.error('Erro ao salvar anotações pedagógicas:', err);
     }
   };
 
   const handleDeleteStudent = async (studentId: string) => {
-    // Sempre remove do estado local e atualiza cache imediatamente
+    // 1. Otimismo UI
     setStudents((prev) => {
       const next = prev.filter((s) => s.id !== studentId);
-      if (typeof window !== 'undefined') {
-        try {
-          setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
-        } catch (e) {
-          console.warn('Erro ao atualizar cache na exclusão:', e);
-        }
-      }
+      if (typeof window !== 'undefined') setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
       return next;
     });
 
-    if (!isSupabaseConfigured || !supabase) {
-      showGlobalStatus('success', 'Aluno removido com sucesso!');
-      return;
-    }
-
+    // 2. Transplante Firebase
     try {
-      const { error } = await supabase!.from('students').delete().eq('id', studentId);
-
-      if (error) {
-        console.warn('Aviso ao deletar aluno do Supabase:', error.message);
-        showGlobalStatus('success', 'Aluno removido com sucesso!');
-        return;
-      }
-
-      showGlobalStatus('success', 'Aluno removido com sucesso do Supabase!');
-    } catch (err: any) {
-      console.warn('Erro ao deletar aluno do Supabase:', err);
+      const res = await fetch(`/api/students?id=${studentId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Falha ao excluir na nuvem.');
       showGlobalStatus('success', 'Aluno removido com sucesso!');
+    } catch (err) {
+      console.warn('Erro ao deletar aluno:', err);
+      showGlobalStatus('error', 'Aluno oculto da tela, mas exclusão na nuvem falhou.');
     }
   };
 
