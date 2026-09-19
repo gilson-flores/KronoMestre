@@ -982,21 +982,40 @@ export default function Home() {
     if (tab !== 'grading' && tab !== 'correcoes') setSelectedActivityForGrading(null);
   }, [role]);
 
-  const handleLogout = useCallback((reason?: string) => {
+  const handleLogout = useCallback(async (reason?: string) => {
+    // 1. Destruição total do Cache do Navegador
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('active_session');
+      sessionStorage.clear();
+      localStorage.removeItem('local_students_data');
+      localStorage.removeItem('local_activities_data');
+      localStorage.removeItem('library_files_data');
     }
+    
+    // 2. Destruição da Sessão no Servidor (Firebase)
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (e) {
+      console.warn("Falha ao invalidar cookie no servidor", e);
+    }
+
+    // 3. Destruição legada (Supabase fallback de segurança)
     if (isSupabaseConfigured && supabase) {
-      supabase!.auth.signOut().catch(() => {});
+      supabase?.auth.signOut().catch(() => {});
     }
+
+    // 4. Limpeza da Memória RAM (Estados do React)
     setRole(null);
     setCurrentStudent(null);
     setStudents(initialStudents);
     setActivities(initialActivities);
     setLibrary(initialLibrary);
+
     if (reason && typeof reason === 'string') {
       showGlobalStatus('error', reason);
     }
+    
+    // 5. Força o recarregamento da página para garantir estado virgem
+    window.location.href = '/';
   }, []);
 
   // Temporizador de Desconexão por Inatividade (8 minutos)

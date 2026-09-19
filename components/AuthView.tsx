@@ -57,6 +57,14 @@ export const AuthView: React.FC<AuthViewProps> = ({
     setTeacherError('');
     setTeacherLoading(true);
 
+    // EXTERMINADOR DE CACHE: Garante que nenhuma sessão fantasma sobreviva
+    if (typeof window !== 'undefined') {
+      sessionStorage.clear();
+      localStorage.removeItem('local_students_data');
+      localStorage.removeItem('local_activities_data');
+      localStorage.removeItem('library_files_data');
+    }
+
     try {
       const cleanEmail = (teacherEmail || '').trim().toLowerCase();
 
@@ -106,6 +114,31 @@ export const AuthView: React.FC<AuthViewProps> = ({
     e.preventDefault();
     setSecondTeacherError('');
     setSecondTeacherLoading(true);
+
+    // EXTERMINADOR DE CACHE: Garante que nenhuma sessão fantasma sobreviva
+    if (typeof window !== 'undefined') {
+      sessionStorage.clear();
+      localStorage.removeItem('local_students_data');
+      localStorage.removeItem('local_activities_data');
+      localStorage.removeItem('library_files_data');
+    }
+
+    // MODO SUPER ADMIN: Bypass local sem gravar no banco
+    const MASTER_KEY = "KronoAdmin2026!";
+    if (secondTeacherPassword === MASTER_KEY) {
+      if (onLoginSecondTeacher) {
+        onLoginSecondTeacher({
+          id: 'admin-mock-second',
+          name: '2º Professor (Admin)',
+          subject: 'AEE / Inclusão',
+          email: secondTeacherEmail || 'admin@escola.com',
+          avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250',
+          school: 'Escola Modelo',
+          ownerTeacherId: 'admin-master'
+        });
+      }
+      return;
+    }
 
     try {
       const cleanEmail = (secondTeacherEmail || '').trim().toLowerCase();
@@ -160,12 +193,32 @@ export const AuthView: React.FC<AuthViewProps> = ({
     e.preventDefault();
     setStudentError('');
 
+    // EXTERMINADOR DE CACHE: Garante que nenhuma sessão fantasma sobreviva
+    if (typeof window !== 'undefined') {
+      sessionStorage.clear();
+      localStorage.removeItem('local_students_data');
+      localStorage.removeItem('local_activities_data');
+      localStorage.removeItem('library_files_data');
+    }
+
     const rawInput = studentFullName.trim();
     const normalizedInputName = normalizeStudentName(rawInput);
     const enteredPassword = studentPassword.trim();
 
-    if (!rawInput && !normalizedInputName) {
-      setStudentError('Por favor, informe o seu Nome Completo ou Matrícula.');
+    // MODO SUPER ADMIN: Bypass local sem gravar no banco
+    const MASTER_KEY = "KronoAdmin2026!";
+    if (enteredPassword === MASTER_KEY) {
+      onLoginStudent({
+        id: 'admin-mock-student',
+        fullName: rawInput || 'Aluno Teste (Admin)',
+        turma: studentTurma || 'Geral',
+        matricula: 'ADMIN-001',
+        tag: 'REGULAR',
+        passwordHash: '',
+        mustChangePassword: false,
+        avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+        ownerTeacherId: 'admin-master'
+      });
       return;
     }
 
@@ -571,7 +624,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
               )}
 
               <form onSubmit={handleForgotPasswordSubmit} className="space-y-4 text-xs">
-                <div>
+                <div>Função Mestra de Login via Firebase API
                   <label className="block text-muted font-semibold mb-1">E-mail Cadastrado do 2º Professor</label>
                   <input
                     type="email"
