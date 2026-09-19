@@ -3027,7 +3027,15 @@ export default function Home() {
 
   // 1. Unauthenticated state -> Show Login Screen
   if (!role) {
-    return <AuthView />;
+    return (
+      <AuthView
+        students={activeStudents}
+        teacher={teacher}
+        onLoginTeacher={handleLoginTeacher}
+        onLoginStudent={handleLoginStudent}
+        onLoginSecondTeacher={handleLoginSecondTeacher}
+      />
+    );
   }
 
   // 2. Student Portal view
