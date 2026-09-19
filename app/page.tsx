@@ -443,7 +443,7 @@ export default function Home() {
             ? ''
             : newFile.driveUrl || '';
 
-        await supabase.from('library_files').insert({
+        await supabase!.from('library_files').insert({
           id: newFile.id,
           title: newFile.title,
           category: newFile.category,
@@ -471,7 +471,7 @@ export default function Home() {
     }
     if (isSupabaseConfigured && supabase) {
       try {
-        await supabase.from('library_files').delete().eq('id', fileId);
+        await supabase!.from('library_files').delete().eq('id', fileId);
       } catch (err) {
         console.warn('Erro ao deletar arquivo no Supabase:', err);
       }
@@ -840,7 +840,7 @@ export default function Home() {
 
     const loadLibrary = async () => {
       try {
-        const { data: dbLibrary } = await supabase.from('library_files').select('*');
+        const { data: dbLibrary } = await supabase!.from('library_files').select('*');
         if (dbLibrary && dbLibrary.length > 0) {
           const mappedLibrary: LibraryFile[] = dbLibrary.map((item) => ({
             id: item.id,
@@ -987,7 +987,7 @@ export default function Home() {
       sessionStorage.removeItem('active_session');
     }
     if (isSupabaseConfigured && supabase) {
-      supabase?.auth.signOut().catch(() => {});
+      supabase!.auth.signOut().catch(() => {});
     }
     setRole(null);
     setCurrentStudent(null);
@@ -1308,7 +1308,7 @@ export default function Home() {
         pending_correction: newAct.pendingCorrection || 0,
       };
 
-      let { error } = await supabase.from('activities').insert(fullPayload);
+      let { error } = await supabase!.from('activities').insert(fullPayload);
 
       // Se falhou (ex: restrição check constraint do tipo ou colunas inexistentes no Supabase)
       if (error) {
@@ -1321,7 +1321,7 @@ export default function Home() {
         // Tentativa 1: mesmo payload com tipo seguro para o banco
         if (isConstraintErr) {
           const safeTypePayload = { ...fullPayload, type: sanitizeTypeForDb(fullPayload.type) };
-          const safeTypeRes = await supabase.from('activities').insert(safeTypePayload);
+          const safeTypeRes = await supabase!.from('activities').insert(safeTypePayload);
           if (!safeTypeRes.error) {
             error = null;
           } else {
@@ -1352,11 +1352,11 @@ export default function Home() {
             pending_correction: newAct.pendingCorrection || 0,
           };
 
-          const fallbackRes = await supabase.from('activities').insert(basicPayload);
+          const fallbackRes = await supabase!.from('activities').insert(basicPayload);
           if (!fallbackRes.error) {
             error = null;
           } else {
-            const upsertRes = await supabase.from('activities').upsert(basicPayload);
+            const upsertRes = await supabase!.from('activities').upsert(basicPayload);
             error = upsertRes.error;
           }
         }
@@ -1474,7 +1474,7 @@ export default function Home() {
         completed_date: updatedAct.completedDate,
       };
 
-      let { error } = await supabase.from('activities').upsert(fullPayload);
+      let { error } = await supabase!.from('activities').upsert(fullPayload);
 
       if (error) {
         console.warn('Upsert de atividade falhou, executando estratégias de fallback...', error);
@@ -1485,7 +1485,7 @@ export default function Home() {
 
         if (isConstraintErr) {
           const safeTypePayload = { ...fullPayload, type: sanitizeTypeForDb(fullPayload.type) };
-          const safeTypeRes = await supabase.from('activities').upsert(safeTypePayload);
+          const safeTypeRes = await supabase!.from('activities').upsert(safeTypePayload);
           if (!safeTypeRes.error) {
             error = null;
           } else {
@@ -1517,7 +1517,7 @@ export default function Home() {
             completed_date: updatedAct.completedDate,
           };
 
-          const fallbackRes = await supabase.from('activities').upsert(basicPayload);
+          const fallbackRes = await supabase!.from('activities').upsert(basicPayload);
           error = fallbackRes.error;
         }
       }
@@ -1571,7 +1571,7 @@ export default function Home() {
             activity_id: updatedAct.id,
             activity_title: updatedAct.title,
           };
-          await supabase.from('chat_messages').insert(extensionMsg);
+          await supabase!.from('chat_messages').insert(extensionMsg);
         } catch (chatErr) {
           console.warn('Erro ao disparar aviso automático de prorrogação no chat:', chatErr);
         }
@@ -1627,8 +1627,8 @@ export default function Home() {
     }
 
     try {
-      await supabase.from('submissions').delete().eq('activity_id', activity.id);
-      const { error } = await supabase.from('activities').delete().eq('id', activity.id);
+      await supabase!.from('submissions').delete().eq('activity_id', activity.id);
+      const { error } = await supabase!.from('activities').delete().eq('id', activity.id);
 
       if (error) {
         console.error('Erro ao excluir atividade no Supabase:', error);
@@ -1729,7 +1729,7 @@ export default function Home() {
       // If missing members exist, insert initial submission for them first in Supabase
       if (isInitialGroupGrading && missingGroupMembers.length > 0) {
         for (const memberSt of missingGroupMembers) {
-          await supabase.from('submissions').insert({
+          await supabase!.from('submissions').insert({
             activity_id: activityId,
             student_id: memberSt.id,
             student_name: memberSt.fullName,
@@ -1943,8 +1943,7 @@ export default function Home() {
       const targetFullName = matchedStudentObj?.fullName;
 
       // 1. Tentar update pelo ID
-      let { data, error } = await supabase
-        .from('students')
+      let { data, error } = await supabase!.from('students')
         .update({ avatar_url: newAvatarUrl })
         .eq('id', studentId)
         .select('*');
@@ -2079,7 +2078,7 @@ export default function Home() {
             })
             .eq('id', existingSub.id);
         } else {
-          await supabase.from('submissions').insert({
+          await supabase!.from('submissions').insert({
             activity_id: activityId,
             student_id: targetSt.id,
             student_name: targetSt.fullName,
@@ -2249,7 +2248,7 @@ export default function Home() {
         avatar_url: s.avatarUrl,
       }));
 
-      let { error } = await supabase.from('students').insert(payloadWithSecondTeacher);
+      let { error } = await supabase!.from('students').insert(payloadWithSecondTeacher);
 
       // Fallback gracioso se colunas opcionais não existirem
       if (error && (error.code === 'PGRST204' || error.message?.includes('second_teacher') || error.message?.includes('pne_conditions') || error.message?.includes('must_change_password') || error.code === '42703')) {
@@ -2261,7 +2260,7 @@ export default function Home() {
           password_hash: s.passwordHash || '',
           avatar_url: s.avatarUrl,
         }));
-        const retryRes = await supabase.from('students').insert(payloadBase);
+        const retryRes = await supabase!.from('students').insert(payloadBase);
         error = retryRes.error;
       }
 
@@ -2311,7 +2310,7 @@ export default function Home() {
     }
 
     try {
-      let { error } = await supabase.from('students').insert({
+      let { error } = await supabase!.from('students').insert({
         full_name: studentToSave.fullName,
         turma: studentToSave.turma,
         matricula: studentToSave.matricula,
@@ -2326,7 +2325,7 @@ export default function Home() {
 
       // Fallback gracioso se colunas extras ainda não foram criadas no banco
       if (error && (error.code === 'PGRST204' || error.message?.includes('second_teacher') || error.message?.includes('pne_conditions') || error.message?.includes('must_change_password') || error.code === '42703')) {
-        const retryRes = await supabase.from('students').insert({
+        const retryRes = await supabase!.from('students').insert({
           full_name: studentToSave.fullName,
           turma: studentToSave.turma,
           matricula: studentToSave.matricula,
@@ -2542,7 +2541,7 @@ export default function Home() {
     }
 
     try {
-      const { error } = await supabase.from('students').delete().eq('id', studentId);
+      const { error } = await supabase!.from('students').delete().eq('id', studentId);
 
       if (error) {
         console.warn('Aviso ao deletar aluno do Supabase:', error.message);
@@ -2864,7 +2863,7 @@ export default function Home() {
     setChatMessages((prev) => mergeChatMessage(prev, newMsg).updated);
 
     if (isSupabaseConfigured && supabase) {
-      supabase.from('chat_messages').insert({
+      supabase!.from('chat_messages').insert({
         thread_id: msgData.threadId,
         sender_id: msgData.senderId,
         sender_name: msgData.senderName,
@@ -2930,7 +2929,7 @@ export default function Home() {
             });
 
             if (isSupabaseConfigured && supabase) {
-              supabase.from('chat_messages').insert({
+              supabase!.from('chat_messages').insert({
                 thread_id: botMsg.threadId,
                 sender_id: botMsg.senderId,
                 sender_name: botMsg.senderName,
@@ -3075,13 +3074,14 @@ export default function Home() {
         currentTab={activeTeacherTab}
         setCurrentTab={handleTeacherTabChange}
         teacher={teacher}
-        role === 'second_teacher' ? (
-              <SecondTeacherDashboardView
-                teacher={teacher}
-                students={visibleStudentsForRole}
-                activities={activities}
-                onNavigateToTab={handleTeacherTabChange}
-              />
+        role={role === 'second_teacher' ? 'second_teacher' : 'teacher'}
+        onOpenNewContentModal={() => setIsNewActivityModalOpen(true)}
+        onLogout={handleLogout}
+        isMobileOpen={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
+        unreadMessagesCount={teacherUnreadMessagesCount}
+        pendingCorrectionsCount={teacherPendingCorrectionsCount}
+      />
             ) : (
 
 
@@ -3131,7 +3131,6 @@ export default function Home() {
                 students={visibleStudentsForRole}
                 activities={activities}
                 onNavigateToTab={handleTeacherTabChange}
-                onViewStudent={handleSuperviseStudent}
               />
             ) : (
               <DashboardCentralView
@@ -3474,7 +3473,7 @@ export default function Home() {
                       // Atualizar Auth do Supabase PRIMEIRO
                       if (teacher.email || newTeacherPassword) {
                         try {
-                          const { data: sessionData } = await supabase.auth.getSession();
+                          const { data: sessionData } = await supabase!.auth.getSession();
                           const currentUser = sessionData?.session?.user;
 
                           const authUpdates: any = {};
@@ -3486,7 +3485,7 @@ export default function Home() {
                           }
 
                           if (Object.keys(authUpdates).length > 0) {
-                            const { error: authError } = await supabase.auth.updateUser(authUpdates);
+                            const { error: authError } = await supabase!.auth.updateUser(authUpdates);
                             if (authError) {
                               console.error('Erro/Aviso ao atualizar autenticação:', authError);
                               const isRateLimit =
