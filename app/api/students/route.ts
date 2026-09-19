@@ -1,90 +1,80 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
+import { NextResponse } from 'next/server';
+import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
+import { cookies } from 'next/headers';
 
-export const dynamic = "force-dynamic";
-
-// GET: Busca todos os alunos do professor logado
-export async function GET() {
-  try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("session")?.value;
-
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-    }
-
-    const adminAuth = getAdminAuth();
-    const adminDb = getAdminDb();
-
-    // Descobre quem é o professor logado
-    const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie);
-    const tenantId = decodedClaims.uid;
-
-    // Busca apenas os alunos da pasta desse professor
-    const studentsSnap = await adminDb
-      .collection("tenants")
-      .doc(tenantId)
-      .collection("students")
-      .get();
-
-    const students = studentsSnap.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-
-    return NextResponse.json({ students });
-  } catch (error: any) {
-    console.error("[Students API] Erro ao buscar alunos:", error);
-    return NextResponse.json({ error: "Falha interna do servidor" }, { status: 500 });
-  }
-}
-
-// POST: Cadastra um novo aluno na pasta do professor
 export async function POST(request: Request) {
   try {
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("session")?.value;
-
+    const sessionCookie = cookieStore.get('session')?.value;
+    
     if (!sessionCookie) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const adminAuth = getAdminAuth();
-    const adminDb = getAdminDb();
+    const auth = getAdminAuth();
+    const db = getAdminDb();
 
-    const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie);
-    const tenantId = decodedClaims.uid;
+    // Identifica o dono do Tenant (Professor Admin)
+    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true);
+    const ownerTeacherId = decodedClaims.uid;
 
-    const body = await request.json();
+    const studentData = await request.json();
+    
+    // Garante que o aluno tenha um ID válido (aproveita o existente ou gera um novo)
+    const studentId = studentData.id || `STU-${Date.now()}`;
 
-    // Prepara o objeto do aluno (sanitização básica)
-    const newStudent = {
-      fullName: body.fullName || "Aluno Sem Nome",
-      matricula: body.matricula || "",
-      turma: body.turma || "",
-      tag: body.tag || "REGULAR",
-      avatarUrl: body.avatarUrl || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200",
-      pneConditions: body.pneConditions || null,
-      passwordHash: body.passwordHash || "",
-      mustChangePassword: true,
-      created_at: new Date().toISOString(),
-      isArchived: false,
-    };
+    // Grava no Firestore dentro da pasta do professor (Multitenant)
+    await db.collection('tenants')
+      .doc(ownerTeacherId)
+      .collection('students')
+      .doc(studentId)
+      .set({
+        ...studentData,
+        id: studentId,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
 
-    // Salva no banco de dados, deixando o Firestore gerar um ID único seguro
-    const docRef = await adminDb
-      .collection("tenants")
-      .doc(tenantId)
-      .collection("students")
-      .add(newStudent);
-
-    return NextResponse.json({ 
-      success: true, 
-      student: { id: docRef.id, ...newStudent } 
-    });
+    return NextResponse.json({ success: true, id: studentId });
   } catch (error: any) {
-    console.error("[Students API] Erro ao cadastrar aluno:", error);
-    return NextResponse.json({ error: "Falha ao cadastrar aluno" }, { status: 500 });
+    console.error('Erro na API de Alunos:', error);
+    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });
+  }
+}
+
+export async function PUT(request: Request) {
+  return POST(request); // O Firestore com merge:true lida com update/insert da mesma forma
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get('session')?.value;
+    
+    if (!sessionCookie) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    }
+
+    const auth = getAdminAuth();
+    const db = getAdminDb();
+
+    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true);
+    const ownerTeacherId = decodedClaims.uid;
+    
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    
+    if (!id) {
+      return NextResponse.json({ error: 'ID ausente' }, { status: 400 });
+    }
+
+    await db.collection('tenants')
+      .doc(ownerTeacherId)
+      .collection('students')
+      .doc(id)
+      .delete();
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
   }
 }

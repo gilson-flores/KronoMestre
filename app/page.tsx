@@ -1292,330 +1292,68 @@ export default function Home() {
   };
 
   const handleCreateActivity = async (newAct: Activity) => {
-    if (!isSupabaseConfigured || !supabase) {
-      showGlobalStatus('error', 'ARMADILHA DE BUG DISPARADA: Supabase não está configurado no ambiente. A atividade NÃO foi salva.');
-      return;
-    }
+    // 1. Otimismo UI (Cache Rápido)
+    setActivities((prev) => {
+      const next = [newAct, ...prev];
+      if (typeof window !== 'undefined') setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
+      return next;
+    });
 
+    // 2. Transplante Firebase
     try {
-      const fullPayload = {
-        id: newAct.id,
-        title: newAct.title,
-        subject: newAct.subject || 'Sociologia',
-        description: newAct.description || '',
-        support_material: newAct.supportMaterial || '',
-        turma: newAct.turma || '',
-        type: newAct.type,
-        status: newAct.status,
-        deadline: newAct.deadline || '',
-        max_grade: newAct.maxGrade || 10,
-        allow_group_work: newAct.allowGroupWork || false,
-        security_focus_lock: newAct.securityFocusLock || false,
-        security_block_copy_statement: newAct.securityBlockCopyStatement || false,
-        security_block_paste_essay: newAct.securityBlockPasteEssay || false,
-        included_pne_student_ids: newAct.includedPneStudentIds || [],
-        is_adapted: newAct.isAdapted || false,
-        adaptation_type: newAct.adaptationType || null,
-        playful_game_html: newAct.playfulGameHtml || null,
-        adapted_from_id: newAct.adaptedFromId || null,
-        is_recovery: newAct.isRecovery || false,
-        recovery_from_id: newAct.recoveryFromId || null,
-        recovery_approach: newAct.recoveryApproach || null,
-        questions: newAct.questions || [],
-        total_submissions: newAct.totalSubmissions || 0,
-        total_students: newAct.totalStudents || 0,
-        pending_correction: newAct.pendingCorrection || 0,
-      };
-
-      let { error } = await supabase!.from('activities').insert(fullPayload);
-
-      // Se falhou (ex: restrição check constraint do tipo ou colunas inexistentes no Supabase)
-      if (error) {
-        console.warn('Inserção direta de atividade falhou, executando estratégias de fallback...', error);
-        const isConstraintErr =
-          error.message?.includes('check constraint') ||
-          error.message?.includes('type_check') ||
-          error.details?.includes('type_check');
-
-        // Tentativa 1: mesmo payload com tipo seguro para o banco
-        if (isConstraintErr) {
-          const safeTypePayload = { ...fullPayload, type: sanitizeTypeForDb(fullPayload.type) };
-          const safeTypeRes = await supabase!.from('activities').insert(safeTypePayload);
-          if (!safeTypeRes.error) {
-            error = null;
-          } else {
-            error = safeTypeRes.error;
-          }
-        }
-
-        // Tentativa 2: enviar payload básico saneado se faltar coluna no banco
-        if (error) {
-          const basicPayload = {
-            id: newAct.id,
-            title: newAct.title,
-            subject: newAct.subject || 'Sociologia',
-            description: newAct.description || '',
-            support_material: newAct.supportMaterial || '',
-            turma: newAct.turma || '',
-            type: sanitizeTypeForDb(newAct.type),
-            status: newAct.status,
-            deadline: newAct.deadline || '',
-            max_grade: newAct.maxGrade || 10,
-            allow_group_work: newAct.allowGroupWork || false,
-            security_focus_lock: newAct.securityFocusLock || false,
-            security_block_copy_statement: newAct.securityBlockCopyStatement || false,
-            security_block_paste_essay: newAct.securityBlockPasteEssay || false,
-            questions: newAct.questions || [],
-            total_submissions: newAct.totalSubmissions || 0,
-            total_students: newAct.totalStudents || 0,
-            pending_correction: newAct.pendingCorrection || 0,
-          };
-
-          const fallbackRes = await supabase!.from('activities').insert(basicPayload);
-          if (!fallbackRes.error) {
-            error = null;
-          } else {
-            const upsertRes = await supabase!.from('activities').upsert(basicPayload);
-            error = upsertRes.error;
-          }
-        }
-      }
-
-      if (error) {
-        const errorDetails = error.message || error.details || error.hint || (typeof error === 'object' ? JSON.stringify(error) : String(error));
-        console.error('Erro ao criar atividade no Supabase:', errorDetails, error);
-        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao gravar atividade no Supabase (${error.code || 'BD'}): ${errorDetails || 'Erro desconhecido'}`);
-        // Mantém no estado local e cache local para garantir usabilidade sem perder dados do professor
-        setActivities((prev) => {
-          const next = [newAct, ...prev];
-          if (typeof window !== 'undefined') {
-            try {
-              setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
-            } catch (e) {}
-          }
-          return next;
-        });
-        return;
-      }
-
-      setActivities((prev) => {
-        const next = [newAct, ...prev];
-        if (typeof window !== 'undefined') {
-          try {
-            setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
-          } catch (e) {}
-        }
-        return next;
+      const res = await fetch('/api/activities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newAct)
       });
-      showGlobalStatus('success', `Atividade "${newAct.title}" criada e confirmada no Supabase com sucesso!`);
-      sendBrowserNotification(`📢 Nova Atividade Publicada: ${newAct.title}`, {
-        body: `Turma ${newAct.turma} • Prazo: ${newAct.deadline || 'A definir'} • Valor: ${newAct.maxGrade || 10} pts`,
+      if (!res.ok) throw new Error('Falha ao salvar no banco.');
+      
+      showGlobalStatus('success', `Atividade "${newAct.title}" criada com sucesso na nuvem!`);
+      sendBrowserNotification(`📢 Nova Atividade: ${newAct.title}`, {
+        body: `Turma ${newAct.turma} • Valor: ${newAct.maxGrade || 10} pts`,
         tag: `new-act-${newAct.id}`,
       });
-    } catch (err: any) {
-      const catchedMsg = err?.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
-      console.error('Erro ao salvar atividade no Supabase:', catchedMsg, err);
-      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Falha de conexão/execução (${catchedMsg || 'Erro desconhecido'})`);
-      setActivities((prev) => {
-        const next = [newAct, ...prev];
-        if (typeof window !== 'undefined') {
-          try {
-            setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
-          } catch (e) {}
-        }
-        return next;
-      });
+    } catch (err) {
+      console.warn('Erro ao criar atividade:', err);
+      showGlobalStatus('error', 'A atividade aparece na tela, mas falhou ao salvar na nuvem.');
     }
   };
 
   const handleSaveActivity = async (updatedAct: Activity) => {
-    if (!isSupabaseConfigured || !supabase) {
-      showGlobalStatus('error', 'ARMADILHA DE BUG DISPARADA: Supabase não está configurado. Alterações NÃO foram gravadas.');
-      return;
+    // Auto adjust status if deadline is specified
+    if (updatedAct.status !== 'Inativo' && updatedAct.deadline) {
+      const isoMatch = updatedAct.deadline.match(/\b(20\d\d)-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b/);
+      if (isoMatch) {
+        const todayISO = new Date().toISOString().split('T')[0];
+        updatedAct.status = isoMatch[0] >= todayISO ? 'Ativo' : 'Prazo Encerrado';
+      }
     }
 
+    // 1. Otimismo UI
+    setActivities((prev) => {
+      const next = prev.map((a) => (a.id === updatedAct.id ? updatedAct : a));
+      if (typeof window !== 'undefined') setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
+      return next;
+    });
+    if (selectedActivityForGrading?.id === updatedAct.id) setSelectedActivityForGrading(updatedAct);
+
+    // 2. Transplante Firebase
     try {
-      // Auto adjust status if deadline is specified
-      const dateStr = updatedAct.deadline ? updatedAct.deadline.trim() : '';
-      if (updatedAct.status !== 'Inativo' && dateStr) {
-        let isoDate: string | null = null;
-        const isoMatch = dateStr.match(/\b(20\d\d)-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b/);
-        if (isoMatch) isoDate = isoMatch[0];
-        const brMatch = dateStr.match(/\b(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/(20\d\d)\b/);
-        if (brMatch) {
-          const [, day, month, year] = brMatch;
-          isoDate = `${year}-${month}-${day}`;
-        }
-        const brShortMatch = dateStr.match(/\b(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\b/);
-        if (brShortMatch) {
-          const [, day, month] = brShortMatch;
-          isoDate = `2026-${month}-${day}`;
-        }
-
-        if (isoDate) {
-          const todayISO = new Date().toISOString().split('T')[0];
-          if (isoDate >= todayISO) {
-            updatedAct.status = 'Ativo';
-          } else {
-            updatedAct.status = 'Prazo Encerrado';
-          }
-        }
-      }
-
-      const fullPayload = {
-        id: updatedAct.id,
-        title: updatedAct.title,
-        subject: updatedAct.subject || 'Sociologia',
-        description: updatedAct.description || '',
-        support_material: updatedAct.supportMaterial || '',
-        turma: updatedAct.turma || '',
-        type: updatedAct.type,
-        status: updatedAct.status,
-        deadline: updatedAct.deadline || '',
-        max_grade: updatedAct.maxGrade || 10,
-        allow_group_work: updatedAct.allowGroupWork || false,
-        security_focus_lock: updatedAct.securityFocusLock || false,
-        security_block_copy_statement: updatedAct.securityBlockCopyStatement || false,
-        security_block_paste_essay: updatedAct.securityBlockPasteEssay || false,
-        included_pne_student_ids: updatedAct.includedPneStudentIds || [],
-        is_adapted: updatedAct.isAdapted || false,
-        adaptation_type: updatedAct.adaptationType || null,
-        playful_game_html: updatedAct.playfulGameHtml || null,
-        adapted_from_id: updatedAct.adaptedFromId || null,
-        is_recovery: updatedAct.isRecovery || false,
-        recovery_from_id: updatedAct.recoveryFromId || null,
-        recovery_approach: updatedAct.recoveryApproach || null,
-        questions: updatedAct.questions || [],
-        total_submissions: updatedAct.totalSubmissions,
-        total_students: updatedAct.totalStudents,
-        pending_correction: updatedAct.pendingCorrection,
-        average_grade: updatedAct.averageGrade,
-        completed_date: updatedAct.completedDate,
-      };
-
-      let { error } = await supabase!.from('activities').upsert(fullPayload);
-
-      if (error) {
-        console.warn('Upsert de atividade falhou, executando estratégias de fallback...', error);
-        const isConstraintErr =
-          error.message?.includes('check constraint') ||
-          error.message?.includes('type_check') ||
-          error.details?.includes('type_check');
-
-        if (isConstraintErr) {
-          const safeTypePayload = { ...fullPayload, type: sanitizeTypeForDb(fullPayload.type) };
-          const safeTypeRes = await supabase!.from('activities').upsert(safeTypePayload);
-          if (!safeTypeRes.error) {
-            error = null;
-          } else {
-            error = safeTypeRes.error;
-          }
-        }
-
-        if (error) {
-          const basicPayload = {
-            id: updatedAct.id,
-            title: updatedAct.title,
-            subject: updatedAct.subject || 'Sociologia',
-            description: updatedAct.description || '',
-            support_material: updatedAct.supportMaterial || '',
-            turma: updatedAct.turma || '',
-            type: sanitizeTypeForDb(updatedAct.type),
-            status: updatedAct.status,
-            deadline: updatedAct.deadline || '',
-            max_grade: updatedAct.maxGrade || 10,
-            allow_group_work: updatedAct.allowGroupWork || false,
-            security_focus_lock: updatedAct.securityFocusLock || false,
-            security_block_copy_statement: updatedAct.securityBlockCopyStatement || false,
-            security_block_paste_essay: updatedAct.securityBlockPasteEssay || false,
-            questions: updatedAct.questions || [],
-            total_submissions: updatedAct.totalSubmissions,
-            total_students: updatedAct.totalStudents,
-            pending_correction: updatedAct.pendingCorrection,
-            average_grade: updatedAct.averageGrade,
-            completed_date: updatedAct.completedDate,
-          };
-
-          const fallbackRes = await supabase!.from('activities').upsert(basicPayload);
-          error = fallbackRes.error;
-        }
-      }
-
-      if (error) {
-        const errorDetails = error.message || error.details || error.hint || (typeof error === 'object' ? JSON.stringify(error) : String(error));
-        console.error('Erro ao atualizar atividade no Supabase:', errorDetails, error);
-        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao atualizar atividade no Supabase (${error.code || 'BD'}): ${errorDetails || 'Erro desconhecido'}`);
-        setActivities((prev) => {
-          const next = prev.map((a) => (a.id === updatedAct.id ? updatedAct : a));
-          if (typeof window !== 'undefined') {
-            try {
-              setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
-            } catch (e) {}
-          }
-          return next;
-        });
-        return;
-      }
-
-      setActivities((prev) => {
-        const next = prev.map((a) => (a.id === updatedAct.id ? updatedAct : a));
-        if (typeof window !== 'undefined') {
-          try {
-            setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
-          } catch (e) {}
-        }
-        return next;
+      const res = await fetch('/api/activities', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedAct)
       });
-      if (selectedActivityForGrading?.id === updatedAct.id) {
-        setSelectedActivityForGrading(updatedAct);
-      }
-
-      // Se o prazo da atividade foi prorrogado/alterado, avisar a turma e enviar no chat
-      const prevAct = activities.find((a) => a.id === updatedAct.id);
-      const isDeadlineProrrogated = prevAct && updatedAct.deadline && prevAct.deadline !== updatedAct.deadline;
-      if (isDeadlineProrrogated) {
-        try {
-          const extensionMsg = {
-            id: `msg-ext-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-            thread_id: 'broadcast',
-            sender_id: teacher.id || 'teacher-1',
-            sender_name: teacher.name || 'Prof. Gilson Flores',
-            sender_role: 'teacher',
-            sender_avatar: teacher.avatarUrl || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
-            recipient_id: 'broadcast',
-            recipient_name: updatedAct.turma ? `Turma ${updatedAct.turma}` : 'Todas as Turmas',
-            content: `⏳ Atenção: O prazo de entrega da atividade "${updatedAct.title}" foi PRORROGADO para: ${updatedAct.deadline}.`,
-            created_at: new Date().toISOString(),
-            read: false,
-            activity_id: updatedAct.id,
-            activity_title: updatedAct.title,
-          };
-          await supabase!.from('chat_messages').insert(extensionMsg);
-        } catch (chatErr) {
-          console.warn('Erro ao disparar aviso automático de prorrogação no chat:', chatErr);
-        }
-      }
-
-      showGlobalStatus('success', `Alterações da atividade "${updatedAct.title}" salvas e confirmadas no Supabase!`);
-    } catch (err: any) {
-      const catchedMsg = err?.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
-      console.error('Erro ao atualizar atividade no Supabase:', catchedMsg, err);
-      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Falha de conexão/execução (${catchedMsg || 'Erro desconhecido'})`);
-      setActivities((prev) => {
-        const next = prev.map((a) => (a.id === updatedAct.id ? updatedAct : a));
-        if (typeof window !== 'undefined') {
-          try {
-            setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
-          } catch (e) {}
-        }
-        return next;
-      });
+      if (!res.ok) throw new Error('Falha na atualização.');
+      showGlobalStatus('success', `Atividade "${updatedAct.title}" atualizada com sucesso!`);
+    } catch (err) {
+      console.warn('Erro ao atualizar atividade:', err);
+      showGlobalStatus('error', 'Dados alterados na tela, mas não salvos na nuvem.');
     }
   };
 
   const handleDeleteActivity = async (activity: Activity) => {
     // Validação de segurança pedagógica:
-    // Se a atividade contiver notas aplicadas ou atividades feitas, só permita a exclusão se o botão RCO estiver assinado em todas as entregas.
     const subs = activity.submissions || [];
     const hasAppliedGradesOrWork = subs.length > 0 && subs.some(
       (s) =>
@@ -1634,43 +1372,28 @@ export default function Home() {
       if (!allRcoSigned) {
         showGlobalStatus(
           'error',
-          `Bloqueio de Segurança: A atividade "${activity.title}" possui notas aplicadas ou entregas de alunos com pendência no RCO. Só é permitida a exclusão quando o botão RCO estiver assinado em todas as entregas.`
+          `Bloqueio de Segurança: A atividade "${activity.title}" possui notas aplicadas ou entregas com pendência no RCO.`
         );
         return;
       }
     }
 
-    if (!isSupabaseConfigured || !supabase) {
-      showGlobalStatus('error', 'ARMADILHA DE BUG DISPARADA: Supabase não está configurado. Atividade NÃO foi excluída.');
-      return;
-    }
+    // 1. Otimismo UI
+    setActivities((prev) => {
+      const next = prev.filter((a) => a.id !== activity.id);
+      if (typeof window !== 'undefined') setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
+      return next;
+    });
+    if (selectedActivityForGrading?.id === activity.id) setSelectedActivityForGrading(null);
 
+    // 2. Transplante Firebase
     try {
-      await supabase!.from('submissions').delete().eq('activity_id', activity.id);
-      const { error } = await supabase!.from('activities').delete().eq('id', activity.id);
-
-      if (error) {
-        console.error('Erro ao excluir atividade no Supabase:', error);
-        showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro ao excluir atividade no Supabase (${error.code || 'BD'}): ${error.message}`);
-        return;
-      }
-
-      setActivities((prev) => {
-        const next = prev.filter((a) => a.id !== activity.id);
-        if (typeof window !== 'undefined') {
-          try {
-            setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
-          } catch (e) {}
-        }
-        return next;
-      });
-      if (selectedActivityForGrading?.id === activity.id) {
-        setSelectedActivityForGrading(null);
-      }
-      showGlobalStatus('success', `Atividade "${activity.title}" excluída com sucesso do Supabase!`);
-    } catch (err: any) {
-      console.error('Erro ao excluir atividade no Supabase:', err);
-      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Falha ao excluir (${err?.message || ''})`);
+      const res = await fetch(`/api/activities?id=${activity.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Falha ao excluir na nuvem.');
+      showGlobalStatus('success', `Atividade "${activity.title}" excluída com sucesso!`);
+    } catch (err) {
+      console.warn('Erro ao excluir atividade:', err);
+      showGlobalStatus('error', 'Atividade oculta da tela, mas exclusão na nuvem falhou.');
     }
   };
 
