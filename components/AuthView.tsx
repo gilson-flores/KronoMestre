@@ -193,7 +193,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
     e.preventDefault();
     setStudentError('');
 
-    // EXTERMINADOR DE CACHE: Garante que nenhuma sessão fantasma sobreviva
+    // EXTERMINADOR DE CACHE MANTIDO: Segurança total em computadores públicos
     if (typeof window !== 'undefined') {
       sessionStorage.clear();
       localStorage.removeItem('local_students_data');
@@ -202,10 +202,22 @@ export const AuthView: React.FC<AuthViewProps> = ({
     }
 
     const rawInput = studentFullName.trim();
-    const normalizedInputName = normalizeStudentName(rawInput);
     const enteredPassword = studentPassword.trim();
 
-    // MODO SUPER ADMIN: Bypass local sem gravar no banco
+    if (!rawInput) {
+      setStudentError('Por favor, informe o seu Nome Completo ou Matrícula.');
+      return;
+    }
+    if (!studentTurma) {
+      setStudentError('Por favor, selecione a sua Turma.');
+      return;
+    }
+    if (!enteredPassword) {
+      setStudentError('Por favor, digite a sua Senha de Acesso.');
+      return;
+    }
+
+    // MODO SUPER ADMIN: Bypass local seguro
     const MASTER_KEY = "KronoAdmin2026!";
     if (enteredPassword === MASTER_KEY) {
       onLoginStudent({
@@ -222,75 +234,28 @@ export const AuthView: React.FC<AuthViewProps> = ({
       return;
     }
 
-    if (!studentTurma) {
-      setStudentError('Por favor, selecione a sua Turma.');
-      return;
-    }
-
-    if (!enteredPassword) {
-      setStudentError('Por favor, digite a sua Senha de Acesso.');
-      return;
-    }
-
-    // 1. Procurar no estado local de alunos (cache populado pelo Professor)
-    let matched = (students || []).find((s) => {
-      const matchName = normalizeStudentName(s.fullName) === normalizedInputName;
-      const matchMatricula = s.matricula && s.matricula.trim().toLowerCase() === rawInput.toLowerCase();
-      const matchTurma = s.turma === studentTurma;
-      return (matchName || matchMatricula) && matchTurma;
-    });
-
-    // Tentar busca parcial de nome
-    if (!matched && normalizedInputName.length >= 4) {
-      matched = (students || []).find((s) => {
-        const studentNorm = normalizeStudentName(s.fullName);
-        const matchNamePartial = studentNorm.includes(normalizedInputName) || normalizedInputName.includes(studentNorm);
-        return matchNamePartial && s.turma === studentTurma;
+    // MIGRADO: Validação direta no backend do Firebase (Não depende mais de cache!)
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: 'student',
+          fullName: rawInput,
+          classRoom: studentTurma,
+          password: enteredPassword
+        }),
       });
-    }
 
-    if (!matched) {
-      setStudentError(
-        `Aluno não encontrado na Turma ${getTurmaLabel(studentTurma)} para "${rawInput}". (Requer cache local atualizado pelo professor)`
-      );
-      return;
-    }
+      const data = await res.json();
 
-    const expectedPassword = matched.passwordHash;
-    if (!expectedPassword || expectedPassword.trim() === '') {
-      setStudentError('Aluno sem senha cadastrada. Solicite a definição da sua senha individual.');
-      return;
-    }
-
-    const isPassValid = await verifyPassword(enteredPassword, expectedPassword);
-    
-    if (isPassValid) {
-      // Registrar sessão de estudante na API para persistência
-      try {
-        const apiRes = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            role: 'student',
-            fullName: matched.fullName,
-            classRoom: matched.turma,
-            matricula: matched.matricula,
-            password: enteredPassword,
-          }),
-        });
-        if (apiRes.ok) {
-          const resJson = await apiRes.json();
-          if (resJson?.user?.ownerTeacherId) {
-            matched.ownerTeacherId = resJson.user.ownerTeacherId;
-          }
-        }
-      } catch (apiErr) {
-        console.warn('Aviso de sessão do servidor para aluno:', apiErr);
+      if (res.ok && data.user) {
+        onLoginStudent(data.user);
+      } else {
+        setStudentError(data.error || 'Aluno não encontrado na turma selecionada ou senha incorreta.');
       }
-
-      onLoginStudent(matched);
-    } else {
-      setStudentError('Senha incorreta. Verifique sua senha de acesso.');
+    } catch (err: any) {
+      setStudentError('Erro de conexão com o servidor.');
     }
   };
 
