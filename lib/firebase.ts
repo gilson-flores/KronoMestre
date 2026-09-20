@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
-import { getAuth, Auth } from "firebase/auth";
+import { getAuth, Auth, setPersistence, browserSessionPersistence } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 
@@ -20,7 +20,12 @@ function getFirebaseClientApp(): FirebaseApp {
 }
 
 export function getClientAuth(): Auth {
-  return getAuth(getFirebaseClientApp());
+  const authInstance = getAuth(getFirebaseClientApp());
+  // Configura persistência de sessão (limpa ao fechar a aba/navegador)
+  setPersistence(authInstance, browserSessionPersistence).catch((err) => {
+    console.warn("Erro ao definir persistência do Firebase Auth:", err);
+  });
+  return authInstance;
 }
 
 export function getClientDb(): Firestore {
@@ -37,6 +42,7 @@ export const app = {
     return getFirebaseClientApp();
   },
 };
+
 export const auth = new Proxy({} as Auth, {
   get: (_, prop) => {
     const real = getClientAuth();
@@ -44,6 +50,7 @@ export const auth = new Proxy({} as Auth, {
     return typeof val === 'function' ? val.bind(real) : val;
   },
 });
+
 export const db = new Proxy({} as Firestore, {
   get: (_, prop) => {
     const real = getClientDb();
@@ -51,6 +58,7 @@ export const db = new Proxy({} as Firestore, {
     return typeof val === 'function' ? val.bind(real) : val;
   },
 });
+
 export const storage = new Proxy({} as FirebaseStorage, {
   get: (_, prop) => {
     const real = getClientStorage();
@@ -58,4 +66,3 @@ export const storage = new Proxy({} as FirebaseStorage, {
     return typeof val === 'function' ? val.bind(real) : val;
   },
 });
-
