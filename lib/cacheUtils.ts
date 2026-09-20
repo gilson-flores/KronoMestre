@@ -91,20 +91,20 @@ export function getScopedCacheKey(baseKey: string, ownerTeacherId?: string | nul
   return baseKey;
 }
 
-/**
- * Remove/limpa todas as chaves de cache antigas sem o sufixo _${ownerTeacherId} do localStorage.
- */
-export function cleanLegacyCacheKeys(customKeys?: readonly string[] | string[]): void {
+/** Remove/limpa chaves residuais de autenticação do Firebase do localStorage no arranque */
+export function cleanAuthLocalStorage(): void {
   if (typeof window === 'undefined') return;
-  const keysToClean = customKeys || LEGACY_CACHE_KEYS;
-  for (const key of keysToClean) {
-    try {
-      if (localStorage.getItem(key) !== null) {
-        localStorage.removeItem(key);
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('firebase:authUser:') || key.startsWith('firebase:auth:'))) {
+        keysToRemove.push(key);
       }
-    } catch (e) {
-      // Ignore quota or security errors in strict iframe environments
     }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  } catch (e) {
+    console.warn('Aviso ao limpar cache de auth do localStorage:', e);
   }
 }
 
@@ -189,5 +189,27 @@ export function removeScopedLocalStorageItem(
     try {
       localStorage.removeItem(`${baseKey}_${owner}`);
     } catch (e) {}
+  }
+}
+
+/** Limpa chaves legadas e resquícios de autenticação do localStorage no arranque */
+export function cleanLegacyCacheKeys(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (
+        key && 
+        (key.startsWith('firebase:authUser:') || 
+         key.startsWith('firebase:auth:') || 
+         key.includes('supabase'))
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  } catch (e) {
+    console.warn('Aviso ao limpar cache legado/auth do localStorage:', e);
   }
 }
