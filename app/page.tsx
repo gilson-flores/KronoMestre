@@ -137,6 +137,7 @@ export default function Home() {
   const [isDataLoading, setIsDataLoading] = useState<boolean>(() => Boolean(isSupabaseConfigured && supabase));
   const [dataLoadError, setDataLoadError] = useState<boolean>(false);
   const [loadDataTrigger, setLoadDataTrigger] = useState<number>(0);
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true); // <-- ADICIONADO TRAVA DE SESSÃO
 
   // Restaurar sessão via nova API do Firebase (Tenant Architecture)
   useEffect(() => {
@@ -153,6 +154,7 @@ export default function Home() {
       if (!activeSession) {
         // Força a destruição de qualquer cookie que o Firebase tenha deixado vivo
         await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+        setIsAuthChecking(false); // <-- Liberta o loader (sem sessão ativa)
         return; // Interrompe o processo e obriga a logar novamente
       }
 
@@ -201,6 +203,8 @@ export default function Home() {
         }
       } catch (e) {
         console.warn('Erro ao restaurar sessão do Firebase:', e);
+      } finally {
+        setIsAuthChecking(false); // <-- Liberta o loader (sessão validada ou erro)
       }
     };
 
@@ -2045,7 +2049,7 @@ export default function Home() {
   }, [activities]);
 
   // 0. Server-side rendering / initial hydration shell
-  if (!isMounted) {
+  if (!isMounted || isAuthChecking) {
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col justify-center items-center">
         <div className="flex items-center gap-3 text-sm font-medium text-muted bg-surface px-6 py-4 rounded-full border border-border shadow-xl">
