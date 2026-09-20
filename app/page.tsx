@@ -148,6 +148,14 @@ export default function Home() {
       if (typeof window === 'undefined') return;
       cleanLegacyCacheKeys();
       
+      // PROTEÇÃO DE TERMINAL PÚBLICO: Se a aba foi fechada, a memória volátil sumiu.
+      const activeSession = sessionStorage.getItem('active_session');
+      if (!activeSession) {
+        // Força a destruição de qualquer cookie que o Firebase tenha deixado vivo
+        await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+        return; // Interrompe o processo e obriga a logar novamente
+      }
+
       try {
         // Bate na rota da nossa nova arquitetura para validar o cookie
         const res = await fetch("/api/auth/session");

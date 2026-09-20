@@ -1,104 +1,49 @@
 import { NextResponse } from 'next/server';
-import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
-import { cookies } from 'next/headers';
-
-export async function GET(request: Request) {
-  try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('session')?.value;
-    
-    if (!sessionCookie) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-
-    const auth = getAdminAuth();
-    const db = getAdminDb();
-
-    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true);
-    const ownerTeacherId = decodedClaims.uid;
-
-    const snapshot = await db.collection('tenants')
-      .doc(ownerTeacherId)
-      .collection('students')
-      .get();
-
-    const students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    return NextResponse.json({ students });
-  } catch (error: any) {
-    console.error('Erro ao buscar alunos no Firestore:', error);
-    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
-  }
-}
+import { getAdminDb } from '@/lib/firebase-admin';
 
 export async function POST(request: Request) {
   try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('session')?.value;
-    
-    if (!sessionCookie) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    const body = await request.json();
+    const { identifier, turma } = body;
+
+    if (!identifier || !turma) {
+      return NextResponse.json({ error: 'Dados incompletos fornecidos.' }, { status: 400 });
     }
 
-    const auth = getAdminAuth();
     const db = getAdminDb();
+    const rawIdentifier = identifier.toLowerCase().trim();
+    const normIdentifier = rawIdentifier.normalize('NFD').replace(/[\u0300-\u036f]/g, "");
 
-    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true);
-    const ownerTeacherId = decodedClaims.uid;
+    // Collection Group Query: Procura em TODAS as subcoleções 'students' de todos os professores
+    const snapshot = await db.collectionGroup('students').where('turma', '==', turma).get();
 
-    const studentData = await request.json();
-    const studentId = studentData.id || `STU-${Date.now()}`;
+    let matchedStudent = null;
+    let ownerTeacherId = null;
 
-    await db.collection('tenants')
-      .doc(ownerTeacherId)
-      .collection('students')
-      .doc(studentId)
-      .set({
-        ...studentData,
-        id: studentId,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      const fullName = (data.fullName || '').toLowerCase().trim();
+      const matricula = (data.matricula || '').toLowerCase().trim();
+      
+      const normFullName = fullName.normalize('NFD').replace(/[\u0300-\u036f]/g, "");
 
-    return NextResponse.json({ success: true, id: studentId });
-  } catch (error: any) {
-    console.error('Erro na API de Alunos:', error);
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });
-  }
-}
-
-export async function PUT(request: Request) {
-  return POST(request);
-}
-
-export async function DELETE(request: Request) {
-  try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('session')?.value;
-    
-    if (!sessionCookie) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+      // Verifica correspondência exata, parcial ou por matrícula
+      if (normFullName === normIdentifier || normFullName.includes(normIdentifier) || matricula === rawIdentifier) {
+        matchedStudent = { id: doc.id, ...data };
+        // Identifica o ID do professor (dono do tenant) subindo na árvore do documento
+        ownerTeacherId = doc.ref.parent.parent?.id;
+        break;
+      }
     }
 
-    const auth = getAdminAuth();
-    const db = getAdminDb();
-
-    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true);
-    const ownerTeacherId = decodedClaims.uid;
-    
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-    
-    if (!id) {
-      return NextResponse.json({ error: 'ID ausente' }, { status: 400 });
+    if (!matchedStudent) {
+      return NextResponse.json({ error: 'Aluno não encontrado na base de dados da nuvem para esta turma.' }, { status: 404 });
     }
 
-    await db.collection('tenants')
-      .doc(ownerTeacherId)
-      .collection('students')
-      .doc(id)
-      .delete();
+    return NextResponse.json({ student: matchedStudent, ownerTeacherId });
 
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
+  } catch (error) {
+    console.error('Erro no login do aluno via Firestore:', error);
+    return NextResponse.json({ error: 'Erro interno de comunicação com o servidor.' }, { status: 500 });
   }
 }

@@ -193,18 +193,16 @@ export const AuthView: React.FC<AuthViewProps> = ({
     e.preventDefault();
     setStudentError('');
 
-    // EXTERMINADOR DE CACHE MANTIDO: Segurança total em computadores públicos
+    // Limpeza de segurança da sessão ativa, mas PRESERVA o cache local de alunos para permitir o login
     if (typeof window !== 'undefined') {
       sessionStorage.clear();
-      localStorage.removeItem('local_students_data');
-      localStorage.removeItem('local_activities_data');
-      localStorage.removeItem('library_files_data');
     }
 
     const rawInput = studentFullName.trim();
+    const normalizedInputName = normalizeStudentName(rawInput);
     const enteredPassword = studentPassword.trim();
 
-    if (!rawInput) {
+    if (!rawInput && !normalizedInputName) {
       setStudentError('Por favor, informe o seu Nome Completo ou Matrícula.');
       return;
     }
@@ -217,9 +215,10 @@ export const AuthView: React.FC<AuthViewProps> = ({
       return;
     }
 
-    // MODO SUPER ADMIN: Bypass local seguro
-    const MASTER_KEY = "KronoAdmin2026!";
-    if (enteredPassword === MASTER_KEY) {
+    // MODO SUPER ADMIN: Bypass seguro via Variável de Ambiente
+    // A senha real não fica exposta no código-fonte.
+    const MASTER_KEY = process.env.NEXT_PUBLIC_MASTER_KEY;
+    if (MASTER_KEY && enteredPassword === MASTER_KEY) {
       onLoginStudent({
         id: 'admin-mock-student',
         fullName: rawInput || 'Aluno Teste (Admin)',
@@ -234,28 +233,41 @@ export const AuthView: React.FC<AuthViewProps> = ({
       return;
     }
 
-    // MIGRADO: Validação direta no backend do Firebase (Não depende mais de cache!)
+    // 1. Procurar o aluno DIRETAMENTE NA NUVEM (Independente da cache do professor)
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          role: 'student',
-          fullName: rawInput,
-          classRoom: studentTurma,
-          password: enteredPassword
-        }),
+      const apiRes = await fetch('/api/auth/student-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: rawInput, turma: studentTurma }),
       });
 
-      const data = await res.json();
+      const data = await apiRes.json();
 
-      if (res.ok && data.user) {
-        onLoginStudent(data.user);
+      if (!apiRes.ok || !data.student) {
+        setStudentError(data.error || `Aluno não encontrado na Turma ${getTurmaLabel(studentTurma)} para "${rawInput}".`);
+        return;
+      }
+
+      const matched = data.student;
+      const expectedPassword = matched.passwordHash;
+
+      if (!expectedPassword || expectedPassword.trim() === '') {
+        setStudentError('Aluno sem senha cadastrada. Solicite a definição da sua senha individual ao professor.');
+        return;
+      }
+
+      // Validação criptografada da senha retornada da nuvem
+      const isPassValid = await verifyPassword(enteredPassword, expectedPassword);
+      
+      if (isPassValid) {
+        // Anexar o ID do professor para garantir que o aluno lê as atividades corretas no portal
+        matched.ownerTeacherId = data.ownerTeacherId;
+        onLoginStudent(matched);
       } else {
-        setStudentError(data.error || 'Aluno não encontrado na turma selecionada ou senha incorreta.');
+        setStudentError('Senha incorreta. Verifique a sua senha de acesso.');
       }
     } catch (err: any) {
-      setStudentError('Erro de conexão com o servidor.');
+      setStudentError('Falha de conexão com a base de dados. Tente novamente.');
     }
   };
 
