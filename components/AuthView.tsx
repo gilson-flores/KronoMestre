@@ -324,7 +324,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           <div className="w-14 h-14 sm:w-16 sm:h-16 bg-[#171f33] border-2 border-primary rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4 text-primary shadow-lg shadow-[#4ade80]/10">
             <BookOpen className="w-7 h-7 sm:w-8 sm:h-8" />
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Sociologia On-line</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">KronoMestre</h1>
           <p className="text-xs sm:text-sm text-muted mt-1">Acesso ao portal escolar</p>
         </div>
 
