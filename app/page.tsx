@@ -479,348 +479,49 @@ export default function Home() {
     showGlobalStatus('success', 'Arquivo removido da biblioteca.');
   };
 
-  // Carregar dados iniciais do Supabase se configurado
+  // Carregar dados iniciais do Firestore (Arquitetura Multi-Tenant)
   useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) return;
-    const client = supabase;
-
     const loadData = async () => {
       setIsDataLoading(true);
       setDataLoadError(false);
       try {
-        // 0. Carregar Dados do Professor
-        const { data: authUser } = await client.auth.getUser();
-        const activeEmail = authUser?.user?.email || teacher.email;
-
-        if (activeEmail) {
-          const { data: teacherRow, error: teacherErr } = await client
-            .from('teachers')
-            .select('*')
-            .eq('email', activeEmail)
-            .maybeSingle();
-
-          if (teacherErr) {
-            console.error('Erro ao buscar professor no Supabase:', teacherErr.message);
-          } else if (teacherRow) {
-            setTeacher((prev) => ({
-              id: teacherRow.id,
-              name: teacherRow.name,
-              subject: teacherRow.subject || 'Sociologia',
-              email: teacherRow.email,
-              avatarUrl: teacherRow.avatar_url || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
-              phone: teacherRow.phone || '',
-              school: teacherRow.school || '',
-              driveFolderUrl: teacherRow.drive_folder_url || prev.driveFolderUrl || '',
-              matriculaFuncional: teacherRow.matricula_funcional || prev.matriculaFuncional || '',
-              contractStartDate: teacherRow.contract_start_date || prev.contractStartDate || '',
-              contractEndDate: teacherRow.contract_end_date || prev.contractEndDate || '',
-              contractType: teacherRow.contract_type || prev.contractType || 'ACT / Contratado',
-              contractStatus: teacherRow.contract_status || prev.contractStatus || 'ativo',
-            }));
-          }
-        }
-
-        // 1. Carregar Alunos do Supabase
-        const { data: dbStudents, error: stuError } = await client.from('students').select('*');
-        if (stuError) {
-          if (!stuError.message?.includes('API key')) {
-            console.error('Erro ao buscar estudantes no Supabase:', stuError);
-            setDataLoadError(true);
-          }
-        }
-        if (dbStudents && dbStudents.length > 0) {
-          // Ler cache local para preservar vínculos que possam não ter colunas no Supabase
-          const localMap: Record<string, StudentUser> = {};
-          if (typeof window !== 'undefined') {
-            try {
-              const saved = getScopedLocalStorageItem('local_students_data', teacher.id);
-              if (saved) {
-                const parsed: StudentUser[] = JSON.parse(saved);
-                parsed.forEach((s) => {
-                  if (s.id) localMap[s.id] = s;
-                  if (s.matricula) localMap[s.matricula] = s;
-                });
-              }
-            } catch (e) {
-              console.warn('Erro ao ler cache local de estudantes:', e);
-            }
-          }
-
-          const mappedStudents: StudentUser[] = dbStudents.map((s) => {
-            let parsedPneConditions: string[] | undefined = undefined;
-            if (s.pne_conditions) {
-              if (Array.isArray(s.pne_conditions)) {
-                parsedPneConditions = s.pne_conditions;
-              } else if (typeof s.pne_conditions === 'string') {
-                try {
-                  const parsed = JSON.parse(s.pne_conditions);
-                  parsedPneConditions = Array.isArray(parsed) ? parsed : [s.pne_conditions];
-                } catch {
-                  parsedPneConditions = s.pne_conditions.split(',').map((c: string) => c.trim()).filter(Boolean);
-                }
-              }
-            }
-
-            const localMatch = localMap[s.id] || (s.matricula ? localMap[s.matricula] : undefined);
-
-            const finalPneConditions = (parsedPneConditions && parsedPneConditions.length > 0)
-              ? parsedPneConditions
-              : (localMatch?.pneConditions || undefined);
-
-            const finalSecondTeacherId = s.second_teacher_id || localMatch?.secondTeacherId || undefined;
-            const finalSecondTeacherName = s.second_teacher_name || localMatch?.secondTeacherName || undefined;
-
-            return {
-              id: s.id,
-              fullName: s.full_name,
-              turma: s.turma,
-              matricula: s.matricula,
-              tag: s.tag,
-              pneConditions: finalPneConditions,
-              passwordHash: s.password_hash || '', // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui
-              avatarUrl:
-                s.avatar_url ||
-                'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
-              pedagogicalNotes: s.pedagogical_notes || localMatch?.pedagogicalNotes || '',
-              secondTeacherId: finalSecondTeacherId,
-              secondTeacherName: finalSecondTeacherName,
-              isArchived: Boolean(s.is_archived),
-              archivedAt: s.archived_at || undefined,
-              archivedReason: s.archived_reason || undefined,
-              archivedVinculoId: s.archived_vinculo_id || s.archivedVinculoId || undefined,
-              archivedSchool: s.archived_school || s.archivedSchool || undefined,
-            };
-          });
-
-          setStudents(mappedStudents);
-          if (typeof window !== 'undefined') {
-            try {
-              setScopedLocalStorageItem('local_students_data', JSON.stringify(mappedStudents), teacher.id);
-            } catch (e) {
-              console.warn('Erro ao atualizar cache local de estudantes:', e);
-            }
-          }
-
-          // Se há um aluno logado no momento, sincroniza seu avatar e dados com os dados frescos do Supabase
-          if (currentStudent) {
-            const matchedCurrent = mappedStudents.find(
-              (s) =>
-                s.id === currentStudent.id ||
-                (s.matricula && s.matricula === currentStudent.matricula) ||
-                (s.fullName && normalizeStudentName(s.fullName) === normalizeStudentName(currentStudent.fullName))
-            );
-            if (matchedCurrent) {
-              setCurrentStudent((prev) => (prev ? { ...prev, ...matchedCurrent } : matchedCurrent));
-              if (typeof window !== 'undefined') {
-                try {
-                  sessionStorage.setItem(
-                    'active_session',
-                    JSON.stringify({ role: 'student', studentId: matchedCurrent.id, studentData: matchedCurrent })
-                  );
-                } catch (e) {}
-              }
+        // 1. Carregar Alunos do Firestore
+        const stuRes = await fetch('/api/students');
+        if (stuRes.ok) {
+          const stuData = await stuRes.json();
+          if (Array.isArray(stuData.students) && stuData.students.length > 0) {
+            setStudents(stuData.students);
+            if (typeof window !== 'undefined') {
+              setScopedLocalStorageItem('local_students_data', JSON.stringify(stuData.students), teacher.id);
             }
           }
         }
 
-        // 2. Carregar Atividades e Entregas do Supabase
-        const { data: dbActivities, error: actError } = await client.from('activities').select('*');
-        const { data: dbSubmissions, error: subError } = await client.from('submissions').select('*');
-
-        if (actError) {
-          if (!actError.message?.includes('API key')) {
-            console.error('Erro ao buscar atividades no Supabase:', actError);
-            setDataLoadError(true);
-          }
-        }
-        if (subError) {
-          if (!subError.message?.includes('API key')) {
-            console.error('Erro ao buscar entregas no Supabase:', subError);
-            setDataLoadError(true);
-          }
-        }
-
-        // Ler cache local de atividades para preservação de seleção de PNE caso o banco ainda esteja migrando
-        let localActivitiesMap: { [id: string]: Activity } = {};
-        if (typeof window !== 'undefined') {
-          try {
-            const cachedActs = getScopedLocalStorageItem('local_activities_data', teacher.id);
-            if (cachedActs) {
-              const parsedActs: Activity[] = JSON.parse(cachedActs);
-              if (Array.isArray(parsedActs)) {
-                parsedActs.forEach((a) => {
-                  if (a.id) localActivitiesMap[a.id] = a;
-                });
-              }
-            }
-          } catch (e) {}
-        }
-
-        if (dbActivities && dbActivities.length > 0) {
-          const mappedActivities: Activity[] = dbActivities.map((act) => {
-            let parsedQuestions = [];
-            if (act.questions) {
-              if (typeof act.questions === 'string') {
-                try {
-                  parsedQuestions = JSON.parse(act.questions);
-                } catch {
-                  parsedQuestions = [];
-                }
-              } else if (Array.isArray(act.questions)) {
-                parsedQuestions = act.questions;
-              }
-            }
-
-            // Parse robusto de included_pne_student_ids
-            let parsedIncludedPneIds: string[] = [];
-            if (act.included_pne_student_ids) {
-              if (Array.isArray(act.included_pne_student_ids)) {
-                parsedIncludedPneIds = act.included_pne_student_ids;
-              } else if (typeof act.included_pne_student_ids === 'string') {
-                try {
-                  const parsed = JSON.parse(act.included_pne_student_ids);
-                  parsedIncludedPneIds = Array.isArray(parsed) ? parsed : [act.included_pne_student_ids];
-                } catch {
-                  parsedIncludedPneIds = act.included_pne_student_ids
-                    .split(',')
-                    .map((s: string) => s.trim())
-                    .filter(Boolean);
-                }
-              }
-            }
-
-            const localAct = localActivitiesMap[act.id];
-            const finalIncludedPneIds =
-              parsedIncludedPneIds && parsedIncludedPneIds.length > 0
-                ? parsedIncludedPneIds
-                : localAct?.includedPneStudentIds || [];
-
-            const actMaxGrade = act.max_grade ? Number(act.max_grade) : (act.maxGrade || 10);
-            const distribution = getActivityGradeDistribution({
-              maxGrade: actMaxGrade,
-              type: act.type,
-              questions: parsedQuestions,
-            });
-
-            const subs = (dbSubmissions || [])
-              .filter((sub) => sub.activity_id === act.id)
-              .map((sub) => ({
-                studentId: sub.student_id,
-                studentName: sub.student_name,
-                matricula: sub.matricula,
-                tag: sub.tag,
-                avatarUrl: sub.avatar_url,
-                objectiveScore: Number(sub.objective_score || 0),
-                maxObjectiveScore: sub.max_objective_score !== undefined && sub.max_objective_score !== null
-                  ? Number(sub.max_objective_score)
-                  : distribution.maxObjectiveGrade,
-                essayScore:
-                  sub.essay_score !== null && sub.essay_score !== undefined
-                    ? Number(sub.essay_score)
-                    : undefined,
-                maxEssayScore: sub.max_essay_score !== undefined && sub.max_essay_score !== null
-                  ? Number(sub.max_essay_score)
-                  : distribution.maxEssayGrade,
-                status: sub.status,
-                essayAnswer: sub.essay_answer,
-                teacherFeedback: sub.teacher_feedback,
-                extraPoints: Number(sub.extra_points || 0),
-                registeredInStateSystem: Boolean(sub.registered_in_state_system),
-                groupMembers: sub.group_members,
-                returnCount: Number(sub.return_count || 0),
-              }));
-
-            return {
-              id: act.id,
-              title: act.title,
-              subject: act.subject || 'Sociologia',
-              description: act.description || '',
-              supportMaterial: act.support_material || act.supportMaterial || '',
-              turma: act.turma || '',
-              type: act.type || 'Avaliação',
-              status: act.status || 'Ativo',
-              deadline: act.deadline || '',
-              maxGrade: act.max_grade ? Number(act.max_grade) : (act.maxGrade || 10),
-              allowGroupWork: act.allow_group_work !== undefined && act.allow_group_work !== null ? Boolean(act.allow_group_work) : Boolean(act.allowGroupWork),
-              securityFocusLock: act.security_focus_lock !== undefined && act.security_focus_lock !== null ? Boolean(act.security_focus_lock) : Boolean(act.securityFocusLock),
-              securityBlockCopyStatement: act.security_block_copy_statement !== undefined && act.security_block_copy_statement !== null ? Boolean(act.security_block_copy_statement) : Boolean(act.securityBlockCopyStatement),
-              securityBlockPasteEssay: act.security_block_paste_essay !== undefined && act.security_block_paste_essay !== null ? Boolean(act.security_block_paste_essay) : Boolean(act.securityBlockPasteEssay),
-              includedPneStudentIds: finalIncludedPneIds,
-              isAdapted: Boolean(act.is_adapted || act.isAdapted || act.title?.startsWith('[PNE Leve/Mod]') || act.title?.startsWith('[PNE Lúdica]') || act.title?.startsWith('[Adaptada PNE]')),
-              adaptationType: act.adaptation_type || act.adaptationType || (act.title?.startsWith('[PNE Lúdica]') ? 'severe_playful' : ((act.title?.startsWith('[PNE Leve/Mod]') || act.title?.startsWith('[Adaptada PNE]')) ? 'mild_moderate' : undefined)),
-              playfulGameHtml: act.playful_game_html || act.playfulGameHtml || undefined,
-              adaptedFromId: act.adapted_from_id || act.adaptedFromId || undefined,
-              isRecovery: Boolean(act.is_recovery || act.isRecovery || act.title?.startsWith('[Recuperação Paralela]') || act.title?.startsWith('[Recuperação]')),
-              recoveryFromId: act.recovery_from_id || act.recoveryFromId || undefined,
-              recoveryApproach: act.recovery_approach || act.recoveryApproach || undefined,
-              questions: parsedQuestions,
-              totalSubmissions: act.total_submissions || subs.length,
-              totalStudents: act.total_students || 0,
-              pendingCorrection: act.pending_correction || subs.filter((s) => s.status === 'pending').length,
-              averageGrade: act.average_grade ? Number(act.average_grade) : undefined,
-              completedDate: act.completed_date,
-              isArchived: Boolean(act.is_archived),
-              archivedAt: act.archived_at || undefined,
-              archivedReason: act.archived_reason || undefined,
-              archivedVinculoId: act.archived_vinculo_id || act.archivedVinculoId || undefined,
-              archivedSchool: act.archived_school || act.archivedSchool || undefined,
-              submissions: subs,
-            };
-          });
-          setActivities(mappedActivities);
-          if (typeof window !== 'undefined') {
-            try {
-              setScopedLocalStorageItem('local_activities_data', JSON.stringify(mappedActivities), teacher.id);
-            } catch (e) {
-              console.warn('Erro ao atualizar cache local de atividades:', e);
-            }
-          }
-        }
-
-        // 3. Carregar Mensagens do Supabase
-        const { data: dbMessages } = await client.from('chat_messages').select('*').order('created_at', { ascending: true });
-        if (dbMessages && dbMessages.length > 0) {
-          const mappedMessages: ChatMessage[] = dbMessages.map((m) => ({
-            id: m.id || `msg-${m.created_at}`,
-            threadId: m.thread_id,
-            senderId: m.sender_id,
-            senderName: m.sender_name,
-            senderRole: m.sender_role,
-            senderAvatar: m.sender_avatar,
-            recipientId: m.recipient_id,
-            recipientName: m.recipient_name,
-            content: m.content,
-            createdAt: m.created_at ? new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '',
-            read: Boolean(m.read),
-            activityId: m.activity_id,
-            activityTitle: m.activity_title,
-          }));
-          setChatMessages(mappedMessages);
-        }
-
-        // 4. Carregar Arquivos da Biblioteca via cache local inicialmente (busca no Supabase feita sob demanda ao acessar aba 'arquivos')
-        if (typeof window !== 'undefined') {
-          const savedLib = getScopedLocalStorageItem('library_files_data', teacher.id);
-          if (savedLib) {
-            try {
-              setLibrary(JSON.parse(savedLib));
-            } catch (e) {
-              console.warn(e);
+        // 2. Carregar Atividades do Firestore
+        const actRes = await fetch('/api/activities');
+        if (actRes.ok) {
+          const actData = await actRes.json();
+          if (Array.isArray(actData.activities)) {
+            setActivities(actData.activities);
+            if (typeof window !== 'undefined') {
+              setScopedLocalStorageItem('local_activities_data', JSON.stringify(actData.activities), teacher.id);
             }
           }
         }
       } catch (err: any) {
-        if (!err?.message?.includes('API key')) {
-          console.error('Erro ao carregar dados do Supabase:', err);
-          setDataLoadError(true);
-        }
+        console.error('Erro ao carregar dados do Firestore:', err);
+        setDataLoadError(true);
       } finally {
         setIsDataLoading(false);
       }
     };
 
-    loadData();
-  }, [loadDataTrigger]);
+    if (role === 'teacher' || role === 'second_teacher') {
+      loadData();
+    } else {
+      setIsDataLoading(false);
+    }
+  }, [loadDataTrigger, role, teacher.id]);
 
   // Tab efetiva para 2º Professor: garante que nunca renderize aba indevida
   const activeTeacherTab = useMemo(() => {
@@ -1411,14 +1112,11 @@ export default function Home() {
     extraPoints?: number,
     registeredInStateSystem?: boolean
   ) => {
-    if (!isSupabaseConfigured || !supabase) {
-      showGlobalStatus('error', 'ARMADILHA DE BUG DISPARADA: Supabase não configurado. Nota NÃO foi salva.');
-      return;
-    }
-
     try {
       const targetActivity = activities.find((a) => a.id === activityId);
-      const currentSub = targetActivity?.submissions.find((s) => s.studentId === studentId);
+      if (!targetActivity) return;
+
+      const currentSub = targetActivity.submissions.find((s) => s.studentId === studentId);
       const currentReturnCount = currentSub?.returnCount || 0;
 
       if (status === 'returned' && currentReturnCount >= 3) {
@@ -1427,10 +1125,7 @@ export default function Home() {
       }
 
       const newReturnCount = status === 'returned' ? currentReturnCount + 1 : currentReturnCount;
-
-      // Identify group members if this is a group submission being corrected from pending queue
       const isInitialGroupGrading = currentSub?.status === 'pending' && Boolean(currentSub?.groupMembers);
-
       const targetGroupStudentIds = new Set<string>([studentId]);
       const missingGroupMembers: StudentUser[] = [];
 
@@ -1449,194 +1144,101 @@ export default function Home() {
           );
           if (matchedSt) {
             targetGroupStudentIds.add(matchedSt.id);
-            const existsInActivity = targetActivity?.submissions.some((s) => s.studentId === matchedSt.id);
+            const existsInActivity = targetActivity.submissions.some((s) => s.studentId === matchedSt.id);
             if (!existsInActivity) {
               missingGroupMembers.push(matchedSt);
             }
           }
         });
 
-        if (targetActivity) {
-          targetActivity.submissions.forEach((s) => {
-            if (
-              s.groupMembers === currentSub.groupMembers ||
-              memberNames.some((m) => normalizeStudentName(m) === normalizeStudentName(s.studentName))
-            ) {
-              targetGroupStudentIds.add(s.studentId);
-            }
-          });
-        }
-      }
-
-      // If missing members exist, insert initial submission for them first in Supabase
-      if (isInitialGroupGrading && missingGroupMembers.length > 0) {
-        for (const memberSt of missingGroupMembers) {
-          await supabase!.from('submissions').insert({
-            activity_id: activityId,
-            student_id: memberSt.id,
-            student_name: memberSt.fullName,
-            matricula: memberSt.matricula,
-            tag: memberSt.tag,
-            avatar_url: memberSt.avatarUrl,
-            essay_answer: currentSub?.essayAnswer || '',
-            status: status,
-            essay_score: essayScore,
-            teacher_feedback: feedback,
-            objective_score: currentSub?.objectiveScore || 0,
-            max_objective_score: currentSub?.maxObjectiveScore || 0,
-            max_essay_score: currentSub?.maxEssayScore || 0,
-            selected_objective_answers: currentSub?.selectedObjectiveAnswers || {},
-            group_members: currentSub?.groupMembers || null,
-            extra_points: extraPoints || 0,
-          });
-        }
-      }
-
-      const idsToUpdate = isInitialGroupGrading ? Array.from(targetGroupStudentIds) : [studentId];
-
-      for (const tid of idsToUpdate) {
-        const updatePayload: any = {
-          essay_score: essayScore,
-          teacher_feedback: feedback,
-          status: status,
-        };
-        if (status === 'returned') updatePayload.return_count = newReturnCount;
-        if (extraPoints !== undefined) updatePayload.extra_points = extraPoints;
-        if (registeredInStateSystem !== undefined) updatePayload.registered_in_state_system = registeredInStateSystem;
-
-        const { error } = await supabase
-          .from('submissions')
-          .update(updatePayload)
-          .eq('activity_id', activityId)
-          .eq('student_id', tid);
-
-        if (error) {
-          if (error.message?.includes('return_count') || error.code === 'PGRST204') {
-            delete updatePayload.return_count;
-            await supabase
-              .from('submissions')
-              .update(updatePayload)
-              .eq('activity_id', activityId)
-              .eq('student_id', tid);
-          } else {
-            console.error(`Erro ao atualizar nota no Supabase para ${tid}:`, error);
+        targetActivity.submissions.forEach((s) => {
+          if (
+            s.groupMembers === currentSub.groupMembers ||
+            memberNames.some((m) => normalizeStudentName(m) === normalizeStudentName(s.studentName))
+          ) {
+            targetGroupStudentIds.add(s.studentId);
           }
-        }
-      }
-
-      setActivities((prev) =>
-        prev.map((act) => {
-          if (act.id !== activityId) return act;
-
-          let updatedSubmissions = [...act.submissions];
-
-          if (isInitialGroupGrading && missingGroupMembers.length > 0) {
-            missingGroupMembers.forEach((memberSt) => {
-              if (!updatedSubmissions.some((s) => s.studentId === memberSt.id)) {
-                updatedSubmissions.push({
-                  studentId: memberSt.id,
-                  studentName: memberSt.fullName,
-                  matricula: memberSt.matricula,
-                  tag: memberSt.tag,
-                  avatarUrl: memberSt.avatarUrl,
-                  submittedAt: currentSub?.submittedAt || new Date().toLocaleDateString('pt-BR'),
-                  objectiveScore: currentSub?.objectiveScore || 0,
-                  maxObjectiveScore: currentSub?.maxObjectiveScore || 0,
-                  maxEssayScore: currentSub?.maxEssayScore || 0,
-                  status: status,
-                  essayAnswer: currentSub?.essayAnswer || '',
-                  selectedObjectiveAnswers: currentSub?.selectedObjectiveAnswers || {},
-                  groupMembers: currentSub?.groupMembers || undefined,
-                  teacherFeedback: feedback,
-                  essayScore: essayScore,
-                  extraPoints: extraPoints || 0,
-                  registeredInStateSystem: registeredInStateSystem || false,
-                });
-              }
-            });
-          }
-
-          updatedSubmissions = updatedSubmissions.map((sub) => {
-            if (idsToUpdate.includes(sub.studentId)) {
-              return {
-                ...sub,
-                essayScore,
-                teacherFeedback: feedback,
-                status,
-                returnCount: status === 'returned' ? (sub.returnCount || 0) + 1 : sub.returnCount,
-                extraPoints: extraPoints !== undefined ? extraPoints : sub.extraPoints,
-                registeredInStateSystem:
-                  registeredInStateSystem !== undefined ? registeredInStateSystem : sub.registeredInStateSystem,
-              };
-            }
-            return sub;
-          });
-
-          const pendingCorrection = updatedSubmissions.filter((s) => s.status === 'pending').length;
-
-          return {
-            ...act,
-            pendingCorrection,
-            submissions: updatedSubmissions,
-          };
-        })
-      );
-
-      if (selectedActivityForGrading && selectedActivityForGrading.id === activityId) {
-        setSelectedActivityForGrading((prev) => {
-          if (!prev) return null;
-          let updatedSubmissions = [...prev.submissions];
-
-          if (isInitialGroupGrading && missingGroupMembers.length > 0) {
-            missingGroupMembers.forEach((memberSt) => {
-              if (!updatedSubmissions.some((s) => s.studentId === memberSt.id)) {
-                updatedSubmissions.push({
-                  studentId: memberSt.id,
-                  studentName: memberSt.fullName,
-                  matricula: memberSt.matricula,
-                  tag: memberSt.tag,
-                  avatarUrl: memberSt.avatarUrl,
-                  submittedAt: currentSub?.submittedAt || new Date().toLocaleDateString('pt-BR'),
-                  objectiveScore: currentSub?.objectiveScore || 0,
-                  maxObjectiveScore: currentSub?.maxObjectiveScore || 0,
-                  maxEssayScore: currentSub?.maxEssayScore || 0,
-                  status: status,
-                  essayAnswer: currentSub?.essayAnswer || '',
-                  selectedObjectiveAnswers: currentSub?.selectedObjectiveAnswers || {},
-                  groupMembers: currentSub?.groupMembers || undefined,
-                  teacherFeedback: feedback,
-                  essayScore: essayScore,
-                  extraPoints: extraPoints || 0,
-                  registeredInStateSystem: registeredInStateSystem || false,
-                });
-              }
-            });
-          }
-
-          return {
-            ...prev,
-            submissions: updatedSubmissions.map((sub) =>
-              idsToUpdate.includes(sub.studentId)
-                ? {
-                    ...sub,
-                    essayScore,
-                    teacherFeedback: feedback,
-                    status,
-                    returnCount: status === 'returned' ? (sub.returnCount || 0) + 1 : sub.returnCount,
-                    extraPoints: extraPoints !== undefined ? extraPoints : sub.extraPoints,
-                    registeredInStateSystem:
-                      registeredInStateSystem !== undefined ? registeredInStateSystem : sub.registeredInStateSystem,
-                  }
-                : sub
-            ),
-          };
         });
       }
 
-      showGlobalStatus('success', 'Nota e feedback sincronizados diretamente no Supabase com sucesso!');
+      const idsToUpdate = isInitialGroupGrading ? Array.from(targetGroupStudentIds) : [studentId];
+      let updatedSubmissions = [...targetActivity.submissions];
+
+      if (isInitialGroupGrading && missingGroupMembers.length > 0) {
+        missingGroupMembers.forEach((memberSt) => {
+          if (!updatedSubmissions.some((s) => s.studentId === memberSt.id)) {
+            updatedSubmissions.push({
+              studentId: memberSt.id,
+              studentName: memberSt.fullName,
+              matricula: memberSt.matricula,
+              tag: memberSt.tag,
+              avatarUrl: memberSt.avatarUrl,
+              submittedAt: currentSub?.submittedAt || new Date().toLocaleDateString('pt-BR'),
+              objectiveScore: currentSub?.objectiveScore || 0,
+              maxObjectiveScore: currentSub?.maxObjectiveScore || 0,
+              maxEssayScore: currentSub?.maxEssayScore || 0,
+              status: status,
+              essayAnswer: currentSub?.essayAnswer || '',
+              selectedObjectiveAnswers: currentSub?.selectedObjectiveAnswers || {},
+              groupMembers: currentSub?.groupMembers || undefined,
+              teacherFeedback: feedback,
+              essayScore: essayScore,
+              extraPoints: extraPoints || 0,
+              registeredInStateSystem: registeredInStateSystem || false,
+            });
+          }
+        });
+      }
+
+      updatedSubmissions = updatedSubmissions.map((sub) => {
+        if (idsToUpdate.includes(sub.studentId)) {
+          return {
+            ...sub,
+            essayScore,
+            teacherFeedback: feedback,
+            status,
+            returnCount: status === 'returned' ? (sub.returnCount || 0) + 1 : sub.returnCount,
+            extraPoints: extraPoints !== undefined ? extraPoints : sub.extraPoints,
+            registeredInStateSystem: registeredInStateSystem !== undefined ? registeredInStateSystem : sub.registeredInStateSystem,
+          };
+        }
+        return sub;
+      });
+
+      const pendingCorrection = updatedSubmissions.filter((s) => s.status === 'pending').length;
+      const updatedActivity: Activity = {
+        ...targetActivity,
+        pendingCorrection,
+        submissions: updatedSubmissions,
+      };
+
+      // 1. Otimismo UI
+      setActivities((prev) => {
+        const next = prev.map((act) => (act.id === activityId ? updatedActivity : act));
+        if (typeof window !== 'undefined') setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
+        return next;
+      });
+
+      if (selectedActivityForGrading?.id === activityId) {
+        setSelectedActivityForGrading(updatedActivity);
+      }
+
+      // 2. Transplante Firebase via API (PUT na rota de Atividades)
+      try {
+        const res = await fetch('/api/activities', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedActivity)
+        });
+        if (!res.ok) throw new Error('Falha ao atualizar a atividade na nuvem.');
+        showGlobalStatus('success', 'Nota e feedback sincronizados diretamente no Firebase com sucesso!');
+      } catch (err) {
+        console.warn('Erro ao atualizar nota no Firebase:', err);
+        showGlobalStatus('error', 'A nota foi registrada na tela, mas falhou ao salvar na nuvem.');
+      }
     } catch (err: any) {
-      console.error('Erro ao atualizar nota no Supabase:', err);
-      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro de conexão (${err?.message || ''})`);
+      console.error('Erro local ao calcular submissão:', err);
+      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro de execução (${err?.message || ''})`);
     }
   };
 

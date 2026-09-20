@@ -2,6 +2,34 @@ import { NextResponse } from 'next/server';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { cookies } from 'next/headers';
 
+export async function GET(request: Request) {
+  try {
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get('session')?.value;
+    
+    if (!sessionCookie) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    }
+
+    const auth = getAdminAuth();
+    const db = getAdminDb();
+
+    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true);
+    const ownerTeacherId = decodedClaims.uid;
+
+    const snapshot = await db.collection('tenants')
+      .doc(ownerTeacherId)
+      .collection('activities')
+      .get();
+
+    const activities = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return NextResponse.json({ activities });
+  } catch (error: any) {
+    console.error('Erro ao buscar atividades no Firestore:', error);
+    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const cookieStore = await cookies();
@@ -11,11 +39,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    // Chama o seu Singleton (que inicializa o Admin automaticamente)
     const auth = getAdminAuth();
     const db = getAdminDb();
 
-    // Identifica o dono do Tenant (Professor Admin)
     const decodedClaims = await auth.verifySessionCookie(sessionCookie, true);
     const ownerTeacherId = decodedClaims.uid;
 
@@ -26,7 +52,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'ID da atividade obrigatório' }, { status: 400 });
     }
 
-    // Grava no Firestore dentro do cofre isolado do professor
     await db.collection('tenants')
       .doc(ownerTeacherId)
       .collection('activities')
@@ -44,7 +69,7 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  return POST(request); // A lógica de merge:true do Firestore resolve Criação e Atualização
+  return POST(request);
 }
 
 export async function DELETE(request: Request) {

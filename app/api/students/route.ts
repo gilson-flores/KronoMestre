@@ -2,6 +2,34 @@ import { NextResponse } from 'next/server';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { cookies } from 'next/headers';
 
+export async function GET(request: Request) {
+  try {
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get('session')?.value;
+    
+    if (!sessionCookie) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    }
+
+    const auth = getAdminAuth();
+    const db = getAdminDb();
+
+    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true);
+    const ownerTeacherId = decodedClaims.uid;
+
+    const snapshot = await db.collection('tenants')
+      .doc(ownerTeacherId)
+      .collection('students')
+      .get();
+
+    const students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return NextResponse.json({ students });
+  } catch (error: any) {
+    console.error('Erro ao buscar alunos no Firestore:', error);
+    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const cookieStore = await cookies();
@@ -14,16 +42,12 @@ export async function POST(request: Request) {
     const auth = getAdminAuth();
     const db = getAdminDb();
 
-    // Identifica o dono do Tenant (Professor Admin)
     const decodedClaims = await auth.verifySessionCookie(sessionCookie, true);
     const ownerTeacherId = decodedClaims.uid;
 
     const studentData = await request.json();
-    
-    // Garante que o aluno tenha um ID válido (aproveita o existente ou gera um novo)
     const studentId = studentData.id || `STU-${Date.now()}`;
 
-    // Grava no Firestore dentro da pasta do professor (Multitenant)
     await db.collection('tenants')
       .doc(ownerTeacherId)
       .collection('students')
@@ -42,7 +66,7 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  return POST(request); // O Firestore com merge:true lida com update/insert da mesma forma
+  return POST(request);
 }
 
 export async function DELETE(request: Request) {
