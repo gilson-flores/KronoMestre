@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/auth-server';
-import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
 import { hashPasswordBcrypt } from '@/lib/crypto';
 
+export const dynamic = 'force-dynamic';
+
+/**
+ * POST /api/auth/reset-user-password
+ * Redefinição de senhas de alunos e 2º professores pelo professor titular.
+ * Operação 100% Firebase Firestore (com atualização no Firebase Auth se aplicável).
+ */
 export async function POST(req: NextRequest) {
   try {
     const session = await getSessionFromRequest(req);
@@ -18,14 +25,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: 'Apenas o Professor Titular pode redefinir senhas de alunos e 2º professores.' },
         { status: 403 }
-      );
-    }
-
-    const admin = getSupabaseAdmin();
-    if (!admin) {
-      return NextResponse.json(
-        { error: 'Serviço de banco de dados indisponível.' },
-        { status: 500 }
       );
     }
 
@@ -45,60 +44,117 @@ export async function POST(req: NextRequest) {
       : '123456';
 
     const bcryptHash = await hashPasswordBcrypt(rawPassword);
+    const db = getAdminDb();
+    const nowIso = new Date().toISOString();
+    const ownerTeacherId = session.ownerTeacherId || session.sub;
 
     if (targetType === 'student') {
-      // Atualiza o aluno garantindo isolamento de owner_teacher_id
-      const { data: updated, error } = await admin
-        .from('students')
-        .update({
-          password_hash: bcryptHash,
-          must_change_password: true, // Força troca de senha no próximo login
-        })
-        .eq('id', targetId)
-        .select('id, full_name, matricula, turma')
-        .maybeSingle();
+      let targetRef = db.collection('tenants').doc(ownerTeacherId).collection('students').doc(targetId);
+      let docSnap = await targetRef.get();
 
-      if (error || !updated) {
-        console.error('Erro ao redefinir senha do aluno:', error);
+      // Fallback de localização se o ID não estiver no caminho direto
+      if (!docSnap.exists) {
+        const querySnap = await db.collectionGroup('students').get();
+        for (const doc of querySnap.docs) {
+          if (doc.id === targetId) {
+            targetRef = doc.ref as any;
+            docSnap = doc;
+            break;
+          }
+        }
+      }
+
+      if (!docSnap.exists) {
         return NextResponse.json(
-          { error: error?.message || 'Aluno não encontrado.' },
-          { status: 500 }
+          { error: 'Aluno não encontrado no Firestore.' },
+          { status: 404 }
         );
       }
 
+      const currentData = docSnap.data() || {};
+
+      await targetRef.set(
+        {
+          passwordHash: bcryptHash,
+          mustChangePassword: true, // Força troca de senha no próximo login
+          updatedAt: nowIso,
+        },
+        { merge: true }
+      );
+
+      const fullName = currentData.fullName || currentData.full_name || currentData.name || 'Aluno';
+
       return NextResponse.json({
         success: true,
-        message: `Senha do aluno "${updated.full_name}" redefinida com sucesso. Ele deverá trocá-la no próximo acesso.`,
+        message: `Senha do aluno "${fullName}" redefinida com sucesso no Firestore. Ele deverá trocá-la no próximo acesso.`,
         tempPassword: rawPassword,
-        target: updated,
+        target: {
+          id: docSnap.id,
+          full_name: fullName,
+          matricula: currentData.matricula || '',
+          turma: currentData.turma || '',
+        },
       });
     }
 
     if (targetType === 'second_teacher') {
-      // Atualiza o 2º professor
-      const { data: updated, error } = await admin
-        .from('second_teachers')
-        .update({
-          password: bcryptHash,
-          must_change_password: true, // Força troca de senha no próximo login
-        })
-        .eq('id', targetId)
-        .select('id, name, email')
-        .maybeSingle();
+      let targetRef = db.collection('tenants').doc(ownerTeacherId).collection('second_teachers').doc(targetId);
+      let docSnap = await targetRef.get();
 
-      if (error || !updated) {
-        console.error('Erro ao redefinir senha do 2º professor:', error);
+      if (!docSnap.exists) {
+        const querySnap = await db.collectionGroup('second_teachers').get();
+        for (const doc of querySnap.docs) {
+          if (doc.id === targetId) {
+            targetRef = doc.ref as any;
+            docSnap = doc;
+            break;
+          }
+        }
+      }
+
+      if (!docSnap.exists) {
         return NextResponse.json(
-          { error: error?.message || '2º Professor não encontrado.' },
-          { status: 500 }
+          { error: '2º Professor não encontrado no Firestore.' },
+          { status: 404 }
         );
       }
 
+      const currentData = docSnap.data() || {};
+      const teacherEmail = currentData.email;
+
+      await targetRef.set(
+        {
+          passwordHash: bcryptHash,
+          mustChangePassword: true, // Força troca de senha no próximo login
+          updatedAt: nowIso,
+        },
+        { merge: true }
+      );
+
+      // Se houver usuário correspondente no Firebase Auth, sincroniza a senha
+      if (teacherEmail) {
+        try {
+          const adminAuth = getAdminAuth();
+          const authUser = await adminAuth.getUserByEmail(teacherEmail).catch(() => null);
+          if (authUser) {
+            await adminAuth.updateUser(authUser.uid, { password: rawPassword });
+          }
+        } catch (authErr) {
+          console.warn('Aviso ao sincronizar senha no Firebase Auth:', authErr);
+        }
+      }
+
+      const teacherName = currentData.name || currentData.fullName || '2º Professor';
+
       return NextResponse.json({
         success: true,
-        message: `Senha do 2º Professor "${updated.name}" redefinida com sucesso. Ele deverá trocá-la no próximo acesso.`,
+        message: `Senha do 2º Professor "${teacherName}" redefinida com sucesso no Firestore. Ele deverá trocá-la no próximo acesso.`,
         tempPassword: rawPassword,
-        target: updated,
+        target: {
+          id: docSnap.id,
+          name: teacherName,
+          email: teacherEmail || '',
+        },
       });
     }
 
@@ -109,8 +165,9 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error('Erro na rota reset-user-password:', err);
     return NextResponse.json(
-      { error: 'Erro interno ao redefinir senha.' },
+      { error: 'Erro interno ao redefinir senha no Firestore.' },
       { status: 500 }
     );
   }
 }
+

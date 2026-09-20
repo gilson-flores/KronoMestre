@@ -28,8 +28,6 @@ import {
 import { TeacherUser, StudentUser, Activity, LibraryFile, ChatMessage, AtestadoRadRecord } from '@/lib/types';
 import { formatAvatarUrl } from '@/lib/utils';
 import { getTurmaLabel } from '@/lib/studentUtils';
-import { hashPassword } from '@/lib/crypto';
-import { supabase } from '@/lib/supabase';
 import { getScopedLocalStorageItem, setScopedLocalStorageItem } from '@/lib/cacheUtils';
 import { StudentSupervisionModal } from '@/components/modals/StudentSupervisionModal';
 import { LibraryView } from '@/components/views/LibraryView';
@@ -294,31 +292,34 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
         return;
       }
       
-      const updates: any = {
-        school: profileSchool,
-        phone: profilePhone,
-      };
-      
-      if (newPassword) {
-        const hashedPass = await hashPassword(newPassword);
-        updates.password = hashedPass;
-      }
-      
-      if (supabase) {
-        const { error } = await supabase
-          .from('teachers')
-          .update(updates)
-          .eq('id', teacher.id);
-          
-        if (error) throw error;
+      const resProfile = await fetch('/api/second-teachers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: teacher.id,
+          email: teacher.email,
+          school: profileSchool,
+          phone: profilePhone,
+        }),
+      });
 
-        // Atualizar também na tabela second_teachers se for o 2º professor
-        if (teacher.email) {
-          const cleanEmail = teacher.email.trim().toLowerCase();
-          await supabase
-            .from('second_teachers')
-            .update(updates)
-            .ilike('email', cleanEmail);
+      if (!resProfile.ok) {
+        const pData = await resProfile.json().catch(() => ({}));
+        throw new Error(pData.error || 'Erro ao atualizar perfil.');
+      }
+
+      if (newPassword) {
+        const resPass = await fetch('/api/auth/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            newPassword: newPassword,
+          }),
+        });
+
+        if (!resPass.ok) {
+          const passData = await resPass.json().catch(() => ({}));
+          throw new Error(passData.error || 'Erro ao atualizar a senha.');
         }
       }
       

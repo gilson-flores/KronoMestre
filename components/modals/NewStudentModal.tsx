@@ -38,24 +38,24 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     const fetchSecondTeachers = async () => {
-      if (!supabase) return;
       try {
-        const { data } = await supabase
-          .from('second_teachers')
-          .select('id, name, email, subject, avatar_url, phone, school')
-          .order('name');
-        if (data) {
-          setAvailableSecondTeachers(
-            data.map((d) => ({
-              id: d.id,
-              name: d.name,
-              subject: d.subject || 'AEE / Inclusão Escolar',
-              email: d.email,
-              avatarUrl: d.avatar_url || '',
-              phone: d.phone,
-              school: d.school,
-            }))
-          );
+        const res = await fetch('/api/second-teachers');
+        if (res.ok) {
+          const resData = await res.json();
+          const list = resData.secondTeachers || resData.data || [];
+          if (Array.isArray(list)) {
+            setAvailableSecondTeachers(
+              list.map((d: any) => ({
+                id: d.id,
+                name: d.name,
+                subject: d.subject || 'AEE / Inclusão Escolar',
+                email: d.email,
+                avatarUrl: d.avatarUrl || d.avatar_url || '',
+                phone: d.phone,
+                school: d.school,
+              }))
+            );
+          }
         }
       } catch (err) {
         console.warn('Erro ao carregar lista de 2º professores:', err);

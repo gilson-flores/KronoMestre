@@ -17,6 +17,11 @@ export interface TeacherUser {
   mustChangePassword?: boolean;
   ownerTeacherId?: string;
   owner_teacher_id?: string;
+  is_admin?: boolean;
+  isAdmin?: boolean;
+  plan_type?: 'basic' | 'pro' | 'unlimited' | string;
+  escolas_vinculadas?: string[];
+  disciplinas?: string[];
 }
 
 export interface StudentUser {

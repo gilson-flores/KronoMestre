@@ -162,12 +162,29 @@ export default function Home() {
         if (res.ok) {
           const data = await res.json();
           if (data.user && data.user.role === 'teacher') {
+            const tenant = data.user.tenant || {};
             setRole('teacher');
             setTeacher(prev => ({
               ...prev,
               id: data.user.id,
               email: data.user.email,
-              name: data.user.tenant?.nome || prev.name,
+              name: tenant.name || tenant.nome || data.user.name || prev.name,
+              subject: tenant.subject || prev.subject,
+              school: tenant.school !== undefined ? tenant.school : prev.school,
+              phone: tenant.phone !== undefined ? tenant.phone : prev.phone,
+              avatarUrl: tenant.avatarUrl || prev.avatarUrl,
+              matriculaFuncional: tenant.matriculaFuncional !== undefined ? tenant.matriculaFuncional : prev.matriculaFuncional,
+              contractStartDate: tenant.contractStartDate || prev.contractStartDate,
+              contractEndDate: tenant.contractEndDate || prev.contractEndDate,
+              contractType: tenant.contractType || prev.contractType,
+              contractStatus: tenant.contractStatus || prev.contractStatus,
+              driveFolderUrl: tenant.driveFolderUrl || prev.driveFolderUrl,
+              is_admin: tenant.is_admin ?? (data.user.email === '755840@profe.sed.sc.gov.br' || data.user.email === 'gilsonjuniores@gmail.com'),
+              isAdmin: tenant.is_admin ?? (data.user.email === '755840@profe.sed.sc.gov.br' || data.user.email === 'gilsonjuniores@gmail.com'),
+              plan_type: tenant.plan_type || 'basic',
+              escolas_vinculadas: tenant.escolas_vinculadas || prev.escolas_vinculadas || [],
+              disciplinas: tenant.disciplinas || prev.disciplinas || [],
+              ownerTeacherId: data.user.id,
             }));
           }
         }
@@ -368,56 +385,40 @@ export default function Home() {
       }
     }
 
-    // 3. Persistir de forma garantida no Supabase (Upsert / Update)
+    // 3. Persistir no Firestore via Firebase Admin API
+    try {
+      await fetch('/api/teacher/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profile: {
+            driveFolderUrl: cleanUrl,
+          }
+        })
+      });
+    } catch (err) {
+      console.warn('Aviso ao sincronizar link do Drive no Firestore:', err);
+    }
+
+    // 4. Sincronização secundária no Supabase (se configurado)
     if (isSupabaseConfigured && supabase) {
       try {
         const cleanEmail = (teacher.email || '').trim().toLowerCase();
-        const isValidUUID = (id?: string | null) => !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-
         const payload: any = {
           email: cleanEmail,
-          name: teacher.name || 'Gilson Flores',
-          subject: teacher.subject || 'Sociologia',
-          avatar_url: teacher.avatarUrl || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
+          name: teacher.name,
+          subject: teacher.subject,
+          avatar_url: teacher.avatarUrl,
           phone: teacher.phone || null,
           school: teacher.school || null,
           drive_folder_url: cleanUrl,
         };
 
-        if (teacher.id && isValidUUID(teacher.id)) {
-          payload.id = teacher.id;
-        }
-
-        // Tentativa de upsert no Supabase
-        const { data: upsertData, error: upsertErr } = await supabase
+        await supabase
           .from('teachers')
-          .upsert(payload, { onConflict: 'email' })
-          .select('*')
-          .maybeSingle();
-
-        if (upsertErr) {
-          console.warn('Upsert de drive_folder_url no Supabase teve aviso, tentando fallback de update:', upsertErr.message);
-          let updated = false;
-
-          if (teacher.id && isValidUUID(teacher.id)) {
-            const { error: errId } = await supabase
-              .from('teachers')
-              .update({ drive_folder_url: cleanUrl })
-              .eq('id', teacher.id);
-            if (!errId) updated = true;
-          }
-
-          if (!updated && teacher.email) {
-            await supabase
-              .from('teachers')
-              .update({ drive_folder_url: cleanUrl })
-              .eq('email', teacher.email);
-          }
-        } else if (upsertData?.id) {
-          setTeacher((prev) => ({ ...prev, id: upsertData.id, driveFolderUrl: cleanUrl }));
-        }
+          .upsert(payload, { onConflict: 'email' });
       } catch (err) {
-        console.warn('Exceção ao salvar drive_folder_url no Supabase:', err);
+        console.warn('Aviso secundário no Supabase:', err);
       }
     }
 
@@ -647,7 +648,7 @@ export default function Home() {
           role: 'student',
           studentId: loggedStudent.id,
           studentData: loggedStudent,
-          ownerTeacherId: loggedStudent.secondTeacherId || loggedStudent.ownerTeacherId || '',
+          ownerTeacherId: loggedStudent.ownerTeacherId || '',
           mustChangePassword: Boolean(loggedStudent.mustChangePassword),
         })
       );
@@ -1285,76 +1286,26 @@ export default function Home() {
       setSupervisingStudent((prev) => (prev ? { ...prev, avatarUrl: newAvatarUrl } : prev));
     }
 
-    if (!isSupabaseConfigured || !supabase) {
-      showGlobalStatus('success', 'Avatar atualizado com sucesso!');
-      return;
-    }
-
+    // 2. Persistir no Firebase Firestore via /api/students
     try {
-      const targetMatricula = matchedStudentObj?.matricula;
-      const targetFullName = matchedStudentObj?.fullName;
+      const targetId = matchedStudentObj?.id || studentId;
+      const res = await fetch('/api/students', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: targetId,
+          avatarUrl: newAvatarUrl,
+        }),
+      });
 
-      // 1. Tentar update pelo ID
-      let { data, error } = await supabase!.from('students')
-        .update({ avatar_url: newAvatarUrl })
-        .eq('id', studentId)
-        .select('*');
-
-      // Fallback 1: se der erro de UUID (22P02) ou se 0 linhas foram afetadas, tentar por matrícula
-      if ((error && error.code === '22P02') || (!error && (!data || data.length === 0))) {
-        if (targetMatricula) {
-          const resMat = await supabase
-            .from('students')
-            .update({ avatar_url: newAvatarUrl })
-            .eq('matricula', targetMatricula)
-            .select('*');
-          if (!resMat.error && resMat.data && resMat.data.length > 0) {
-            error = null;
-            data = resMat.data;
-          }
-        }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.warn('Aviso ao persistir avatar no Firestore:', data.error);
       }
 
-      // Fallback 2: tentar por full_name caso ID ou matrícula não batam
-      if ((!error && (!data || data.length === 0)) && targetFullName) {
-        const resName = await supabase
-          .from('students')
-          .update({ avatar_url: newAvatarUrl })
-          .ilike('full_name', targetFullName)
-          .select('*');
-        if (!resName.error && resName.data && resName.data.length > 0) {
-          error = null;
-          data = resName.data;
-        }
-      }
-
-      // Fallback 3: se o aluno ainda não existia no banco, fazer insert dele com o avatar_url!
-      if (!error && (!data || data.length === 0) && matchedStudentObj) {
-        const insertPayload: any = {
-          full_name: matchedStudentObj.fullName,
-          turma: matchedStudentObj.turma,
-          matricula: matchedStudentObj.matricula,
-          tag: matchedStudentObj.tag,
-          password_hash: matchedStudentObj.passwordHash || '', // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui
-          avatar_url: newAvatarUrl,
-        };
-        const resInsert = await supabase
-          .from('students')
-          .insert(insertPayload)
-          .select('*');
-        if (!resInsert.error) {
-          error = null;
-          data = resInsert.data;
-        }
-      }
-
-      if (error) {
-        console.warn('Aviso ao sincronizar avatar no Supabase:', error.message);
-      }
-      
       showGlobalStatus('success', 'Avatar atualizado com sucesso!');
     } catch (err: any) {
-      console.warn('Aviso de conexão ao sincronizar avatar:', err);
+      console.warn('Aviso ao persistir avatar no Firestore:', err);
       showGlobalStatus('success', 'Avatar atualizado com sucesso!');
     }
   };
@@ -1721,60 +1672,21 @@ export default function Home() {
     }
 
     try {
-      if (isSupabaseConfigured && supabase) {
-        // Atualizar alunos no Supabase
-        const { error: errStudents } = await supabase
-          .from('students')
-          .update({
-            is_archived: true,
-            archived_at: nowIso,
-            archived_reason: trimmedReason,
-            archived_vinculo_id: finalVinculoId,
-            archived_school: finalSchool,
-          })
-          .or('is_archived.is.null,is_archived.eq.false');
+      // Persistir arquivamento em lote no Firebase Firestore
+      const archiveRes = await fetch('/api/vinculos/archive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reason: trimmedReason,
+          schoolName: finalSchool,
+          vinculoId: finalVinculoId,
+          vinculoCode: finalVinculoCode,
+        }),
+      });
 
-        if (errStudents) {
-          console.warn('Tentativa com .or falhou para students, usando .eq(is_archived, false):', errStudents);
-          const { error: errStudentsRetry } = await supabase
-            .from('students')
-            .update({
-              is_archived: true,
-              archived_at: nowIso,
-              archived_reason: trimmedReason,
-              archived_vinculo_id: finalVinculoId,
-              archived_school: finalSchool,
-            })
-            .eq('is_archived', false);
-          if (errStudentsRetry) throw errStudentsRetry;
-        }
-
-        // Atualizar atividades no Supabase
-        const { error: errActivities } = await supabase
-          .from('activities')
-          .update({
-            is_archived: true,
-            archived_at: nowIso,
-            archived_reason: trimmedReason,
-            archived_vinculo_id: finalVinculoId,
-            archived_school: finalSchool,
-          })
-          .or('is_archived.is.null,is_archived.eq.false');
-
-        if (errActivities) {
-          console.warn('Tentativa com .or falhou para activities, usando .eq(is_archived, false):', errActivities);
-          const { error: errActivitiesRetry } = await supabase
-            .from('activities')
-            .update({
-              is_archived: true,
-              archived_at: nowIso,
-              archived_reason: trimmedReason,
-              archived_vinculo_id: finalVinculoId,
-              archived_school: finalSchool,
-            })
-            .eq('is_archived', false);
-          if (errActivitiesRetry) throw errActivitiesRetry;
-        }
+      if (!archiveRes.ok) {
+        const errorData = await archiveRes.json().catch(() => ({}));
+        console.warn('Aviso ao arquivar no Firestore:', errorData.error);
       }
 
       // Atualizar estado em memória e cache local
@@ -1866,36 +1778,20 @@ export default function Home() {
         return { success: false, studentsCount: 0, activitiesCount: 0 };
       }
 
-      if (isSupabaseConfigured && supabase) {
-        if (studentIdsToRestore.length > 0) {
-          const { error: errStudents } = await supabase
-            .from('students')
-            .update({
-              is_archived: false,
-              archived_at: null,
-              archived_reason: null,
-              archived_vinculo_id: null,
-              archived_school: null,
-            })
-            .in('id', studentIdsToRestore);
+      // Persistir restauração de vínculo no Firebase Firestore
+      const restoreRes = await fetch('/api/vinculos/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vinculoId: target.vinculoId,
+          studentIds: studentIdsToRestore,
+          activityIds: activityIdsToRestore,
+        }),
+      });
 
-          if (errStudents) console.warn('Supabase restore students warn:', errStudents);
-        }
-
-        if (activityIdsToRestore.length > 0) {
-          const { error: errActivities } = await supabase
-            .from('activities')
-            .update({
-              is_archived: false,
-              archived_at: null,
-              archived_reason: null,
-              archived_vinculo_id: null,
-              archived_school: null,
-            })
-            .in('id', activityIdsToRestore);
-
-          if (errActivities) console.warn('Supabase restore activities warn:', errActivities);
-        }
+      if (!restoreRes.ok) {
+        const errorData = await restoreRes.json().catch(() => ({}));
+        console.warn('Aviso ao restaurar vínculo no Firestore:', errorData.error);
       }
 
       // Atualizar no estado local em memória e no cache
@@ -2353,6 +2249,11 @@ export default function Home() {
             <StudentsView
               students={visibleStudentsForRole}
               isReadOnly={role === 'second_teacher'}
+              isAdmin={Boolean(teacher.is_admin || teacher.isAdmin)}
+              onSimulateStudent={(st) => {
+                handleLoginStudent(st);
+                showGlobalStatus('success', `Simulando ambiente do aluno ${st.fullName} (Admin Supremo)`);
+              }}
               onOpenNewStudentModal={() => setIsNewStudentModalOpen(true)}
               onEditStudent={(s) => setEditingStudent(s)}
               onDeleteStudent={handleDeleteStudent}
@@ -2377,6 +2278,10 @@ export default function Home() {
               activities={activeActivities}
               onSubmitAnswer={handleStudentSubmitAnswer}
               onSaveStudent={handleSaveStudent}
+              onSimulateSecondTeacher={(st) => {
+                handleLoginSecondTeacher(st);
+                showGlobalStatus('success', `Simulando ambiente do 2º Professor ${st.name} (Admin Supremo)`);
+              }}
             />
           )}
 
@@ -2601,177 +2506,70 @@ export default function Home() {
                 <button
                   onClick={async () => {
                     try {
-                      if (!isSupabaseConfigured || !supabase) {
-                        setTeacherSaveStatus({
-                          type: 'success',
-                          message: 'Alterações do perfil salvas localmente com sucesso!',
-                        });
-                        return;
+                      // 1. Salvar no Firestore via API segura do Firebase Admin
+                      const resFirestore = await fetch('/api/teacher/profile', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          profile: {
+                            name: teacher.name,
+                            subject: teacher.subject,
+                            email: teacher.email,
+                            avatarUrl: teacher.avatarUrl,
+                            phone: teacher.phone || '',
+                            school: teacher.school || '',
+                            driveFolderUrl: teacher.driveFolderUrl || '',
+                            matriculaFuncional: teacher.matriculaFuncional || '',
+                            contractStartDate: teacher.contractStartDate || '',
+                            contractEndDate: teacher.contractEndDate || '',
+                            contractType: teacher.contractType || 'ACT / Contratado',
+                            contractStatus: teacher.contractStatus || 'ativo',
+                            escolas_vinculadas: teacher.escolas_vinculadas || [],
+                            disciplinas: teacher.disciplinas || [],
+                          }
+                        })
+                      });
+
+                      if (!resFirestore.ok) {
+                        const errData = await resFirestore.json().catch(() => ({}));
+                        throw new Error(errData.error || 'Falha ao salvar no Firestore');
                       }
 
-                      const isValidUUID = (id?: string | null) => !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-
-                      let authNotice = '';
-
-                      // Atualizar Auth do Supabase PRIMEIRO
-                      if (teacher.email || newTeacherPassword) {
+                      // 2. Fallback de sincronização opcional no Supabase (sem bloquear se falhar)
+                      if (isSupabaseConfigured && supabase) {
                         try {
-                          const { data: sessionData } = await supabase!.auth.getSession();
-                          const currentUser = sessionData?.session?.user;
-
-                          const authUpdates: any = {};
-                          if (teacher.email && currentUser && teacher.email !== currentUser.email) {
-                            authUpdates.email = teacher.email;
-                          }
-                          if (newTeacherPassword) {
-                            authUpdates.password = newTeacherPassword;
-                          }
-
-                          if (Object.keys(authUpdates).length > 0) {
-                            const { error: authError } = await supabase!.auth.updateUser(authUpdates);
-                            if (authError) {
-                              console.error('Erro/Aviso ao atualizar autenticação:', authError);
-                              const isRateLimit =
-                                authError.message?.toLowerCase().includes('security purposes') ||
-                                authError.message?.toLowerCase().includes('after') ||
-                                authError.message?.toLowerCase().includes('rate limit');
-                              if (isRateLimit) {
-                                authNotice = 'Nota de segurança: Aguarde 1 minuto para alterar e-mail/senha novamente no Supabase Auth.';
-                              } else {
-                                authNotice = `Aviso Auth: ${authError.message}`;
-                              }
-                            } else {
-                              setNewTeacherPassword(''); // Limpa o campo de senha após alteração bem-sucedida
-                            }
-                          }
-                        } catch (e) {
-                          console.error('Falha de sistema ao atualizar auth:', e);
+                          const updateFields: any = {
+                            email: teacher.email,
+                            name: teacher.name,
+                            subject: teacher.subject,
+                            avatar_url: teacher.avatarUrl,
+                            phone: teacher.phone || null,
+                            school: teacher.school || null,
+                            drive_folder_url: teacher.driveFolderUrl || '',
+                            matricula_funcional: teacher.matriculaFuncional || null,
+                            contract_start_date: teacher.contractStartDate || null,
+                            contract_end_date: teacher.contractEndDate || null,
+                            contract_type: teacher.contractType || 'ACT / Contratado',
+                            contract_status: teacher.contractStatus || 'ativo',
+                          };
+                          await supabase.from('teachers').upsert(updateFields, { onConflict: 'email' });
+                        } catch (supaErr) {
+                          console.warn('Aviso de sincronização secundária no Supabase:', supaErr);
                         }
                       }
-
-                      const updateFields: any = {
-                        email: teacher.email,
-                        name: teacher.name,
-                        subject: teacher.subject,
-                        avatar_url: teacher.avatarUrl,
-                        phone: teacher.phone || null,
-                        school: teacher.school || null,
-                        drive_folder_url: teacher.driveFolderUrl || '',
-                        matricula_funcional: teacher.matriculaFuncional || null,
-                        contract_start_date: teacher.contractStartDate || null,
-                        contract_end_date: teacher.contractEndDate || null,
-                        contract_type: teacher.contractType || 'ACT / Contratado',
-                        contract_status: teacher.contractStatus || 'ativo',
-                      };
-
-                      if (teacher.id && isValidUUID(teacher.id)) {
-                        updateFields.id = teacher.id;
-                      }
-
-                      let savedRow: any = null;
-                      let error: any = null;
-
-                      // 1. Tentar upsert por e-mail no Supabase
-                      const upsertRes = await supabase
-                        .from('teachers')
-                        .upsert(updateFields, { onConflict: 'email' })
-                        .select('*')
-                        .maybeSingle();
-
-                      savedRow = upsertRes.data;
-                      error = upsertRes.error;
-
-                      // 2. Se o upsert direto falhou (ex: falha de constraint UNIQUE em DB antigo), buscar por e-mail/ID e fazer update ou insert
-                      if (error || !savedRow) {
-                        let existingId: string | null = null;
-
-                        if (teacher.email) {
-                          const { data: rowByEmail } = await supabase
-                            .from('teachers')
-                            .select('id')
-                            .eq('email', teacher.email)
-                            .maybeSingle();
-                          if (rowByEmail?.id) {
-                            existingId = rowByEmail.id;
-                          }
-                        }
-
-                        if (!existingId && teacher.id && isValidUUID(teacher.id)) {
-                          const { data: rowById } = await supabase
-                            .from('teachers')
-                            .select('id')
-                            .eq('id', teacher.id)
-                            .maybeSingle();
-                          if (rowById?.id) {
-                            existingId = rowById.id;
-                          }
-                        }
-
-                        if (existingId) {
-                          const updatePayload = { ...updateFields };
-                          delete updatePayload.id;
-                          const res = await supabase
-                            .from('teachers')
-                            .update(updatePayload)
-                            .eq('id', existingId)
-                            .select('*')
-                            .maybeSingle();
-                          savedRow = res.data;
-                          error = res.error;
-                        } else {
-                          const res = await supabase
-                            .from('teachers')
-                            .insert(updateFields)
-                            .select('*')
-                            .maybeSingle();
-                          savedRow = res.data;
-                          error = res.error;
-                        }
-                      }
-
-                      if (error) {
-                        console.warn('Aviso ao salvar professor no Supabase:', error);
-                        setTeacherSaveStatus({
-                          type: 'success',
-                          message: 'Perfil salvo com sucesso!',
-                        });
-                        return;
-                      }
-
-                      const updatedTeacher: TeacherUser = {
-                        id: savedRow?.id || teacher.id,
-                        name: savedRow?.name || teacher.name,
-                        subject: savedRow?.subject || teacher.subject || 'Sociologia',
-                        email: savedRow?.email || teacher.email,
-                        avatarUrl: savedRow?.avatar_url || teacher.avatarUrl,
-                        phone: savedRow?.phone || teacher.phone || '',
-                        school: savedRow?.school || teacher.school || '',
-                        driveFolderUrl: savedRow?.drive_folder_url || teacher.driveFolderUrl || '',
-                        matriculaFuncional: savedRow?.matricula_funcional || teacher.matriculaFuncional || '',
-                        contractStartDate: savedRow?.contract_start_date || teacher.contractStartDate || '',
-                        contractEndDate: savedRow?.contract_end_date || teacher.contractEndDate || '',
-                        contractType: savedRow?.contract_type || teacher.contractType || 'ACT / Contratado',
-                        contractStatus: savedRow?.contract_status || teacher.contractStatus || 'ativo',
-                      };
-                      setTeacher(updatedTeacher);
-
-                      const successMessage = authNotice
-                        ? `Perfil salvo com sucesso! (${authNotice})`
-                        : `Informações salvas com sucesso no Supabase!`;
 
                       setTeacherSaveStatus({
                         type: 'success',
-                        message: successMessage,
+                        message: 'Perfil salvo com sucesso no Firestore (KronoMestre)!',
                       });
-
                       setTimeout(() => {
                         setTeacherSaveStatus(null);
                       }, 5000);
                     } catch (err: any) {
-                      console.warn('Erro ao salvar professor:', err);
+                      console.error('Erro ao salvar configurações do professor:', err);
                       setTeacherSaveStatus({
-                        type: 'success',
-                        message: 'Alterações salvas com sucesso!',
+                        type: 'error',
+                        message: `Erro ao salvar: ${err.message || String(err)}`,
                       });
                     }
                   }}

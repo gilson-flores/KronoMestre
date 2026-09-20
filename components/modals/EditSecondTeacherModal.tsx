@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Pencil, HeartHandshake, CheckCircle2, AlertTriangle, Save } from 'lucide-react';
 import { TeacherUser } from '@/lib/types';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { getScopedLocalStorageItem, setScopedLocalStorageItem } from '@/lib/cacheUtils';
 
 interface EditSecondTeacherModalProps {
@@ -78,19 +77,8 @@ export const EditSecondTeacherModal: React.FC<EditSecondTeacherModalProps> = ({
       });
 
       if (!res.ok) {
-        // Fallback direto via Supabase client se API falhar
-        if (isSupabaseConfigured && supabase) {
-          const { error: sbErr } = await supabase
-            .from('second_teachers')
-            .update({
-              name: updatedTeacher.name,
-              subject: updatedTeacher.subject,
-              phone: updatedTeacher.phone,
-              school: updatedTeacher.school,
-            })
-            .eq('id', teacherToEdit.id);
-          if (sbErr) console.warn('Supabase fallback warning:', sbErr);
-        }
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Erro ao atualizar dados do professor');
       }
 
       // 2. Atualizar cache local

@@ -3,8 +3,6 @@
 import React, { useState } from 'react';
 import { X, UserPlus, HeartHandshake, CheckCircle2, AlertTriangle, Lock } from 'lucide-react';
 import { TeacherUser } from '@/lib/types';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { hashPasswordBcrypt } from '@/lib/crypto';
 import { getScopedLocalStorageItem, setScopedLocalStorageItem } from '@/lib/cacheUtils';
 
 interface NewSecondTeacherModalProps {
@@ -55,7 +53,26 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      const newTeacher: TeacherUser = {
+      const res = await fetch('/api/second-teachers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          password: password.trim(),
+          subject: subject.trim() || 'AEE / Inclusão Escolar',
+          phone: phone.trim(),
+          school: school.trim() || defaultSchool,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Erro ao cadastrar professor');
+      }
+
+      const resData = await res.json();
+      const newTeacher: TeacherUser = resData.teacher || {
         id: `teacher-${Date.now()}`,
         name: name.trim(),
         subject: subject.trim() || 'AEE / Inclusão Escolar',
@@ -64,52 +81,6 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
         phone: phone.trim(),
         school: school.trim() || defaultSchool,
       };
-
-      if (isSupabaseConfigured && supabase) {
-        // 1. Tentar criar conta no Supabase Auth
-        try {
-          await supabase.auth.signUp({
-            email: newTeacher.email,
-            password: password,
-            options: {
-              data: {
-                full_name: newTeacher.name,
-                role: 'second_teacher',
-              },
-            },
-          });
-        } catch (authErr) {
-          console.warn('Supabase Auth signUp opcional:', authErr);
-        }
-
-        // 2. Inserir ou atualizar na tabela 'second_teachers' com hash Bcrypt seguro
-        const hashedPassword = await hashPasswordBcrypt(password);
-        const { data: dbTeacher, error: dbError } = await supabase
-          .from('second_teachers')
-          .upsert(
-            {
-              name: newTeacher.name,
-              subject: newTeacher.subject,
-              email: newTeacher.email,
-              password: hashedPassword,
-              must_change_password: true, // Força troca no primeiro login
-              avatar_url: newTeacher.avatarUrl,
-              phone: newTeacher.phone,
-              school: newTeacher.school,
-            },
-            { onConflict: 'email' }
-          )
-          .select('*')
-          .maybeSingle();
-
-        if (dbTeacher?.id) {
-          newTeacher.id = dbTeacher.id;
-        }
-
-        if (dbError) {
-          console.error('Erro ao salvar 2º Professor no Supabase:', dbError);
-        }
-      }
 
       if (typeof window !== 'undefined') {
         try {
@@ -133,7 +104,7 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
 
     } catch (err: any) {
       console.error('Erro ao cadastrar 2º Professor:', err);
-      setFormError('Falha ao cadastrar no Supabase: ' + (err.message || 'Erro de conexão'));
+      setFormError(err.message || 'Erro ao cadastrar 2º Professor');
       setIsSubmitting(false);
     }
   };

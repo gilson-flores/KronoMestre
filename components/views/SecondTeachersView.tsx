@@ -34,7 +34,6 @@ import {
   Pencil,
   Loader2
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { hashPassword } from '@/lib/crypto';
 import {
   TeacherUser,
@@ -76,6 +75,7 @@ interface SecondTeachersViewProps {
     groupMembers?: string
   ) => Promise<void> | void;
   onSaveStudent?: (updatedStudent: StudentUser) => void;
+  onSimulateSecondTeacher?: (secondTeacher: TeacherUser) => void;
 }
 
 export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
@@ -86,6 +86,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
   messages = [],
   onSubmitAnswer,
   onSaveStudent,
+  onSimulateSecondTeacher,
 }) => {
   const isSecondTeacher = currentUserRole === 'second_teacher';
   const [activeTab, setActiveTab] = useState<'atividades_alunos' | 'professores_apoio'>('atividades_alunos');
@@ -149,17 +150,18 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
     }
 
     try {
-      // 2. Tentar rota de API backend
+      // Buscar lista de 2º professores via API backend (Firebase Firestore)
       const res = await fetch('/api/second-teachers');
       if (res.ok) {
         const apiData = await res.json();
-        if (Array.isArray(apiData.teachers)) {
-          const formatted: TeacherUser[] = apiData.teachers.map((d: any) => ({
+        const list = apiData.secondTeachers || apiData.teachers || [];
+        if (Array.isArray(list)) {
+          const formatted: TeacherUser[] = list.map((d: any) => ({
             id: d.id,
             name: d.name,
             email: d.email,
             subject: d.subject || 'AEE / Inclusão Escolar',
-            avatarUrl: d.avatar_url || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250',
+            avatarUrl: d.avatarUrl || d.avatar_url || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250',
             phone: d.phone || '',
             school: d.school || '',
           }));
@@ -169,35 +171,6 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
           }
           setIsLoadingTeachers(false);
           return;
-        }
-      }
-
-      // 3. Fallback Supabase client
-      if (supabase) {
-        const { data, error } = await supabase
-          .from('second_teachers')
-          .select('*')
-          .order('name');
-
-        if (error) {
-          console.error('Erro ao buscar 2º professores:', error);
-          if (error.code === 'PGRST205') {
-            setErrorMsg('A tabela "second_teachers" não foi encontrada. Por favor, execute a migration SQL mais recente no painel do Supabase.');
-          }
-        } else if (Array.isArray(data)) {
-          const formatted: TeacherUser[] = data.map((d) => ({
-            id: d.id,
-            name: d.name,
-            email: d.email,
-            subject: d.subject || 'AEE / Inclusão Escolar',
-            avatarUrl: d.avatar_url || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250',
-            phone: d.phone || '',
-            school: d.school || '',
-          }));
-          setSecondTeachers(formatted);
-          if (typeof window !== 'undefined') {
-            setScopedLocalStorageItem('local_second_teachers_data', JSON.stringify(formatted), ownerTeacherId);
-          }
         }
       }
     } catch (err) {
@@ -258,7 +231,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
       }
     }
 
-    // 3. Desvincular alunos que estavam sob tutela desse 2º professor
+    // 3. Desvincular alunos que estavam sob tutela desse 2º professor no estado local
     if (onSaveStudent && students.length > 0) {
       students.forEach((s) => {
         if (
@@ -274,7 +247,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
       });
     }
 
-    // 4. Executar Exclusão Segura via API Backend
+    // 4. Executar Exclusão Segura via API Backend (Firebase Firestore)
     try {
       const queryParams = new URLSearchParams();
       if (teacherId) queryParams.set('id', teacherId);
@@ -285,32 +258,14 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
       });
 
       if (!res.ok) {
-        // Fallback direto via Supabase client
-        if (supabase) {
-          await supabase
-            .from('students')
-            .update({ second_teacher_id: null, second_teacher_name: null })
-            .eq('second_teacher_id', teacherId);
-          await supabase.from('second_teachers').delete().eq('id', teacherId);
-        }
+        const errData = await res.json().catch(() => ({}));
+        console.warn('Aviso ao excluir 2º professor via API:', errData.error);
       }
 
       setSuccessMsg(`Professor ${teacherName} removido com sucesso.`);
       setTimeout(() => setSuccessMsg(''), 4000);
     } catch (err: any) {
       console.error('Erro na exclusão do 2º professor:', err);
-      // Fallback direto via Supabase client se API falhar
-      if (supabase) {
-        try {
-          await supabase
-            .from('students')
-            .update({ second_teacher_id: null, second_teacher_name: null })
-            .eq('second_teacher_id', teacherId);
-          await supabase.from('second_teachers').delete().eq('id', teacherId);
-        } catch (sbErr) {
-          console.error('Erro no Supabase fallback:', sbErr);
-        }
-      }
       setSuccessMsg(`Professor ${teacherName} removido.`);
       setTimeout(() => setSuccessMsg(''), 4000);
     } finally {
@@ -330,20 +285,7 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
         secondTeacherName: isAssigned ? tutelageModalTeacher.name : undefined,
       };
 
-      if (supabase) {
-        try {
-          await supabase
-            .from('students')
-            .update({
-              second_teacher_id: isAssigned ? tutelageModalTeacher.id : null,
-              second_teacher_name: isAssigned ? tutelageModalTeacher.name : null,
-            })
-            .eq('id', student.id);
-        } catch (e) {
-          console.error(e);
-        }
-      }
-      onSaveStudent(updatedStudent);
+      await onSaveStudent(updatedStudent);
     }
     
     scrollToTop();
@@ -375,24 +317,17 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
     setChangePasswordLoading(true);
 
     try {
-      if (supabase && teacher.email) {
-        const cleanEmail = teacher.email.trim().toLowerCase();
-        const hashedPass = await hashPassword(changePasswordNewPass);
-        await supabase
-          .from('second_teachers')
-          .update({ password: hashedPass })
-          .ilike('email', cleanEmail);
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          newPassword: changePasswordNewPass,
+        }),
+      });
 
-        await supabase
-          .from('teachers')
-          .update({ password: hashedPass })
-          .ilike('email', cleanEmail);
-
-        try {
-          await supabase.auth.updateUser({ password: changePasswordNewPass });
-        } catch (authErr) {
-          console.warn('Auth user password update warning:', authErr);
-        }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Falha ao atualizar a senha');
       }
 
       scrollToTop();
@@ -1666,6 +1601,17 @@ export const SecondTeachersView: React.FC<SecondTeachersViewProps> = ({
                     </div>
 
                     <div className="mt-4 pt-3 border-t border-border flex items-center justify-between gap-1.5">
+                      {(teacher.is_admin || teacher.isAdmin) && onSimulateSecondTeacher && (
+                        <button
+                          onClick={() => onSimulateSecondTeacher(st)}
+                          className="py-1.5 px-2.5 text-xs font-bold rounded-xl border transition-all flex items-center gap-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border-emerald-500/30 shadow-sm cursor-pointer"
+                          title="Simular ambiente do 2º Professor (Admin Supremo)"
+                        >
+                          <Smartphone className="w-3 h-3" />
+                          <span>Simular</span>
+                        </button>
+                      )}
+
                       <button
                         onClick={() => handleResetTeacherPassword(st)}
                         className="py-1.5 px-2.5 text-xs font-bold rounded-xl border transition-all flex items-center gap-1 bg-primary hover:bg-primary/90 text-white border-none shadow-sm cursor-pointer"

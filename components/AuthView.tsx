@@ -87,15 +87,27 @@ export const AuthView: React.FC<AuthViewProps> = ({
       }
 
       if (res.ok && data.user) {
-        // Formata os dados retornados pela API para o formato esperado pelo painel
+        const tenant = data.user.tenant || {};
+        // Formata os dados retornados pela API exclusivamente a partir do Firebase/Firestore
         const teacherProfile: TeacherUser = {
           id: data.user.id,
-          name: data.user.tenant?.nome || data.user.name || cleanEmail.split('@')[0],
-          subject: data.user.subject || 'Sociologia',
+          name: tenant.name || tenant.nome || data.user.name || cleanEmail.split('@')[0],
+          subject: tenant.subject || data.user.subject || 'Sociologia',
           email: data.user.email || cleanEmail,
-          avatarUrl: data.user.avatarUrl || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
-          phone: data.user.phone || '',
-          school: data.user.school || '',
+          avatarUrl: tenant.avatarUrl || data.user.avatarUrl || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
+          phone: tenant.phone || data.user.phone || '',
+          school: tenant.school || data.user.school || '',
+          matriculaFuncional: tenant.matriculaFuncional || data.user.matriculaFuncional || '',
+          contractStartDate: tenant.contractStartDate || '',
+          contractEndDate: tenant.contractEndDate || '',
+          contractType: tenant.contractType || 'ACT / Contratado',
+          contractStatus: tenant.contractStatus || 'ativo',
+          driveFolderUrl: tenant.driveFolderUrl || '',
+          is_admin: tenant.is_admin ?? (cleanEmail === '755840@profe.sed.sc.gov.br' || cleanEmail === 'gilsonjuniores@gmail.com'),
+          isAdmin: tenant.is_admin ?? (cleanEmail === '755840@profe.sed.sc.gov.br' || cleanEmail === 'gilsonjuniores@gmail.com'),
+          plan_type: tenant.plan_type || 'basic',
+          escolas_vinculadas: tenant.escolas_vinculadas || [],
+          disciplinas: tenant.disciplinas || [],
           ownerTeacherId: data.user.id,
         };
 
@@ -233,39 +245,29 @@ export const AuthView: React.FC<AuthViewProps> = ({
       return;
     }
 
-    // 1. Procurar o aluno DIRETAMENTE NA NUVEM (Independente da cache do professor)
+    // 1. Autenticar o aluno DIRETAMENTE NA NUVEM (Firebase Firestore)
     try {
       const apiRes = await fetch('/api/auth/student-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: rawInput, turma: studentTurma }),
+        body: JSON.stringify({
+          identifier: rawInput,
+          turma: studentTurma,
+          password: enteredPassword,
+        }),
       });
 
       const data = await apiRes.json();
 
       if (!apiRes.ok || !data.student) {
-        setStudentError(data.error || `Aluno não encontrado na Turma ${getTurmaLabel(studentTurma)} para "${rawInput}".`);
+        setStudentError(data.error || `Não foi possível autenticar o aluno para a turma selecionada.`);
         return;
       }
 
       const matched = data.student;
-      const expectedPassword = matched.passwordHash;
-
-      if (!expectedPassword || expectedPassword.trim() === '') {
-        setStudentError('Aluno sem senha cadastrada. Solicite a definição da sua senha individual ao professor.');
-        return;
-      }
-
-      // Validação criptografada da senha retornada da nuvem
-      const isPassValid = await verifyPassword(enteredPassword, expectedPassword);
-      
-      if (isPassValid) {
-        // Anexar o ID do professor para garantir que o aluno lê as atividades corretas no portal
-        matched.ownerTeacherId = data.ownerTeacherId;
-        onLoginStudent(matched);
-      } else {
-        setStudentError('Senha incorreta. Verifique a sua senha de acesso.');
-      }
+      // Anexar o ID do professor para garantir que o aluno lê as atividades corretas no portal
+      matched.ownerTeacherId = data.ownerTeacherId || matched.ownerTeacherId;
+      onLoginStudent(matched);
     } catch (err: any) {
       setStudentError('Falha de conexão com a base de dados. Tente novamente.');
     }

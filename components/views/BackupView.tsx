@@ -504,6 +504,61 @@ export const BackupView: React.FC<BackupViewProps> = ({
           </div>
         </section>
 
+        {/* SEÇÃO ADMIN SUPREMO: MIGRAÇÃO SUPABASE -> FIRESTORE */}
+        {(teacher?.is_admin || teacher?.isAdmin) && (
+          <section
+            id="section-admin-migrate-firestore"
+            className="bg-emerald-500/10 border border-emerald-500/30 rounded-3xl p-6 sm:p-8 shadow-sm space-y-4"
+          >
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-2xl shrink-0">
+                <Database className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    Admin Supremo
+                  </span>
+                  <h2 className="text-lg font-bold text-foreground">Importar Dados do Supabase para o Firestore</h2>
+                </div>
+                <p className="text-xs text-text-muted mt-2 leading-relaxed">
+                  Importa com segurança alunos, turmas, atividades e perfil do professor registrados no banco Supabase legado diretamente para a coleção deste tenant no Firestore (<code className="text-emerald-400">tenants/{'{uid}'}</code>). Nenhum dado do Supabase é excluído.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-emerald-500/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4" />
+                Operação Segura com Firebase Admin
+              </span>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!confirm('Deseja iniciar a importação segura dos dados do Supabase para o Firestore agora?')) return;
+                  try {
+                    setFeedbackMessage({ type: 'success', text: 'Iniciando migração segura do Supabase para o Firestore...' });
+                    const res = await fetch('/api/admin/migrate-supabase-to-firestore', { method: 'POST' });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || 'Falha na migração');
+                    setFeedbackMessage({
+                      type: 'success',
+                      text: `Migração concluída com sucesso! Alunos importados: ${data.stats?.importedStudents || 0}, Atividades: ${data.stats?.importedActivities || 0}.`,
+                    });
+                  } catch (err: any) {
+                    setFeedbackMessage({ type: 'error', text: `Erro na migração: ${err.message || String(err)}` });
+                  }
+                }}
+                className="w-full sm:w-auto px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Executar Importação Supabase → Firestore</span>
+              </button>
+            </div>
+          </section>
+        )}
+
         {/* SEÇÃO 2: ARQUIVAR VÍNCULO ATUAL (ENCERRAMENTO DE CICLO / GERAÇÃO DE NOVO VÍNCULO) */}
         <section
           id="section-archive-vinculo"

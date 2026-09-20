@@ -26,15 +26,22 @@ export async function GET() {
     const tenantRef = adminDb.collection("tenants").doc(uid);
     const tenantSnap = await tenantRef.get();
 
-    let tenantData;
+    const isAdminSupremo =
+      email.toLowerCase().trim() === "755840@profe.sed.sc.gov.br" ||
+      email.toLowerCase().trim() === "gilsonjuniores@gmail.com";
+
+    let tenantData: any;
 
     // 3. Se por acaso o documento não existir, faz a criação silenciosa
     if (!tenantSnap.exists) {
       tenantData = {
-        nome: email.split("@")[0],
+        name: isAdminSupremo ? "Gilson Flores" : email.split("@")[0],
+        nome: isAdminSupremo ? "Gilson Flores" : email.split("@")[0],
         email: email,
-        plan_type: "basic",
-        is_admin: true,
+        plan_type: isAdminSupremo ? "unlimited" : "basic",
+        is_admin: isAdminSupremo,
+        subject: "Sociologia",
+        school: "",
         escolas_vinculadas: [],
         disciplinas: [],
         created_at: new Date().toISOString(),
@@ -42,7 +49,12 @@ export async function GET() {
       
       await tenantRef.set(tenantData);
     } else {
-      tenantData = tenantSnap.data();
+      tenantData = tenantSnap.data() || {};
+      if (isAdminSupremo && (!tenantData.is_admin || tenantData.plan_type !== "unlimited")) {
+        tenantData.is_admin = true;
+        tenantData.plan_type = "unlimited";
+        await tenantRef.set({ is_admin: true, plan_type: "unlimited" }, { merge: true });
+      }
     }
 
     // 4. Retorna a união do Auth com o Banco de Dados para o Frontend
@@ -50,6 +62,7 @@ export async function GET() {
       user: {
         id: uid,
         email: email,
+        name: tenantData.name || tenantData.nome || email.split("@")[0],
         role: decodedClaims.role || "teacher",
         tenant: tenantData,
       },

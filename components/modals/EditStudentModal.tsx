@@ -54,28 +54,28 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
         }
       }
 
-      if (!supabase) return;
       try {
-        const { data } = await supabase
-          .from('second_teachers')
-          .select('id, name, email, subject, avatar_url, phone, school')
-          .order('name');
-        if (data && data.length > 0) {
-          const mapped: TeacherUser[] = data.map((d) => ({
-            id: d.id,
-            name: d.name,
-            subject: d.subject || 'AEE / Inclusão Escolar',
-            email: d.email,
-            avatarUrl: d.avatar_url || '',
-            phone: d.phone,
-            school: d.school,
-          }));
-          setAvailableSecondTeachers(mapped);
-          if (typeof window !== 'undefined') {
-            try {
-              setScopedLocalStorageItem('local_second_teachers_data', JSON.stringify(mapped));
-            } catch (e) {
-              console.warn('Erro ao salvar cache de 2º professores:', e);
+        const res = await fetch('/api/second-teachers');
+        if (res.ok) {
+          const resData = await res.json();
+          const list = resData.secondTeachers || resData.data || [];
+          if (Array.isArray(list) && list.length > 0) {
+            const mapped: TeacherUser[] = list.map((d: any) => ({
+              id: d.id,
+              name: d.name,
+              subject: d.subject || 'AEE / Inclusão Escolar',
+              email: d.email,
+              avatarUrl: d.avatarUrl || d.avatar_url || '',
+              phone: d.phone,
+              school: d.school,
+            }));
+            setAvailableSecondTeachers(mapped);
+            if (typeof window !== 'undefined') {
+              try {
+                setScopedLocalStorageItem('local_second_teachers_data', JSON.stringify(mapped));
+              } catch (e) {
+                console.warn('Erro ao salvar cache de 2º professores:', e);
+              }
             }
           }
         }

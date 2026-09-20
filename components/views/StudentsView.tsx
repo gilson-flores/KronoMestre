@@ -16,6 +16,8 @@ interface StudentsViewProps {
   onSuperviseStudent: (student: StudentUser) => void;
   onImportStudents: (newStudents: StudentUser[]) => void;
   isReadOnly?: boolean;
+  isAdmin?: boolean;
+  onSimulateStudent?: (student: StudentUser) => void;
 }
 
 export const StudentsView: React.FC<StudentsViewProps> = ({
@@ -26,6 +28,8 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
   onSuperviseStudent,
   onImportStudents,
   isReadOnly = false,
+  isAdmin = false,
+  onSimulateStudent,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTurmaFilter, setSelectedTurmaFilter] = useState('all');
@@ -221,6 +225,17 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
 
               {/* Right Action buttons */}
               <div className="flex flex-wrap items-center gap-2.5 pt-3 md:pt-0 border-t md:border-t-0 border-border w-full md:w-auto">
+                {isAdmin && onSimulateStudent && (
+                  <button
+                    onClick={() => onSimulateStudent(student)}
+                    className="py-2.5 px-4 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 font-bold rounded-full text-xs transition-all border border-emerald-500/30 shadow-md cursor-pointer flex items-center gap-1.5 min-h-[44px]"
+                    title="Simular ambiente deste aluno (Admin Supremo)"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>Simular Aluno</span>
+                  </button>
+                )}
+
                 <button
                   onClick={() => onSuperviseStudent(student)}
                   className="flex-1 md:flex-none py-2.5 px-5 bg-primary hover:bg-primary-hover text-white font-bold rounded-full text-xs transition-all shadow-md cursor-pointer uppercase tracking-wider min-h-[44px] flex items-center justify-center"

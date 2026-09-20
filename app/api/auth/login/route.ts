@@ -59,13 +59,20 @@ export async function POST(request: Request) {
     const tenantRef = adminDb.collection("tenants").doc(uid);
     const tenantSnap = await tenantRef.get();
 
-    let tenantData;
+    const isAdminSupremo =
+      userEmail.toLowerCase().trim() === "755840@profe.sed.sc.gov.br" ||
+      userEmail.toLowerCase().trim() === "gilsonjuniores@gmail.com";
+
+    let tenantData: any;
     if (!tenantSnap.exists) {
       tenantData = {
-        nome: userEmail.split("@")[0],
+        name: isAdminSupremo ? "Gilson Flores" : userEmail.split("@")[0],
+        nome: isAdminSupremo ? "Gilson Flores" : userEmail.split("@")[0],
         email: userEmail,
-        plan_type: "basic",
-        is_admin: true,
+        plan_type: isAdminSupremo ? "unlimited" : "basic",
+        is_admin: isAdminSupremo,
+        subject: "Sociologia",
+        school: "",
         escolas_vinculadas: [],
         disciplinas: [],
         created_at: new Date().toISOString(),
@@ -73,13 +80,19 @@ export async function POST(request: Request) {
       await tenantRef.set(tenantData);
       console.log(`[Firestore] Tenant criado com sucesso: ${uid}`);
     } else {
-      tenantData = tenantSnap.data();
+      tenantData = tenantSnap.data() || {};
+      if (isAdminSupremo && (!tenantData.is_admin || tenantData.plan_type !== "unlimited")) {
+        tenantData.is_admin = true;
+        tenantData.plan_type = "unlimited";
+        await tenantRef.set({ is_admin: true, plan_type: "unlimited" }, { merge: true });
+      }
     }
 
     return NextResponse.json({
       user: {
         id: uid,
         email: userEmail,
+        name: tenantData.name || tenantData.nome || userEmail.split("@")[0],
         role: "teacher",
         tenant: tenantData,
       },

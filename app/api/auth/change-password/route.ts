@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest, signSessionToken, setSessionCookie, SessionPayload } from '@/lib/auth-server';
-import { getSupabaseAdmin } from '@/lib/supabase-admin';
-import { hashPasswordBcrypt, verifyPasswordBcrypt } from '@/lib/crypto';
+import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
+import { hashPasswordBcrypt } from '@/lib/crypto';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,16 +15,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const admin = getSupabaseAdmin();
-    if (!admin) {
-      return NextResponse.json(
-        { error: 'Serviço de banco de dados indisponível.' },
-        { status: 500 }
-      );
-    }
-
     const body = await req.json();
-    const { newPassword, confirmPassword, currentPassword } = body;
+    const { newPassword, confirmPassword } = body;
 
     if (!newPassword || typeof newPassword !== 'string') {
       return NextResponse.json(
@@ -47,54 +41,115 @@ export async function POST(req: NextRequest) {
 
     const cleanPassword = newPassword.trim();
     const newBcryptHash = await hashPasswordBcrypt(cleanPassword);
+    const db = getAdminDb();
+    const nowIso = new Date().toISOString();
 
-    // 1. Fluxo Aluno
+    // 1. Fluxo Aluno (100% Firebase Firestore)
     if (session.role === 'student') {
-      const { error: updateErr } = await admin
-        .from('students')
-        .update({
-          password_hash: newBcryptHash,
-          must_change_password: false,
-        })
-        .eq('id', session.sub);
+      let updated = false;
 
-      if (updateErr) {
-        console.error('Erro ao atualizar senha do aluno:', updateErr);
+      // Tentativa 1: Atualização direta pelo caminho do tenant
+      if (session.ownerTeacherId) {
+        const studentRef = db
+          .collection('tenants')
+          .doc(session.ownerTeacherId)
+          .collection('students')
+          .doc(session.sub);
+
+        const snap = await studentRef.get();
+        if (snap.exists) {
+          await studentRef.set(
+            {
+              passwordHash: newBcryptHash,
+              mustChangePassword: false,
+              updatedAt: nowIso,
+            },
+            { merge: true }
+          );
+          updated = true;
+        }
+      }
+
+      // Tentativa 2: Fallback por collectionGroup se não atualizou
+      if (!updated) {
+        const querySnap = await db.collectionGroup('students').get();
+        for (const doc of querySnap.docs) {
+          if (doc.id === session.sub) {
+            await doc.ref.set(
+              {
+                passwordHash: newBcryptHash,
+                mustChangePassword: false,
+                updatedAt: nowIso,
+              },
+              { merge: true }
+            );
+            updated = true;
+            break;
+          }
+        }
+      }
+
+      if (!updated) {
         return NextResponse.json(
-          { error: 'Erro ao salvar nova senha no banco de dados.' },
-          { status: 500 }
+          { error: 'Registro do aluno não encontrado no Firestore para atualizar a senha.' },
+          { status: 404 }
         );
       }
     }
 
-    // 2. Fluxo 2º Professor
+    // 2. Fluxo 2º Professor (100% Firebase Firestore)
     else if (session.role === 'second_teacher') {
-      const { error: updateErr } = await admin
-        .from('second_teachers')
-        .update({
-          password: newBcryptHash,
-          must_change_password: false,
-        })
-        .eq('id', session.sub);
+      let updated = false;
 
-      if (updateErr) {
-        console.error('Erro ao atualizar senha do 2º professor:', updateErr);
-        return NextResponse.json(
-          { error: 'Erro ao salvar nova senha no banco de dados.' },
-          { status: 500 }
-        );
+      if (session.ownerTeacherId) {
+        const secRef = db
+          .collection('tenants')
+          .doc(session.ownerTeacherId)
+          .collection('second_teachers')
+          .doc(session.sub);
+
+        const snap = await secRef.get();
+        if (snap.exists) {
+          await secRef.set(
+            {
+              passwordHash: newBcryptHash,
+              mustChangePassword: false,
+              updatedAt: nowIso,
+            },
+            { merge: true }
+          );
+          updated = true;
+        }
+      }
+
+      if (!updated) {
+        const querySnap = await db.collectionGroup('second_teachers').get();
+        for (const doc of querySnap.docs) {
+          if (doc.id === session.sub) {
+            await doc.ref.set(
+              {
+                passwordHash: newBcryptHash,
+                mustChangePassword: false,
+                updatedAt: nowIso,
+              },
+              { merge: true }
+            );
+            updated = true;
+            break;
+          }
+        }
       }
     }
 
-    // 3. Fluxo Professor Titular
+    // 3. Fluxo Professor Titular (Firebase Auth)
     else if (session.role === 'teacher') {
-      // Atualiza no Supabase Auth se aplicável
       try {
-        await admin.auth.admin.updateUserById(session.sub, {
+        const adminAuth = getAdminAuth();
+        await adminAuth.updateUser(session.sub, {
           password: cleanPassword,
         });
       } catch (authErr) {
-        console.warn('Aviso ao atualizar senha no Supabase Auth admin:', authErr);
+        console.warn('Aviso ao atualizar senha no Firebase Auth admin:', authErr);
       }
     }
 
@@ -124,3 +179,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
