@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 /**
  * POST /api/auth/student-login
  * Autenticação segura de alunos 100% no Firebase Firestore (ISOLAMENTO MULTI-TENANT).
- * Valida o Código do Professor (Tenant), acha o aluno restrito ao tenant e emite cookie.
+ * Valida o Código do Professor (Tenant Code), acha o aluno restrito ao tenant e emite cookie.
  */
 export async function POST(request: Request) {
   try {
@@ -34,23 +34,26 @@ export async function POST(request: Request) {
     const rawIdentifier = String(identifier).toLowerCase().trim();
     const normIdentifier = rawIdentifier.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-    // 1. ISOLAMENTO DO TENANT: Localizar o Professor dono do Código
-    // O teacherCode pode ser o ID do professor no banco ou a Matrícula Funcional.
+    // 1. ISOLAMENTO DO TENANT: Localizar o Professor dono do Código na coleção correta ('tenants')
     let ownerTeacherId: string | null = null;
 
-    // Tentativa A: Achar o professor usando o ID do documento
-    const teacherDocById = await db.collection('teachers').doc(cleanTeacherCode).get();
-    if (teacherDocById.exists) {
-      ownerTeacherId = teacherDocById.id;
+    // Busca pela chave gerada 'tenantCode'
+    const tenantQuery = await db.collection('tenants')
+      .where('tenantCode', '==', cleanTeacherCode)
+      .limit(1)
+      .get();
+
+    if (!tenantQuery.empty) {
+      ownerTeacherId = tenantQuery.docs[0].id;
     } else {
-      // Tentativa B: Achar o professor cuja matrícula funcional coincida com o código
-      const teacherQuery = await db.collection('teachers')
+      // Fallback preventivo: Se o professor ainda não clicou em gerar código e usou a matrícula antiga
+      const fallbackQuery = await db.collection('tenants')
         .where('matriculaFuncional', '==', cleanTeacherCode)
         .limit(1)
         .get();
-
-      if (!teacherQuery.empty) {
-        ownerTeacherId = teacherQuery.docs[0].id;
+        
+      if (!fallbackQuery.empty) {
+        ownerTeacherId = fallbackQuery.docs[0].id;
       }
     }
 
@@ -61,8 +64,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. BUSCA DO ALUNO (SOMENTE DENTRO DO TENANT IDENTIFICADO)
-    const studentsRef = db.collection('teachers').doc(ownerTeacherId).collection('students');
+    // 2. BUSCA DO ALUNO (SOMENTE DENTRO DA SUBCOLEÇÃO DO TENANT IDENTIFICADO)
+    const studentsRef = db.collection('tenants').doc(ownerTeacherId).collection('students');
     const snapshot = await studentsRef.get();
 
     let matchedStudent: any = null;

@@ -40,6 +40,7 @@ export async function POST(request: Request) {
       phone: profile.phone ?? currentData.phone ?? '',
       avatarUrl: profile.avatarUrl ?? currentData.avatarUrl ?? '',
       matriculaFuncional: profile.matriculaFuncional ?? currentData.matriculaFuncional ?? '',
+      tenantCode: profile.tenantCode ?? currentData.tenantCode ?? '', // NOVO CAMPO: Código do Aluno
       contractStartDate: profile.contractStartDate ?? currentData.contractStartDate ?? '',
       contractEndDate: profile.contractEndDate ?? currentData.contractEndDate ?? '',
       contractType: profile.contractType ?? currentData.contractType ?? 'ACT',

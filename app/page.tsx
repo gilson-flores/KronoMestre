@@ -176,6 +176,7 @@ export default function Home() {
               phone: tenant.phone !== undefined ? tenant.phone : prev.phone,
               avatarUrl: tenant.avatarUrl || prev.avatarUrl,
               matriculaFuncional: tenant.matriculaFuncional !== undefined ? tenant.matriculaFuncional : prev.matriculaFuncional,
+              tenantCode: tenant.tenantCode || prev.tenantCode,
               contractStartDate: tenant.contractStartDate || prev.contractStartDate,
               contractEndDate: tenant.contractEndDate || prev.contractEndDate,
               contractType: tenant.contractType || prev.contractType,
@@ -2400,6 +2401,41 @@ export default function Home() {
                     placeholder="Ex: 654.982-1"
                   />
                 </div>
+
+                <div className="p-4 bg-primary/10 border border-primary/30 rounded-2xl relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+                  <label className="block text-primary font-bold mb-1">CÓDIGO DE ACESSO DOS ALUNOS</label>
+                  <p className="text-[11px] text-muted mb-3 max-w-[90%]">Este é o código exclusivo do seu ambiente (Tenant). Forneça este código aos seus alunos para que eles possam acessar as suas atividades.</p>
+                  
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="text"
+                      readOnly
+                      value={teacher.tenantCode || ''}
+                      className="w-40 bg-background/50 border border-primary/40 rounded-xl px-4 py-3 text-foreground font-mono text-lg font-bold tracking-widest text-center"
+                      placeholder="----"
+                    />
+                    {!teacher.tenantCode && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                          const nums = '0123456789';
+                          const c1 = chars.charAt(Math.floor(Math.random() * chars.length));
+                          const n1 = nums.charAt(Math.floor(Math.random() * nums.length));
+                          const c2 = chars.charAt(Math.floor(Math.random() * chars.length));
+                          const n2 = nums.charAt(Math.floor(Math.random() * nums.length));
+                          const newCode = `${c1}${n1}${c2}${n2}`;
+                          setTeacher({ ...teacher, tenantCode: newCode });
+                        }}
+                        className="px-4 py-3 bg-primary text-white text-xs font-bold rounded-xl shadow-lg hover:opacity-90 transition-all cursor-pointer"
+                      >
+                        Gerar Novo Código
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-background border border-border">
                   <div>
                     <label className="block text-muted font-semibold mb-1">Início da Vigência do Contrato</label>
@@ -2528,6 +2564,7 @@ export default function Home() {
                             contractEndDate: teacher.contractEndDate || '',
                             contractType: teacher.contractType || 'ACT / Contratado',
                             contractStatus: teacher.contractStatus || 'ativo',
+                            tenantCode: teacher.tenantCode || '',
                             escolas_vinculadas: teacher.escolas_vinculadas || [],
                             disciplinas: teacher.disciplinas || [],
                           }
