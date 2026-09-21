@@ -7,30 +7,65 @@ export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/auth/student-login
- * Autenticação segura de alunos 100% no Firebase Firestore.
- * Valida a senha no servidor com hash criptografado e emite cookie seguro de sessão.
+ * Autenticação segura de alunos 100% no Firebase Firestore (ISOLAMENTO MULTI-TENANT).
+ * Valida o Código do Professor (Tenant), acha o aluno restrito ao tenant e emite cookie.
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { identifier, turma, password } = body;
+    const { identifier, teacherCode, password } = body;
 
-    if (!identifier || !turma) {
+    if (!identifier || !teacherCode) {
       return NextResponse.json(
-        { error: 'Nome/matrícula e turma são obrigatórios para o login.' },
+        { error: 'Nome/matrícula e Código do Professor são obrigatórios para o login.' },
+        { status: 400 }
+      );
+    }
+
+    if (!password) {
+      return NextResponse.json(
+        { error: 'Por favor, digite a sua senha de acesso.' },
         { status: 400 }
       );
     }
 
     const db = getAdminDb();
+    const cleanTeacherCode = String(teacherCode).toUpperCase().trim();
     const rawIdentifier = String(identifier).toLowerCase().trim();
     const normIdentifier = rawIdentifier.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-    // Procura na subcoleção de alunos do Firestore de todos os tenants
-    const snapshot = await db.collectionGroup('students').where('turma', '==', turma).get();
+    // 1. ISOLAMENTO DO TENANT: Localizar o Professor dono do Código
+    // O teacherCode pode ser o ID do professor no banco ou a Matrícula Funcional.
+    let ownerTeacherId: string | null = null;
+
+    // Tentativa A: Achar o professor usando o ID do documento
+    const teacherDocById = await db.collection('teachers').doc(cleanTeacherCode).get();
+    if (teacherDocById.exists) {
+      ownerTeacherId = teacherDocById.id;
+    } else {
+      // Tentativa B: Achar o professor cuja matrícula funcional coincida com o código
+      const teacherQuery = await db.collection('teachers')
+        .where('matriculaFuncional', '==', cleanTeacherCode)
+        .limit(1)
+        .get();
+
+      if (!teacherQuery.empty) {
+        ownerTeacherId = teacherQuery.docs[0].id;
+      }
+    }
+
+    if (!ownerTeacherId) {
+      return NextResponse.json(
+        { error: 'Código do Professor inválido ou não encontrado. Verifique o código fornecido.' },
+        { status: 404 }
+      );
+    }
+
+    // 2. BUSCA DO ALUNO (SOMENTE DENTRO DO TENANT IDENTIFICADO)
+    const studentsRef = db.collection('teachers').doc(ownerTeacherId).collection('students');
+    const snapshot = await studentsRef.get();
 
     let matchedStudent: any = null;
-    let ownerTeacherId: string | null = null;
 
     for (const doc of snapshot.docs) {
       const data = doc.data();
@@ -49,18 +84,18 @@ export async function POST(request: Request) {
         normFullName.includes(normIdentifier)
       ) {
         matchedStudent = { id: doc.id, ...data };
-        ownerTeacherId = doc.ref.parent.parent?.id || data.ownerTeacherId || data.owner_teacher_id || null;
         break;
       }
     }
 
     if (!matchedStudent) {
       return NextResponse.json(
-        { error: 'Aluno não encontrado na base de dados da nuvem para esta turma.' },
+        { error: 'Aluno não encontrado na base deste professor. Verifique seu nome ou matrícula.' },
         { status: 404 }
       );
     }
 
+    // 3. VALIDAÇÃO DE SENHA DO ALUNO
     const storedHash = matchedStudent.passwordHash || matchedStudent.password_hash || '';
 
     if (!storedHash || storedHash.trim() === '') {
@@ -70,27 +105,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Se a senha foi informada, faz a validação no servidor
-    if (password !== undefined) {
-      const isPassValid = await verifyPassword(String(password), storedHash);
-      if (!isPassValid) {
-        return NextResponse.json(
-          { error: 'Senha incorreta. Verifique a sua senha de acesso.' },
-          { status: 401 }
-        );
-      }
-    } else {
+    const isPassValid = await verifyPassword(String(password), storedHash);
+    if (!isPassValid) {
       return NextResponse.json(
-        { error: 'Por favor, digite a sua senha de acesso.' },
-        { status: 400 }
+        { error: 'Senha incorreta. Verifique a sua senha de acesso.' },
+        { status: 401 }
       );
     }
 
-    // Aluno autenticado com sucesso: cria o JWT de sessão segura
+    // 4. SUCESSO: CRIAR SESSÃO SEGURA
     const sessionPayload: SessionPayload = {
       sub: matchedStudent.id,
       role: 'student',
-      ownerTeacherId: ownerTeacherId || '',
+      ownerTeacherId: ownerTeacherId,
       name: matchedStudent.fullName || matchedStudent.full_name || matchedStudent.name || 'Aluno',
       turma: matchedStudent.turma || '',
       classRoom: matchedStudent.turma || '',
@@ -107,7 +134,7 @@ export async function POST(request: Request) {
     const cleanStudent = { ...matchedStudent };
     delete cleanStudent.passwordHash;
     delete cleanStudent.password_hash;
-    cleanStudent.ownerTeacherId = ownerTeacherId || '';
+    cleanStudent.ownerTeacherId = ownerTeacherId;
 
     const response = NextResponse.json({
       success: true,

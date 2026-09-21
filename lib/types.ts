@@ -10,6 +10,7 @@ export interface TeacherUser {
   school?: string;
   driveFolderUrl?: string;
   matriculaFuncional?: string;
+  tenantCode?: string; // NOVO: Código único de acesso do aluno (Ex: A1B2)
   contractStartDate?: string; // YYYY-MM-DD
   contractEndDate?: string; // YYYY-MM-DD
   contractType?: 'ACT / Contratado' | 'Efetivo' | 'Substituto' | string;

@@ -37,7 +37,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
   // Student Login state
   const [studentFullName, setStudentFullName] = useState('');
-  const [studentTurma, setStudentTurma] = useState('');
+  const [teacherCode, setTeacherCode] = useState('');
   const [studentPassword, setStudentPassword] = useState('');
   const [studentError, setStudentError] = useState('');
 
@@ -218,8 +218,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
       setStudentError('Por favor, informe o seu Nome Completo ou Matrícula.');
       return;
     }
-    if (!studentTurma) {
-      setStudentError('Por favor, selecione a sua Turma.');
+    if (!teacherCode) {
+      setStudentError('Por favor, informe o Código do Professor.');
       return;
     }
     if (!enteredPassword) {
@@ -234,7 +234,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
       onLoginStudent({
         id: 'admin-mock-student',
         fullName: rawInput || 'Aluno Teste (Admin)',
-        turma: studentTurma || 'Geral',
+        turma: 'Geral',
         matricula: 'ADMIN-001',
         tag: 'REGULAR',
         passwordHash: '',
@@ -252,7 +252,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           identifier: rawInput,
-          turma: studentTurma,
+          teacherCode: teacherCode.trim(),
           password: enteredPassword,
         }),
       });
@@ -431,7 +431,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           <form onSubmit={handleStudentSubmit} className="space-y-4">
             <div className="flex items-center gap-2 text-xs text-[#c0c1ff] bg-indigo-500/10 p-3 rounded-2xl border border-indigo-500/20 mb-2">
               <CheckCircle2 className="w-4 h-4 shrink-0 text-primary" />
-              <span>Acesso do Aluno: Informe seu Nome ou Matrícula, sua Turma e Senha de Acesso.</span>
+              <span>Acesso do Aluno: Informe seu Nome, o Código do seu Professor e sua Senha.</span>
             </div>
 
             {studentError && (
@@ -456,21 +456,17 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
             <div>
               <label className="block text-xs font-semibold text-muted mb-1.5 ml-1">
-                Turma <span className="text-rose-400">*</span>
+                Código do Professor <span className="text-rose-400">*</span>
               </label>
-              <select
+              <input
+                type="text"
                 required
-                value={studentTurma}
-                onChange={(e) => setStudentTurma(e.target.value)}
-                className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-sm text-foreground focus:outline-none focus:border-primary"
-              >
-                <option value="">Selecione sua Turma...</option>
-                {availableTurmas.map((t) => (
-                  <option key={t} value={t} className="bg-background text-foreground">
-                    Turma {getTurmaLabel(t)}
-                  </option>
-                ))}
-              </select>
+                value={teacherCode}
+                onChange={(e) => setTeacherCode(e.target.value.toUpperCase())}
+                className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-primary uppercase tracking-wider font-mono"
+                placeholder="Ex: PROF-12345"
+              />
+              <p className="text-[10px] text-muted mt-1 ml-1">Código fornecido pelo seu professor.</p>
             </div>
 
             <div>
