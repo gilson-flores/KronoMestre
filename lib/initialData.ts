@@ -1,18 +1,21 @@
 import { Activity, StudentUser, TeacherUser, ScheduleItem, LibraryFile, ChatMessage } from './types';
 
+// Fallback de carregamento esterilizado.
+// Usado APENAS para evitar erros de renderização no frontend antes da API responder.
 export const initialTeacher: TeacherUser = {
-  id: 'teacher-1',
-  name: 'Gilson Flores',
-  subject: 'Sociologia',
+  id: '',
+  name: 'Carregando...',
+  subject: '',
   email: '',
-  avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
-  school: "EEB Prof. Jandira D'Ávila",
+  avatarUrl: '',
+  school: '',
   driveFolderUrl: '',
-  matriculaFuncional: '654.982-1',
-  contractStartDate: '2026-02-09',
-  contractEndDate: '2026-12-18',
-  contractType: 'ACT / Contratado',
-  contractStatus: 'ativo',
+  matriculaFuncional: '',
+  tenantCode: '',
+  contractStartDate: '',
+  contractEndDate: '',
+  contractType: '',
+  contractStatus: '',
 };
 
 export const initialStudents: StudentUser[] = [];

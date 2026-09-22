@@ -1007,8 +1007,11 @@ export default function Home() {
   };
 
   const handleCreateActivity = async (newAct: Activity) => {
-    // 1. Otimismo UI (Cache Rápido)
+    // 1. Otimismo UI (Cache Rápido com Prevenção Atômica de Duplicidade)
     setActivities((prev) => {
+      // Se a atividade já existir no cache (ex: via WebSocket), ignora a injeção dupla.
+      if (prev.some((a) => a.id === newAct.id)) return prev;
+      
       const next = [newAct, ...prev];
       if (typeof window !== 'undefined') setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
       return next;
@@ -1551,8 +1554,11 @@ export default function Home() {
 
     const studentToSave: StudentUser = { ...newStudent, passwordHash: hashedPass, mustChangePassword: true };
 
-    // 1. Otimismo UI
+    // 1. Otimismo UI (Cache Rápido com Prevenção Atômica de Duplicidade)
     setStudents((prev) => {
+      // Evita o clone do aluno se o listener do banco ou cliques duplos enviarem o mesmo ID ou Matrícula
+      if (prev.some((s) => s.id === studentToSave.id || s.matricula === studentToSave.matricula)) return prev;
+
       const next = [...prev, studentToSave];
       if (typeof window !== 'undefined') setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
       return next;

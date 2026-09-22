@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { X, UserPlus, CheckCircle2, AlertTriangle, HeartHandshake } from 'lucide-react';
 import { StudentUser, TeacherUser } from '@/lib/types';
 import { PneConditionsSelect } from '@/components/PneConditionsSelect';
-import { supabase } from '@/lib/supabase';
 import {
   normalizeStudentName,
   validateStudentName,
@@ -24,9 +23,7 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
 }) => {
   const [fullName, setFullName] = useState('');
   const [turma, setTurma] = useState('301');
-  const [customTurma, setCustomTurma] = useState('');
-  const [isCustomTurma, setIsCustomTurma] = useState(false);
-  const [matricula, setMatricula] = useState('2023854');
+  const [matricula, setMatricula] = useState('');
   const [password, setPassword] = useState('');
   const [tag, setTag] = useState<'REGULAR' | 'PNE' | 'RAD'>('REGULAR');
   const [pneConditions, setPneConditions] = useState<string[]>([]);
@@ -109,6 +106,7 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
     onCreateStudent(newStudent);
     setFullName('');
     setPassword('');
+    setMatricula('');
     setPneConditions([]);
     setSecondTeacherId('');
     setFormError('');
@@ -117,22 +115,30 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-lg glass-panel rounded-3xl border border-border p-6 sm:p-8 space-y-6 shadow-2xl relative animate-fadeIn">
-        <button
-          onClick={onClose}
-          className="absolute top-5 right-5 p-2 text-muted hover:text-foreground rounded-full hover:bg-surface-hover transition-colors cursor-pointer"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-primary/10 text-primary rounded-2xl border border-primary/20">
-            <UserPlus className="w-6 h-6" />
+      {/* 
+        AQUI ESTÁ O PATCH CIRÚRGICO: 
+        Foi adicionado max-h-[90vh] para limitar o tamanho do painel e overflow-y-auto 
+        para criar barra de rolagem e permitir acesso ao botão de salvar quando expandir a aba PNE.
+      */}
+      <div className="w-full max-w-lg glass-panel rounded-3xl border border-border p-6 sm:p-8 space-y-6 shadow-2xl relative animate-fadeIn max-h-[90vh] overflow-y-auto">
+        
+        {/* Header travado/absoluto ajustado */}
+        <div className="flex justify-between items-start mb-2">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-primary/10 text-primary rounded-2xl border border-primary/20">
+              <UserPlus className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-foreground">Cadastrar Novo Aluno</h2>
+              <p className="text-xs text-muted">Nome Completo (MAIÚSCULAS) e Turma</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-foreground">Cadastrar Novo Aluno</h2>
-            <p className="text-xs text-muted">O aluno acessará com Nome Completo (MAIÚSCULAS), Turma e senha cadastrada</p>
-          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-muted hover:text-foreground rounded-full hover:bg-surface-hover transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Note Box */}
@@ -166,7 +172,7 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-muted mb-1">Turma (ex: 301, 1001)</label>
+              <label className="block text-xs font-semibold text-muted mb-1">Turma (ex: 301)</label>
               <input
                 type="text"
                 required
@@ -189,7 +195,7 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-muted mb-1">Senha de Acesso do Aluno (Opcional - padrão: Matrícula)</label>
+            <label className="block text-xs font-semibold text-muted mb-1">Senha de Acesso do Aluno (Opcional)</label>
             <input
               type="password"
               value={password}
@@ -232,7 +238,7 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
                   <span>Vincular 2º Professor (AEE / Inclusão)</span>
                 </label>
                 <p className="text-[11px] text-muted">
-                  Selecione o profissional de inclusão responsável pelo acompanhamento deste aluno.
+                  Selecione o profissional responsável pelo acompanhamento deste aluno.
                 </p>
                 <select
                   value={secondTeacherId}
@@ -248,20 +254,22 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
                 </select>
                 {availableSecondTeachers.length === 0 && (
                   <p className="text-[10px] text-amber-600/80">
-                    Nenhum 2º Professor cadastrado ainda. Você pode cadastrá-los na aba &quot;2º Professor&quot;.
+                    Nenhum 2º Professor cadastrado. Você pode cadastrá-los na aba "2º Professor".
                   </p>
                 )}
               </div>
             </div>
           )}
 
-          <button
-            type="submit"
-            className="w-full py-3.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-full transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20 cursor-pointer mt-4 text-sm"
-          >
-            <UserPlus className="w-5 h-5" />
-            <span>Cadastrar Aluno</span>
-          </button>
+          <div className="pt-2">
+            <button
+              type="submit"
+              className="w-full py-3.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-full transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20 cursor-pointer text-sm"
+            >
+              <UserPlus className="w-5 h-5" />
+              <span>Cadastrar Aluno</span>
+            </button>
+          </div>
         </form>
       </div>
     </div>
