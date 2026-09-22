@@ -577,6 +577,7 @@ export default function Home() {
 
   // Auth Handlers
   const handleLoginTeacher = (loggedTeacher: TeacherUser) => {
+    setIsDataLoading(true);
     setTeacher(loggedTeacher);
     setRole('teacher');
     setMustChangePassword(false);
@@ -616,7 +617,8 @@ export default function Home() {
     setLoadDataTrigger((prev) => prev + 1);
   };
 
-  const handleLoginSecondTeacher = (loggedTeacher: TeacherUser) => {
+ const handleLoginSecondTeacher = (loggedTeacher: TeacherUser) => {
+    setIsDataLoading(true);
     setTeacher(loggedTeacher);
     setRole('second_teacher');
     setMustChangePassword(Boolean(loggedTeacher.mustChangePassword));
@@ -637,6 +639,7 @@ export default function Home() {
   };
 
   const handleLoginStudent = (loggedStudent: StudentUser) => {
+    setIsDataLoading(true);
     setCurrentStudent(loggedStudent);
     setRole('student');
     setMustChangePassword(Boolean(loggedStudent.mustChangePassword));

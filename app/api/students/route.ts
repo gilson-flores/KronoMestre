@@ -6,12 +6,10 @@ import { cookies } from 'next/headers';
 export const dynamic = 'force-dynamic';
 
 /**
- * Extrai o ID do professor proprietário (tenant) da requisição com suporte dual:
- * 1. Cookie 'session' do Firebase Auth (padrão principal)
- * 2. Cookie 'auth_session_token' / JWT de Sessão (lib/auth-server)
+ * Helper blindado: Identifica perfeitamente ONDE gravar (tenantId) e QUEM está gravando (userId)
  */
-async function resolveOwnerTeacherId(request: Request): Promise<{ ownerTeacherId: string; email?: string; role?: string } | null> {
-  // 1. Tenta verificar sessão do Firebase
+async function resolveSession(request: Request): Promise<{ tenantId: string; userId: string; email?: string; role?: string } | null> {
+  // 1. Tenta verificar sessão do Firebase (Professor)
   try {
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('session')?.value;
@@ -20,51 +18,45 @@ async function resolveOwnerTeacherId(request: Request): Promise<{ ownerTeacherId
       const decoded = await auth.verifySessionCookie(sessionCookie, true);
       if (decoded && decoded.uid) {
         return {
-          ownerTeacherId: decoded.uid,
+          tenantId: decoded.uid,
+          userId: decoded.uid,
           email: decoded.email,
           role: 'teacher',
         };
       }
     }
-  } catch {
-    // Ignora e tenta fallback JWT
-  }
+  } catch {}
 
-  // 2. Fallback JWT (auth-server)
+  // 2. Fallback JWT (Aluno / 2º Professor)
   try {
     const session = await getSessionFromRequest(request);
     if (session && (session.ownerTeacherId || session.sub)) {
       return {
-        ownerTeacherId: session.ownerTeacherId || session.sub,
+        tenantId: session.ownerTeacherId || session.sub, // A pasta do dono (Professor)
+        userId: session.sub,                             // O ID real de quem está logado (Aluno)
         email: session.email,
         role: session.role,
       };
     }
-  } catch {
-    // Falha silenciosa
-  }
+  } catch {}
 
   return null;
 }
 
 /**
  * GET /api/students
- * Lista todos os alunos vinculados ao professor (tenant) logado exclusivamente do Firebase Firestore.
  */
 export async function GET(request: Request) {
   try {
-    const session = await resolveOwnerTeacherId(request);
+    const session = await resolveSession(request);
     if (!session) {
-      return NextResponse.json({ error: 'Não autorizado. Faça login como professor.' }, { status: 401 });
+      return NextResponse.json({ error: 'Não autorizado. Faça login.' }, { status: 401 });
     }
 
-    const { ownerTeacherId } = session;
     const db = getAdminDb();
-
-    // Busca alunos no Firestore no caminho isolado do tenant: tenants/{ownerTeacherId}/students
     const snapshot = await db
       .collection('tenants')
-      .doc(ownerTeacherId)
+      .doc(session.tenantId)
       .collection('students')
       .get();
 
@@ -82,13 +74,12 @@ export async function GET(request: Request) {
 
 /**
  * POST /api/students
- * Cadastra ou importa alunos vinculando-os ao tenant do professor exclusivamente no Firebase Firestore.
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    // Caso de compatibilidade: se for requisição de autenticação de aluno (identifier + turma)
+    // Caso 1: Login do Aluno (Busca por matrícula/nome + turma)
     if (body && body.identifier && body.turma && !body.fullName && !body.matricula) {
       const { identifier, turma } = body;
       const db = getAdminDb();
@@ -119,16 +110,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ student: matchedStudent, ownerTeacherId });
     }
 
-    // Fluxo de criação / importação de aluno pelo professor titular
-    const session = await resolveOwnerTeacherId(request);
+    // Caso 2: Criação/Importação de Alunos pelo Professor
+    const session = await resolveSession(request);
     if (!session) {
-      return NextResponse.json({ error: 'Não autorizado. Sessão de professor necessária.' }, { status: 401 });
+      return NextResponse.json({ error: 'Não autorizado. Sessão necessária.' }, { status: 401 });
     }
 
-    const { ownerTeacherId } = session;
     const db = getAdminDb();
-
-    // Pode vir como único aluno ou lote (array)
     const rawList = Array.isArray(body) ? body : [body];
     if (rawList.length === 0) {
       return NextResponse.json({ error: 'Nenhum dado de aluno recebido.' }, { status: 400 });
@@ -143,12 +131,12 @@ export async function POST(request: Request) {
       const studentDoc = {
         ...item,
         id: studentId,
-        ownerTeacherId: ownerTeacherId,
-        owner_teacher_id: ownerTeacherId,
+        ownerTeacherId: session.tenantId,
+        owner_teacher_id: session.tenantId,
         updatedAt: new Date().toISOString(),
       };
 
-      const docRef = db.collection('tenants').doc(ownerTeacherId).collection('students').doc(studentId);
+      const docRef = db.collection('tenants').doc(session.tenantId).collection('students').doc(studentId);
       batch.set(docRef, studentDoc, { merge: true });
       processedStudents.push(studentDoc);
     }
@@ -169,33 +157,33 @@ export async function POST(request: Request) {
 
 /**
  * PUT /api/students
- * Atualiza os dados ou vínculos pedagógicos de um aluno existente no tenant do professor exclusivamente no Firebase Firestore.
  */
 export async function PUT(request: Request) {
   try {
-    const session = await resolveOwnerTeacherId(request);
+    const session = await resolveSession(request);
     if (!session) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
     const body = await request.json();
-    const studentId = body.id || body.studentId || (session.role === 'student' ? session.ownerTeacherId : null);
+    
+    // Agora o sistema sabe perfeitamente quem é o aluno logado através do session.userId
+    const studentId = body.id || body.studentId || (session.role === 'student' ? session.userId : null);
 
     if (!studentId) {
       return NextResponse.json({ error: 'ID do aluno é obrigatório para atualização.' }, { status: 400 });
     }
 
     // Se for perfil de aluno, só permite atualizar o próprio registro
-    if (session.role === 'student' && session.ownerTeacherId && session.ownerTeacherId !== studentId) {
+    if (session.role === 'student' && session.userId && session.userId !== studentId) {
       return NextResponse.json({ error: 'Acesso negado para modificar outro aluno.' }, { status: 403 });
     }
 
-    const { ownerTeacherId } = session;
     const db = getAdminDb();
-    let docRef = db.collection('tenants').doc(ownerTeacherId).collection('students').doc(studentId);
+    let docRef = db.collection('tenants').doc(session.tenantId).collection('students').doc(studentId);
     let docSnap = await docRef.get();
 
-    // Fallback de busca se o aluno estiver em outra subcoleção ou ID diferente
+    // Fallback de busca caso o ID venha diferente
     if (!docSnap.exists) {
       const querySnap = await db.collectionGroup('students').get();
       for (const doc of querySnap.docs) {
@@ -210,7 +198,7 @@ export async function PUT(request: Request) {
     const updatedData = {
       ...body,
       id: studentId,
-      ownerTeacherId: ownerTeacherId || docSnap.data()?.ownerTeacherId,
+      ownerTeacherId: session.tenantId || docSnap.data()?.ownerTeacherId,
       updatedAt: new Date().toISOString(),
     };
 
@@ -225,16 +213,14 @@ export async function PUT(request: Request) {
 
 /**
  * DELETE /api/students?id={studentId}
- * Remove um aluno do tenant do professor exclusivamente no Firebase Firestore.
  */
 export async function DELETE(request: Request) {
   try {
-    const session = await resolveOwnerTeacherId(request);
+    const session = await resolveSession(request);
     if (!session) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const { ownerTeacherId } = session;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -243,7 +229,7 @@ export async function DELETE(request: Request) {
     }
 
     const db = getAdminDb();
-    await db.collection('tenants').doc(ownerTeacherId).collection('students').doc(id).delete();
+    await db.collection('tenants').doc(session.tenantId).collection('students').doc(id).delete();
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
