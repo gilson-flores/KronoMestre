@@ -449,28 +449,19 @@ export default function Home() {
         console.warn('Não foi possível salvar os arquivos no localStorage (cota excedida):', err);
       }
     }
-    if (isSupabaseConfigured && supabase) {
-      try {
-        // Se a Data URL for muito grande para a coluna text do Supabase, salvar string vazia para evitar estouro
-        const safeDriveUrl =
-          newFile.driveUrl && newFile.driveUrl.startsWith('data:') && newFile.driveUrl.length > 500000
-            ? ''
-            : newFile.driveUrl || '';
 
-        await supabase!.from('library_files').insert({
-          id: newFile.id,
-          title: newFile.title,
-          category: newFile.category,
-          turma: newFile.turma,
-          file_size: newFile.fileSize,
-          updated_at: newFile.updatedAt,
-          drive_url: safeDriveUrl,
-        });
-      } catch (err) {
-        console.warn('Erro ao salvar arquivo no Supabase:', err);
-      }
+    try {
+      const res = await fetch('/api/library', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newFile),
+      });
+      if (!res.ok) throw new Error('Falha ao salvar no Firestore.');
+      showGlobalStatus('success', 'Arquivo cadastrado com sucesso no Firestore!');
+    } catch (err) {
+      console.warn('Erro ao salvar arquivo na nuvem:', err);
+      showGlobalStatus('error', 'Arquivo exibido na tela, mas falhou ao salvar na nuvem.');
     }
-    showGlobalStatus('success', 'Arquivo cadastrado com sucesso!');
   };
 
   const handleDeleteLibraryFile = async (fileId: string) => {
@@ -483,14 +474,15 @@ export default function Home() {
         console.warn('Erro ao atualizar localStorage após deleção:', err);
       }
     }
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase!.from('library_files').delete().eq('id', fileId);
-      } catch (err) {
-        console.warn('Erro ao deletar arquivo no Supabase:', err);
-      }
+
+    try {
+      const res = await fetch(`/api/library?id=${fileId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Falha ao excluir na nuvem.');
+      showGlobalStatus('success', 'Arquivo removido da biblioteca.');
+    } catch (err) {
+      console.warn('Erro ao deletar arquivo na nuvem:', err);
+      showGlobalStatus('error', 'Arquivo removido da tela, mas exclusão na nuvem falhou.');
     }
-    showGlobalStatus('success', 'Arquivo removido da biblioteca.');
   };
 
   // Carregar dados iniciais do Firestore (Arquitetura Multi-Tenant)
@@ -548,38 +540,40 @@ export default function Home() {
     return currentTab;
   }, [role, currentTab]);
 
-  // Carregamento sob demanda (lazy) da Biblioteca apenas quando a aba 'arquivos' for acessada
+  // Carregamento sob demanda (lazy) da Biblioteca do Firestore apenas quando a aba 'arquivos' for acessada
   useEffect(() => {
     if (activeTeacherTab !== 'arquivos') return;
-    if (!isSupabaseConfigured || !supabase) return;
 
     const loadLibrary = async () => {
       try {
-        const { data: dbLibrary } = await supabase!.from('library_files').select('*');
-        if (dbLibrary && dbLibrary.length > 0) {
-          const mappedLibrary: LibraryFile[] = dbLibrary.map((item) => ({
-            id: item.id,
-            title: item.title,
-            category: item.category || 'Geral',
-            turma: item.turma || 'Todas',
-            fileSize: item.file_size || '1 MB',
-            updatedAt: item.updated_at || new Date().toLocaleDateString('pt-BR'),
-            driveUrl: item.drive_url || item.file_url || '',
-          }));
-          setLibrary(mappedLibrary);
-          if (typeof window !== 'undefined') {
-            try {
-              setScopedLocalStorageItem('library_files_data', JSON.stringify(mappedLibrary), teacher.id);
-            } catch (e) {}
+        const res = await fetch('/api/library');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.files) && data.files.length > 0) {
+            const mappedLibrary: LibraryFile[] = data.files.map((item: any) => ({
+              id: item.id,
+              title: item.title,
+              category: item.category || 'Geral',
+              turma: item.turma || 'Todas',
+              fileSize: item.fileSize || item.file_size || '1 MB',
+              updatedAt: item.updatedAt || item.updated_at || new Date().toLocaleDateString('pt-BR'),
+              driveUrl: item.driveUrl || item.drive_url || item.file_url || '',
+            }));
+            setLibrary(mappedLibrary);
+            if (typeof window !== 'undefined') {
+              try {
+                setScopedLocalStorageItem('library_files_data', JSON.stringify(mappedLibrary), teacher.id);
+              } catch (e) {}
+            }
           }
         }
       } catch (err) {
-        console.warn('Erro ao carregar arquivos da biblioteca sob demanda:', err);
+        console.warn('Erro ao carregar arquivos da biblioteca no Firestore:', err);
       }
     };
 
     loadLibrary();
-  }, [activeTeacherTab]);
+  }, [activeTeacherTab, teacher.id]);
 
   // Auth Handlers
   const handleLoginTeacher = (loggedTeacher: TeacherUser) => {
