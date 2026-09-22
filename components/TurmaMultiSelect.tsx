@@ -24,7 +24,7 @@ export const TurmaMultiSelect: React.FC<TurmaMultiSelectProps> = ({
   // Combine options from active students with any custom options present in selectedTurmas
   const allOptions = Array.from(
     new Set([...options, ...selectedTurmas.filter(Boolean)])
-  );
+  ).sort(); // Sort para manter organizado alfabeticamente
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -69,8 +69,7 @@ export const TurmaMultiSelect: React.FC<TurmaMultiSelectProps> = ({
   const getDisplayText = () => {
     if (selectedTurmas.length === 0) return placeholder;
     if (allOptions.length > 0 && isAllSelected) return `Todas as turmas (${allOptions.length})`;
-    if (selectedTurmas.length === 1) return `Turma ${selectedTurmas[0]}`;
-    return `Turmas: ${selectedTurmas.join(', ')}`;
+    return selectedTurmas.join(', ');
   };
 
   return (
@@ -141,7 +140,7 @@ export const TurmaMultiSelect: React.FC<TurmaMultiSelectProps> = ({
                       {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
                     </div>
                     <Users className="w-3.5 h-3.5 text-[#869486] shrink-0" />
-                    <span>Turma {turma}</span>
+                    <span>{turma}</span>
                   </label>
                 );
               })}

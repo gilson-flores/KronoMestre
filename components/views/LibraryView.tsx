@@ -49,7 +49,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [selectedFileSize, setSelectedFileSize] = useState('1 MB');
   const [fileDataUrl, setFileDataUrl] = useState('');
   const [uploadSuccessMsg, setUploadSuccessMsg] = useState('');
-  const [fileToDelete, setFileToDelete] = useState<StudyFile | null>(null);
+  const [fileToDelete, setFileToDelete] = useState<LibraryFile | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -88,25 +88,22 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       setSelectedFileSize(`${sizeInKB} KB`);
     }
 
-    // Convert file to Data URL so it can be downloaded directly
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      if (result) {
-        setFileDataUrl(result);
-        if (!newDriveUrl) {
-          setNewDriveUrl(result);
-        }
-      }
-    };
-    reader.readAsDataURL(file);
+    // AVISO DE MIGRAÇÃO: O FileReader (base64) foi desativado para prevenir "Out of Memory" (Passo 51).
+    // O arquivo agora atua apenas como preenchimento visual de metadados. O link do Drive passa a ser mandatório.
+    setFileDataUrl(''); 
   };
 
   const handleAddFileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
+    
+    const submittedUrl = newDriveUrl.trim();
+    if (!submittedUrl) {
+      alert("Por favor, cole o Link do Google Drive ou Repositório Externo do material no campo correspondente.");
+      return;
+    }
 
-    const finalUrl = newDriveUrl.trim() || fileDataUrl || driveFolderUrl;
+    const finalUrl = submittedUrl;
 
     const newLibraryFile: LibraryFile = {
       id: `file-${Date.now()}`,

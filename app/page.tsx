@@ -522,7 +522,7 @@ export default function Home() {
       }
     };
 
-    if (role === 'teacher' || role === 'second_teacher') {
+    if (role === 'teacher' || role === 'second_teacher' || role === 'student') {
       loadData();
     } else {
       setIsDataLoading(false);
@@ -1328,11 +1328,6 @@ export default function Home() {
       return;
     }
 
-    if (!isSupabaseConfigured || !supabase) {
-      showGlobalStatus('error', 'ARMADILHA DE BUG DISPARADA: Supabase não está configurado. Resposta NÃO enviada.');
-      return;
-    }
-
     try {
       // Identify all target students involved in the submission (current student + group members)
       const targetStudents: StudentUser[] = [studentUser];
@@ -1355,53 +1350,9 @@ export default function Home() {
         });
       }
 
-      // Save submission in Supabase for each target student
-      for (const targetSt of targetStudents) {
-        const { data: existingSub, error: checkErr } = await supabase
-          .from('submissions')
-          .select('id')
-          .eq('activity_id', activityId)
-          .eq('student_id', targetSt.id)
-          .maybeSingle();
+      // Update local state for all target students and prepare payload for Firestore
+      let targetActivityToSave: Activity | null = null;
 
-        if (checkErr) {
-          console.error(`Erro ao verificar entrega existente para ${targetSt.fullName}:`, checkErr);
-          continue;
-        }
-
-        if (existingSub) {
-          await supabase
-            .from('submissions')
-            .update({
-              essay_answer: essayAnswer,
-              objective_score: objectiveScore,
-              max_objective_score: maxObjectiveScore,
-              max_essay_score: maxEssayScore,
-              selected_objective_answers: selectedObjectiveAnswers || {},
-              group_members: groupMembers || null,
-              status: 'pending',
-            })
-            .eq('id', existingSub.id);
-        } else {
-          await supabase!.from('submissions').insert({
-            activity_id: activityId,
-            student_id: targetSt.id,
-            student_name: targetSt.fullName,
-            matricula: targetSt.matricula,
-            tag: targetSt.tag,
-            avatar_url: targetSt.avatarUrl,
-            essay_answer: essayAnswer,
-            status: 'pending',
-            objective_score: objectiveScore,
-            max_objective_score: maxObjectiveScore,
-            max_essay_score: maxEssayScore,
-            selected_objective_answers: selectedObjectiveAnswers || {},
-            group_members: groupMembers || null,
-          });
-        }
-      }
-
-      // Update local state for all target students
       setActivities((prev) =>
         prev.map((act) => {
           if (act.id !== activityId) return act;
@@ -1444,64 +1395,39 @@ export default function Home() {
 
           const pendingCorrection = updatedSubmissions.filter((s) => s.status === 'pending').length;
 
-          return {
+          const updatedAct = {
             ...act,
             totalSubmissions: updatedSubmissions.length,
             pendingCorrection,
             submissions: updatedSubmissions,
           };
+          
+          targetActivityToSave = updatedAct;
+          return updatedAct;
         })
       );
 
       if (selectedActivityForGrading && selectedActivityForGrading.id === activityId) {
-        setSelectedActivityForGrading((prev) => {
-          if (!prev) return null;
-          let updatedSubmissions = [...prev.submissions];
-          targetStudents.forEach((targetSt) => {
-            const existingIndex = updatedSubmissions.findIndex((s) => s.studentId === targetSt.id);
-            if (existingIndex >= 0) {
-              updatedSubmissions[existingIndex] = {
-                ...updatedSubmissions[existingIndex],
-                essayAnswer,
-                objectiveScore,
-                maxObjectiveScore,
-                maxEssayScore,
-                selectedObjectiveAnswers,
-                groupMembers: groupMembers !== undefined ? groupMembers : updatedSubmissions[existingIndex].groupMembers,
-                status: 'pending' as const,
-              };
-            } else {
-              updatedSubmissions.push({
-                studentId: targetSt.id,
-                studentName: targetSt.fullName,
-                matricula: targetSt.matricula,
-                tag: targetSt.tag,
-                avatarUrl: targetSt.avatarUrl,
-                submittedAt: new Date().toLocaleDateString('pt-BR'),
-                objectiveScore,
-                maxObjectiveScore,
-                maxEssayScore,
-                status: 'pending',
-                essayAnswer,
-                selectedObjectiveAnswers,
-                groupMembers: groupMembers || undefined,
-                teacherFeedback: '',
-              });
-            }
-          });
-          return {
-            ...prev,
-            totalSubmissions: updatedSubmissions.length,
-            pendingCorrection: updatedSubmissions.filter((s) => s.status === 'pending').length,
-            submissions: updatedSubmissions,
-          };
-        });
+        if (targetActivityToSave) {
+          setSelectedActivityForGrading(targetActivityToSave);
+        }
       }
 
-      showGlobalStatus('success', 'Resposta do aluno gravada com sucesso no Supabase!');
+      // Sincronizar com Firestore via nossa API central
+      if (targetActivityToSave) {
+        const res = await fetch('/api/activities', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(targetActivityToSave)
+        });
+        
+        if (!res.ok) throw new Error('Falha ao gravar resposta na nuvem.');
+      }
+
+      showGlobalStatus('success', 'Resposta da atividade enviada com sucesso para o Professor!');
     } catch (err: any) {
       console.error('Erro ao enviar resposta:', err);
-      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro de conexão (${err?.message || ''})`);
+      showGlobalStatus('error', `Falha ao salvar na nuvem: Erro de conexão (${err?.message || ''})`);
     }
   };
 
@@ -2049,8 +1975,8 @@ export default function Home() {
     return count;
   }, [activities]);
 
-  // 0. Server-side rendering / initial hydration shell
-  if (!isMounted || isAuthChecking) {
+  // 0. Server-side rendering / initial hydration shell / data loading
+  if (!isMounted || isAuthChecking || isDataLoading) {
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col justify-center items-center">
         <div className="flex items-center gap-3 text-sm font-medium text-muted bg-surface px-6 py-4 rounded-full border border-border shadow-xl">
@@ -2126,8 +2052,6 @@ export default function Home() {
         unreadMessagesCount={teacherUnreadMessagesCount}
         pendingCorrectionsCount={teacherPendingCorrectionsCount}
       />
-            ) : (
-
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 max-w-full">

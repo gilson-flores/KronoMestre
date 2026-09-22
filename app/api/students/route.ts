@@ -179,14 +179,14 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json();
-    const studentId = body.id || body.studentId || (session.role === 'student' ? session.sub : null);
+    const studentId = body.id || body.studentId || (session.role === 'student' ? session.ownerTeacherId : null);
 
     if (!studentId) {
       return NextResponse.json({ error: 'ID do aluno é obrigatório para atualização.' }, { status: 400 });
     }
 
     // Se for perfil de aluno, só permite atualizar o próprio registro
-    if (session.role === 'student' && session.sub && session.sub !== studentId) {
+    if (session.role === 'student' && session.ownerTeacherId && session.ownerTeacherId !== studentId) {
       return NextResponse.json({ error: 'Acesso negado para modificar outro aluno.' }, { status: 403 });
     }
 
