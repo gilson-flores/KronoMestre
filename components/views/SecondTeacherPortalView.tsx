@@ -259,14 +259,24 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
   }, [atestados, atestadosSearch, atestadosTurmaFilter, atestadosTipoFilter]);
 
   const accessibleLibraryFiles = useMemo(() => {
-    if (derivedTurmas.length === 0) return libraryFiles;
-    return libraryFiles.filter(
-      (f) =>
-        !f.turma ||
-        f.turma === 'Todas' ||
-        f.turma === 'Geral' ||
-        derivedTurmas.includes(f.turma.trim())
-    );
+    return libraryFiles.filter((f) => {
+      const fileTurma = (f.turma || '').trim().toLowerCase();
+      if (
+        !fileTurma ||
+        fileTurma === 'todas' ||
+        fileTurma === 'todas as turmas' ||
+        fileTurma === 'geral' ||
+        fileTurma === 'all'
+      ) {
+        return true;
+      }
+      if (derivedTurmas.length === 0) return true;
+      const cleanFileTurma = fileTurma.replace(/^turma\s+/i, '').trim();
+      return derivedTurmas.some((dt) => {
+        const cleanDt = dt.trim().toLowerCase().replace(/^turma\s+/i, '').trim();
+        return cleanFileTurma === cleanDt || fileTurma.includes(cleanDt);
+      });
+    });
   }, [libraryFiles, derivedTurmas]);
 
   // Load atestados for the derived turmas
@@ -962,6 +972,7 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
 
             <LibraryView
               files={accessibleLibraryFiles}
+              driveFolderUrl={teacher.driveFolderUrl}
               isReadOnly={true}
               onAddFile={() => {}}
               onDeleteFile={() => {}}

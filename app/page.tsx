@@ -199,11 +199,20 @@ export default function Home() {
               disciplinas: tenant.disciplinas || prev.disciplinas || [],
               ownerTeacherId: data.user.id,
             }));
-          } else if (parsedLocalSession.role === 'second_teacher' && parsedLocalSession.teacherData) {
-            setTeacher(parsedLocalSession.teacherData);
+          } else if (data.user && data.user.role === 'second_teacher') {
+            const updatedTeacher = {
+              ...(parsedLocalSession.teacherData || {}),
+              id: data.user.id,
+              name: data.user.name,
+              email: data.user.email,
+              ownerTeacherId: data.user.ownerTeacherId,
+              mustChangePassword: Boolean(data.user.mustChangePassword),
+              driveFolderUrl: data.user.driveFolderUrl || parsedLocalSession.teacherData?.driveFolderUrl || '',
+            };
+            setTeacher(updatedTeacher);
             setRole('second_teacher');
-            setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
-          } else if (parsedLocalSession.role === 'student' && parsedLocalSession.studentData) {
+            setMustChangePassword(Boolean(data.user.mustChangePassword));
+          } else if (data.user && data.user.role === 'student') {
             if (data.user?.tenant) {
               const t = data.user.tenant;
               setTeacher((prev) => ({
@@ -216,6 +225,14 @@ export default function Home() {
                 driveFolderUrl: t.driveFolderUrl || prev.driveFolderUrl,
               }));
             }
+            setCurrentStudent(parsedLocalSession.studentData);
+            setRole('student');
+            setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
+          } else if (parsedLocalSession.role === 'second_teacher' && parsedLocalSession.teacherData) {
+            setTeacher(parsedLocalSession.teacherData);
+            setRole('second_teacher');
+            setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
+          } else if (parsedLocalSession.role === 'student' && parsedLocalSession.studentData) {
             setCurrentStudent(parsedLocalSession.studentData);
             setRole('student');
             setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
@@ -516,8 +533,8 @@ export default function Home() {
       setIsDataLoading(true);
       setDataLoadError(false);
       try {
-        // 0. Se for Aluno, sincroniza o perfil e a foto real do Professor Titular direto do Tenant
-        if (role === 'student') {
+        // 0. Se for Aluno ou 2º Professor, sincroniza o link do Drive e dados do Tenant do Professor Titular
+        if (role === 'student' || role === 'second_teacher') {
           const sessRes = await fetch('/api/auth/session').catch(() => null);
           if (sessRes && sessRes.ok) {
             const sessData = await sessRes.json().catch(() => ({}));
@@ -525,12 +542,15 @@ export default function Home() {
               const t = sessData.user.tenant;
               setTeacher((prev) => ({
                 ...prev,
-                id: sessData.user.ownerTeacherId || prev.id,
-                name: t.name || 'Prof. Gilson Flores',
-                subject: t.subject || prev.subject,
+                id: role === 'student' ? sessData.user.ownerTeacherId || prev.id : prev.id,
+                name: role === 'student' ? t.name || 'Prof. Gilson Flores' : prev.name,
+                subject: role === 'student' ? t.subject || prev.subject : prev.subject,
                 school: t.school || prev.school,
-                avatarUrl: t.avatarUrl || prev.avatarUrl,
-                driveFolderUrl: t.driveFolderUrl || prev.driveFolderUrl,
+                avatarUrl: role === 'student' ? t.avatarUrl || prev.avatarUrl : prev.avatarUrl,
+                driveFolderUrl:
+                  t.driveFolderUrl ||
+                  prev.driveFolderUrl ||
+                  (typeof window !== 'undefined' ? localStorage.getItem('teacher_drive_folder_url') || '' : ''),
               }));
             }
           }
@@ -566,6 +586,24 @@ export default function Home() {
           const msgData = await msgRes.json();
           if (Array.isArray(msgData.messages) && msgData.messages.length > 0) {
             setChatMessages(msgData.messages);
+          }
+        }
+
+        // 4. Carregar Biblioteca de Arquivos do Firestore (para Titular, 2º Professor e Aluno)
+        const libRes = await fetch('/api/library');
+        if (libRes.ok) {
+          const libData = await libRes.json();
+          if (Array.isArray(libData.files) && libData.files.length > 0) {
+            const mappedLibrary: LibraryFile[] = libData.files.map((item: any) => ({
+              id: item.id,
+              title: item.title,
+              category: item.category || 'Geral',
+              turma: item.turma || 'Todas',
+              fileSize: item.fileSize || item.file_size || '1 MB',
+              updatedAt: item.updatedAt || item.updated_at || new Date().toLocaleDateString('pt-BR'),
+              driveUrl: item.driveUrl || item.drive_url || item.file_url || '',
+            }));
+            setLibrary(mappedLibrary);
           }
         }
       } catch (err: any) {

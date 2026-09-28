@@ -43,6 +43,9 @@ export async function GET(req: NextRequest) {
       const ownerTeacherId = jwtSession.ownerTeacherId || jwtSession.sub;
 
       if (jwtSession.role === 'second_teacher') {
+        const tenantSnap = await db.collection('tenants').doc(ownerTeacherId).get();
+        const tenantData = tenantSnap.exists ? tenantSnap.data() : {};
+
         return NextResponse.json({
           user: {
             id: jwtSession.sub,
@@ -51,6 +54,10 @@ export async function GET(req: NextRequest) {
             role: 'second_teacher',
             ownerTeacherId,
             mustChangePassword: Boolean(jwtSession.mustChangePassword),
+            tenant: {
+              driveFolderUrl: tenantData?.driveFolderUrl || '',
+              school: tenantData?.school || "EEB Prof. Jandira D'Ávila",
+            },
           },
         });
       }

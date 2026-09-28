@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 import { verifyPassword } from "@/lib/crypto";
-import { signSessionToken, setSessionCookie, SessionPayload } from "@/lib/auth-server";
+import { signSessionToken, setSessionCookie, clearSessionCookie, SessionPayload } from "@/lib/auth-server";
 
 export const dynamic = "force-dynamic";
 
@@ -19,38 +19,44 @@ export async function POST(request: Request) {
     const cleanPassword = String(password).trim();
     const adminDb = getAdminDb();
 
-    // ============================================================================
-    // FLUXO 1: LOGIN DO 2º PROFESSOR (AEE / INCLUSÃO) - 100% FIRESTORE + JWT
-    // ============================================================================
-    if (role === "second_teacher") {
-      const snap = await adminDb.collectionGroup("second_teachers").get();
-      let matchedDoc: any = null;
-      let matchedData: any = null;
+    const isAdminSupremoEmail =
+      cleanEmail === "755840@profe.sed.sc.gov.br" ||
+      cleanEmail === "gilsonjuniores@gmail.com";
 
+    // ============================================================================
+    // VERIFICAÇÃO AUTOMÁTICA DE 2º PROFESSOR NO FIRESTORE
+    // (Funciona tanto na aba 2º Professor quanto se digitar na aba Professor!)
+    // ============================================================================
+    let matchedSecondDoc: any = null;
+    let matchedSecondData: any = null;
+
+    if (role === "second_teacher" || !isAdminSupremoEmail) {
+      const snap = await adminDb.collectionGroup("second_teachers").get();
       for (const doc of snap.docs) {
         const d = doc.data();
         if ((d.email || "").trim().toLowerCase() === cleanEmail) {
-          matchedDoc = doc;
-          matchedData = d;
+          matchedSecondDoc = doc;
+          matchedSecondData = d;
           break;
         }
       }
+    }
 
-      if (!matchedDoc || !matchedData) {
+    if (role === "second_teacher" || matchedSecondDoc) {
+      if (!matchedSecondDoc || !matchedSecondData) {
         return NextResponse.json(
           { error: "E-mail de 2º Professor não encontrado. Verifique com o Professor Titular." },
           { status: 404 }
         );
       }
 
-      const storedHash = matchedData.passwordHash || matchedData.password_hash || "";
+      const storedHash = matchedSecondData.passwordHash || matchedSecondData.password_hash || "";
       let isPassValid = false;
 
       if (storedHash) {
         isPassValid = await verifyPassword(cleanPassword, storedHash);
       }
 
-      // Fallback: se não validou pelo hash Bcrypt, tenta verificar no Firebase Auth
       if (!isPassValid) {
         const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
         if (apiKey) {
@@ -59,7 +65,11 @@ export async function POST(request: Request) {
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email: cleanEmail, password: cleanPassword, returnSecureToken: true }),
+              body: JSON.stringify({
+                email: cleanEmail,
+                password: cleanPassword,
+                returnSecureToken: true,
+              }),
             }
           ).catch(() => null);
           if (fbRes && fbRes.ok) {
@@ -75,52 +85,56 @@ export async function POST(request: Request) {
         );
       }
 
-      // Descobre o ownerTeacherId real (da pasta pai no Firestore ou do documento)
+      // Descobre o ownerTeacherId real do Professor Titular
       let ownerTeacherId =
-        matchedDoc.ref.parent.parent?.id || matchedData.ownerTeacherId || "default-teacher";
+        matchedSecondDoc.ref.parent.parent?.id ||
+        matchedSecondData.ownerTeacherId ||
+        "default-teacher";
 
-      // Se estava pendurado em 'default-teacher', localiza o Tenant principal no Firestore
       if (ownerTeacherId === "default-teacher") {
         const tenantsSnap = await adminDb.collection("tenants").get();
         const realTenant = tenantsSnap.docs.find((t) => t.id !== "default-teacher");
         if (realTenant) {
           ownerTeacherId = realTenant.id;
-          await matchedDoc.ref.set({ ownerTeacherId }, { merge: true });
+          await matchedSecondDoc.ref.set({ ownerTeacherId }, { merge: true });
         }
       }
 
+      // Busca o driveFolderUrl e escola do Tenant do Professor Titular para a Biblioteca de Arquivos
+      const ownerTenantSnap = await adminDb.collection("tenants").doc(ownerTeacherId).get();
+      const ownerTenantData = ownerTenantSnap.exists ? ownerTenantSnap.data() || {} : {};
+
       const sessionPayload: SessionPayload = {
-        sub: matchedDoc.id,
+        sub: matchedSecondDoc.id,
         role: "second_teacher",
         ownerTeacherId,
         email: cleanEmail,
-        name: matchedData.name || "2º Professor (AEE)",
-        mustChangePassword: Boolean(matchedData.mustChangePassword),
+        name: matchedSecondData.name || "2º Professor (AEE)",
+        mustChangePassword: Boolean(matchedSecondData.mustChangePassword),
       };
 
       const token = await signSessionToken(sessionPayload, "7d");
 
-      // Limpa eventual cookie 'session' antigo do Firebase Auth para não dar conflito de papéis
-      const cookieStore = await cookies();
-      cookieStore.delete("session");
-
       const response = NextResponse.json({
         user: {
-          id: matchedDoc.id,
+          id: matchedSecondDoc.id,
           email: cleanEmail,
-          name: matchedData.name || "2º Professor (AEE)",
-          subject: matchedData.subject || "AEE / Inclusão Escolar",
-          phone: matchedData.phone || "",
-          school: matchedData.school || "",
+          name: matchedSecondData.name || "2º Professor (AEE)",
+          subject: matchedSecondData.subject || "AEE / Inclusão Escolar",
+          phone: matchedSecondData.phone || "",
+          school: matchedSecondData.school || ownerTenantData.school || "EEB Prof. Jandira D'Ávila",
+          driveFolderUrl: ownerTenantData.driveFolderUrl || "",
           avatarUrl:
-            matchedData.avatarUrl ||
+            matchedSecondData.avatarUrl ||
             "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250",
           role: "second_teacher",
-          mustChangePassword: Boolean(matchedData.mustChangePassword),
+          mustChangePassword: Boolean(matchedSecondData.mustChangePassword),
           ownerTeacherId,
         },
       });
 
+      // Destrói o cookie 'session' do Firebase Auth diretamente no cabeçalho da resposta!
+      response.cookies.set("session", "", { maxAge: 0, path: "/" });
       setSessionCookie(response, token, 7 * 24 * 60 * 60);
       return response;
     }
@@ -141,7 +155,11 @@ export async function POST(request: Request) {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: cleanEmail, password: cleanPassword, returnSecureToken: true }),
+        body: JSON.stringify({
+          email: cleanEmail,
+          password: cleanPassword,
+          returnSecureToken: true,
+        }),
       }
     );
 
@@ -160,31 +178,18 @@ export async function POST(request: Request) {
     const expiresIn = 60 * 60 * 24 * 5 * 1000; // 5 dias
     const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn });
 
-    const cookieStore = await cookies();
-    cookieStore.set("session", sessionCookie, {
-      maxAge: expiresIn / 1000,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      sameSite: "lax",
-    });
-
     // Onboarding Silencioso (Gravação do Tenant no Firestore)
     const tenantRef = adminDb.collection("tenants").doc(uid);
     const tenantSnap = await tenantRef.get();
 
-    const isAdminSupremo =
-      userEmail.toLowerCase().trim() === "755840@profe.sed.sc.gov.br" ||
-      userEmail.toLowerCase().trim() === "gilsonjuniores@gmail.com";
-
     let tenantData: any;
     if (!tenantSnap.exists) {
       tenantData = {
-        name: isAdminSupremo ? "Gilson Flores" : userEmail.split("@")[0],
-        nome: isAdminSupremo ? "Gilson Flores" : userEmail.split("@")[0],
+        name: isAdminSupremoEmail ? "Gilson Flores" : userEmail.split("@")[0],
+        nome: isAdminSupremoEmail ? "Gilson Flores" : userEmail.split("@")[0],
         email: userEmail,
-        plan_type: isAdminSupremo ? "unlimited" : "basic",
-        is_admin: isAdminSupremo,
+        plan_type: isAdminSupremoEmail ? "unlimited" : "basic",
+        is_admin: isAdminSupremoEmail,
         subject: "Sociologia",
         school: "",
         escolas_vinculadas: [],
@@ -194,14 +199,14 @@ export async function POST(request: Request) {
       await tenantRef.set(tenantData);
     } else {
       tenantData = tenantSnap.data() || {};
-      if (isAdminSupremo && (!tenantData.is_admin || tenantData.plan_type !== "unlimited")) {
+      if (isAdminSupremoEmail && (!tenantData.is_admin || tenantData.plan_type !== "unlimited")) {
         tenantData.is_admin = true;
         tenantData.plan_type = "unlimited";
         await tenantRef.set({ is_admin: true, plan_type: "unlimited" }, { merge: true });
       }
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       user: {
         id: uid,
         email: userEmail,
@@ -210,6 +215,18 @@ export async function POST(request: Request) {
         tenant: tenantData,
       },
     });
+
+    // Limpa eventual cookie JWT de aluno/2º professor e grava o cookie do Professor Titular
+    clearSessionCookie(response);
+    response.cookies.set("session", sessionCookie, {
+      maxAge: expiresIn / 1000,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      sameSite: "lax",
+    });
+
+    return response;
   } catch (error: any) {
     console.error("[Login API] Erro fatal:", error);
     return NextResponse.json(

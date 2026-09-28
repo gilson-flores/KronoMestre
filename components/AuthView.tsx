@@ -87,7 +87,22 @@ export const AuthView: React.FC<AuthViewProps> = ({
       }
 
       if (res.ok && data.user) {
-        const tenant = data.user.tenant || {};
+     if (data.user.role === 'second_teacher' && onLoginSecondTeacher) {
+       onLoginSecondTeacher({
+         id: data.user.id || '2nd-teacher-id',
+         name: data.user.name || '2º Professor (AEE)',
+         subject: data.user.subject || 'AEE / Inclusão Escolar',
+         email: data.user.email || cleanEmail,
+         avatarUrl: data.user.avatarUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250',
+         phone: data.user.phone || '',
+         school: data.user.school || '',
+         driveFolderUrl: data.user.driveFolderUrl || '',
+         mustChangePassword: Boolean(data.user.mustChangePassword),
+         ownerTeacherId: data.user.ownerTeacherId,
+       });
+       return;
+     }
+     const tenant = data.user.tenant || {};
         // Formata os dados retornados pela API exclusivamente a partir do Firebase/Firestore
         const teacherProfile: TeacherUser = {
           id: data.user.id,
@@ -127,7 +142,6 @@ export const AuthView: React.FC<AuthViewProps> = ({
     setSecondTeacherError('');
     setSecondTeacherLoading(true);
 
-    // EXTERMINADOR DE CACHE: Garante que nenhuma sessão fantasma sobreviva
     if (typeof window !== 'undefined') {
       sessionStorage.clear();
       localStorage.removeItem('local_students_data');
@@ -135,7 +149,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
       localStorage.removeItem('library_files_data');
     }
 
-    // MODO SUPER ADMIN: Bypass local sem gravar no banco
+    // MODO SUPER ADMIN: Bypass local
     const MASTER_KEY = "KronoAdmin2026!";
     if (secondTeacherPassword === MASTER_KEY) {
       if (onLoginSecondTeacher) {
@@ -155,7 +169,6 @@ export const AuthView: React.FC<AuthViewProps> = ({
     try {
       const cleanEmail = (secondTeacherEmail || '').trim().toLowerCase();
 
-      // MIGRADO: Comunicação com a API
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -181,10 +194,23 @@ export const AuthView: React.FC<AuthViewProps> = ({
           email: data.user.email || cleanEmail,
           avatarUrl: data.user.avatarUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250',
           phone: data.user.phone || '',
-          school: data.user.school || teacher?.school || '',
+          school: data.user.school || '',
+          driveFolderUrl: data.user.driveFolderUrl || '',
           mustChangePassword: Boolean(data.user.mustChangePassword),
-          ownerTeacherId: data.user.ownerTeacherId || teacher?.id,
+          ownerTeacherId: data.user.ownerTeacherId || '',
         };
+
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem(
+            'active_session',
+            JSON.stringify({
+              role: 'second_teacher',
+              ownerTeacherId: secondTeacherProfile.ownerTeacherId,
+              teacherData: secondTeacherProfile,
+              mustChangePassword: secondTeacherProfile.mustChangePassword,
+            })
+          );
+        }
 
         if (onLoginSecondTeacher) {
           onLoginSecondTeacher(secondTeacherProfile);
