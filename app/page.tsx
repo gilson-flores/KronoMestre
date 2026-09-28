@@ -514,6 +514,15 @@ export default function Home() {
             }
           }
         }
+
+        // 3. Carregar Mensagens de Chat do Firestore
+        const msgRes = await fetch('/api/messages');
+        if (msgRes.ok) {
+          const msgData = await msgRes.json();
+          if (Array.isArray(msgData.messages) && msgData.messages.length > 0) {
+            setChatMessages(msgData.messages);
+          }
+        }
       } catch (err: any) {
         console.error('Erro ao carregar dados do Firestore:', err);
         setDataLoadError(true);
@@ -767,230 +776,113 @@ export default function Home() {
     return () => clearInterval(deadlineInterval);
   }, [role, currentStudent, activities, showGlobalStatus]);
 
-  // Sincronização em Tempo Real de Mensagens e Novas Atividades via Supabase (Realtime Channel + Polling)
+  // Sincronização em Tempo Real de Mensagens e Novas Atividades via Firestore Polling
   useEffect(() => {
-    if (!role || !isSupabaseConfigured || !supabase) return;
+    if (!role) return;
 
-    const client = supabase;
-    const currentUserId = role === 'student' ? currentStudent?.id : (role === 'teacher' ? teacher.id || 'teacher-1' : 'second-teacher');
+    const currentUserId =
+      role === 'student'
+        ? currentStudent?.id
+        : role === 'teacher'
+        ? teacher.id || 'teacher-1'
+        : 'second-teacher';
 
-    // Realtime Channel para Mensagens de Chat e Atividades
-    const realtimeChannel = client
-      .channel('realtime_app_feed')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
-        (payload) => {
-          const newMsgRow = payload.new;
-          if (!newMsgRow) return;
-
-          const newMsg: ChatMessage = {
-            id: newMsgRow.id || `msg-${newMsgRow.created_at}`,
-            threadId: newMsgRow.thread_id,
-            senderId: newMsgRow.sender_id,
-            senderName: newMsgRow.sender_name,
-            senderRole: newMsgRow.sender_role,
-            senderAvatar: newMsgRow.sender_avatar,
-            recipientId: newMsgRow.recipient_id,
-            recipientName: newMsgRow.recipient_name,
-            content: newMsgRow.content,
-            createdAt: newMsgRow.created_at
-              ? new Date(newMsgRow.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-              : '',
-            read: Boolean(newMsgRow.read),
-            activityId: newMsgRow.activity_id,
-            activityTitle: newMsgRow.activity_title,
-          };
-
-          setChatMessages((prev) => {
-            const { updated, isNew } = mergeChatMessage(prev, newMsg);
-
-            // Disparar Notificação Sonora e Visual Nativas se a mensagem for nova e de outro usuário
-            if (isNew && newMsg.senderId !== currentUserId) {
-              if (role === 'student' && currentStudent) {
-                const isForMe = newMsg.threadId === currentStudent.id || newMsg.recipientId === currentStudent.id || newMsg.threadId === 'broadcast';
-                if (isForMe) {
-                  sendBrowserNotification(`Mensagem de ${newMsg.senderName || 'Prof. Gilson Flores'}:`, {
-                    body: newMsg.content,
-                    icon: newMsg.senderAvatar || teacher.avatarUrl,
-                    tag: `msg-${newMsg.id}`,
-                  });
-                  showGlobalStatus('info', `💬 Nova mensagem de ${newMsg.senderName || 'Prof. Gilson Flores'}`);
-                }
-              } else if (role === 'teacher') {
-                sendBrowserNotification(`Mensagem de ${newMsg.senderName}:`, {
-                  body: newMsg.content,
-                  icon: newMsg.senderAvatar,
-                  tag: `msg-${newMsg.id}`,
-                });
-                showGlobalStatus('info', `💬 Nova mensagem de ${newMsg.senderName}`);
-              } else if (role === 'second_teacher') {
-                if (newMsg.recipientId === 'second-teacher' || newMsg.recipientName?.includes('2º')) {
-                  sendBrowserNotification(`Mensagem de ${newMsg.senderName}:`, {
-                    body: newMsg.content,
-                    icon: newMsg.senderAvatar,
-                    tag: `msg-${newMsg.id}`,
-                  });
-                }
-              }
-            }
-
-            return updated;
-          });
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'activities' },
-        (payload) => {
-          const newActRow = payload.new;
-          if (!newActRow) return;
-
-          if (role === 'student' && currentStudent) {
-            notifyNewActivityForStudent(
-              {
-                id: newActRow.id,
-                title: newActRow.title,
-                subject: newActRow.subject || 'Sociologia',
-                description: newActRow.description || '',
-                turma: newActRow.turma || '',
-                type: newActRow.type || 'Avaliação',
-                status: newActRow.status || 'Ativo',
-                deadline: newActRow.deadline || '',
-                maxGrade: Number(newActRow.max_grade || 10),
-                isAdapted: Boolean(newActRow.is_adapted),
-                questions: [],
-                totalSubmissions: 0,
-                totalStudents: 0,
-                pendingCorrection: 0,
-                submissions: [],
-              },
-              currentStudent,
-              showGlobalStatus
-            );
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'activities' },
-        (payload) => {
-          const updatedActRow = payload.new;
-          const oldActRow = payload.old;
-          if (!updatedActRow) return;
-
-          // Atualiza lista de atividades no estado local
-          setActivities((prev) => {
-            const exists = prev.some((a) => a.id === updatedActRow.id);
-            if (!exists) return prev;
-            return prev.map((a) =>
-              a.id === updatedActRow.id
-                ? {
-                    ...a,
-                    title: updatedActRow.title || a.title,
-                    description: updatedActRow.description ?? a.description,
-                    turma: updatedActRow.turma || a.turma,
-                    status: updatedActRow.status || a.status,
-                    deadline: updatedActRow.deadline || a.deadline,
-                    maxGrade: Number(updatedActRow.max_grade ?? a.maxGrade),
-                  }
-                : a
-            );
-          });
-
-          if (role === 'student' && currentStudent) {
-            const hasNewDeadline = updatedActRow.deadline && (!oldActRow || oldActRow.deadline !== updatedActRow.deadline);
-            if (hasNewDeadline) {
-              notifyDeadlineExtendedForStudent(
-                {
-                  id: updatedActRow.id,
-                  title: updatedActRow.title,
-                  subject: updatedActRow.subject || 'Sociologia',
-                  description: updatedActRow.description || '',
-                  turma: updatedActRow.turma || '',
-                  type: updatedActRow.type || 'Avaliação',
-                  status: updatedActRow.status || 'Ativo',
-                  deadline: updatedActRow.deadline || '',
-                  maxGrade: Number(updatedActRow.max_grade || 10),
-                  isAdapted: Boolean(updatedActRow.is_adapted),
-                  questions: [],
-                  totalSubmissions: 0,
-                  totalStudents: 0,
-                  pendingCorrection: 0,
-                  submissions: [],
-                },
-                currentStudent,
-                showGlobalStatus
-              );
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    // Fallback polling a cada 8 segundos para garantir sincronização caso o websocket oscile
     const pollInterval = setInterval(async () => {
       try {
-        const { data: latestMsgs } = await client
-          .from('chat_messages')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(10);
+        // 1. Polling de Mensagens no Firestore
+        const msgRes = await fetch('/api/messages');
+        if (msgRes.ok) {
+          const msgData = await msgRes.json();
+          if (Array.isArray(msgData.messages) && msgData.messages.length > 0) {
+            setChatMessages((prev) => {
+              let currentList = prev;
+              msgData.messages.forEach((mapped: ChatMessage) => {
+                const { updated, isNew } = mergeChatMessage(currentList, mapped);
+                currentList = updated;
 
-        if (latestMsgs && latestMsgs.length > 0) {
-          setChatMessages((prev) => {
-            let currentList = prev;
-            latestMsgs.reverse().forEach((m) => {
-              const mapped: ChatMessage = {
-                id: m.id || `msg-${m.created_at}`,
-                threadId: m.thread_id,
-                senderId: m.sender_id,
-                senderName: m.sender_name,
-                senderRole: m.sender_role,
-                senderAvatar: m.sender_avatar,
-                recipientId: m.recipient_id,
-                recipientName: m.recipient_name,
-                content: m.content,
-                createdAt: m.created_at
-                  ? new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-                  : '',
-                read: Boolean(m.read),
-                activityId: m.activity_id,
-                activityTitle: m.activity_title,
-              };
-
-              const { updated, isNew } = mergeChatMessage(currentList, mapped);
-              currentList = updated;
-
-              if (isNew && mapped.senderId !== currentUserId) {
-                if (role === 'student' && currentStudent) {
-                  const isForMe = mapped.threadId === currentStudent.id || mapped.recipientId === currentStudent.id || mapped.threadId === 'broadcast';
-                  if (isForMe) {
-                    sendBrowserNotification(`Mensagem de ${mapped.senderName || 'Prof. Gilson Flores'}:`, {
+                if (isNew && mapped.senderId !== currentUserId) {
+                  if (role === 'student' && currentStudent) {
+                    const isForMe =
+                      mapped.threadId === currentStudent.id ||
+                      mapped.recipientId === currentStudent.id ||
+                      mapped.threadId === 'broadcast';
+                    if (isForMe) {
+                      sendBrowserNotification(
+                        `Mensagem de ${mapped.senderName || 'Prof. Gilson Flores'}:`,
+                        {
+                          body: mapped.content,
+                          icon: mapped.senderAvatar || teacher.avatarUrl,
+                          tag: `msg-${mapped.id}`,
+                        }
+                      );
+                      showGlobalStatus(
+                        'info',
+                        `💬 Nova mensagem de ${mapped.senderName || 'Prof. Gilson Flores'}`
+                      );
+                    }
+                  } else if (role === 'teacher' && mapped.senderRole !== 'teacher') {
+                    sendBrowserNotification(`Mensagem de ${mapped.senderName}:`, {
                       body: mapped.content,
-                      icon: mapped.senderAvatar || teacher.avatarUrl,
+                      icon: mapped.senderAvatar,
                       tag: `msg-${mapped.id}`,
                     });
+                    showGlobalStatus('info', `💬 Nova mensagem de ${mapped.senderName}`);
+                  } else if (role === 'second_teacher') {
+                    if (
+                      mapped.recipientId === 'second-teacher' ||
+                      mapped.recipientName?.includes('2º')
+                    ) {
+                      sendBrowserNotification(`Mensagem de ${mapped.senderName}:`, {
+                        body: mapped.content,
+                        icon: mapped.senderAvatar,
+                        tag: `msg-${mapped.id}`,
+                      });
+                      showGlobalStatus('info', `💬 Nova mensagem de ${mapped.senderName}`);
+                    }
                   }
-                } else if (role === 'teacher' && mapped.senderRole === 'student') {
-                  sendBrowserNotification(`Mensagem de ${mapped.senderName}:`, {
-                    body: mapped.content,
-                    icon: mapped.senderAvatar,
-                    tag: `msg-${mapped.id}`,
-                  });
                 }
-              }
+              });
+              return currentList;
             });
-            return currentList;
-          });
+          }
         }
-      } catch (pollErr) {
-        // Silently handle polling errors
+
+        // 2. Polling de Atividades e Prazos no Firestore (Notificações para Alunos e entregas para Professor)
+        const actRes = await fetch('/api/activities');
+        if (actRes.ok) {
+          const actData = await actRes.json();
+          if (Array.isArray(actData.activities)) {
+            setActivities((prev) => {
+              const incomingActs: Activity[] = actData.activities;
+
+              if (role === 'student' && currentStudent && prev.length > 0) {
+                incomingActs.forEach((inc) => {
+                  const existing = prev.find((p) => p.id === inc.id);
+                  if (!existing) {
+                    notifyNewActivityForStudent(inc, currentStudent, showGlobalStatus);
+                  } else if (inc.deadline && existing.deadline !== inc.deadline) {
+                    notifyDeadlineExtendedForStudent(inc, currentStudent, showGlobalStatus);
+                  }
+                });
+              }
+
+              if (typeof window !== 'undefined') {
+                setScopedLocalStorageItem(
+                  'local_activities_data',
+                  JSON.stringify(incomingActs),
+                  teacher.id
+                );
+              }
+              return incomingActs;
+            });
+          }
+        }
+      } catch {
+        // Silencia oscilações momentâneas de rede
       }
-    }, 8000);
+    }, 6000);
 
     return () => {
-      client.removeChannel(realtimeChannel);
       clearInterval(pollInterval);
     };
   }, [role, currentStudent, teacher.avatarUrl, teacher.id, showGlobalStatus]);
@@ -1452,16 +1344,26 @@ export default function Home() {
       return next;
     });
 
-    // 2. Transplante: Envia para o Firebase (POST /api/students)
+    // 2. Transplante em Lote Atômico: Envia todo o array em 1 única requisição para o Firebase (POST /api/students)
     try {
-      // Como o backend aceita lote ou único, enviamos um por um de forma segura (ou lote se preferir otimizar no futuro)
-      await Promise.all(processedStudents.map(student => 
-        fetch('/api/students', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(student)
-        })
-      ));
+      const res = await fetch('/api/students', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(processedStudents),
+      });
+      if (!res.ok) throw new Error('Falha ao gravar lote de alunos no Firestore.');
+      showGlobalStatus('success', `${processedStudents.length} aluno(s) importado(s) e confirmados no Banco!`);
+    } catch (err) {
+      console.warn('Erro ao conectar na importação de alunos:', err);
+      showGlobalStatus('error', 'A importação ocorreu na tela, mas houve falha ao salvar na nuvem.');
+    }// 2. Transplante em Lote Atômico: Envia todo o array em 1 única requisição para o Firebase (POST /api/students)
+    try {
+      const res = await fetch('/api/students', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(processedStudents),
+      });
+      if (!res.ok) throw new Error('Falha ao gravar lote de alunos no Firestore.');
       showGlobalStatus('success', `${processedStudents.length} aluno(s) importado(s) e confirmados no Banco!`);
     } catch (err) {
       console.warn('Erro ao conectar na importação de alunos:', err);
@@ -1798,7 +1700,7 @@ export default function Home() {
     threadId: string;
     senderId: string;
     senderName: string;
-    senderRole: 'teacher' | 'student';
+    senderRole: 'teacher' | 'student' | 'second_teacher';
     senderAvatar?: string;
     recipientId: string;
     recipientName: string;
@@ -1814,7 +1716,7 @@ export default function Home() {
       threadId: msgData.threadId,
       senderId: msgData.senderId,
       senderName: msgData.senderName,
-      senderRole: msgData.senderRole,
+      senderRole: msgData.senderRole as 'teacher' | 'student',
       senderAvatar: msgData.senderAvatar,
       recipientId: msgData.recipientId,
       recipientName: msgData.recipientName,
@@ -1825,28 +1727,24 @@ export default function Home() {
       activityTitle: msgData.activityTitle,
     };
 
+    // 1. Otimismo UI
     setChatMessages((prev) => mergeChatMessage(prev, newMsg).updated);
 
-    if (isSupabaseConfigured && supabase) {
-      supabase!.from('chat_messages').insert({
-        thread_id: msgData.threadId,
-        sender_id: msgData.senderId,
-        sender_name: msgData.senderName,
-        sender_role: msgData.senderRole,
-        sender_avatar: msgData.senderAvatar,
-        recipient_id: msgData.recipientId,
-        recipient_name: msgData.recipientName,
-        content: msgData.content,
-        created_at: now.toISOString(),
-        read: false,
-        activity_id: msgData.activityId,
-        activity_title: msgData.activityTitle,
-      }).then(({ error }) => {
-        if (error) console.log('Tabela chat_messages no Supabase (opcional):', error.message);
+    // 2. Persistir mensagem no Firebase Firestore
+    try {
+      await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...newMsg,
+          createdAtIso: now.toISOString(),
+        }),
       });
+    } catch (err) {
+      console.warn('Erro ao persistir mensagem no Firestore:', err);
     }
 
-    // Se a mensagem for de um aluno e o auto-reply de IA do Prof. Gilson estiver habilitado:
+    // 3. Se a mensagem for de um aluno e o auto-reply de IA do Prof. Gilson estiver habilitado:
     if (msgData.senderRole === 'student' && isAiAutoReplyEnabled && msgData.recipientId !== 'second-teacher') {
       const studentObj = students.find((s) => s.id === msgData.senderId);
 
@@ -1893,22 +1791,14 @@ export default function Home() {
               icon: teacher.avatarUrl,
             });
 
-            if (isSupabaseConfigured && supabase) {
-              supabase!.from('chat_messages').insert({
-                thread_id: botMsg.threadId,
-                sender_id: botMsg.senderId,
-                sender_name: botMsg.senderName,
-                sender_role: botMsg.senderRole,
-                sender_avatar: botMsg.senderAvatar,
-                recipient_id: botMsg.recipientId,
-                recipient_name: botMsg.recipientName,
-                content: botMsg.content,
-                created_at: replyNow.toISOString(),
-                read: false,
-              }).then(({ error }) => {
-                if (error) console.log('Tabela chat_messages no Supabase (auto-reply):', error.message);
-              });
-            }
+            await fetch('/api/messages', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...botMsg,
+                createdAtIso: replyNow.toISOString(),
+              }),
+            });
           }
         }
       } catch (botErr) {
@@ -1920,34 +1810,18 @@ export default function Home() {
   const handleMarkThreadAsRead = useCallback((threadId: string, currentRole: 'teacher' | 'student') => {
     setChatMessages((prev) => {
       const unreadMsgs = prev.filter(
-        (m) => (m.threadId === threadId || m.recipientId === threadId || m.senderId === threadId) &&
-               m.senderRole !== currentRole &&
-               !m.read
+        (m) =>
+          (m.threadId === threadId || m.recipientId === threadId || m.senderId === threadId) &&
+          m.senderRole !== currentRole &&
+          !m.read
       );
       if (unreadMsgs.length === 0) return prev;
 
-      if (isSupabaseConfigured && supabase) {
-        const unreadDbIds = unreadMsgs.map((m) => m.id).filter((id) => id && !id.startsWith('msg-'));
-        if (unreadDbIds.length > 0) {
-          supabase
-            .from('chat_messages')
-            .update({ read: true })
-            .in('id', unreadDbIds)
-            .then(({ error }) => {
-              if (error) console.log('Atualização de mensagens lidas no Supabase:', error.message);
-            });
-        } else {
-          supabase
-            .from('chat_messages')
-            .update({ read: true })
-            .or(`thread_id.eq.${threadId},sender_id.eq.${threadId},recipient_id.eq.${threadId}`)
-            .neq('sender_role', currentRole)
-            .eq('read', false)
-            .then(({ error }) => {
-              if (error) console.log('Atualização de mensagens lidas no Supabase:', error.message);
-            });
-        }
-      }
+      fetch('/api/messages', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threadId, currentRole }),
+      }).catch((err) => console.warn('Erro ao marcar mensagens como lidas no Firestore:', err));
 
       return prev.map((m) => {
         if (
@@ -2032,7 +1906,6 @@ export default function Home() {
           libraryFiles={library}
           messages={chatMessages}
           onLogout={handleLogout}
-          // @ts-expect-error - Ignorando incompatibilidade temporária de tipagem do chat legada
           onSendMessage={handleSendMessage}
           onMarkThreadAsRead={handleMarkThreadAsRead}
         />

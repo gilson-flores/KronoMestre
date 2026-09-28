@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { X, Pencil, HeartHandshake, CheckCircle2, AlertTriangle, Save } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Pencil, CheckCircle2, AlertTriangle, Save, KeyRound } from 'lucide-react';
 import { TeacherUser } from '@/lib/types';
 import { getScopedLocalStorageItem, setScopedLocalStorageItem } from '@/lib/cacheUtils';
 
@@ -21,6 +21,7 @@ export const EditSecondTeacherModal: React.FC<EditSecondTeacherModalProps> = ({
   const [prevTeacherId, setPrevTeacherId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [subject, setSubject] = useState('AEE / Inclusão Escolar');
   const [phone, setPhone] = useState('');
   const [school, setSchool] = useState('');
@@ -32,6 +33,7 @@ export const EditSecondTeacherModal: React.FC<EditSecondTeacherModalProps> = ({
     setPrevTeacherId(teacherToEdit.id);
     setName(teacherToEdit.name || '');
     setEmail(teacherToEdit.email || '');
+    setPassword('');
     setSubject(teacherToEdit.subject || 'AEE / Inclusão Escolar');
     setPhone(teacherToEdit.phone || '');
     setSchool(teacherToEdit.school || '');
@@ -51,24 +53,38 @@ export const EditSecondTeacherModal: React.FC<EditSecondTeacherModalProps> = ({
       return;
     }
 
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setFormError('Por favor, informe um e-mail de acesso válido.');
+      return;
+    }
+
+    if (password.trim() && password.trim().length < 4) {
+      setFormError('Se desejar alterar a senha, informe pelo menos 4 caracteres.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     const updatedTeacher: TeacherUser = {
       ...teacherToEdit,
       name: name.trim(),
+      email: cleanEmail,
       subject: subject.trim() || 'AEE / Inclusão Escolar',
       phone: phone.trim(),
       school: school.trim(),
     };
 
     try {
-      // 1. Chamar API interna
+      // 1. Chamar API interna enviando tanto o e-mail antigo (para localização) quanto o newEmail e eventual senha
       const res = await fetch('/api/second-teachers', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: teacherToEdit.id,
           email: teacherToEdit.email,
+          newEmail: cleanEmail,
+          password: password.trim() || undefined,
           name: updatedTeacher.name,
           subject: updatedTeacher.subject,
           phone: updatedTeacher.phone,
@@ -99,14 +115,15 @@ export const EditSecondTeacherModal: React.FC<EditSecondTeacherModalProps> = ({
         }
       }
 
-      setFormSuccess('Dados do 2º Professor atualizados com sucesso!');
+      setFormSuccess('Dados e credenciais do 2º Professor atualizados com sucesso!');
       onSaveTeacher(updatedTeacher);
 
       setTimeout(() => {
         setIsSubmitting(false);
         setFormSuccess('');
+        setPassword('');
         onClose();
-      }, 1200);
+      }, 1000);
     } catch (err: any) {
       console.error('Erro ao atualizar 2º Professor:', err);
       setFormError('Erro ao atualizar: ' + (err?.message || 'Tente novamente'));
@@ -132,7 +149,7 @@ export const EditSecondTeacherModal: React.FC<EditSecondTeacherModalProps> = ({
           <div>
             <h2 className="text-xl font-bold text-foreground">Editar 2º Professor</h2>
             <p className="text-xs text-muted">
-              Atualize as informações de contato e vínculo do profissional de apoio
+              Atualize nome, e-mail de login, senha e vínculo do profissional de apoio
             </p>
           </div>
         </div>
@@ -166,12 +183,14 @@ export const EditSecondTeacherModal: React.FC<EditSecondTeacherModalProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-muted font-bold mb-1.5">E-mail de Acesso (Não alterável)</label>
+              <label className="block text-muted font-bold mb-1.5">E-mail de Acesso (Login) *</label>
               <input
                 type="email"
-                disabled
+                required
                 value={email}
-                className="w-full bg-surface/50 border border-border rounded-xl px-4 py-2.5 text-muted cursor-not-allowed text-xs"
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="professor2@sed.sc.gov.br"
+                className="w-full bg-surface border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:border-amber-400 text-xs transition-all"
               />
             </div>
 
@@ -209,6 +228,20 @@ export const EditSecondTeacherModal: React.FC<EditSecondTeacherModalProps> = ({
                 className="w-full bg-surface border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:border-amber-400 text-xs transition-all"
               />
             </div>
+          </div>
+
+          <div className="pt-2 border-t border-border">
+            <label className="block text-amber-400 font-bold mb-1.5 flex items-center gap-1.5">
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>Redefinir Senha de Acesso (Opcional)</span>
+            </label>
+            <input
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Deixe em branco para manter a senha atual ou digite uma nova..."
+              className="w-full bg-surface border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:border-amber-400 text-xs transition-all"
+            />
           </div>
 
           <div className="flex gap-3 pt-3">

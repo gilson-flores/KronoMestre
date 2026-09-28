@@ -2,26 +2,55 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/auth-server';
 import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
 import { hashPasswordBcrypt } from '@/lib/crypto';
+import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * POST /api/auth/reset-user-password
- * Redefinição de senhas de alunos e 2º professores pelo professor titular.
- * Operação 100% Firebase Firestore (com atualização no Firebase Auth se aplicável).
+ * Resolve a sessão do Professor Titular / Admin Supremo via Firebase Cookie ('session') ou JWT ('auth_session_token')
  */
-export async function POST(req: NextRequest) {
+async function resolveTeacherSession(req: NextRequest): Promise<{ ownerTeacherId: string; role: string; email?: string } | null> {
+  // 1. Cookie 'session' do Firebase Auth (Professor Titular / Admin Supremo)
+  try {
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get('session')?.value;
+    if (sessionCookie) {
+      const auth = getAdminAuth();
+      const decoded = await auth.verifySessionCookie(sessionCookie, true);
+      if (decoded && decoded.uid) {
+        return {
+          ownerTeacherId: (decoded as any).tenant || (decoded as any).ownerTeacherId || decoded.uid,
+          role: 'teacher',
+          email: decoded.email,
+        };
+      }
+    }
+  } catch {}
+
+  // 2. Fallback JWT (lib/auth-server)
   try {
     const session = await getSessionFromRequest(req);
+    if (session && (session.ownerTeacherId || session.sub)) {
+      return {
+        ownerTeacherId: session.ownerTeacherId || session.sub,
+        role: session.role || 'teacher',
+        email: session.email,
+      };
+    }
+  } catch {}
+
+  return null;
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const session = await resolveTeacherSession(req);
     if (!session) {
-      return NextResponse.json(
-        { error: 'Não autenticado.' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });
     }
 
-    // Apenas o Professor Titular tem permissão para resetar senhas de usuários
-    if (session.role !== 'teacher') {
+    // Permite Professor Titular ou Admin
+    if (session.role !== 'teacher' && session.role !== 'admin') {
       return NextResponse.json(
         { error: 'Apenas o Professor Titular pode redefinir senhas de alunos e 2º professores.' },
         { status: 403 }
@@ -38,25 +67,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Senha temporária definida pelo professor ou fallback seguro
-    const rawPassword = (tempPassword && typeof tempPassword === 'string' && tempPassword.trim().length >= 4)
-      ? tempPassword.trim()
-      : '123456';
+    const rawPassword =
+      tempPassword && typeof tempPassword === 'string' && tempPassword.trim().length >= 4
+        ? tempPassword.trim()
+        : '123456';
 
     const bcryptHash = await hashPasswordBcrypt(rawPassword);
     const db = getAdminDb();
     const nowIso = new Date().toISOString();
-    const ownerTeacherId = session.ownerTeacherId || session.sub;
+    const ownerTeacherId = session.ownerTeacherId;
 
     if (targetType === 'student') {
       let targetRef = db.collection('tenants').doc(ownerTeacherId).collection('students').doc(targetId);
       let docSnap = await targetRef.get();
 
-      // Fallback de localização se o ID não estiver no caminho direto
       if (!docSnap.exists) {
         const querySnap = await db.collectionGroup('students').get();
         for (const doc of querySnap.docs) {
-          if (doc.id === targetId) {
+          if (doc.id === targetId || doc.data().matricula === targetId) {
             targetRef = doc.ref as any;
             docSnap = doc;
             break;
@@ -65,10 +93,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (!docSnap.exists) {
-        return NextResponse.json(
-          { error: 'Aluno não encontrado no Firestore.' },
-          { status: 404 }
-        );
+        return NextResponse.json({ error: 'Aluno não encontrado no Firestore.' }, { status: 404 });
       }
 
       const currentData = docSnap.data() || {};
@@ -76,7 +101,7 @@ export async function POST(req: NextRequest) {
       await targetRef.set(
         {
           passwordHash: bcryptHash,
-          mustChangePassword: true, // Força troca de senha no próximo login
+          mustChangePassword: true,
           updatedAt: nowIso,
         },
         { merge: true }
@@ -86,7 +111,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: `Senha do aluno "${fullName}" redefinida com sucesso no Firestore. Ele deverá trocá-la no próximo acesso.`,
+        message: `Senha do aluno "${fullName}" redefinida com sucesso! Ele deverá trocá-la no próximo acesso.`,
         tempPassword: rawPassword,
         target: {
           id: docSnap.id,
@@ -104,7 +129,7 @@ export async function POST(req: NextRequest) {
       if (!docSnap.exists) {
         const querySnap = await db.collectionGroup('second_teachers').get();
         for (const doc of querySnap.docs) {
-          if (doc.id === targetId) {
+          if (doc.id === targetId || doc.data().email === targetId) {
             targetRef = doc.ref as any;
             docSnap = doc;
             break;
@@ -113,10 +138,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (!docSnap.exists) {
-        return NextResponse.json(
-          { error: '2º Professor não encontrado no Firestore.' },
-          { status: 404 }
-        );
+        return NextResponse.json({ error: '2º Professor não encontrado no Firestore.' }, { status: 404 });
       }
 
       const currentData = docSnap.data() || {};
@@ -125,19 +147,26 @@ export async function POST(req: NextRequest) {
       await targetRef.set(
         {
           passwordHash: bcryptHash,
-          mustChangePassword: true, // Força troca de senha no próximo login
+          mustChangePassword: true,
           updatedAt: nowIso,
         },
         { merge: true }
       );
 
-      // Se houver usuário correspondente no Firebase Auth, sincroniza a senha
+      // Sincroniza ou cria usuário no Firebase Auth para garantir que o login funcione
       if (teacherEmail) {
         try {
           const adminAuth = getAdminAuth();
           const authUser = await adminAuth.getUserByEmail(teacherEmail).catch(() => null);
           if (authUser) {
             await adminAuth.updateUser(authUser.uid, { password: rawPassword });
+          } else {
+            await adminAuth.createUser({
+              uid: docSnap.id.startsWith('st_') ? undefined : docSnap.id,
+              email: teacherEmail,
+              password: rawPassword,
+              displayName: currentData.name || '2º Professor',
+            }).catch(() => {});
           }
         } catch (authErr) {
           console.warn('Aviso ao sincronizar senha no Firebase Auth:', authErr);
@@ -148,7 +177,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: `Senha do 2º Professor "${teacherName}" redefinida com sucesso no Firestore. Ele deverá trocá-la no próximo acesso.`,
+        message: `Senha do 2º Professor "${teacherName}" redefinida com sucesso!`,
         tempPassword: rawPassword,
         target: {
           id: docSnap.id,
@@ -158,16 +187,9 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json(
-      { error: 'Tipo de usuário inválido.' },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: 'Tipo de usuário inválido.' }, { status: 400 });
   } catch (err: any) {
     console.error('Erro na rota reset-user-password:', err);
-    return NextResponse.json(
-      { error: 'Erro interno ao redefinir senha no Firestore.' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Erro interno ao redefinir senha.' }, { status: 500 });
   }
 }
-

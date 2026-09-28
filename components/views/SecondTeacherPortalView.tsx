@@ -42,14 +42,17 @@ interface SecondTeacherPortalViewProps {
   libraryFiles?: LibraryFile[];
   messages?: ChatMessage[];
   onLogout: () => void;
-  onSendMessage?: (msg: {
+  onSendMessage: (msg: {
     threadId: string;
     senderId: string;
+    senderName: string;
     senderRole: 'teacher' | 'student';
-    text: string;
-    attachmentUrl?: string;
-    attachmentType?: 'image' | 'video' | 'audio' | 'document';
-    recipientId?: string;
+    senderAvatar?: string;
+    recipientId: string;
+    recipientName: string;
+    content: string;
+    activityId?: string;
+    activityTitle?: string;
   }) => void;
   onMarkThreadAsRead?: (threadId: string, role: 'teacher' | 'student') => void;
 }
@@ -141,14 +144,16 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
     return classRoster.filter((s) => {
       const matchSearch = s.fullName.toLowerCase().includes(rosterSearch.toLowerCase());
       const matchTurma = rosterTurmaFilter === 'all' || s.turma === rosterTurmaFilter;
-      
+      const isPneStudent =
+        s.tag === 'PNE' || Boolean(s.pneConditions && s.pneConditions.length > 0);
+
       let matchTag = true;
       if (rosterTagFilter === 'tutelados') {
         matchTag = tutoredStudentIds.has(s.id);
       } else if (rosterTagFilter === 'pne') {
-        matchTag = s.specialNeeds && s.specialNeeds.trim().length > 0;
+        matchTag = isPneStudent;
       } else if (rosterTagFilter === 'regular') {
-        matchTag = !s.specialNeeds || s.specialNeeds.trim().length === 0;
+        matchTag = !isPneStudent;
       }
 
       return matchSearch && matchTurma && matchTag;
@@ -161,14 +166,19 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
     let somaNotas = 0;
     let qtdNotas = 0;
 
-    activities.forEach(act => {
-      act.submissions?.forEach(sub => {
+    activities.forEach((act) => {
+      act.submissions?.forEach((sub) => {
         if (tutoredStudentIds.has(sub.studentId)) {
           totalEntregas++;
-          if (sub.grade === undefined || sub.grade === null) {
+          const isGraded = sub.status === 'graded' || (sub.essayScore !== undefined && sub.essayScore !== null);
+          if (!isGraded) {
             aguardandoCorrecao++;
           } else {
-            somaNotas += sub.grade;
+            const finalGrade =
+              Number(sub.objectiveScore || 0) +
+              Number(sub.essayScore || 0) +
+              Number(sub.extraPoints || 0);
+            somaNotas += finalGrade;
             qtdNotas++;
           }
         }
@@ -186,29 +196,78 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
   }, [tutoredStudents, tutoredStudentIds, activities]);
 
   const tutoredDeliveries = useMemo(() => {
-    const deliveries = [];
-    activities.forEach(act => {
-      act.submissions?.forEach(sub => {
+    const deliveries: Array<{
+      activityId: string;
+      studentId: string;
+      studentName: string;
+      activityTitle: string;
+      isAdapted: boolean;
+      turma: string;
+      status: 'pending' | 'graded';
+      totalGrade: number | undefined;
+      maxGrade: number;
+      teacherFeedback?: string;
+    }> = [];
+
+    activities.forEach((act) => {
+      act.submissions?.forEach((sub) => {
         if (tutoredStudentIds.has(sub.studentId)) {
-          const student = tutoredStudents.find(s => s.id === sub.studentId);
+          const student = tutoredStudents.find((s) => s.id === sub.studentId);
+          const isGraded = sub.status === 'graded' || (sub.essayScore !== undefined && sub.essayScore !== null);
+          const computedGrade = isGraded
+            ? Number(
+                (
+                  Number(sub.objectiveScore || 0) +
+                  Number(sub.essayScore || 0) +
+                  Number(sub.extraPoints || 0)
+                ).toFixed(1)
+              )
+            : undefined;
+
           deliveries.push({
             activityId: act.id,
             studentId: sub.studentId,
-            studentName: student?.fullName || student?.name || 'Aluno Desconhecido',
+            studentName: student?.fullName || sub.studentName || 'Aluno Desconhecido',
             activityTitle: act.title,
-            isAdapted: !!act.adaptedContent,
+            isAdapted: Boolean(act.isAdapted),
             turma: student?.turma || 'Sem Turma',
-            status: (sub.grade === undefined || sub.grade === null) ? 'pending' : 'graded',
-            totalGrade: sub.grade,
+            status: isGraded ? 'graded' : 'pending',
+            totalGrade: computedGrade,
             maxGrade: act.maxGrade || 10,
-            teacherFeedback: sub.feedback
+            teacherFeedback: sub.teacherFeedback,
           });
         }
       });
     });
-    // Sort by most recent (assuming ID is loosely chronological or just reversed)
+
     return deliveries.reverse();
   }, [activities, tutoredStudents, tutoredStudentIds]);
+
+  const filteredAtestados = useMemo(() => {
+    return atestados.filter((item) => {
+      const q = atestadosSearch.trim().toLowerCase();
+      const matchSearch =
+        !q ||
+        (item.studentName || '').toLowerCase().includes(q) ||
+        (item.motivo || '').toLowerCase().includes(q);
+      const matchTurma =
+        atestadosTurmaFilter === 'all' || item.studentTurma === atestadosTurmaFilter;
+      const matchTipo =
+        atestadosTipoFilter === 'all' || item.tipo === atestadosTipoFilter;
+      return matchSearch && matchTurma && matchTipo;
+    });
+  }, [atestados, atestadosSearch, atestadosTurmaFilter, atestadosTipoFilter]);
+
+  const accessibleLibraryFiles = useMemo(() => {
+    if (derivedTurmas.length === 0) return libraryFiles;
+    return libraryFiles.filter(
+      (f) =>
+        !f.turma ||
+        f.turma === 'Todas' ||
+        f.turma === 'Geral' ||
+        derivedTurmas.includes(f.turma.trim())
+    );
+  }, [libraryFiles, derivedTurmas]);
 
   // Load atestados for the derived turmas
   useEffect(() => {
@@ -501,9 +560,9 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
                           <div className="text-[11px] text-muted mt-0.5">
                             Matrícula: <span className="font-semibold text-foreground">{student.matricula}</span>
                           </div>
-                          {student.pneCondition && (
+                          {student.pneConditions && student.pneConditions.length > 0 && (
                             <div className="text-[11px] text-primary font-bold mt-1 bg-primary/10 px-2 py-0.5 rounded-md inline-block">
-                              {student.pneCondition}
+                              {student.pneConditions.join(', ')}
                             </div>
                           )}
                         </div>
@@ -511,8 +570,8 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
 
                       <div className="mt-4 pt-3 border-t border-border flex items-center justify-between gap-2">
                         <div className="text-[11px] text-muted">
-                          {student.phoneResponsible ? (
-                            <span>Resp: {student.phoneResponsible}</span>
+                          {(student as any).phoneResponsible ? (
+                            <span>Resp: {(student as any).phoneResponsible}</span>
                           ) : (
                             <span>Apoio Pedagógico Ativo</span>
                           )}
@@ -860,7 +919,7 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
                                 )}
                               </div>
                             </td>
-                            <td className="py-3 text-muted">{getTurmaLabel(item.studentTurma)}</td>
+                            <td className="py-3 text-muted">{getTurmaLabel(item.studentTurma || '')}</td>
                             <td className="py-3">
                               <span
                                 className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
@@ -917,7 +976,7 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
               currentUserRole="teacher"
               isSecondTeacher={true}
               teacher={teacher}
-              students={allStudents}
+              students={classRoster}
               activities={activities}
               messages={messages}
               onSendMessage={onSendMessage}
