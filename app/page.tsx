@@ -29,8 +29,7 @@ import { SecondTeacherPortalView } from '@/components/views/SecondTeacherPortalV
 import { AtestadosRadView } from '@/components/views/AtestadosRadView';
 import { BackupView } from '@/components/views/BackupView';
 
-
-import { normalizeStudentName, getActivityGradeDistribution } from '@/lib/studentUtils';
+import { normalizeStudentName } from '@/lib/studentUtils';
 import {
   sendBrowserNotification,
   checkAndNotifyApproachingDeadlines,
@@ -45,7 +44,6 @@ import { ViewActivityModal } from '@/components/modals/ViewActivityModal';
 import { NewStudentModal } from '@/components/modals/NewStudentModal';
 import { EditStudentModal } from '@/components/modals/EditStudentModal';
 import { StudentSupervisionModal } from '@/components/modals/StudentSupervisionModal';
-import { NewSecondTeacherModal } from '@/components/modals/NewSecondTeacherModal';
 import { ParallelRecoveryModal } from '@/components/modals/ParallelRecoveryModal';
 import { ForceChangePasswordModal } from '@/components/modals/ForceChangePasswordModal';
 import { hashPasswordBcrypt } from '@/lib/crypto';
@@ -54,9 +52,8 @@ import {
   getScopedLocalStorageItem,
   setScopedLocalStorageItem,
   cleanLegacyCacheKeys,
-  getCurrentOwnerTeacherId,
 } from '@/lib/cacheUtils';
-import { CheckCircle2, AlertTriangle, HeartHandshake, UserPlus } from 'lucide-react';
+import { CheckCircle2, AlertTriangle } from 'lucide-react';
 
 // Helper de unificação e desduplicação atômica de mensagens de chat
 const mergeChatMessage = (
@@ -69,7 +66,7 @@ const mergeChatMessage = (
     return { updated: prev, isNew: false };
   }
 
-  // 2. Verificação de mensagem otimista local vs banco Supabase (mesmo remetente, mesmo destinatário/thread e mesmo conteúdo)
+  // 2. Verificação de mensagem otimista local vs banco
   const optimisticMatchIndex = prev.findIndex((m) => {
     const isSameSender = m.senderId === incoming.senderId;
     const isSameThread =
@@ -89,7 +86,6 @@ const mergeChatMessage = (
 
   if (optimisticMatchIndex !== -1) {
     const clone = [...prev];
-    // Se a mensagem que chegou do banco possui ID persistido, atualiza o ID temporário local
     if (!incoming.id.startsWith('msg-') && clone[optimisticMatchIndex].id.startsWith('msg-')) {
       clone[optimisticMatchIndex] = {
         ...clone[optimisticMatchIndex],
@@ -127,9 +123,15 @@ export default function Home() {
   // Mounting state to prevent SSR/hydration mismatch
   const [isMounted, setIsMounted] = useState(false);
 
-  // Auth state
+  // Auth state (substitui 'Carregando...' por 'Prof. Gilson Flores')
   const [role, setRole] = useState<UserRole>(null);
-  const [teacher, setTeacher] = useState<TeacherUser>(initialTeacher);
+  const [teacher, setTeacher] = useState<TeacherUser>(() => ({
+    ...initialTeacher,
+    name:
+      initialTeacher.name && !initialTeacher.name.toLowerCase().includes('carregando')
+        ? initialTeacher.name
+        : 'Prof. Gilson Flores',
+  }));
   const [currentStudent, setCurrentStudent] = useState<StudentUser | null>(null);
   const [mustChangePassword, setMustChangePassword] = useState<boolean>(false);
   const [inactivityTimeoutEnabled, setInactivityTimeoutEnabled] = useState<boolean>(true);
@@ -137,9 +139,9 @@ export default function Home() {
   const [isDataLoading, setIsDataLoading] = useState<boolean>(() => Boolean(isSupabaseConfigured && supabase));
   const [dataLoadError, setDataLoadError] = useState<boolean>(false);
   const [loadDataTrigger, setLoadDataTrigger] = useState<number>(0);
-  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true); // <-- ADICIONADO TRAVA DE SESSÃO
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
 
-  // Restaurar sessão via nova API do Firebase (Tenant Architecture)
+  // Restaurar sessão via API do Firebase (Tenant Architecture)
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsMounted(true);
@@ -148,51 +150,86 @@ export default function Home() {
     const checkSession = async () => {
       if (typeof window === 'undefined') return;
       cleanLegacyCacheKeys();
-      
-      // PROTEÇÃO DE TERMINAL PÚBLICO: Se a aba foi fechada, a memória volátil sumiu.
+
       const activeSession = sessionStorage.getItem('active_session');
       if (!activeSession) {
-        // Força a destruição de qualquer cookie que o Firebase tenha deixado vivo
         await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
-        setIsAuthChecking(false); // <-- Liberta o loader (sem sessão ativa)
-        return; // Interrompe o processo e obriga a logar novamente
+        setIsAuthChecking(false);
+        return;
       }
 
       try {
-        // Bate na rota da nossa nova arquitetura para validar o cookie
-        const res = await fetch("/api/auth/session");
+        const parsedLocalSession = JSON.parse(activeSession);
+
+        const res = await fetch('/api/auth/session');
         if (res.ok) {
           const data = await res.json();
           if (data.user && data.user.role === 'teacher') {
             const tenant = data.user.tenant || {};
             setRole('teacher');
-            setTeacher(prev => ({
+            setTeacher((prev) => ({
               ...prev,
               id: data.user.id,
               email: data.user.email,
-              name: tenant.name || tenant.nome || data.user.name || prev.name,
+              name: tenant.name || tenant.nome || data.user.name || 'Prof. Gilson Flores',
               subject: tenant.subject || prev.subject,
               school: tenant.school !== undefined ? tenant.school : prev.school,
               phone: tenant.phone !== undefined ? tenant.phone : prev.phone,
               avatarUrl: tenant.avatarUrl || prev.avatarUrl,
-              matriculaFuncional: tenant.matriculaFuncional !== undefined ? tenant.matriculaFuncional : prev.matriculaFuncional,
+              matriculaFuncional:
+                tenant.matriculaFuncional !== undefined
+                  ? tenant.matriculaFuncional
+                  : prev.matriculaFuncional,
               tenantCode: tenant.tenantCode || prev.tenantCode,
               contractStartDate: tenant.contractStartDate || prev.contractStartDate,
               contractEndDate: tenant.contractEndDate || prev.contractEndDate,
               contractType: tenant.contractType || prev.contractType,
               contractStatus: tenant.contractStatus || prev.contractStatus,
               driveFolderUrl: tenant.driveFolderUrl || prev.driveFolderUrl,
-              is_admin: tenant.is_admin ?? (data.user.email === '755840@profe.sed.sc.gov.br' || data.user.email === 'gilsonjuniores@gmail.com'),
-              isAdmin: tenant.is_admin ?? (data.user.email === '755840@profe.sed.sc.gov.br' || data.user.email === 'gilsonjuniores@gmail.com'),
+              is_admin:
+                tenant.is_admin ??
+                (data.user.email === '755840@profe.sed.sc.gov.br' ||
+                  data.user.email === 'gilsonjuniores@gmail.com'),
+              isAdmin:
+                tenant.is_admin ??
+                (data.user.email === '755840@profe.sed.sc.gov.br' ||
+                  data.user.email === 'gilsonjuniores@gmail.com'),
               plan_type: tenant.plan_type || 'basic',
               escolas_vinculadas: tenant.escolas_vinculadas || prev.escolas_vinculadas || [],
               disciplinas: tenant.disciplinas || prev.disciplinas || [],
               ownerTeacherId: data.user.id,
             }));
+          } else if (parsedLocalSession.role === 'second_teacher' && parsedLocalSession.teacherData) {
+            setTeacher(parsedLocalSession.teacherData);
+            setRole('second_teacher');
+            setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
+          } else if (parsedLocalSession.role === 'student' && parsedLocalSession.studentData) {
+            if (data.user?.tenant) {
+              const t = data.user.tenant;
+              setTeacher((prev) => ({
+                ...prev,
+                id: data.user.ownerTeacherId || prev.id,
+                name: t.name || 'Prof. Gilson Flores',
+                subject: t.subject || prev.subject,
+                school: t.school || prev.school,
+                avatarUrl: t.avatarUrl || prev.avatarUrl,
+                driveFolderUrl: t.driveFolderUrl || prev.driveFolderUrl,
+              }));
+            }
+            setCurrentStudent(parsedLocalSession.studentData);
+            setRole('student');
+            setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
           }
+        } else if (parsedLocalSession.role === 'second_teacher' && parsedLocalSession.teacherData) {
+          setTeacher(parsedLocalSession.teacherData);
+          setRole('second_teacher');
+          setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
+        } else if (parsedLocalSession.role === 'student' && parsedLocalSession.studentData) {
+          setCurrentStudent(parsedLocalSession.studentData);
+          setRole('student');
+          setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
         }
 
-        // Mantém as configurações visuais do localStorage
         const savedDriveUrl = localStorage.getItem('teacher_drive_folder_url');
         if (savedDriveUrl) setTeacher((prev) => ({ ...prev, driveFolderUrl: savedDriveUrl }));
 
@@ -205,7 +242,7 @@ export default function Home() {
       } catch (e) {
         console.warn('Erro ao restaurar sessão do Firebase:', e);
       } finally {
-        setIsAuthChecking(false); // <-- Liberta o loader (sessão validada ou erro)
+        setIsAuthChecking(false);
       }
     };
 
@@ -230,6 +267,7 @@ export default function Home() {
     }
     return initialStudents;
   });
+
   const [activities, setActivities] = useState<Activity[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -246,7 +284,9 @@ export default function Home() {
     }
     return initialActivities;
   });
+
   const [schedule] = useState(initialSchedule);
+
   const [library, setLibrary] = useState<LibraryFile[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -263,9 +303,10 @@ export default function Home() {
     }
     return initialLibrary;
   });
+
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
 
-  // Active datasets (filtered by non-archived for the current school cycle / vinculo)
+  // Active datasets
   const activeStudents = useMemo(() => students.filter((s) => !s.isArchived), [students]);
   const activeActivities = useMemo(() => activities.filter((a) => !a.isArchived), [activities]);
 
@@ -293,20 +334,13 @@ export default function Home() {
     return activeStudents;
   }, [role, teacher, activeStudents]);
 
-  // Active view tab: 'painel' | 'atividades' | 'alunos' | 'horarios' | 'arquivos' | 'grading' | 'mensagens' | 'configuracoes'
-
   const [selectedActivityForGrading, setSelectedActivityForGrading] = useState<Activity | null>(null);
-
-  // Global search input
   const [globalSearch, setGlobalSearch] = useState('');
-
-  // Mobile menu drawer state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Modals state
   const [isNewActivityModalOpen, setIsNewActivityModalOpen] = useState(false);
   const [isNewStudentModalOpen, setIsNewStudentModalOpen] = useState(false);
-  const [isNewSecondTeacherModalOpen, setIsNewSecondTeacherModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<StudentUser | null>(null);
   const [supervisingStudent, setSupervisingStudent] = useState<StudentUser | null>(null);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
@@ -317,7 +351,7 @@ export default function Home() {
   const [globalDbStatus, setGlobalDbStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [newTeacherPassword, setNewTeacherPassword] = useState('');
 
-  // Theme preference state (default 'dark' para alto contraste)
+  // Theme preference state
   const [themeMode, setThemeMode] = useState<'dark' | 'light'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('app_theme_mode');
@@ -326,7 +360,6 @@ export default function Home() {
     return 'dark';
   });
 
-  // Atualizar classe do documento quando tema muda
   useEffect(() => {
     if (typeof document !== 'undefined') {
       if (themeMode === 'light') {
@@ -340,7 +373,7 @@ export default function Home() {
     }
   }, [themeMode]);
 
-  // AI Auto-Reply State for Teacher (Prof. Gilson bot)
+  // AI Auto-Reply State for Teacher (Boby Sociólogo / Prof. Gilson)
   const [isAiAutoReplyEnabled, setIsAiAutoReplyEnabled] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('teacher_ai_auto_reply_enabled');
@@ -368,15 +401,11 @@ export default function Home() {
 
   const handleSaveDriveFolderUrl = async (url: string) => {
     const cleanUrl = url.trim();
-
-    // 1. Atualizar estado em memória
     setTeacher((prev) => ({ ...prev, driveFolderUrl: cleanUrl }));
 
-    // 2. Persistir localmente no localStorage e sessionStorage
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem('teacher_drive_folder_url', cleanUrl);
-
         const sessionStr = sessionStorage.getItem('active_session');
         if (sessionStr) {
           const session = JSON.parse(sessionStr);
@@ -390,7 +419,6 @@ export default function Home() {
       }
     }
 
-    // 3. Persistir no Firestore via Firebase Admin API
     try {
       await fetch('/api/teacher/profile', {
         method: 'POST',
@@ -398,14 +426,13 @@ export default function Home() {
         body: JSON.stringify({
           profile: {
             driveFolderUrl: cleanUrl,
-          }
-        })
+          },
+        }),
       });
     } catch (err) {
       console.warn('Aviso ao sincronizar link do Drive no Firestore:', err);
     }
 
-    // 4. Sincronização secundária no Supabase (se configurado)
     if (isSupabaseConfigured && supabase) {
       try {
         const cleanEmail = (teacher.email || '').trim().toLowerCase();
@@ -419,9 +446,7 @@ export default function Home() {
           drive_folder_url: cleanUrl,
         };
 
-        await supabase
-          .from('teachers')
-          .upsert(payload, { onConflict: 'email' });
+        await supabase.from('teachers').upsert(payload, { onConflict: 'email' });
       } catch (err) {
         console.warn('Aviso secundário no Supabase:', err);
       }
@@ -491,6 +516,26 @@ export default function Home() {
       setIsDataLoading(true);
       setDataLoadError(false);
       try {
+        // 0. Se for Aluno, sincroniza o perfil e a foto real do Professor Titular direto do Tenant
+        if (role === 'student') {
+          const sessRes = await fetch('/api/auth/session').catch(() => null);
+          if (sessRes && sessRes.ok) {
+            const sessData = await sessRes.json().catch(() => ({}));
+            if (sessData?.user?.tenant) {
+              const t = sessData.user.tenant;
+              setTeacher((prev) => ({
+                ...prev,
+                id: sessData.user.ownerTeacherId || prev.id,
+                name: t.name || 'Prof. Gilson Flores',
+                subject: t.subject || prev.subject,
+                school: t.school || prev.school,
+                avatarUrl: t.avatarUrl || prev.avatarUrl,
+                driveFolderUrl: t.driveFolderUrl || prev.driveFolderUrl,
+              }));
+            }
+          }
+        }
+
         // 1. Carregar Alunos do Firestore
         const stuRes = await fetch('/api/students');
         if (stuRes.ok) {
@@ -538,7 +583,7 @@ export default function Home() {
     }
   }, [loadDataTrigger, role, teacher.id]);
 
-  // Tab efetiva para 2º Professor: garante que nunca renderize aba indevida
+  // Tab efetiva para 2º Professor
   const activeTeacherTab = useMemo(() => {
     if (role === 'second_teacher') {
       const allowedTabs = ['dashboard', 'painel', 'alunos', 'atestados_rad', 'arquivos', 'configuracoes'];
@@ -549,7 +594,7 @@ export default function Home() {
     return currentTab;
   }, [role, currentTab]);
 
-  // Carregamento sob demanda (lazy) da Biblioteca do Firestore apenas quando a aba 'arquivos' for acessada
+  // Carregamento sob demanda da Biblioteca do Firestore
   useEffect(() => {
     if (activeTeacherTab !== 'arquivos') return;
 
@@ -602,7 +647,6 @@ export default function Home() {
       );
       requestNotificationPermission().catch(() => {});
 
-      // Carregar cache local seguro do professor que está iniciando sessão
       try {
         const cachedStudents = getScopedLocalStorageItem('local_students_data', loggedTeacher.id);
         if (cachedStudents) {
@@ -626,7 +670,7 @@ export default function Home() {
     setLoadDataTrigger((prev) => prev + 1);
   };
 
- const handleLoginSecondTeacher = (loggedTeacher: TeacherUser) => {
+  const handleLoginSecondTeacher = (loggedTeacher: TeacherUser) => {
     setIsDataLoading(true);
     setTeacher(loggedTeacher);
     setRole('second_teacher');
@@ -666,7 +710,6 @@ export default function Home() {
       requestNotificationPermission().catch(() => {});
     }
     setLoadDataTrigger((prev) => prev + 1);
-    // Verificar prazos imediatamente no login do aluno
     setTimeout(() => {
       checkAndNotifyApproachingDeadlines(activities, loggedStudent, showGlobalStatus);
     }, 1200);
@@ -691,40 +734,39 @@ export default function Home() {
     }
   };
 
-  const handleTeacherTabChange = useCallback((tab: string) => {
-    if (role === 'second_teacher') {
-      const allowedTabs = ['dashboard', 'painel', 'alunos', 'atestados_rad', 'arquivos', 'configuracoes'];
-      if (!allowedTabs.includes(tab)) {
-        setCurrentTab('dashboard');
-        return;
+  const handleTeacherTabChange = useCallback(
+    (tab: string) => {
+      if (role === 'second_teacher') {
+        const allowedTabs = ['dashboard', 'painel', 'alunos', 'atestados_rad', 'arquivos', 'configuracoes'];
+        if (!allowedTabs.includes(tab)) {
+          setCurrentTab('dashboard');
+          return;
+        }
       }
-    }
-    setCurrentTab(tab);
-    if (tab !== 'grading' && tab !== 'correcoes') setSelectedActivityForGrading(null);
-  }, [role]);
+      setCurrentTab(tab);
+      if (tab !== 'grading' && tab !== 'correcoes') setSelectedActivityForGrading(null);
+    },
+    [role]
+  );
 
   const handleLogout = useCallback(async (reason?: string) => {
-    // 1. Destruição total do Cache do Navegador
     if (typeof window !== 'undefined') {
       sessionStorage.clear();
       localStorage.removeItem('local_students_data');
       localStorage.removeItem('local_activities_data');
       localStorage.removeItem('library_files_data');
     }
-    
-    // 2. Destruição da Sessão no Servidor (Firebase)
+
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
     } catch (e) {
-      console.warn("Falha ao invalidar cookie no servidor", e);
+      console.warn('Falha ao invalidar cookie no servidor', e);
     }
 
-    // 3. Destruição legada (Supabase fallback de segurança)
     if (isSupabaseConfigured && supabase) {
       supabase?.auth.signOut().catch(() => {});
     }
 
-    // 4. Limpeza da Memória RAM (Estados do React)
     setRole(null);
     setCurrentStudent(null);
     setStudents(initialStudents);
@@ -734,16 +776,15 @@ export default function Home() {
     if (reason && typeof reason === 'string') {
       showGlobalStatus('error', reason);
     }
-    
-    // 5. Força o recarregamento da página para garantir estado virgem
+
     window.location.href = '/';
-  }, []);
+  }, [showGlobalStatus]);
 
   // Temporizador de Desconexão por Inatividade (8 minutos)
   useEffect(() => {
     if (!role || !inactivityTimeoutEnabled) return;
 
-    const INACTIVITY_LIMIT_MS = 8 * 60 * 1000; // 8 minutos = 480.000 ms
+    const INACTIVITY_LIMIT_MS = 8 * 60 * 1000;
     let timeoutId: NodeJS.Timeout;
 
     const resetTimer = () => {
@@ -771,7 +812,7 @@ export default function Home() {
     checkAndNotifyApproachingDeadlines(activities, currentStudent, showGlobalStatus);
     const deadlineInterval = setInterval(() => {
       checkAndNotifyApproachingDeadlines(activities, currentStudent, showGlobalStatus);
-    }, 60 * 1000); // Verifica a cada 1 minuto
+    }, 60 * 1000);
 
     return () => clearInterval(deadlineInterval);
   }, [role, currentStudent, activities, showGlobalStatus]);
@@ -847,7 +888,7 @@ export default function Home() {
           }
         }
 
-        // 2. Polling de Atividades e Prazos no Firestore (Notificações para Alunos e entregas para Professor)
+        // 2. Polling de Atividades e Prazos no Firestore
         const actRes = await fetch('/api/activities');
         if (actRes.ok) {
           const actData = await actRes.json();
@@ -887,34 +928,24 @@ export default function Home() {
     };
   }, [role, currentStudent, teacher.avatarUrl, teacher.id, showGlobalStatus]);
 
-  // Activity Handlers
-  const sanitizeTypeForDb = (rawType: string): string => {
-    if (rawType === 'Trabalho em grupo') return 'Dinâmica';
-    if (rawType === 'Projeto de pesquisa') return 'Avaliação';
-    const valid = ['Simulado', 'Redação', 'Dinâmica', 'Avaliação'];
-    return valid.includes(rawType) ? rawType : 'Avaliação';
-  };
-
   const handleCreateActivity = async (newAct: Activity) => {
-    // 1. Otimismo UI (Cache Rápido com Prevenção Atômica de Duplicidade)
     setActivities((prev) => {
-      // Se a atividade já existir no cache (ex: via WebSocket), ignora a injeção dupla.
       if (prev.some((a) => a.id === newAct.id)) return prev;
-      
+
       const next = [newAct, ...prev];
-      if (typeof window !== 'undefined') setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
+      if (typeof window !== 'undefined')
+        setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
       return next;
     });
 
-    // 2. Transplante Firebase
     try {
       const res = await fetch('/api/activities', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newAct)
+        body: JSON.stringify(newAct),
       });
       if (!res.ok) throw new Error('Falha ao salvar no banco.');
-      
+
       showGlobalStatus('success', `Atividade "${newAct.title}" criada com sucesso na nuvem!`);
       sendBrowserNotification(`📢 Nova Atividade: ${newAct.title}`, {
         body: `Turma ${newAct.turma} • Valor: ${newAct.maxGrade || 10} pts`,
@@ -927,7 +958,6 @@ export default function Home() {
   };
 
   const handleSaveActivity = async (updatedAct: Activity) => {
-    // Auto adjust status if deadline is specified
     if (updatedAct.status !== 'Inativo' && updatedAct.deadline) {
       const isoMatch = updatedAct.deadline.match(/\b(20\d\d)-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b/);
       if (isoMatch) {
@@ -936,20 +966,19 @@ export default function Home() {
       }
     }
 
-    // 1. Otimismo UI
     setActivities((prev) => {
       const next = prev.map((a) => (a.id === updatedAct.id ? updatedAct : a));
-      if (typeof window !== 'undefined') setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
+      if (typeof window !== 'undefined')
+        setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
       return next;
     });
     if (selectedActivityForGrading?.id === updatedAct.id) setSelectedActivityForGrading(updatedAct);
 
-    // 2. Transplante Firebase
     try {
       const res = await fetch('/api/activities', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedAct)
+        body: JSON.stringify(updatedAct),
       });
       if (!res.ok) throw new Error('Falha na atualização.');
       showGlobalStatus('success', `Atividade "${updatedAct.title}" atualizada com sucesso!`);
@@ -960,19 +989,20 @@ export default function Home() {
   };
 
   const handleDeleteActivity = async (activity: Activity) => {
-    // Validação de segurança pedagógica:
     const subs = activity.submissions || [];
-    const hasAppliedGradesOrWork = subs.length > 0 && subs.some(
-      (s) =>
-        s.status === 'graded' ||
-        s.status === 'pending' ||
-        s.status === 'returned' ||
-        s.status === 'draft' ||
-        (s.essayScore !== undefined && s.essayScore !== null) ||
-        (s.objectiveScore !== undefined && s.objectiveScore > 0) ||
-        Boolean(s.essayAnswer) ||
-        Boolean(s.submittedAt)
-    );
+    const hasAppliedGradesOrWork =
+      subs.length > 0 &&
+      subs.some(
+        (s) =>
+          s.status === 'graded' ||
+          s.status === 'pending' ||
+          s.status === 'returned' ||
+          s.status === 'draft' ||
+          (s.essayScore !== undefined && s.essayScore !== null) ||
+          (s.objectiveScore !== undefined && s.objectiveScore > 0) ||
+          Boolean(s.essayAnswer) ||
+          Boolean(s.submittedAt)
+      );
 
     if (hasAppliedGradesOrWork) {
       const allRcoSigned = subs.length > 0 && subs.every((s) => Boolean(s.registeredInStateSystem));
@@ -985,15 +1015,14 @@ export default function Home() {
       }
     }
 
-    // 1. Otimismo UI
     setActivities((prev) => {
       const next = prev.filter((a) => a.id !== activity.id);
-      if (typeof window !== 'undefined') setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
+      if (typeof window !== 'undefined')
+        setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
       return next;
     });
     if (selectedActivityForGrading?.id === activity.id) setSelectedActivityForGrading(null);
 
-    // 2. Transplante Firebase
     try {
       const res = await fetch(`/api/activities?id=${activity.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Falha ao excluir na nuvem.');
@@ -1026,11 +1055,13 @@ export default function Home() {
       const currentReturnCount = currentSub?.returnCount || 0;
 
       if (status === 'returned' && currentReturnCount >= 3) {
-        showGlobalStatus('error', '🚨 Bloqueio: Esta atividade já foi devolvida 3 vezes. A 4ª devolução está bloqueada! Atribua a nota final e conclua a avaliação.');
+        showGlobalStatus(
+          'error',
+          '🚨 Bloqueio: Esta atividade já foi devolvida 3 vezes. A 4ª devolução está bloqueada! Atribua a nota final e conclua a avaliação.'
+        );
         return;
       }
 
-      const newReturnCount = status === 'returned' ? currentReturnCount + 1 : currentReturnCount;
       const isInitialGroupGrading = currentSub?.status === 'pending' && Boolean(currentSub?.groupMembers);
       const targetGroupStudentIds = new Set<string>([studentId]);
       const missingGroupMembers: StudentUser[] = [];
@@ -1105,7 +1136,10 @@ export default function Home() {
             status,
             returnCount: status === 'returned' ? (sub.returnCount || 0) + 1 : sub.returnCount,
             extraPoints: extraPoints !== undefined ? extraPoints : sub.extraPoints,
-            registeredInStateSystem: registeredInStateSystem !== undefined ? registeredInStateSystem : sub.registeredInStateSystem,
+            registeredInStateSystem:
+              registeredInStateSystem !== undefined
+                ? registeredInStateSystem
+                : sub.registeredInStateSystem,
           };
         }
         return sub;
@@ -1118,10 +1152,10 @@ export default function Home() {
         submissions: updatedSubmissions,
       };
 
-      // 1. Otimismo UI
       setActivities((prev) => {
         const next = prev.map((act) => (act.id === activityId ? updatedActivity : act));
-        if (typeof window !== 'undefined') setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
+        if (typeof window !== 'undefined')
+          setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
         return next;
       });
 
@@ -1129,12 +1163,11 @@ export default function Home() {
         setSelectedActivityForGrading(updatedActivity);
       }
 
-      // 2. Transplante Firebase via API (PUT na rota de Atividades)
       try {
         const res = await fetch('/api/activities', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedActivity)
+          body: JSON.stringify(updatedActivity),
         });
         if (!res.ok) throw new Error('Falha ao atualizar a atividade na nuvem.');
         showGlobalStatus('success', 'Nota e feedback sincronizados diretamente no Firebase com sucesso!');
@@ -1149,14 +1182,11 @@ export default function Home() {
   };
 
   const handleUpdateStudentAvatar = async (studentId: string, newAvatarUrl: string) => {
-    // 1. Atualizar estado local e cache imediatamente
     let matchedStudentObj: StudentUser | undefined;
     setStudents((prev) => {
       matchedStudentObj = prev.find((s) => s.id === studentId || s.matricula === studentId);
       const next = prev.map((s) =>
-        s.id === studentId || s.matricula === studentId
-          ? { ...s, avatarUrl: newAvatarUrl }
-          : s
+        s.id === studentId || s.matricula === studentId ? { ...s, avatarUrl: newAvatarUrl } : s
       );
       if (typeof window !== 'undefined') {
         try {
@@ -1183,7 +1213,6 @@ export default function Home() {
       setSupervisingStudent((prev) => (prev ? { ...prev, avatarUrl: newAvatarUrl } : prev));
     }
 
-    // 2. Persistir no Firebase Firestore via /api/students
     try {
       const targetId = matchedStudentObj?.id || studentId;
       const res = await fetch('/api/students', {
@@ -1224,7 +1253,6 @@ export default function Home() {
     }
 
     try {
-      // Identify all target students involved in the submission (current student + group members)
       const targetStudents: StudentUser[] = [studentUser];
       if (groupMembers) {
         const memberNames = groupMembers
@@ -1245,14 +1273,13 @@ export default function Home() {
         });
       }
 
-      // Update local state for all target students and prepare payload for Firestore
       let targetActivityToSave: Activity | null = null;
 
       setActivities((prev) =>
         prev.map((act) => {
           if (act.id !== activityId) return act;
 
-          let updatedSubmissions = [...act.submissions];
+          const updatedSubmissions = [...act.submissions];
 
           targetStudents.forEach((targetSt) => {
             const existingIndex = updatedSubmissions.findIndex((s) => s.studentId === targetSt.id);
@@ -1265,7 +1292,10 @@ export default function Home() {
                 maxObjectiveScore,
                 maxEssayScore,
                 selectedObjectiveAnswers,
-                groupMembers: groupMembers !== undefined ? groupMembers : updatedSubmissions[existingIndex].groupMembers,
+                groupMembers:
+                  groupMembers !== undefined
+                    ? groupMembers
+                    : updatedSubmissions[existingIndex].groupMembers,
                 status: 'pending' as const,
               };
             } else {
@@ -1296,7 +1326,7 @@ export default function Home() {
             pendingCorrection,
             submissions: updatedSubmissions,
           };
-          
+
           targetActivityToSave = updatedAct;
           return updatedAct;
         })
@@ -1308,14 +1338,13 @@ export default function Home() {
         }
       }
 
-      // Sincronizar com Firestore via nossa API central
       if (targetActivityToSave) {
         const res = await fetch('/api/activities', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(targetActivityToSave)
+          body: JSON.stringify(targetActivityToSave),
         });
-        
+
         if (!res.ok) throw new Error('Falha ao gravar resposta na nuvem.');
       }
 
@@ -1337,26 +1366,13 @@ export default function Home() {
       })
     );
 
-    // 1. Otimismo UI: Atualiza a tela instantaneamente
     setStudents((prev) => {
       const next = [...prev, ...processedStudents];
-      if (typeof window !== 'undefined') setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
+      if (typeof window !== 'undefined')
+        setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
       return next;
     });
 
-    // 2. Transplante em Lote Atômico: Envia todo o array em 1 única requisição para o Firebase (POST /api/students)
-    try {
-      const res = await fetch('/api/students', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(processedStudents),
-      });
-      if (!res.ok) throw new Error('Falha ao gravar lote de alunos no Firestore.');
-      showGlobalStatus('success', `${processedStudents.length} aluno(s) importado(s) e confirmados no Banco!`);
-    } catch (err) {
-      console.warn('Erro ao conectar na importação de alunos:', err);
-      showGlobalStatus('error', 'A importação ocorreu na tela, mas houve falha ao salvar na nuvem.');
-    }// 2. Transplante em Lote Atômico: Envia todo o array em 1 única requisição para o Firebase (POST /api/students)
     try {
       const res = await fetch('/api/students', {
         method: 'POST',
@@ -1377,24 +1393,27 @@ export default function Home() {
       hashedPass = await hashPasswordBcrypt(hashedPass || newStudent.matricula || '123456');
     }
 
-    const studentToSave: StudentUser = { ...newStudent, passwordHash: hashedPass, mustChangePassword: true };
+    const studentToSave: StudentUser = {
+      ...newStudent,
+      passwordHash: hashedPass,
+      mustChangePassword: true,
+    };
 
-    // 1. Otimismo UI (Cache Rápido com Prevenção Atômica de Duplicidade)
     setStudents((prev) => {
-      // Evita o clone do aluno se o listener do banco ou cliques duplos enviarem o mesmo ID ou Matrícula
-      if (prev.some((s) => s.id === studentToSave.id || s.matricula === studentToSave.matricula)) return prev;
+      if (prev.some((s) => s.id === studentToSave.id || s.matricula === studentToSave.matricula))
+        return prev;
 
       const next = [...prev, studentToSave];
-      if (typeof window !== 'undefined') setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
+      if (typeof window !== 'undefined')
+        setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
       return next;
     });
 
-    // 2. Transplante Firebase
     try {
       const res = await fetch('/api/students', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(studentToSave)
+        body: JSON.stringify(studentToSave),
       });
       if (!res.ok) throw new Error('Falha ao salvar no banco.');
       showGlobalStatus('success', `Aluno "${studentToSave.fullName}" cadastrado com sucesso!`);
@@ -1405,23 +1424,28 @@ export default function Home() {
   };
 
   const handleSaveStudent = async (updatedStudent: StudentUser) => {
-    // 1. Otimismo UI
     setStudents((prev) => {
-      const next = prev.map((s) => (s.id === updatedStudent.id || s.matricula === updatedStudent.matricula ? updatedStudent : s));
-      if (typeof window !== 'undefined') setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
+      const next = prev.map((s) =>
+        s.id === updatedStudent.id || s.matricula === updatedStudent.matricula ? updatedStudent : s
+      );
+      if (typeof window !== 'undefined')
+        setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
       return next;
     });
 
-    if (supervisingStudent && (supervisingStudent.id === updatedStudent.id || supervisingStudent.matricula === updatedStudent.matricula)) {
+    if (
+      supervisingStudent &&
+      (supervisingStudent.id === updatedStudent.id ||
+        supervisingStudent.matricula === updatedStudent.matricula)
+    ) {
       setSupervisingStudent(updatedStudent);
     }
 
-    // 2. Transplante Firebase
     try {
       const res = await fetch('/api/students', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedStudent)
+        body: JSON.stringify(updatedStudent),
       });
       if (!res.ok) throw new Error('Falha na atualização.');
       showGlobalStatus('success', `Vínculo do aluno "${updatedStudent.fullName}" salvo e gravado com sucesso!`);
@@ -1432,14 +1456,14 @@ export default function Home() {
   };
 
   const handleSavePedagogicalNotes = async (studentId: string, notes: string) => {
-    // Atualiza estado local
     const targetStudent = students.find((s) => s.id === studentId);
     if (!targetStudent) return;
     const updatedStudent = { ...targetStudent, pedagogicalNotes: notes };
 
     setStudents((prev) => {
       const next = prev.map((s) => (s.id === studentId ? updatedStudent : s));
-      if (typeof window !== 'undefined') setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
+      if (typeof window !== 'undefined')
+        setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
       return next;
     });
 
@@ -1447,12 +1471,11 @@ export default function Home() {
       setSupervisingStudent(updatedStudent);
     }
 
-    // Envia o objeto inteiro atualizado (a API de PUT do Firebase sobrescreve o nó do aluno)
     try {
       await fetch('/api/students', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedStudent)
+        body: JSON.stringify(updatedStudent),
       });
     } catch (err) {
       console.error('Erro ao salvar anotações pedagógicas:', err);
@@ -1460,14 +1483,13 @@ export default function Home() {
   };
 
   const handleDeleteStudent = async (studentId: string) => {
-    // 1. Otimismo UI
     setStudents((prev) => {
       const next = prev.filter((s) => s.id !== studentId);
-      if (typeof window !== 'undefined') setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
+      if (typeof window !== 'undefined')
+        setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
       return next;
     });
 
-    // 2. Transplante Firebase
     try {
       const res = await fetch(`/api/students?id=${studentId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Falha ao excluir na nuvem.');
@@ -1508,7 +1530,6 @@ export default function Home() {
     }
 
     try {
-      // Persistir arquivamento em lote no Firebase Firestore
       const archiveRes = await fetch('/api/vinculos/archive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1525,7 +1546,6 @@ export default function Home() {
         console.warn('Aviso ao arquivar no Firestore:', errorData.error);
       }
 
-      // Atualizar estado em memória e cache local
       setStudents((prev) => {
         const updated = prev.map((s) =>
           !s.isArchived
@@ -1614,7 +1634,6 @@ export default function Home() {
         return { success: false, studentsCount: 0, activitiesCount: 0 };
       }
 
-      // Persistir restauração de vínculo no Firebase Firestore
       const restoreRes = await fetch('/api/vinculos/restore', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1630,7 +1649,6 @@ export default function Home() {
         console.warn('Aviso ao restaurar vínculo no Firestore:', errorData.error);
       }
 
-      // Atualizar no estado local em memória e no cache
       setStudents((prev) => {
         const updated = prev.map((s) => {
           if (studentIdsToRestore.includes(s.id)) {
@@ -1709,7 +1727,10 @@ export default function Home() {
     activityTitle?: string;
   }) => {
     const now = new Date();
-    const formattedDate = `${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    const formattedDate = `${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })}`;
     const newMsgId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const newMsg: ChatMessage = {
       id: newMsgId,
@@ -1744,9 +1765,17 @@ export default function Home() {
       console.warn('Erro ao persistir mensagem no Firestore:', err);
     }
 
-    // 3. Se a mensagem for de um aluno e o auto-reply de IA do Prof. Gilson estiver habilitado:
-    if (msgData.senderRole === 'student' && isAiAutoReplyEnabled && msgData.recipientId !== 'second-teacher') {
+    // 3. Se a mensagem for de um aluno para o Prof. Titular e o Boby Sociólogo estiver ativo:
+    if (
+      msgData.senderRole === 'student' &&
+      isAiAutoReplyEnabled &&
+      msgData.recipientId !== 'second-teacher'
+    ) {
       const studentObj = students.find((s) => s.id === msgData.senderId);
+      const cleanTeacherName =
+        teacher.name && !teacher.name.toLowerCase().includes('carregando')
+          ? teacher.name
+          : 'Prof. Gilson Flores';
 
       try {
         const res = await fetch('/api/gemini/teacher-bot', {
@@ -1756,7 +1785,7 @@ export default function Home() {
             studentName: msgData.senderName,
             studentTurma: studentObj?.turma || 'Geral',
             studentTag: studentObj?.tag || 'REGULAR',
-            teacherName: teacher.name || 'Prof. Gilson Flores',
+            teacherName: cleanTeacherName,
             teacherSubject: teacher.subject || 'Sociologia',
             schoolName: teacher.school || "EEB Prof. Jandira D'Ávila",
             messages: [...chatMessages, newMsg],
@@ -1769,12 +1798,15 @@ export default function Home() {
           const data = await res.json();
           if (data.reply) {
             const replyNow = new Date();
-            const replyDate = `${replyNow.toLocaleDateString('pt-BR')} ${replyNow.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+            const replyDate = `${replyNow.toLocaleDateString('pt-BR')} ${replyNow.toLocaleTimeString(
+              'pt-BR',
+              { hour: '2-digit', minute: '2-digit' }
+            )}`;
             const botMsg: ChatMessage = {
               id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
               threadId: msgData.threadId,
               senderId: teacher.id || 'teacher-1',
-              senderName: teacher.name || 'Prof. Gilson Flores',
+              senderName: data.teacherName || `Boby Sociólogo 🤖 (${cleanTeacherName})`,
               senderRole: 'teacher',
               senderAvatar: teacher.avatarUrl,
               recipientId: msgData.senderId,
@@ -1786,7 +1818,7 @@ export default function Home() {
 
             setChatMessages((prev) => mergeChatMessage(prev, botMsg).updated);
 
-            sendBrowserNotification(`${teacher.name || 'Prof. Gilson Flores'} respondeu:`, {
+            sendBrowserNotification(`Boby Sociólogo (${cleanTeacherName}) respondeu:`, {
               body: data.reply,
               icon: teacher.avatarUrl,
             });
@@ -1802,7 +1834,7 @@ export default function Home() {
           }
         }
       } catch (botErr) {
-        console.warn('Erro ao disparar resposta automática do professor com IA:', botErr);
+        console.warn('Erro ao disparar resposta automática do Boby Sociólogo:', botErr);
       }
     }
   };
@@ -1900,22 +1932,21 @@ export default function Home() {
   if (role === 'second_teacher' && teacher) {
     return (
       <SecondTeacherPortalView
-          teacher={teacher}
-          allStudents={activeStudents}
-          activities={activeActivities}
-          libraryFiles={library}
-          messages={chatMessages}
-          onLogout={handleLogout}
-          onSendMessage={handleSendMessage}
-          onMarkThreadAsRead={handleMarkThreadAsRead}
-        />
+        teacher={teacher}
+        allStudents={activeStudents}
+        activities={activeActivities}
+        libraryFiles={library}
+        messages={chatMessages}
+        onLogout={handleLogout}
+        onSendMessage={handleSendMessage}
+        onMarkThreadAsRead={handleMarkThreadAsRead}
+      />
     );
   }
 
   // 4. Teacher Dashboard Layout
   return (
     <div className="flex min-h-screen bg-background text-foreground overflow-x-hidden">
-      {/* Sidebar Navigation */}
       <Sidebar
         currentTab={activeTeacherTab}
         setCurrentTab={handleTeacherTabChange}
@@ -1929,7 +1960,6 @@ export default function Home() {
         pendingCorrectionsCount={teacherPendingCorrectionsCount}
       />
 
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 max-w-full">
         <NavbarTop
           role={role}
@@ -1968,8 +1998,8 @@ export default function Home() {
         )}
 
         <main className="flex-1 p-3 sm:p-6 md:p-8 max-w-7xl w-full mx-auto">
-          {(activeTeacherTab === 'dashboard' || activeTeacherTab === 'painel') && (
-            role === 'second_teacher' ? (
+          {(activeTeacherTab === 'dashboard' || activeTeacherTab === 'painel') &&
+            (role === 'second_teacher' ? (
               <SecondTeacherDashboardView
                 teacher={teacher}
                 students={visibleStudentsForRole}
@@ -1990,8 +2020,7 @@ export default function Home() {
                 onOpenParallelRecoveryModal={(act) => setParallelRecoveryParentActivity(act)}
                 onViewActivity={(act) => setViewingActivity(act)}
               />
-            )
-          )}
+            ))}
 
           {activeTeacherTab === 'atividades' && role !== 'second_teacher' && (
             <DashboardView
@@ -2015,17 +2044,18 @@ export default function Home() {
             />
           )}
 
-          {(activeTeacherTab === 'correcoes' || activeTeacherTab === 'grading') && role !== 'second_teacher' && (
-            <CorrectionsView
-              activities={activeActivities}
-              students={visibleStudentsForRole}
-              isLoading={isDataLoading}
-              hasError={dataLoadError}
-              onRetry={() => setLoadDataTrigger((prev) => prev + 1)}
-              onUpdateSubmission={handleUpdateSubmission}
-              initialSelectedActivityId={selectedActivityForGrading?.id || null}
-            />
-          )}
+          {(activeTeacherTab === 'correcoes' || activeTeacherTab === 'grading') &&
+            role !== 'second_teacher' && (
+              <CorrectionsView
+                activities={activeActivities}
+                students={visibleStudentsForRole}
+                isLoading={isDataLoading}
+                hasError={dataLoadError}
+                onRetry={() => setLoadDataTrigger((prev) => prev + 1)}
+                onUpdateSubmission={handleUpdateSubmission}
+                initialSelectedActivityId={selectedActivityForGrading?.id || null}
+              />
+            )}
 
           {activeTeacherTab === 'postagem_rco' && role !== 'second_teacher' && (
             <PostagemRcoView
@@ -2101,19 +2131,19 @@ export default function Home() {
             />
           )}
 
-              {activeTeacherTab === 'arquivos' && (
-                <LibraryView
-                  files={library}
-                  driveFolderUrl={teacher.driveFolderUrl}
-                  onSaveDriveFolderUrl={handleSaveDriveFolderUrl}
-                  onAddFile={handleAddLibraryFile}
-                  onDeleteFile={handleDeleteLibraryFile}
-                  isReadOnly={role === 'second_teacher'}
-                />
-              )}
+          {activeTeacherTab === 'arquivos' && (
+            <LibraryView
+              files={library}
+              driveFolderUrl={teacher.driveFolderUrl}
+              onSaveDriveFolderUrl={handleSaveDriveFolderUrl}
+              onAddFile={handleAddLibraryFile}
+              onDeleteFile={handleDeleteLibraryFile}
+              isReadOnly={role === 'second_teacher'}
+            />
+          )}
 
-              {activeTeacherTab === 'configuracoes' && (
-                <div className="glass-panel p-8 rounded-3xl border border-border max-w-2xl space-y-6">
+          {activeTeacherTab === 'configuracoes' && (
+            <div className="glass-panel p-8 rounded-3xl border border-border max-w-2xl space-y-6">
               <h1 className="text-2xl font-bold text-foreground">Configurações da Conta</h1>
 
               {teacherSaveStatus && (
@@ -2136,7 +2166,9 @@ export default function Home() {
 
               <div className="space-y-4 text-xs">
                 <div>
-                  <label className="block text-muted font-semibold mb-1">URL da Imagem de Perfil (Avatar)</label>
+                  <label className="block text-muted font-semibold mb-1">
+                    URL da Imagem de Perfil (Avatar)
+                  </label>
                   <input
                     type="text"
                     value={teacher.avatarUrl}
@@ -2170,7 +2202,9 @@ export default function Home() {
                     onChange={(e) => setTeacher({ ...teacher, email: e.target.value })}
                     className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-foreground focus:outline-none focus:border-primary"
                   />
-                  <p className="text-[10px] text-muted mt-1 ml-1">Você pode alterar seu e-mail de contato e acesso do professor por aqui.</p>
+                  <p className="text-[10px] text-muted mt-1 ml-1">
+                    Você pode alterar seu e-mail de contato e acesso do professor por aqui.
+                  </p>
                 </div>
                 <div>
                   <label className="block text-muted font-semibold mb-1">Telefone</label>
@@ -2192,7 +2226,9 @@ export default function Home() {
                   />
                 </div>
                 <div>
-                  <label className="block text-muted font-semibold mb-1">Matrícula Funcional / Vínculo</label>
+                  <label className="block text-muted font-semibold mb-1">
+                    Matrícula Funcional / Vínculo
+                  </label>
                   <input
                     type="text"
                     value={teacher.matriculaFuncional || ''}
@@ -2204,9 +2240,13 @@ export default function Home() {
 
                 <div className="p-4 bg-primary/10 border border-primary/30 rounded-2xl relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                  <label className="block text-primary font-bold mb-1">CÓDIGO DE ACESSO DOS ALUNOS</label>
-                  <p className="text-[11px] text-muted mb-3 max-w-[90%]">Este é o código exclusivo do seu ambiente (Tenant). Forneça este código aos seus alunos para que eles possam acessar as suas atividades.</p>
-                  
+                  <label className="block text-primary font-bold mb-1">
+                    CÓDIGO DE ACESSO DOS ALUNOS
+                  </label>
+                  <p className="text-[11px] text-muted mb-3 max-w-[90%]">
+                    Este é o código exclusivo do seu ambiente (Tenant). Forneça este código aos seus alunos para que eles possam acessar as suas atividades.
+                  </p>
+
                   <div className="flex items-center gap-3">
                     <input
                       type="text"
@@ -2238,16 +2278,22 @@ export default function Home() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-2xl bg-background border border-border">
                   <div>
-                    <label className="block text-muted font-semibold mb-1">Início da Vigência do Contrato</label>
+                    <label className="block text-muted font-semibold mb-1">
+                      Início da Vigência do Contrato
+                    </label>
                     <input
                       type="date"
                       value={teacher.contractStartDate || ''}
-                      onChange={(e) => setTeacher({ ...teacher, contractStartDate: e.target.value })}
+                      onChange={(e) =>
+                        setTeacher({ ...teacher, contractStartDate: e.target.value })
+                      }
                       className="w-full bg-surface border border-border rounded-2xl px-4 py-2.5 text-foreground focus:outline-none focus:border-primary"
                     />
                   </div>
                   <div>
-                    <label className="block text-muted font-semibold mb-1">Término / Encerramento do Contrato</label>
+                    <label className="block text-muted font-semibold mb-1">
+                      Término / Encerramento do Contrato
+                    </label>
                     <input
                       type="date"
                       value={teacher.contractEndDate || ''}
@@ -2256,16 +2302,26 @@ export default function Home() {
                     />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block text-muted font-semibold mb-1">Tipo de Vínculo Contratual</label>
+                    <label className="block text-muted font-semibold mb-1">
+                      Tipo de Vínculo Contratual
+                    </label>
                     <select
                       value={teacher.contractType || 'ACT / Contratado'}
                       onChange={(e) => setTeacher({ ...teacher, contractType: e.target.value })}
                       className="w-full bg-surface border border-border rounded-2xl px-4 py-2.5 text-foreground focus:outline-none focus:border-primary"
                     >
-                      <option value="ACT / Contratado" className="bg-surface text-foreground">ACT / Admitido em Caráter Temporário</option>
-                      <option value="Efetivo" className="bg-surface text-foreground">Professor Efetivo / Concursado</option>
-                      <option value="Substituto" className="bg-surface text-foreground">Professor Substituto</option>
-                      <option value="Outro" className="bg-surface text-foreground">Outro Vínculo</option>
+                      <option value="ACT / Contratado" className="bg-surface text-foreground">
+                        ACT / Admitido em Caráter Temporário
+                      </option>
+                      <option value="Efetivo" className="bg-surface text-foreground">
+                        Professor Efetivo / Concursado
+                      </option>
+                      <option value="Substituto" className="bg-surface text-foreground">
+                        Professor Substituto
+                      </option>
+                      <option value="Outro" className="bg-surface text-foreground">
+                        Outro Vínculo
+                      </option>
                     </select>
                   </div>
                 </div>
@@ -2278,7 +2334,9 @@ export default function Home() {
                     className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-foreground focus:outline-none focus:border-primary"
                     placeholder="Deixe em branco para não alterar"
                   />
-                  <p className="text-[10px] text-muted mt-1 ml-1">Preencha apenas se desejar alterar a senha de acesso (Supabase Auth).</p>
+                  <p className="text-[10px] text-muted mt-1 ml-1">
+                    Preencha apenas se desejar alterar a senha de acesso.
+                  </p>
                 </div>
 
                 <div className="pt-4 border-t border-border space-y-2">
@@ -2287,8 +2345,12 @@ export default function Home() {
                   </h3>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-surface rounded-2xl border border-border gap-3">
                     <div>
-                      <p className="text-xs font-bold text-foreground">Tema Escuro de Alto Contraste</p>
-                      <p className="text-[11px] text-muted mt-0.5">Letras nítidas e legíveis para conforto visual e uso profissional prolongado.</p>
+                      <p className="text-xs font-bold text-foreground">
+                        Tema Escuro de Alto Contraste
+                      </p>
+                      <p className="text-[11px] text-muted mt-0.5">
+                        Letras nítidas e legíveis para conforto visual e uso profissional prolongado.
+                      </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -2323,8 +2385,12 @@ export default function Home() {
                   </h3>
                   <div className="flex items-center justify-between p-4 bg-surface rounded-2xl border border-border">
                     <div>
-                      <p className="text-xs font-bold text-foreground">Deslogar por 8 minutos de inatividade</p>
-                      <p className="text-[11px] text-muted mt-0.5">Sua sessão será encerrada automaticamente após 8 minutos sem cliques ou movimentação.</p>
+                      <p className="text-xs font-bold text-foreground">
+                        Deslogar por 8 minutos de inatividade
+                      </p>
+                      <p className="text-[11px] text-muted mt-0.5">
+                        Sua sessão será encerrada automaticamente após 8 minutos sem cliques ou movimentação.
+                      </p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
                       <input
@@ -2343,10 +2409,10 @@ export default function Home() {
                     </label>
                   </div>
                 </div>
+
                 <button
                   onClick={async () => {
                     try {
-                      // 1. Salvar no Firestore via API segura do Firebase Admin
                       const resFirestore = await fetch('/api/teacher/profile', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -2367,8 +2433,8 @@ export default function Home() {
                             tenantCode: teacher.tenantCode || '',
                             escolas_vinculadas: teacher.escolas_vinculadas || [],
                             disciplinas: teacher.disciplinas || [],
-                          }
-                        })
+                          },
+                        }),
                       });
 
                       if (!resFirestore.ok) {
@@ -2376,7 +2442,6 @@ export default function Home() {
                         throw new Error(errData.error || 'Falha ao salvar no Firestore');
                       }
 
-                      // 2. Fallback de sincronização opcional no Supabase (sem bloquear se falhar)
                       if (isSupabaseConfigured && supabase) {
                         try {
                           const updateFields: any = {
@@ -2489,7 +2554,7 @@ export default function Home() {
         onSendMessage={
           role === 'second_teacher'
             ? undefined
-            : (st) => {
+            : () => {
                 setSupervisingStudent(null);
                 setCurrentTab('mensagens');
               }
@@ -2500,7 +2565,11 @@ export default function Home() {
       {mustChangePassword && role && role !== 'teacher' && (
         <ForceChangePasswordModal
           isOpen={mustChangePassword}
-          userName={role === 'student' ? currentStudent?.fullName || 'Aluno' : teacher.name || '2º Professor'}
+          userName={
+            role === 'student'
+              ? currentStudent?.fullName || 'Aluno'
+              : teacher.name || '2º Professor'
+          }
           userRole={role === 'student' ? 'student' : 'second_teacher'}
           onPasswordChanged={handlePasswordChanged}
         />

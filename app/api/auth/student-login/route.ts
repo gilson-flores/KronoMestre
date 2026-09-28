@@ -139,10 +139,21 @@ export async function POST(request: Request) {
     delete cleanStudent.password_hash;
     cleanStudent.ownerTeacherId = ownerTeacherId;
 
+    const tenantDoc = await db.collection('tenants').doc(ownerTeacherId).get();
+    const tenantInfo = tenantDoc.exists ? tenantDoc.data() || {} : {};
+
     const response = NextResponse.json({
       success: true,
       student: cleanStudent,
       ownerTeacherId,
+      teacherProfile: {
+        id: ownerTeacherId,
+        name: tenantInfo.name || tenantInfo.nome || 'Prof. Gilson Flores',
+        subject: tenantInfo.subject || 'Sociologia',
+        school: tenantInfo.school || "EEB Prof. Jandira D'Ávila",
+        avatarUrl: tenantInfo.avatarUrl || '',
+        driveFolderUrl: tenantInfo.driveFolderUrl || '',
+      },
     });
 
     // Grava o cookie HttpOnly de sessão do aluno (validade de 24 horas)

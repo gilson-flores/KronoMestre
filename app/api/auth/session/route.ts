@@ -1,74 +1,90 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
+import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
+import { getSessionFromRequest } from '@/lib/auth-server';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("session")?.value;
+    const db = getAdminDb();
 
-    if (!sessionCookie) {
-      return NextResponse.json({ user: null }, { status: 401 });
+    // 1. Tentar validar sessão do Professor Titular / Admin Supremo (Cookie 'session' do Firebase)
+    try {
+      const cookieStore = await cookies();
+      const sessionCookie = cookieStore.get('session')?.value;
+
+      if (sessionCookie) {
+        const auth = getAdminAuth();
+        const decoded = await auth.verifySessionCookie(sessionCookie, true);
+
+        if (decoded && decoded.uid) {
+          const tenantSnap = await db.collection('tenants').doc(decoded.uid).get();
+          const tenantData = tenantSnap.exists ? tenantSnap.data() : {};
+
+          return NextResponse.json({
+            user: {
+              id: decoded.uid,
+              email: decoded.email || '',
+              name: tenantData?.name || tenantData?.nome || decoded.name || 'Prof. Gilson Flores',
+              role: 'teacher',
+              tenant: tenantData,
+            },
+          });
+        }
+      }
+    } catch {
+      // Se o cookie 'session' não existir ou tiver expirado, segue para o fluxo JWT abaixo
     }
 
-    // Usando as novas funções seguras de inicialização
-    const adminAuth = getAdminAuth();
-    const adminDb = getAdminDb();
+    // 2. Tentar validar sessão de Aluno ou 2º Professor (Cookie JWT via lib/auth-server)
+    const jwtSession = await getSessionFromRequest(req);
+    if (jwtSession && jwtSession.sub) {
+      const ownerTeacherId = jwtSession.ownerTeacherId || jwtSession.sub;
 
-    // 1. Valida o cookie e extrai dados básicos do Auth
-    const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie);
-    const uid = decodedClaims.uid;
-    const email = decodedClaims.email || "";
+      if (jwtSession.role === 'second_teacher') {
+        return NextResponse.json({
+          user: {
+            id: jwtSession.sub,
+            email: jwtSession.email || '',
+            name: jwtSession.name || '2º Professor',
+            role: 'second_teacher',
+            ownerTeacherId,
+            mustChangePassword: Boolean(jwtSession.mustChangePassword),
+          },
+        });
+      }
 
-    // 2. Acessa o Firestore para buscar o Tenant (Professor Cliente)
-    const tenantRef = adminDb.collection("tenants").doc(uid);
-    const tenantSnap = await tenantRef.get();
+      if (jwtSession.role === 'student') {
+        const tenantSnap = await db.collection('tenants').doc(ownerTeacherId).get();
+        const tenantData = tenantSnap.exists ? tenantSnap.data() : {};
 
-    const isAdminSupremo =
-      email.toLowerCase().trim() === "755840@profe.sed.sc.gov.br" ||
-      email.toLowerCase().trim() === "gilsonjuniores@gmail.com";
-
-    let tenantData: any;
-
-    // 3. Se por acaso o documento não existir, faz a criação silenciosa
-    if (!tenantSnap.exists) {
-      tenantData = {
-        name: isAdminSupremo ? "Gilson Flores" : email.split("@")[0],
-        nome: isAdminSupremo ? "Gilson Flores" : email.split("@")[0],
-        email: email,
-        plan_type: isAdminSupremo ? "unlimited" : "basic",
-        is_admin: isAdminSupremo,
-        subject: "Sociologia",
-        school: "",
-        escolas_vinculadas: [],
-        disciplinas: [],
-        created_at: new Date().toISOString(),
-      };
-      
-      await tenantRef.set(tenantData);
-    } else {
-      tenantData = tenantSnap.data() || {};
-      if (isAdminSupremo && (!tenantData.is_admin || tenantData.plan_type !== "unlimited")) {
-        tenantData.is_admin = true;
-        tenantData.plan_type = "unlimited";
-        await tenantRef.set({ is_admin: true, plan_type: "unlimited" }, { merge: true });
+        return NextResponse.json({
+          user: {
+            id: jwtSession.sub,
+            name: jwtSession.name || 'Aluno',
+            role: 'student',
+            turma: jwtSession.turma || '',
+            matricula: jwtSession.matricula || '',
+            tag: jwtSession.tag || 'REGULAR',
+            avatarUrl: jwtSession.avatarUrl || '',
+            ownerTeacherId,
+            mustChangePassword: Boolean(jwtSession.mustChangePassword),
+            tenant: {
+              name: tenantData?.name || tenantData?.nome || 'Prof. Gilson Flores',
+              subject: tenantData?.subject || 'Sociologia',
+              school: tenantData?.school || "EEB Prof. Jandira D'Ávila",
+              avatarUrl: tenantData?.avatarUrl || '',
+              driveFolderUrl: tenantData?.driveFolderUrl || '',
+            },
+          },
+        });
       }
     }
 
-    // 4. Retorna a união do Auth com o Banco de Dados para o Frontend
-    return NextResponse.json({
-      user: {
-        id: uid,
-        email: email,
-        name: tenantData.name || tenantData.nome || email.split("@")[0],
-        role: decodedClaims.role || "teacher",
-        tenant: tenantData,
-      },
-    });
-  } catch (error) {
-    console.error("[Session API] Erro ao validar sessão/tenant:", error);
     return NextResponse.json({ user: null }, { status: 401 });
+  } catch (err) {
+    console.error('Erro ao verificar sessão:', err);
+    return NextResponse.json({ user: null }, { status: 500 });
   }
 }

@@ -315,12 +315,57 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   // Security Toast Message for blocked Copy/Paste actions
   const [securityToast, setSecurityToast] = useState<string | null>(null);
 
+  const [isScreenshotShieldActive, setIsScreenshotShieldActive] = useState(false);
+
   const showSecurityToast = (msg: string) => {
     setSecurityToast(msg);
     setTimeout(() => {
       setSecurityToast((current) => (current === msg ? null : current));
     }, 4000);
   };
+
+  // Trava Anti-Print de Tela (PrintScreen, Win+Shift+S, Cmd+Shift+3/4/5 e Ctrl+P)
+  useEffect(() => {
+    if (!selectedActivityId) return;
+
+    const triggerScreenshotBlock = (reason: string) => {
+      setIsScreenshotShieldActive(true);
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText('🚫 Captura de tela bloqueada pelo sistema KronoMestre.').catch(() => {});
+      }
+      showSecurityToast(`🚫 ${reason}`);
+      setTimeout(() => {
+        setIsScreenshotShieldActive(false);
+      }, 3500);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isPrintScreen = e.key === 'PrintScreen' || e.keyCode === 44;
+      const isMacShot = e.metaKey && e.shiftKey && ['3', '4', '5', 's', 'S'].includes(e.key);
+      const isWinSnip = (e.metaKey || e.ctrlKey) && e.shiftKey && ['s', 'S'].includes(e.key);
+      const isCtrlP = (e.ctrlKey || e.metaKey) && ['p', 'P'].includes(e.key);
+
+      if (isPrintScreen || isMacShot || isWinSnip || isCtrlP) {
+        e.preventDefault();
+        e.stopPropagation();
+        triggerScreenshotBlock('Captura ou impressão de tela bloqueada! A tentativa foi registrada.');
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'PrintScreen' || e.keyCode === 44) {
+        e.preventDefault();
+        triggerScreenshotBlock('Print de tela bloqueado! Área de transferência limpa pelo sistema.');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('keyup', handleKeyUp, true);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('keyup', handleKeyUp, true);
+    };
+  }, [selectedActivityId]);
 
   // Split into "A Fazer" and "Entregues/Corrigidas"
   const pendingActivities = useMemo(() => {
@@ -1129,6 +1174,19 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       </div>
                     </div>
 
+                    {/* Cortina Preta Instantânea quando o aluno tenta tirar Print da Tela */}
+                    {isScreenshotShieldActive && (
+                      <div className="fixed inset-0 z-[9999] bg-black flex flex-col items-center justify-center p-6 text-center select-none">
+                        <ShieldAlert className="w-16 h-16 text-rose-500 mb-4 animate-bounce" />
+                        <h2 className="text-xl sm:text-2xl font-black text-white">
+                          🚫 CAPTURA DE TELA BLOQUEADA!
+                        </h2>
+                        <p className="text-xs sm:text-sm text-zinc-300 max-w-md mt-2">
+                          O sistema Anti-Cola KronoMestre bloqueou a tentativa de Print Screen e limpou a sua área de transferência. Foque na sua avaliação!
+                        </p>
+                      </div>
+                    )}
+
                     {/* Security Active Banner (Apenas para atividades convencionais) */}
                     {!(act.playfulGameHtml || act.adaptationType === 'severe_playful') && (act.securityFocusLock || act.securityBlockCopyStatement || act.securityBlockPasteEssay) && (
                       <div className="bg-[#171f33] p-3.5 rounded-2xl border border-amber-500/30 flex flex-wrap items-center gap-2.5 text-xs text-amber-200 shadow-md">
@@ -1151,6 +1209,9 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                             <span>Sem Cola</span>
                           </span>
                         )}
+                        <span className="bg-cyan-100 text-cyan-700 px-2.5 py-0.5 rounded-full border border-cyan-500/30 font-semibold text-[11px] flex items-center gap-1">
+                          <span>📸 Anti-Print Ativo</span>
+                        </span>
                       </div>
                     )}
 
