@@ -1,22 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminDb } from '@/lib/firebase-admin';
+import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
 import { getSessionFromRequest } from '@/lib/auth-server';
+import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
+// Helper de Autorização Universal (Reconhece o Professor Titular e o 2º Professor)
+async function getAuthorizedOwnerId(req: NextRequest): Promise<string | null> {
+  // 1. Tenta validar o Titular pelo cookie seguro do Firebase Admin
+  try {
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get('session')?.value;
+    if (sessionCookie) {
+      const auth = getAdminAuth();
+      const decoded = await auth.verifySessionCookie(sessionCookie, true);
+      if (decoded && decoded.uid) return decoded.uid; // É o Professor Titular
+    }
+  } catch (e) {}
+  
+  // 2. Tenta validar o 2º Professor ou Aluno pelo JWT
+  try {
+    const jwtSession = await getSessionFromRequest(req);
+    if (jwtSession && jwtSession.ownerTeacherId) {
+      return jwtSession.ownerTeacherId; // É o 2º Professor
+    }
+  } catch (e) {}
+
+  return null;
+}
+
 export async function GET(req: NextRequest) {
   try {
-    const session = await getSessionFromRequest(req);
-    if (!session || !session.ownerTeacherId) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const ownerTeacherId = await getAuthorizedOwnerId(req);
+    if (!ownerTeacherId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
     const db = getAdminDb();
-    const studentsRef = db.collection('tenants').doc(session.ownerTeacherId).collection('students');
+    const studentsRef = db.collection('tenants').doc(ownerTeacherId).collection('students');
     const snapshot = await studentsRef.get();
     
     const students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
     return NextResponse.json({ students });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -25,41 +47,42 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getSessionFromRequest(req);
-    if (!session || !session.ownerTeacherId) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const ownerTeacherId = await getAuthorizedOwnerId(req);
+    if (!ownerTeacherId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
     const db = getAdminDb();
-    const batch = db.batch();
-    const studentsRef = db.collection('tenants').doc(session.ownerTeacherId).collection('students');
-
+    const studentsRef = db.collection('tenants').doc(ownerTeacherId).collection('students');
     const body = await req.json();
     
-    // Suporta tanto um Array (Importação em Lote CSV) quanto um Único Objeto (Cadastro Manual)
     const studentsToProcess = Array.isArray(body) ? body : [body];
     const savedStudents = [];
+    
+    // Chunking para respeitar o limite de 500 operações do Firestore Batch
+    const chunkSize = 400;
+    for (let i = 0; i < studentsToProcess.length; i += chunkSize) {
+      const chunk = studentsToProcess.slice(i, i + chunkSize);
+      const batch = db.batch();
 
-    for (const studentData of studentsToProcess) {
-      // Garante que o aluno tenha ID. Se não veio do front, gera um.
-      if (!studentData.id) {
-        studentData.id = `std-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      for (const studentData of chunk) {
+        const id = studentData.id || `std-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+        const docRef = studentsRef.doc(id);
+        
+        const cleanData: any = { 
+          ...studentData, 
+          id, 
+          ownerTeacherId 
+        };
+        
+        // Firebase rejeita undefined, então limpamos preventivamente a estrutura
+        Object.keys(cleanData).forEach(key => {
+          if (cleanData[key] === undefined) delete cleanData[key];
+        });
+        
+        batch.set(docRef, cleanData, { merge: true });
+        savedStudents.push(cleanData);
       }
-      
-      const docRef = studentsRef.doc(studentData.id);
-      
-      // Limpa dados e insere no lote
-      const cleanData = { 
-        ...studentData, 
-        ownerTeacherId: session.ownerTeacherId 
-      };
-      
-      batch.set(docRef, cleanData, { merge: true });
-      savedStudents.push(cleanData);
+      await batch.commit();
     }
-
-    // Comita (salva) todos os alunos no Firebase numa única transação rápida
-    await batch.commit();
 
     return NextResponse.json({ success: true, students: savedStudents });
   } catch (error: any) {
@@ -70,21 +93,21 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const session = await getSessionFromRequest(req);
-    if (!session || !session.ownerTeacherId) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const ownerTeacherId = await getAuthorizedOwnerId(req);
+    if (!ownerTeacherId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
     const db = getAdminDb();
     const body = await req.json();
+    if (!body.id) return NextResponse.json({ error: 'ID ausente' }, { status: 400 });
+
+    const studentRef = db.collection('tenants').doc(ownerTeacherId).collection('students').doc(body.id);
     
-    if (!body.id) {
-      return NextResponse.json({ error: 'ID do aluno ausente' }, { status: 400 });
-    }
+    const cleanData = { ...body };
+    Object.keys(cleanData).forEach(key => {
+      if (cleanData[key] === undefined) delete cleanData[key];
+    });
 
-    const studentRef = db.collection('tenants').doc(session.ownerTeacherId).collection('students').doc(body.id);
-    await studentRef.set(body, { merge: true });
-
+    await studentRef.set(cleanData, { merge: true });
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -93,20 +116,15 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const session = await getSessionFromRequest(req);
-    if (!session || !session.ownerTeacherId) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const ownerTeacherId = await getAuthorizedOwnerId(req);
+    if (!ownerTeacherId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
-
-    if (!id) {
-      return NextResponse.json({ error: 'ID ausente' }, { status: 400 });
-    }
+    if (!id) return NextResponse.json({ error: 'ID ausente' }, { status: 400 });
 
     const db = getAdminDb();
-    const studentRef = db.collection('tenants').doc(session.ownerTeacherId).collection('students').doc(id);
+    const studentRef = db.collection('tenants').doc(ownerTeacherId).collection('students').doc(id);
     await studentRef.delete();
 
     return NextResponse.json({ success: true });
