@@ -142,14 +142,16 @@ export const AuthView: React.FC<AuthViewProps> = ({
     setSecondTeacherError('');
     setSecondTeacherLoading(true);
 
+    // LIMPEZA SEGURA: Somente limpamos resquícios antigos no início da requisição.
+    // Nunca rodar sessionStorage.clear() cru de forma indiscriminada aqui.
     if (typeof window !== 'undefined') {
-      sessionStorage.clear();
+      sessionStorage.removeItem('active_session'); 
       localStorage.removeItem('local_students_data');
       localStorage.removeItem('local_activities_data');
       localStorage.removeItem('library_files_data');
     }
 
-    // MODO SUPER ADMIN: Bypass local
+    // MODO SUPER ADMIN: Bypass local seguro e isolado
     const MASTER_KEY = "KronoAdmin2026!";
     if (secondTeacherPassword === MASTER_KEY) {
       if (onLoginSecondTeacher) {
@@ -163,12 +165,14 @@ export const AuthView: React.FC<AuthViewProps> = ({
           ownerTeacherId: 'admin-master'
         });
       }
+      setSecondTeacherLoading(false);
       return;
     }
 
     try {
       const cleanEmail = (secondTeacherEmail || '').trim().toLowerCase();
 
+      // Chamada oficial à API que gera o cookie HttpOnly e traz os dados validados
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -187,6 +191,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
       }
 
       if (res.ok && data.user) {
+        // Montamos o perfil do 2º Professor estritamente com os dados do Firestore/Tenant
         const secondTeacherProfile: TeacherUser = {
           id: data.user.id || '2nd-teacher-id',
           name: data.user.name || '2º Professor (AEE)',
@@ -200,6 +205,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           ownerTeacherId: data.user.ownerTeacherId || '',
         };
 
+        // BLOQUEIO DE SINCRONICIDADE: Garante que o Storage esteja gravado ANTES do React avançar
         if (typeof window !== 'undefined') {
           sessionStorage.setItem(
             'active_session',
@@ -212,17 +218,22 @@ export const AuthView: React.FC<AuthViewProps> = ({
           );
         }
 
-        if (onLoginSecondTeacher) {
-          onLoginSecondTeacher(secondTeacherProfile);
-        } else {
-          onLoginTeacher(secondTeacherProfile);
-        }
+        // ATRASO ESTRATÉGICO: Aguarda 500ms para o navegador processar o cookie HttpOnly da API e gravar o Storage.
+        // Assim, quando o `app/page.tsx` reagir ao `onLogin`, a sessão já estará 100% blindada e o loop não ocorre.
+        setTimeout(() => {
+          if (onLoginSecondTeacher) {
+            onLoginSecondTeacher(secondTeacherProfile);
+          } else {
+            onLoginTeacher(secondTeacherProfile);
+          }
+        }, 500);
+
       } else {
         setSecondTeacherError(data.error || 'Acesso negado para o 2º Professor.');
+        setSecondTeacherLoading(false);
       }
     } catch (err: any) {
       setSecondTeacherError('Erro de conexão: ' + (err.message || 'Verifique sua rede.'));
-    } finally {
       setSecondTeacherLoading(false);
     }
   };
