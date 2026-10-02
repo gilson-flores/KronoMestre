@@ -4,106 +4,55 @@ import { getSessionFromRequest } from '@/lib/auth-server';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * POST /api/vinculos/archive
- * Arquiva alunos e atividades ativas do professor no Firebase Firestore em lote (batch).
- */
 export async function POST(req: NextRequest) {
   try {
     const session = await getSessionFromRequest(req);
-    if (!session || (session.role !== 'teacher' && session.role !== 'admin')) {
+    if (!session || !session.ownerTeacherId) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const ownerTeacherId = session.ownerTeacherId || session.sub;
     const body = await req.json();
     const { reason, schoolName, vinculoId, vinculoCode } = body;
-
     const nowIso = new Date().toISOString();
-    const finalReason = (reason || 'Troca de vínculo').trim();
-    const finalSchool = (schoolName || 'Escola Estadual').trim();
-    const finalVinculoId = vinculoId || `VINC-${Date.now().toString(36)}`;
 
     const db = getAdminDb();
-    const tenantRef = db.collection('tenants').doc(ownerTeacherId);
-
-    // 1. Buscar alunos ativos no Firestore
-    const studentsSnap = await tenantRef.collection('students').get();
-    const activeStudents = studentsSnap.docs.filter((doc) => {
-      const data = doc.data();
-      return !data.isArchived;
-    });
-
-    // 2. Buscar atividades ativas no Firestore
-    const activitiesSnap = await tenantRef.collection('activities').get();
-    const activeActivities = activitiesSnap.docs.filter((doc) => {
-      const data = doc.data();
-      return !data.isArchived;
-    });
-
-    // Executar batch update no Firestore
+    const tenantRef = db.collection('tenants').doc(session.ownerTeacherId);
     const batch = db.batch();
 
-    activeStudents.forEach((doc) => {
-      batch.set(
-        doc.ref,
-        {
+    // 1. Arquivar Alunos Ativos
+    const studentsSnap = await tenantRef.collection('students').get();
+    studentsSnap.docs.forEach(doc => {
+      if (!doc.data().isArchived) {
+        batch.update(doc.ref, {
           isArchived: true,
           archivedAt: nowIso,
-          archivedReason: finalReason,
-          archivedVinculoId: finalVinculoId,
-          archivedSchool: finalSchool,
-          updatedAt: nowIso,
-        },
-        { merge: true }
-      );
+          archivedReason: reason || '',
+          archivedVinculoId: vinculoId || '',
+          archivedSchool: schoolName || '',
+          archivedCode: vinculoCode || ''
+        });
+      }
     });
 
-    activeActivities.forEach((doc) => {
-      batch.set(
-        doc.ref,
-        {
+    // 2. Arquivar Atividades Ativas
+    const activitiesSnap = await tenantRef.collection('activities').get();
+    activitiesSnap.docs.forEach(doc => {
+      if (!doc.data().isArchived) {
+        batch.update(doc.ref, {
           isArchived: true,
           archivedAt: nowIso,
-          archivedReason: finalReason,
-          archivedVinculoId: finalVinculoId,
-          archivedSchool: finalSchool,
-          updatedAt: nowIso,
-        },
-        { merge: true }
-      );
+          archivedReason: reason || '',
+          archivedVinculoId: vinculoId || '',
+          archivedSchool: schoolName || '',
+          archivedCode: vinculoCode || ''
+        });
+      }
     });
-
-    // Registrar o histórico do vínculo na coleção vinculos_historico do tenant
-    const vinculoDocRef = tenantRef.collection('vinculos_historico').doc(finalVinculoId);
-    batch.set(
-      vinculoDocRef,
-      {
-        id: finalVinculoId,
-        vinculoCode: vinculoCode || `Vínculo ${new Date().toLocaleDateString('pt-BR')}`,
-        school: finalSchool,
-        reason: finalReason,
-        closedAt: nowIso,
-        totalStudents: activeStudents.length,
-        totalActivities: activeActivities.length,
-        updatedAt: nowIso,
-      },
-      { merge: true }
-    );
 
     await batch.commit();
-
-    return NextResponse.json({
-      success: true,
-      vinculoId: finalVinculoId,
-      studentsArchived: activeStudents.length,
-      activitiesArchived: activeActivities.length,
-    });
+    return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error('Erro ao arquivar vínculo no Firestore:', error);
-    return NextResponse.json(
-      { error: error?.message || 'Erro interno ao arquivar vínculo' },
-      { status: 500 }
-    );
+    console.error('Erro no arquivamento:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

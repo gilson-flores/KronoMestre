@@ -6,6 +6,9 @@ import { signSessionToken, setSessionCookie, clearSessionCookie, SessionPayload 
 
 export const dynamic = "force-dynamic";
 
+// Novo Ícone SVG Base64 Moderno e Inclusivo (AEE)
+const DEFAULT_INCLUSION_ICON = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iYmciIHgxPSIwIiB5MT0iMCIgeDI9IjI1NiIgeTI9IjI1NiI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMxZTI5M2IiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMGYxNzJhIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJwcmltYXJ5IiB4MT0iMCIgeTE9IjAiIHgyPSIyNTYiIHkyPSIyNTYiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjZjU5ZTBiIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iI2Q5NzcwNiIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0ic2Vjb25kYXJ5IiB4MT0iMCIgeTE9IjAiIHgyPSIyNTYiIHkyPSIyNTYiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjZmJiZjI0Ii8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iI2Y1OWUwYiIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICA8L2RlZnM+CiAgPHJlY3Qgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIGZpbGw9InVybCgjYmcpIi8+CiAgPHBhdGggZD0iTTQwIDEyOCBBIDg4IDg4IDAgMSAxIDIxNiAxMjggQSA4OCA4OCAwIDEgMSA0MCAxMjgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZiYmYyNCIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtZGFzaGFycmF5PSI4IDgiIG9wYWNpdHk9IjAuMTUiLz4KICA8Y2lyY2xlIGN4PSIxMDQiIGN5PSIxMDAiIHI9IjI4IiBmaWxsPSJ1cmwoI3ByaW1hcnkpIi8+CiAgPHBhdGggZD0iTTEwNCAxNDAgQzYwIDE0MCA0MCAxODAgMzIgMjMwIEwxNzYgMjMwIEMxNjggMTgwIDE0OCAxNDAgMTA0IDE0MCBaIiBmaWxsPSJ1cmwoI3ByaW1hcnkpIi8+CiAgPGNpcmNsZSBjeD0iMTY4IiBjeT0iMTMyIiByPSIyMiIgZmlsbD0idXJsKCNzZWNvbmRhcnkpIi8+CiAgPHBhdGggZD0iTTE2OCAxNjUgQzE0MCAxNjUgMTI1IDE5MCAxMjAgMjMwIEwyMTYgMjMwIEMyMTEgMTkwIDE5NiAxNjUgMTY4IDE2NSBaIiBmaWxsPSJ1cmwoI3NlY29uZGFyeSkiLz4KICA8cGF0aCBkPSJNMTgwIDUwIEwxODUgNzAgTDIwNSA3NSBMMTg1IDgwIEwxODAgMTAwIEwxNzUgODAgTDE1NSA3NSBMMTc1IDcwIFoiIGZpbGw9IiNmY2QzNGQiIG9wYWNpdHk9IjAuOSIvPgogIDxjaXJjbGUgY3g9IjcwIiBjeT0iNzAiIHI9IjYiIGZpbGw9IiNmYmJmMjQiIG9wYWNpdHk9IjAuNiIvPgo8L3N2Zz4=';
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -25,7 +28,6 @@ export async function POST(request: Request) {
 
     // ============================================================================
     // VERIFICAÇÃO AUTOMÁTICA DE 2º PROFESSOR NO FIRESTORE
-    // (Funciona tanto na aba 2º Professor quanto se digitar na aba Professor!)
     // ============================================================================
     let matchedSecondDoc: any = null;
     let matchedSecondData: any = null;
@@ -85,7 +87,6 @@ export async function POST(request: Request) {
         );
       }
 
-      // Descobre o ownerTeacherId real do Professor Titular
       let ownerTeacherId =
         matchedSecondDoc.ref.parent.parent?.id ||
         matchedSecondData.ownerTeacherId ||
@@ -100,7 +101,6 @@ export async function POST(request: Request) {
         }
       }
 
-      // Busca o driveFolderUrl e escola do Tenant do Professor Titular para a Biblioteca de Arquivos
       const ownerTenantSnap = await adminDb.collection("tenants").doc(ownerTeacherId).get();
       const ownerTenantData = ownerTenantSnap.exists ? ownerTenantSnap.data() || {} : {};
 
@@ -115,6 +115,12 @@ export async function POST(request: Request) {
 
       const token = await signSessionToken(sessionPayload, "7d");
 
+      // Substitui a foto antiga do Unsplash pelo novo ícone!
+      let finalAvatar = matchedSecondData.avatarUrl || DEFAULT_INCLUSION_ICON;
+      if (finalAvatar.includes("photo-1573496359142")) {
+        finalAvatar = DEFAULT_INCLUSION_ICON;
+      }
+
       const response = NextResponse.json({
         user: {
           id: matchedSecondDoc.id,
@@ -124,16 +130,13 @@ export async function POST(request: Request) {
           phone: matchedSecondData.phone || "",
           school: matchedSecondData.school || ownerTenantData.school || "EEB Prof. Jandira D'Ávila",
           driveFolderUrl: ownerTenantData.driveFolderUrl || "",
-          avatarUrl:
-            matchedSecondData.avatarUrl ||
-            "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=250",
+          avatarUrl: finalAvatar,
           role: "second_teacher",
           mustChangePassword: Boolean(matchedSecondData.mustChangePassword),
           ownerTeacherId,
         },
       });
 
-      // Destrói o cookie 'session' do Firebase Auth diretamente no cabeçalho da resposta!
       response.cookies.set("session", "", { maxAge: 0, path: "/" });
       setSessionCookie(response, token, 7 * 24 * 60 * 60);
       return response;
@@ -175,10 +178,9 @@ export async function POST(request: Request) {
     const userEmail = data.email || cleanEmail;
 
     const adminAuth = getAdminAuth();
-    const expiresIn = 60 * 60 * 24 * 5 * 1000; // 5 dias
+    const expiresIn = 60 * 60 * 24 * 5 * 1000;
     const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn });
 
-    // Onboarding Silencioso (Gravação do Tenant no Firestore)
     const tenantRef = adminDb.collection("tenants").doc(uid);
     const tenantSnap = await tenantRef.get();
 
@@ -216,7 +218,6 @@ export async function POST(request: Request) {
       },
     });
 
-    // Limpa eventual cookie JWT de aluno/2º professor e grava o cookie do Professor Titular
     clearSessionCookie(response);
     response.cookies.set("session", sessionCookie, {
       maxAge: expiresIn / 1000,
