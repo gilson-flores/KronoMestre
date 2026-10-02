@@ -1,124 +1,124 @@
-import { NextResponse } from 'next/server';
-import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
+import { NextRequest, NextResponse } from 'next/server';
+import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
 import { getSessionFromRequest } from '@/lib/auth-server';
 import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Extrai o ID do professor proprietário (tenant) da requisição com suporte dual:
- * 1. Cookie 'session' do Firebase Auth (Professor)
- * 2. Cookie JWT de Sessão (lib/auth-server) (Alunos)
- */
-async function resolveOwnerTeacherId(request: Request): Promise<{ ownerTeacherId: string; email?: string; role?: string } | null> {
+// Helper de Autorização Universal (Reconhece o Professor Titular e o 2º Professor)
+async function getAuthorizedOwnerId(req: NextRequest): Promise<string | null> {
+  // 1. Tenta validar o Titular pelo cookie seguro do Firebase Admin
   try {
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('session')?.value;
     if (sessionCookie) {
       const auth = getAdminAuth();
       const decoded = await auth.verifySessionCookie(sessionCookie, true);
-      if (decoded && decoded.uid) {
-        return {
-          ownerTeacherId: decoded.tenant || decoded.ownerTeacherId || decoded.uid,
-          email: decoded.email,
-          role: decoded.role || 'teacher',
-        };
-      }
+      if (decoded && decoded.uid) return decoded.uid; // É o Professor Titular
     }
-  } catch {}
-
+  } catch (e) {}
+  
+  // 2. Tenta validar o 2º Professor ou Aluno pelo JWT
   try {
-    const session = await getSessionFromRequest(request);
-    if (session && (session.ownerTeacherId || session.sub)) {
-      return {
-        ownerTeacherId: session.ownerTeacherId || session.sub,
-        email: session.email,
-        role: session.role,
-      };
+    const jwtSession = await getSessionFromRequest(req);
+    if (jwtSession && jwtSession.ownerTeacherId) {
+      return jwtSession.ownerTeacherId; // É o 2º Professor
     }
-  } catch {}
+  } catch (e) {}
 
   return null;
 }
 
-export async function GET(request: Request) {
+export async function GET(req: NextRequest) {
   try {
-    const session = await resolveOwnerTeacherId(request);
-    if (!session) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+    const ownerTeacherId = await getAuthorizedOwnerId(req);
+    if (!ownerTeacherId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
     const db = getAdminDb();
-    const snapshot = await db.collection('tenants')
-      .doc(session.ownerTeacherId)
-      .collection('activities')
-      .get();
-
+    const activitiesRef = db.collection('tenants').doc(ownerTeacherId).collection('activities');
+    const snapshot = await activitiesRef.get();
+    
     const activities = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
     return NextResponse.json({ activities });
   } catch (error: any) {
-    console.error('Erro GET atividades:', error);
-    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const session = await resolveOwnerTeacherId(request);
-    if (!session) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-
-    const activityData = await request.json();
-    if (!activityData.id) {
-      return NextResponse.json({ error: 'ID da atividade obrigatório' }, { status: 400 });
-    }
+    const ownerTeacherId = await getAuthorizedOwnerId(req);
+    if (!ownerTeacherId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
     const db = getAdminDb();
-    await db.collection('tenants')
-      .doc(session.ownerTeacherId)
-      .collection('activities')
-      .doc(activityData.id)
-      .set({
-        ...activityData,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
+    const body = await req.json();
+    
+    if (!body.id) {
+      body.id = `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    }
+
+    const activityRef = db.collection('tenants').doc(ownerTeacherId).collection('activities').doc(body.id);
+    
+    const cleanData = { ...body, ownerTeacherId };
+    // Firebase rejeita undefined
+    Object.keys(cleanData).forEach(key => {
+      if (cleanData[key] === undefined) delete cleanData[key];
+    });
+
+    await activityRef.set(cleanData, { merge: true });
+
+    return NextResponse.json({ success: true, activity: cleanData });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function PUT(req: NextRequest) {
+  try {
+    const ownerTeacherId = await getAuthorizedOwnerId(req);
+    if (!ownerTeacherId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+
+    const db = getAdminDb();
+    const body = await req.json();
+    
+    if (!body.id) {
+      return NextResponse.json({ error: 'ID ausente' }, { status: 400 });
+    }
+
+    const activityRef = db.collection('tenants').doc(ownerTeacherId).collection('activities').doc(body.id);
+    
+    const cleanData = { ...body };
+    Object.keys(cleanData).forEach(key => {
+      if (cleanData[key] === undefined) delete cleanData[key];
+    });
+
+    await activityRef.set(cleanData, { merge: true });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error('Erro POST atividades:', error);
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
-export async function PUT(request: Request) {
-  return POST(request);
-}
-
-export async function DELETE(request: Request) {
+export async function DELETE(req: NextRequest) {
   try {
-    const session = await resolveOwnerTeacherId(request);
-    if (!session) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
-    
-    const { searchParams } = new URL(request.url);
+    const ownerTeacherId = await getAuthorizedOwnerId(req);
+    if (!ownerTeacherId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+
+    const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
-    
+
     if (!id) {
       return NextResponse.json({ error: 'ID ausente' }, { status: 400 });
     }
 
     const db = getAdminDb();
-    await db.collection('tenants')
-      .doc(session.ownerTeacherId)
-      .collection('activities')
-      .doc(id)
-      .delete();
+    const activityRef = db.collection('tenants').doc(ownerTeacherId).collection('activities').doc(id);
+    await activityRef.delete();
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error('Erro DELETE atividades:', error);
-    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
