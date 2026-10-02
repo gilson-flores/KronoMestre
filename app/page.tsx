@@ -1398,8 +1398,9 @@ export default function Home() {
       newStudents.map(async (s) => {
         let hashed = s.passwordHash;
         if (!hashed || (!hashed.startsWith('$2a$') && !hashed.startsWith('$2b$'))) {
-          hashed = await hashPasswordBcrypt(hashed || s.matricula || '123456');
+          hashed = await hashPasswordBcrypt(hashed || '123456');
         }
+        // O mustChangePassword: true obriga a tela de Nova Senha no primeiro acesso
         return { ...s, passwordHash: hashed, mustChangePassword: true };
       })
     );
@@ -1535,6 +1536,33 @@ export default function Home() {
     } catch (err) {
       console.warn('Erro ao deletar aluno:', err);
       showGlobalStatus('error', 'Aluno oculto da tela, mas exclusão na nuvem falhou.');
+    }
+  };
+
+  const handleDeleteAllStudents = async () => {
+    if (!window.confirm('⚠️ ATENÇÃO EXTREMA: Tem certeza que deseja EXCLUIR TODOS OS ALUNOS da base ativa?')) return;
+    
+    const confirmText = window.prompt('Para confirmar, digite EXCLUIR TODOS:');
+    if (confirmText !== 'EXCLUIR TODOS') {
+      showGlobalStatus('error', 'Exclusão cancelada. O texto de confirmação não confere.');
+      return;
+    }
+
+    setIsDataLoading(true);
+    try {
+      const res = await fetch('/api/students?id=all', { method: 'DELETE' });
+      if (!res.ok) throw new Error('Falha ao excluir na nuvem.');
+      
+      setStudents([]);
+      if (typeof window !== 'undefined') {
+        setScopedLocalStorageItem('local_students_data', '[]', teacher.id);
+      }
+      showGlobalStatus('success', 'Todos os alunos foram excluídos com sucesso da base de dados!');
+    } catch (err) {
+      console.warn('Erro ao deletar todos os alunos:', err);
+      showGlobalStatus('error', 'Erro ao processar exclusão em massa no servidor.');
+    } finally {
+      setIsDataLoading(false);
     }
   };
 
@@ -2448,6 +2476,29 @@ export default function Home() {
                   </div>
                 </div>
 
+<div className="pt-4 border-t border-border space-y-2">
+                  <h3 className="text-sm font-bold text-rose-500 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>Zona de Perigo (Ações Irreversíveis)</span>
+                  </h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-rose-500/5 rounded-2xl border border-rose-500/20 gap-3">
+                    <div>
+                      <p className="text-xs font-bold text-rose-500">
+                        Excluir Todos os Alunos Ativos
+                      </p>
+                      <p className="text-[11px] text-rose-400/80 mt-0.5 max-w-sm">
+                        Zera completamente a sua base de alunos, permitindo uma nova importação limpa via CSV.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleDeleteAllStudents}
+                      className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all shadow-md shrink-0 cursor-pointer"
+                    >
+                      🗑️ Excluir Todos
+                    </button>
+                  </div>
+                </div>
                 <button
                   onClick={async () => {
                     try {

@@ -124,8 +124,21 @@ export async function DELETE(req: NextRequest) {
     if (!id) return NextResponse.json({ error: 'ID ausente' }, { status: 400 });
 
     const db = getAdminDb();
-    const studentRef = db.collection('tenants').doc(ownerTeacherId).collection('students').doc(id);
-    await studentRef.delete();
+    const studentsRef = db.collection('tenants').doc(ownerTeacherId).collection('students');
+
+    // ====== EXCLUSÃO EM MASSA ======
+    if (id === 'all') {
+      const snapshot = await studentsRef.get();
+      const batch = db.batch();
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+      return NextResponse.json({ success: true, deletedCount: snapshot.docs.length });
+    }
+
+    // ====== EXCLUSÃO INDIVIDUAL ======
+    await studentsRef.doc(id).delete();
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
