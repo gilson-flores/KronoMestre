@@ -867,6 +867,9 @@ export default function Home() {
         : 'second-teacher';
 
     const pollInterval = setInterval(async () => {
+      // BLINDAGEM DE COTA DO FIREBASE: Se a aba estiver invisível/minimizada, não consome leituras!
+      if (typeof document !== 'undefined' && document.hidden) return;
+
       try {
         // 1. Polling de Mensagens no Firestore
         const msgRes = await fetch('/api/messages');
@@ -959,7 +962,7 @@ export default function Home() {
       } catch {
         // Silencia oscilações momentâneas de rede
       }
-    }, 6000);
+    }, 45000); // <-- Intervalo aumentado de 6s para 45s (Economiza mais de 85% da cota de leituras diárias)
 
     return () => {
       clearInterval(pollInterval);
