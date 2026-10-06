@@ -31,6 +31,8 @@ interface MessagesViewProps {
   students: StudentUser[];
   activities: Activity[];
   messages: ChatMessage[];
+  isAiAutoReplyEnabled?: boolean;
+  onToggleAiAutoReply?: (enabled: boolean) => void;
   onSendMessage: (msg: {
     threadId: string;
     senderId: string;
@@ -75,6 +77,8 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
   students,
   activities,
   messages,
+  isAiAutoReplyEnabled = true,
+  onToggleAiAutoReply,
   onSendMessage,
   onMarkThreadAsRead,
 }) => {
@@ -321,8 +325,25 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
             title="Atualizar mensagens"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>Sincronizar</span>
+            <span className="hidden sm:inline">Sincronizar</span>
           </button>
+
+          {/* Teacher AI Auto-Reply Toggle */}
+          {currentUserRole === 'teacher' && !isSecondTeacher && onToggleAiAutoReply && (
+            <button
+              type="button"
+              onClick={() => onToggleAiAutoReply(!isAiAutoReplyEnabled)}
+              className={`px-3 py-2 rounded-2xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm ${
+                isAiAutoReplyEnabled
+                  ? 'bg-purple-100 text-purple-600 border-purple-200 hover:bg-purple-500/30'
+                  : 'bg-surface text-muted border-border hover:text-foreground'
+              }`}
+              title="Ativar/Pausar respostas automáticas com IA do Boby"
+            >
+              <Bot className={`w-3.5 h-3.5 ${isAiAutoReplyEnabled ? 'text-purple-400' : 'text-[#869486]'}`} />
+              <span className="hidden sm:inline">Boby Auto: {isAiAutoReplyEnabled ? 'ON' : 'OFF'}</span>
+            </button>
+          )}
 
           <div className="bg-surface px-3 py-2 rounded-2xl border border-border flex items-center gap-2 text-xs text-foreground shrink-0">
             <Shield className="w-3.5 h-3.5 text-primary shrink-0" />
