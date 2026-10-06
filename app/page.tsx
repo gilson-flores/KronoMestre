@@ -589,21 +589,30 @@ export default function Home() {
           }
         }
 
-        // 4. Carregar Biblioteca de Arquivos do Firestore (para Titular, 2º Professor e Aluno)
-        const libRes = await fetch('/api/library');
-        if (libRes.ok) {
-          const libData = await libRes.json();
-          if (Array.isArray(libData.files) && libData.files.length > 0) {
-            const mappedLibrary: LibraryFile[] = libData.files.map((item: any) => ({
-              id: item.id,
-              title: item.title,
-              category: item.category || 'Geral',
-              turma: item.turma || 'Todas',
-              fileSize: item.fileSize || item.file_size || '1 MB',
-              updatedAt: item.updatedAt || item.updated_at || new Date().toLocaleDateString('pt-BR'),
-              driveUrl: item.driveUrl || item.drive_url || item.file_url || '',
-            }));
-            setLibrary(mappedLibrary);
+        // 4. Carregar Biblioteca de Arquivos do Firestore COM CACHE (Economia de Leituras)
+        const cacheKey = `library_cache_${teacher?.id || 'default'}`;
+        const cachedLibrary = sessionStorage.getItem(cacheKey);
+
+        if (cachedLibrary) {
+          setLibrary(JSON.parse(cachedLibrary));
+        } else {
+          const libRes = await fetch('/api/library');
+          if (libRes.ok) {
+            const libData = await libRes.json();
+            if (Array.isArray(libData.files) && libData.files.length > 0) {
+              const mappedLibrary: LibraryFile[] = libData.files.map((item: any) => ({
+                id: item.id,
+                title: item.title,
+                category: item.category || 'Geral',
+                turma: item.turma || 'Todas',
+                fileSize: item.fileSize || item.file_size || '1 MB',
+                updatedAt: item.updatedAt || item.updated_at || new Date().toLocaleDateString('pt-BR'),
+                driveUrl: item.driveUrl || item.drive_url || item.file_url || '',
+              }));
+              setLibrary(mappedLibrary);
+              // Guarda o resultado mapeado no cache do navegador
+              sessionStorage.setItem(cacheKey, JSON.stringify(mappedLibrary));
+            }
           }
         }
       } catch (err: any) {
@@ -962,7 +971,7 @@ export default function Home() {
       } catch {
         // Silencia oscilações momentâneas de rede
       }
-    }, 45000); // <-- Intervalo aumentado de 6s para 45s (Economiza mais de 85% da cota de leituras diárias)
+    }, 86400000); // Radar anestesiado para rodar apenas a cada 24 horas
 
     return () => {
       clearInterval(pollInterval);
