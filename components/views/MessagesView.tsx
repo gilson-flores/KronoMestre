@@ -153,11 +153,15 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeThreadMessages.length, selectedStudentId, studentRecipient]);
 
+  const hasUnreadInActiveThread = activeThreadMessages.some(
+    (m) => m.senderRole !== currentUserRole && !m.read
+  );
+
   useEffect(() => {
-    if (onMarkThreadAsRead && activeThreadId) {
+    if (onMarkThreadAsRead && activeThreadId && hasUnreadInActiveThread) {
       onMarkThreadAsRead(activeThreadId, currentUserRole);
     }
-  }, [activeThreadId, currentUserRole, onMarkThreadAsRead, messages]);
+  }, [activeThreadId, currentUserRole, onMarkThreadAsRead, hasUnreadInActiveThread]);
 
   const filteredStudents = students.filter((s) => {
     const stMessages = messages.filter(

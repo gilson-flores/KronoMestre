@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { getSessionFromRequest } from '@/lib/auth-server';
 import { cookies } from 'next/headers';
+import { serverCache } from '@/lib/server-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,31 +53,35 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const db = getAdminDb();
-    const snapshot = await db
-      .collection('tenants')
-      .doc(session.tenantId)
-      .collection('messages')
-      .orderBy('createdAtIso', 'asc')
-      .get()
-      .catch(async () => {
-        // Fallback caso algum documento antigo não possua createdAtIso indexado
-        return await db
-          .collection('tenants')
-          .doc(session.tenantId)
-          .collection('messages')
-          .get();
-      });
+    const cacheKey = `messages_${session.tenantId}`;
 
-    const messages = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const messages = await serverCache.getOrSet(cacheKey, 60, async () => {
+      const db = getAdminDb();
+      const snapshot = await db
+        .collection('tenants')
+        .doc(session.tenantId)
+        .collection('messages')
+        .orderBy('createdAtIso', 'asc')
+        .get()
+        .catch(async () => {
+          // Fallback caso algum documento antigo não possua createdAtIso indexado
+          return await db
+            .collection('tenants')
+            .doc(session.tenantId)
+            .collection('messages')
+            .get();
+        });
+
+      return snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+    });
 
     return NextResponse.json({ messages });
   } catch (error: any) {
-    console.error('Erro ao buscar mensagens no Firestore:', error);
-    return NextResponse.json({ error: 'Erro interno ao buscar mensagens' }, { status: 500 });
+    console.warn('Aviso ao buscar mensagens no Firestore (possível cota excedida):', error.message);
+    return NextResponse.json({ messages: [], warning: error.message }, { status: 200 });
   }
 }
 
@@ -120,6 +125,8 @@ export async function POST(request: Request) {
       .doc(msgId)
       .set(msgDoc, { merge: true });
 
+    serverCache.delete(`messages_${session.tenantId}`);
+
     return NextResponse.json({ success: true, message: msgDoc });
   } catch (error: any) {
     console.error('Erro ao salvar mensagem no Firestore:', error);
@@ -162,6 +169,7 @@ export async function PUT(request: Request) {
 
     if (updatedCount > 0) {
       await batch.commit();
+      serverCache.delete(`messages_${session.tenantId}`);
     }
 
     return NextResponse.json({ success: true, updatedCount });

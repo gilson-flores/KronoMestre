@@ -254,7 +254,7 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
                 </select>
                 {availableSecondTeachers.length === 0 && (
                   <p className="text-[10px] text-amber-600/80">
-                    Nenhum 2º Professor cadastrado. Você pode cadastrá-los na aba "2º Professor".
+                    Nenhum 2º Professor cadastrado. Você pode cadastrá-los na aba &quot;2º Professor&quot;.
                   </p>
                 )}
               </div>

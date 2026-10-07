@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   initialTeacher,
   initialStudents,
@@ -140,6 +140,7 @@ export default function Home() {
   const [dataLoadError, setDataLoadError] = useState<boolean>(false);
   const [loadDataTrigger, setLoadDataTrigger] = useState<number>(0);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
+  const lastLoadTimestampRef = useRef<number>(0);
 
   // Restaurar sessão via API do Firebase (Tenant Architecture)
   useEffect(() => {
@@ -530,33 +531,16 @@ export default function Home() {
   // Carregar dados iniciais do Firestore (Arquitetura Multi-Tenant)
   useEffect(() => {
     const loadData = async () => {
+      const now = Date.now();
+      if (now - lastLoadTimestampRef.current < 4000) {
+        return;
+      }
+      lastLoadTimestampRef.current = now;
+
       setIsDataLoading(true);
       setDataLoadError(false);
       try {
-        // 0. Se for Aluno ou 2º Professor, sincroniza o link do Drive e dados do Tenant do Professor Titular
-        if (role === 'student' || role === 'second_teacher') {
-          const sessRes = await fetch('/api/auth/session').catch(() => null);
-          if (sessRes && sessRes.ok) {
-            const sessData = await sessRes.json().catch(() => ({}));
-            if (sessData?.user?.tenant) {
-              const t = sessData.user.tenant;
-              setTeacher((prev) => ({
-                ...prev,
-                id: role === 'student' ? sessData.user.ownerTeacherId || prev.id : prev.id,
-                name: role === 'student' ? t.name || 'Prof. Gilson Flores' : prev.name,
-                subject: role === 'student' ? t.subject || prev.subject : prev.subject,
-                school: t.school || prev.school,
-                avatarUrl: role === 'student' ? t.avatarUrl || prev.avatarUrl : prev.avatarUrl,
-                driveFolderUrl:
-                  t.driveFolderUrl ||
-                  prev.driveFolderUrl ||
-                  (typeof window !== 'undefined' ? localStorage.getItem('teacher_drive_folder_url') || '' : ''),
-              }));
-            }
-          }
-        }
-
-        // 1. Carregar Alunos do Firestore
+        // 1. Carregar Alunos do Firestore (com cache no backend e cliente)
         const stuRes = await fetch('/api/students');
         if (stuRes.ok) {
           const stuData = await stuRes.json();
@@ -568,11 +552,11 @@ export default function Home() {
           }
         }
 
-        // 2. Carregar Atividades do Firestore
+        // 2. Carregar Atividades do Firestore (com cache no backend e cliente)
         const actRes = await fetch('/api/activities');
         if (actRes.ok) {
           const actData = await actRes.json();
-          if (Array.isArray(actData.activities)) {
+          if (Array.isArray(actData.activities) && actData.activities.length > 0) {
             setActivities(actData.activities);
             if (typeof window !== 'undefined') {
               setScopedLocalStorageItem('local_activities_data', JSON.stringify(actData.activities), teacher.id);
@@ -626,7 +610,9 @@ export default function Home() {
     if (role === 'teacher' || role === 'second_teacher' || role === 'student') {
       loadData();
     } else {
-      setIsDataLoading(false);
+      queueMicrotask(() => {
+        setIsDataLoading(false);
+      });
     }
   }, [loadDataTrigger, role, teacher.id]);
 
@@ -644,6 +630,7 @@ export default function Home() {
   // Carregamento sob demanda da Biblioteca do Firestore
   useEffect(() => {
     if (activeTeacherTab !== 'arquivos') return;
+    if (library.length > 0) return;
 
     const loadLibrary = async () => {
       try {

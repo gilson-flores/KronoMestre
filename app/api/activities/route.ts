@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
 import { getSessionFromRequest } from '@/lib/auth-server';
 import { cookies } from 'next/headers';
+import { serverCache } from '@/lib/server-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,11 +19,11 @@ async function getAuthorizedOwnerId(req: NextRequest): Promise<string | null> {
     }
   } catch (e) {}
   
-  // 2. Tenta validar o 2º Professor ou Aluno pelo JWT
+  // 2. Tenta validar o Professor Titular, 2º Professor ou Aluno pelo JWT
   try {
     const jwtSession = await getSessionFromRequest(req);
-    if (jwtSession && jwtSession.ownerTeacherId) {
-      return jwtSession.ownerTeacherId; // É o 2º Professor
+    if (jwtSession && (jwtSession.ownerTeacherId || jwtSession.sub)) {
+      return jwtSession.ownerTeacherId || jwtSession.sub;
     }
   } catch (e) {}
 
@@ -34,15 +35,19 @@ export async function GET(req: NextRequest) {
     const ownerTeacherId = await getAuthorizedOwnerId(req);
     if (!ownerTeacherId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
-    const db = getAdminDb();
-    const activitiesRef = db.collection('tenants').doc(ownerTeacherId).collection('activities');
-    const snapshot = await activitiesRef.get();
-    
-    const activities = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const cacheKey = `activities_${ownerTeacherId}`;
+
+    const activities = await serverCache.getOrSet(cacheKey, 180, async () => {
+      const db = getAdminDb();
+      const activitiesRef = db.collection('tenants').doc(ownerTeacherId).collection('activities');
+      const snapshot = await activitiesRef.get();
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    });
 
     return NextResponse.json({ activities });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.warn('Aviso /api/activities GET (possível cota excedida):', error.message);
+    return NextResponse.json({ activities: [], warning: error.message }, { status: 200 });
   }
 }
 
@@ -67,6 +72,7 @@ export async function POST(req: NextRequest) {
     });
 
     await activityRef.set(cleanData, { merge: true });
+    serverCache.delete(`activities_${ownerTeacherId}`);
 
     return NextResponse.json({ success: true, activity: cleanData });
   } catch (error: any) {
@@ -94,6 +100,7 @@ export async function PUT(req: NextRequest) {
     });
 
     await activityRef.set(cleanData, { merge: true });
+    serverCache.delete(`activities_${ownerTeacherId}`);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
@@ -116,6 +123,7 @@ export async function DELETE(req: NextRequest) {
     const db = getAdminDb();
     const activityRef = db.collection('tenants').doc(ownerTeacherId).collection('activities').doc(id);
     await activityRef.delete();
+    serverCache.delete(`activities_${ownerTeacherId}`);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

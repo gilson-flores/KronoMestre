@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 import { verifyPassword } from "@/lib/crypto";
 import { signSessionToken, setSessionCookie, clearSessionCookie, SessionPayload } from "@/lib/auth-server";
+import { serverCache } from "@/lib/server-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -27,24 +28,27 @@ export async function POST(request: Request) {
       cleanEmail === "gilsonjuniores@gmail.com";
 
     // ============================================================================
-    // VERIFICAÇÃO AUTOMÁTICA DE 2º PROFESSOR NO FIRESTORE
+    // FLUXO 1: VERIFICAÇÃO DE 2º PROFESSOR NO FIRESTORE (APENAS QUANDO SOLICITADO)
     // ============================================================================
-    let matchedSecondDoc: any = null;
-    let matchedSecondData: any = null;
+    if (role === "second_teacher") {
+      let matchedSecondDoc: any = null;
+      let matchedSecondData: any = null;
 
-    if (role === "second_teacher" || !isAdminSupremoEmail) {
-      const snap = await adminDb.collectionGroup("second_teachers").get();
-      for (const doc of snap.docs) {
-        const d = doc.data();
-        if ((d.email || "").trim().toLowerCase() === cleanEmail) {
-          matchedSecondDoc = doc;
-          matchedSecondData = d;
-          break;
+      try {
+        const snap = await adminDb
+          .collectionGroup("second_teachers")
+          .where("email", "==", cleanEmail)
+          .limit(1)
+          .get();
+
+        if (!snap.empty) {
+          matchedSecondDoc = snap.docs[0];
+          matchedSecondData = matchedSecondDoc.data();
         }
+      } catch (stQueryErr: any) {
+        console.warn("[Login API] Falha na consulta de 2º professor (Firestore):", stQueryErr?.message);
       }
-    }
 
-    if (role === "second_teacher" || matchedSecondDoc) {
       if (!matchedSecondDoc || !matchedSecondData) {
         return NextResponse.json(
           { error: "E-mail de 2º Professor não encontrado. Verifique com o Professor Titular." },
@@ -87,22 +91,20 @@ export async function POST(request: Request) {
         );
       }
 
-      let ownerTeacherId =
+      const ownerTeacherId =
         matchedSecondDoc.ref.parent.parent?.id ||
         matchedSecondData.ownerTeacherId ||
         "default-teacher";
 
-      if (ownerTeacherId === "default-teacher") {
-        const tenantsSnap = await adminDb.collection("tenants").get();
-        const realTenant = tenantsSnap.docs.find((t) => t.id !== "default-teacher");
-        if (realTenant) {
-          ownerTeacherId = realTenant.id;
-          await matchedSecondDoc.ref.set({ ownerTeacherId }, { merge: true });
+      let ownerTenantData: any = {};
+      try {
+        const ownerTenantSnap = await adminDb.collection("tenants").doc(ownerTeacherId).get();
+        if (ownerTenantSnap.exists) {
+          ownerTenantData = ownerTenantSnap.data() || {};
         }
+      } catch (ownerErr: any) {
+        console.warn("[Login API] Aviso ao buscar dados do tenant para 2º professor:", ownerErr?.message);
       }
-
-      const ownerTenantSnap = await adminDb.collection("tenants").doc(ownerTeacherId).get();
-      const ownerTenantData = ownerTenantSnap.exists ? ownerTenantSnap.data() || {} : {};
 
       const sessionPayload: SessionPayload = {
         sub: matchedSecondDoc.id,
@@ -115,7 +117,7 @@ export async function POST(request: Request) {
 
       const token = await signSessionToken(sessionPayload, "7d");
 
-      // Substitui a foto antiga do Unsplash pelo novo ícone!
+      // Substitui a foto antiga pelo novo ícone inclusivo
       let finalAvatar = matchedSecondData.avatarUrl || DEFAULT_INCLUSION_ICON;
       if (finalAvatar.includes("photo-1573496359142")) {
         finalAvatar = DEFAULT_INCLUSION_ICON;
@@ -177,36 +179,54 @@ export async function POST(request: Request) {
     const uid = data.localId;
     const userEmail = data.email || cleanEmail;
 
-    const adminAuth = getAdminAuth();
     const expiresIn = 60 * 60 * 24 * 5 * 1000;
-    const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn });
-
-    const tenantRef = adminDb.collection("tenants").doc(uid);
-    const tenantSnap = await tenantRef.get();
-
-    let tenantData: any;
-    if (!tenantSnap.exists) {
-      tenantData = {
-        name: isAdminSupremoEmail ? "Gilson Flores" : userEmail.split("@")[0],
-        nome: isAdminSupremoEmail ? "Gilson Flores" : userEmail.split("@")[0],
-        email: userEmail,
-        plan_type: isAdminSupremoEmail ? "unlimited" : "basic",
-        is_admin: isAdminSupremoEmail,
-        subject: "Sociologia",
-        school: "",
-        escolas_vinculadas: [],
-        disciplinas: [],
-        created_at: new Date().toISOString(),
-      };
-      await tenantRef.set(tenantData);
-    } else {
-      tenantData = tenantSnap.data() || {};
-      if (isAdminSupremoEmail && (!tenantData.is_admin || tenantData.plan_type !== "unlimited")) {
-        tenantData.is_admin = true;
-        tenantData.plan_type = "unlimited";
-        await tenantRef.set({ is_admin: true, plan_type: "unlimited" }, { merge: true });
-      }
+    let sessionCookie: string | null = null;
+    try {
+      const adminAuth = getAdminAuth();
+      sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn });
+    } catch (cookieErr: any) {
+      console.warn("[Login API] Aviso ao gerar session cookie do Firebase (usando JWT fallback):", cookieErr?.message);
     }
+
+    let tenantData: any = {
+      name: isAdminSupremoEmail ? "Gilson Flores" : userEmail.split("@")[0],
+      nome: isAdminSupremoEmail ? "Gilson Flores" : userEmail.split("@")[0],
+      email: userEmail,
+      plan_type: isAdminSupremoEmail ? "unlimited" : "basic",
+      is_admin: isAdminSupremoEmail,
+      subject: "Sociologia",
+      school: "",
+      escolas_vinculadas: [],
+      disciplinas: [],
+      created_at: new Date().toISOString(),
+    };
+
+    // Tentar ler ou criar o Tenant no Firestore de forma protegida contra estouro de cota (RESOURCE_EXHAUSTED)
+    try {
+      const tenantRef = adminDb.collection("tenants").doc(uid);
+      const tenantSnap = await tenantRef.get();
+
+      if (!tenantSnap.exists) {
+        await tenantRef.set(tenantData).catch((setErr) => {
+          console.warn("[Login API] Aviso ao inicializar tenant no Firestore:", setErr?.message);
+        });
+      } else {
+        const existingData = tenantSnap.data() || {};
+        tenantData = { ...tenantData, ...existingData };
+        if (isAdminSupremoEmail && (!existingData.is_admin || existingData.plan_type !== "unlimited")) {
+          tenantData.is_admin = true;
+          tenantData.plan_type = "unlimited";
+          await tenantRef.set({ is_admin: true, plan_type: "unlimited" }, { merge: true }).catch((setErr) => {
+            console.warn("[Login API] Aviso ao atualizar dados de admin no Firestore:", setErr?.message);
+          });
+        }
+      }
+    } catch (firestoreErr: any) {
+      console.warn("[Login API] Aviso: Firestore com cota excedida ou indisponível. Login efetuado com perfil autenticado em fallback:", firestoreErr?.message);
+    }
+
+    // Alimenta cache de sessão para evitar leitura imediata subsequente
+    serverCache.set(`tenant_${uid}`, tenantData, 300);
 
     const response = NextResponse.json({
       user: {
@@ -218,21 +238,40 @@ export async function POST(request: Request) {
       },
     });
 
-    clearSessionCookie(response);
-    response.cookies.set("session", sessionCookie, {
-      maxAge: expiresIn / 1000,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      sameSite: "lax",
-    });
+    // Emite o token JWT de sessão (resiliente e independente de cotas do Identity Platform)
+    const sessionPayload: SessionPayload = {
+      sub: uid,
+      role: "teacher",
+      ownerTeacherId: uid,
+      email: userEmail,
+      name: tenantData.name || tenantData.nome || userEmail.split("@")[0],
+    };
+    const jwtToken = await signSessionToken(sessionPayload, "7d");
+    setSessionCookie(response, jwtToken, 7 * 24 * 60 * 60);
+
+    // Se o sessionCookie do Firebase Auth foi emitido, adiciona-o ao response
+    if (sessionCookie) {
+      response.cookies.set("session", sessionCookie, {
+        maxAge: expiresIn / 1000,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        sameSite: "lax",
+      });
+    }
 
     return response;
   } catch (error: any) {
     console.error("[Login API] Erro fatal:", error);
+    const msg = error?.message || String(error);
+    const isQuota = msg.includes("RESOURCE_EXHAUSTED") || msg.includes("Quota exceeded") || error?.code === 8;
     return NextResponse.json(
-      { error: `Erro no Servidor: ${error.message || String(error)}` },
-      { status: 500 }
+      {
+        error: isQuota
+          ? "Limite temporário de requisições excedido no Firebase (Quota Exceeded). Por favor, aguarde alguns instantes e tente novamente."
+          : `Erro no Servidor: ${msg}`,
+      },
+      { status: isQuota ? 429 : 500 }
     );
   }
 }

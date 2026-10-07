@@ -2,13 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { getSessionFromRequest } from '@/lib/auth-server';
+import { serverCache } from '@/lib/server-cache';
 
 export const dynamic = 'force-dynamic';
 
+async function getTenantDataCached(tenantId: string): Promise<any> {
+  const cacheKey = `tenant_${tenantId}`;
+  return serverCache.getOrSet(cacheKey, 300, async () => {
+    try {
+      const db = getAdminDb();
+      const tenantSnap = await db.collection('tenants').doc(tenantId).get();
+      return tenantSnap.exists ? tenantSnap.data() || {} : {};
+    } catch (err: any) {
+      console.warn('[Session API] Falha ao buscar tenant no Firestore (usando fallback cache):', err?.message);
+      return {};
+    }
+  });
+}
+
 export async function GET(req: NextRequest) {
   try {
-    const db = getAdminDb();
-
     // 1. Tentar validar sessão do Professor Titular / Admin Supremo (Cookie 'session' do Firebase)
     try {
       const cookieStore = await cookies();
@@ -19,8 +32,7 @@ export async function GET(req: NextRequest) {
         const decoded = await auth.verifySessionCookie(sessionCookie, true);
 
         if (decoded && decoded.uid) {
-          const tenantSnap = await db.collection('tenants').doc(decoded.uid).get();
-          const tenantData = tenantSnap.exists ? tenantSnap.data() : {};
+          const tenantData = await getTenantDataCached(decoded.uid);
 
           return NextResponse.json({
             user: {
@@ -37,14 +49,27 @@ export async function GET(req: NextRequest) {
       // Se o cookie 'session' não existir ou tiver expirado, segue para o fluxo JWT abaixo
     }
 
-    // 2. Tentar validar sessão de Aluno ou 2º Professor (Cookie JWT via lib/auth-server)
+    // 2. Tentar validar sessão de Professor, 2º Professor ou Aluno (Cookie JWT via lib/auth-server)
     const jwtSession = await getSessionFromRequest(req);
     if (jwtSession && jwtSession.sub) {
       const ownerTeacherId = jwtSession.ownerTeacherId || jwtSession.sub;
 
+      if (jwtSession.role === 'teacher') {
+        const tenantData = await getTenantDataCached(jwtSession.sub);
+
+        return NextResponse.json({
+          user: {
+            id: jwtSession.sub,
+            email: jwtSession.email || '',
+            name: tenantData?.name || tenantData?.nome || jwtSession.name || 'Prof. Gilson Flores',
+            role: 'teacher',
+            tenant: tenantData,
+          },
+        });
+      }
+
       if (jwtSession.role === 'second_teacher') {
-        const tenantSnap = await db.collection('tenants').doc(ownerTeacherId).get();
-        const tenantData = tenantSnap.exists ? tenantSnap.data() : {};
+        const tenantData = await getTenantDataCached(ownerTeacherId);
 
         return NextResponse.json({
           user: {
@@ -63,8 +88,7 @@ export async function GET(req: NextRequest) {
       }
 
       if (jwtSession.role === 'student') {
-        const tenantSnap = await db.collection('tenants').doc(ownerTeacherId).get();
-        const tenantData = tenantSnap.exists ? tenantSnap.data() : {};
+        const tenantData = await getTenantDataCached(ownerTeacherId);
 
         return NextResponse.json({
           user: {

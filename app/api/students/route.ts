@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
 import { getSessionFromRequest } from '@/lib/auth-server';
 import { cookies } from 'next/headers';
+import { serverCache } from '@/lib/server-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,11 +19,11 @@ async function getAuthorizedOwnerId(req: NextRequest): Promise<string | null> {
     }
   } catch (e) {}
   
-  // 2. Tenta validar o 2º Professor ou Aluno pelo JWT
+  // 2. Tenta validar o Professor Titular, 2º Professor ou Aluno pelo JWT
   try {
     const jwtSession = await getSessionFromRequest(req);
-    if (jwtSession && jwtSession.ownerTeacherId) {
-      return jwtSession.ownerTeacherId; // É o 2º Professor
+    if (jwtSession && (jwtSession.ownerTeacherId || jwtSession.sub)) {
+      return jwtSession.ownerTeacherId || jwtSession.sub;
     }
   } catch (e) {}
 
@@ -34,14 +35,19 @@ export async function GET(req: NextRequest) {
     const ownerTeacherId = await getAuthorizedOwnerId(req);
     if (!ownerTeacherId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
-    const db = getAdminDb();
-    const studentsRef = db.collection('tenants').doc(ownerTeacherId).collection('students');
-    const snapshot = await studentsRef.get();
+    const cacheKey = `students_${ownerTeacherId}`;
+
+    const students = await serverCache.getOrSet(cacheKey, 180, async () => {
+      const db = getAdminDb();
+      const studentsRef = db.collection('tenants').doc(ownerTeacherId).collection('students');
+      const snapshot = await studentsRef.get();
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    });
     
-    const students = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     return NextResponse.json({ students });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.warn('Aviso /api/students GET (possível cota excedida):', error.message);
+    return NextResponse.json({ students: [], warning: error.message }, { status: 200 });
   }
 }
 
@@ -84,6 +90,9 @@ export async function POST(req: NextRequest) {
       await batch.commit();
     }
 
+    // Invalida cache após salvar novos alunos
+    serverCache.delete(`students_${ownerTeacherId}`);
+
     return NextResponse.json({ success: true, students: savedStudents });
   } catch (error: any) {
     console.error('Erro no POST /api/students:', error);
@@ -108,6 +117,10 @@ export async function PUT(req: NextRequest) {
     });
 
     await studentRef.set(cleanData, { merge: true });
+
+    // Invalida cache após atualização do aluno
+    serverCache.delete(`students_${ownerTeacherId}`);
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -134,11 +147,13 @@ export async function DELETE(req: NextRequest) {
         batch.delete(doc.ref);
       });
       await batch.commit();
+      serverCache.delete(`students_${ownerTeacherId}`);
       return NextResponse.json({ success: true, deletedCount: snapshot.docs.length });
     }
 
     // ====== EXCLUSÃO INDIVIDUAL ======
     await studentsRef.doc(id).delete();
+    serverCache.delete(`students_${ownerTeacherId}`);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

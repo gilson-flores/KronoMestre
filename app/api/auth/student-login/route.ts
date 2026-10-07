@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { verifyPassword } from '@/lib/crypto';
 import { signSessionToken, setSessionCookie, SessionPayload } from '@/lib/auth-server';
+import { serverCache } from '@/lib/server-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,25 +36,36 @@ export async function POST(request: Request) {
     const normIdentifier = rawIdentifier.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
     // 1. ISOLAMENTO DO TENANT: Localizar o Professor dono do Código na coleção correta ('tenants')
-    let ownerTeacherId: string | null = null;
+    const tenantCacheKey = `tenant_code_to_id_${cleanTeacherCode}`;
+    let ownerTeacherId: string | null = serverCache.get<string>(tenantCacheKey);
 
-    // Busca pela chave gerada 'tenantCode'
-    const tenantQuery = await db.collection('tenants')
-      .where('tenantCode', '==', cleanTeacherCode)
-      .limit(1)
-      .get();
+    if (!ownerTeacherId) {
+      try {
+        // Busca pela chave gerada 'tenantCode'
+        const tenantQuery = await db.collection('tenants')
+          .where('tenantCode', '==', cleanTeacherCode)
+          .limit(1)
+          .get();
 
-    if (!tenantQuery.empty) {
-      ownerTeacherId = tenantQuery.docs[0].id;
-    } else {
-      // Fallback preventivo: Se o professor ainda não clicou em gerar código e usou a matrícula antiga
-      const fallbackQuery = await db.collection('tenants')
-        .where('matriculaFuncional', '==', cleanTeacherCode)
-        .limit(1)
-        .get();
-        
-      if (!fallbackQuery.empty) {
-        ownerTeacherId = fallbackQuery.docs[0].id;
+        if (!tenantQuery.empty) {
+          ownerTeacherId = tenantQuery.docs[0].id;
+        } else {
+          // Fallback preventivo: Se o professor ainda não clicou em gerar código e usou a matrícula antiga
+          const fallbackQuery = await db.collection('tenants')
+            .where('matriculaFuncional', '==', cleanTeacherCode)
+            .limit(1)
+            .get();
+            
+          if (!fallbackQuery.empty) {
+            ownerTeacherId = fallbackQuery.docs[0].id;
+          }
+        }
+
+        if (ownerTeacherId) {
+          serverCache.set(tenantCacheKey, ownerTeacherId, 600); // Cache por 10 min
+        }
+      } catch (tQueryErr: any) {
+        console.warn('[Student Login API] Aviso ao buscar tenant (possível cota excedida):', tQueryErr?.message);
       }
     }
 
@@ -64,17 +76,30 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. BUSCA DO ALUNO (SOMENTE DENTRO DA SUBCOLEÇÃO DO TENANT IDENTIFICADO)
-    const studentsRef = db.collection('tenants').doc(ownerTeacherId).collection('students');
-    const snapshot = await studentsRef.get();
+    // 2. BUSCA DO ALUNO (COM CACHE EM MEMÓRIA COMPARTILHADO COM /api/students)
+    const studentsCacheKey = `students_${ownerTeacherId}`;
+    let studentList: any[] = [];
+
+    try {
+      studentList = await serverCache.getOrSet(studentsCacheKey, 180, async () => {
+        const studentsRef = db.collection('tenants').doc(ownerTeacherId!).collection('students');
+        const snapshot = await studentsRef.get();
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      });
+    } catch (snapErr: any) {
+      console.warn('[Student Login API] Aviso ao buscar alunos do tenant:', snapErr?.message);
+      return NextResponse.json(
+        { error: 'O servidor está temporariamente indisponível para consulta de alunos. Tente novamente em alguns instantes.' },
+        { status: 503 }
+      );
+    }
 
     let matchedStudent: any = null;
 
-    for (const doc of snapshot.docs) {
-      const data = doc.data();
+    for (const data of studentList) {
       const fullName = (data.fullName || data.full_name || data.name || '').toLowerCase().trim();
       const matricula = (data.matricula || '').toLowerCase().trim();
-      const docId = doc.id.toLowerCase().trim();
+      const docId = (data.id || '').toLowerCase().trim();
 
       const normFullName = fullName.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -86,7 +111,7 @@ export async function POST(request: Request) {
         normFullName.startsWith(normIdentifier) ||
         normFullName.includes(normIdentifier)
       ) {
-        matchedStudent = { id: doc.id, ...data };
+        matchedStudent = data;
         break;
       }
     }
@@ -139,8 +164,15 @@ export async function POST(request: Request) {
     delete cleanStudent.password_hash;
     cleanStudent.ownerTeacherId = ownerTeacherId;
 
-    const tenantDoc = await db.collection('tenants').doc(ownerTeacherId).get();
-    const tenantInfo = tenantDoc.exists ? tenantDoc.data() || {} : {};
+    let tenantInfo: any = {};
+    try {
+      const tenantDoc = await db.collection('tenants').doc(ownerTeacherId).get();
+      if (tenantDoc.exists) {
+        tenantInfo = tenantDoc.data() || {};
+      }
+    } catch (tDocErr: any) {
+      console.warn('[Student Login API] Aviso ao buscar dados do tenant:', tDocErr?.message);
+    }
 
     const response = NextResponse.json({
       success: true,
@@ -162,7 +194,16 @@ export async function POST(request: Request) {
     return response;
   } catch (error: any) {
     console.error('Erro no login do aluno via Firestore:', error);
-    return NextResponse.json({ error: 'Erro interno de comunicação com o servidor.' }, { status: 500 });
+    const msg = error?.message || String(error);
+    const isQuota = msg.includes('RESOURCE_EXHAUSTED') || msg.includes('Quota exceeded') || error?.code === 8;
+    return NextResponse.json(
+      { 
+        error: isQuota 
+          ? 'Limite temporário de requisições excedido no banco de dados. Aguarde alguns instantes e tente novamente.' 
+          : 'Erro interno de comunicação com o servidor.' 
+      }, 
+      { status: isQuota ? 429 : 500 }
+    );
   }
 }
 

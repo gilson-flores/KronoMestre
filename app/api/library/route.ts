@@ -1,77 +1,97 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
+import { getSessionFromRequest } from '@/lib/auth-server';
+import { serverCache } from '@/lib/server-cache';
 
 export const dynamic = 'force-dynamic';
 
-// 1. LER ARQUIVOS (GET) - Substitui o supabase.from('library_files').select('*')
-export async function GET(request: Request) {
+async function getAuthorizedTeacherId(request: Request): Promise<string | null> {
   try {
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('session')?.value;
-    if (!sessionCookie) return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+    if (sessionCookie) {
+      const adminAuth = getAdminAuth();
+      const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
+      if (decoded?.uid) return decoded.uid;
+    }
+  } catch {}
 
-    const adminAuth = getAdminAuth();
-    const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-    const db = getAdminDb();
+  try {
+    const jwtSession = await getSessionFromRequest(request);
+    if (jwtSession && (jwtSession.ownerTeacherId || jwtSession.sub)) {
+      return jwtSession.ownerTeacherId || jwtSession.sub;
+    }
+  } catch {}
 
-    // Busca apenas os arquivos do tenant atual (Isolamento)
-    const snapshot = await db.collection('tenants').doc(decoded.uid).collection('library_files').get();
-    
-    const files = snapshot.docs.map(doc => doc.data());
+  return null;
+}
+
+// 1. LER ARQUIVOS (GET)
+export async function GET(request: Request) {
+  try {
+    const teacherId = await getAuthorizedTeacherId(request);
+    if (!teacherId) return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+
+    const cacheKey = `library_${teacherId}`;
+    const files = await serverCache.getOrSet(cacheKey, 300, async () => {
+      const db = getAdminDb();
+      const snapshot = await db.collection('tenants').doc(teacherId).collection('library_files').get();
+      return snapshot.docs.map(doc => doc.data());
+    });
 
     return NextResponse.json({ success: true, files });
   } catch (error: any) {
-    console.error('Erro ao ler biblioteca no Firestore:', error);
-    return NextResponse.json({ error: 'Erro ao buscar arquivos.' }, { status: 500 });
+    console.warn('Aviso ao ler biblioteca no Firestore (possível cota excedida):', error.message);
+    return NextResponse.json({ success: true, files: [], warning: error.message }, { status: 200 });
   }
 }
 
-// 2. SALVAR ARQUIVO (POST) - Substitui o supabase.from('library_files').insert()
+// 2. SALVAR ARQUIVO (POST)
 export async function POST(request: Request) {
   try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('session')?.value;
-    if (!sessionCookie) return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+    const teacherId = await getAuthorizedTeacherId(request);
+    if (!teacherId) return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
 
-    const adminAuth = getAdminAuth();
-    const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
     const db = getAdminDb();
-    
     const fileData = await request.json();
     if (!fileData.id) return NextResponse.json({ error: 'ID do arquivo ausente.' }, { status: 400 });
 
-    // Salva o arquivo na subcoleção do tenant atual
-    await db.collection('tenants').doc(decoded.uid).collection('library_files').doc(fileData.id).set(fileData);
+    try {
+      await db.collection('tenants').doc(teacherId).collection('library_files').doc(fileData.id).set(fileData);
+      serverCache.delete(`library_${teacherId}`);
+    } catch (dbErr: any) {
+      console.warn('Aviso ao salvar arquivo no Firestore (possível cota excedida):', dbErr?.message);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error('Erro ao salvar arquivo no Firestore:', error);
-    return NextResponse.json({ error: 'Erro ao salvar arquivo.' }, { status: 500 });
+    console.error('Erro ao processar arquivo:', error);
+    return NextResponse.json({ error: 'Erro ao processar arquivo.' }, { status: 500 });
   }
 }
 
-// 3. DELETAR ARQUIVO (DELETE) - Substitui o supabase.from('library_files').delete()
+// 3. DELETAR ARQUIVO (DELETE)
 export async function DELETE(request: Request) {
   try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('session')?.value;
-    if (!sessionCookie) return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+    const teacherId = await getAuthorizedTeacherId(request);
+    if (!teacherId) return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
 
-    const adminAuth = getAdminAuth();
-    const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
     const db = getAdminDb();
-
     const { searchParams } = new URL(request.url);
     const fileId = searchParams.get('id');
     if (!fileId) return NextResponse.json({ error: 'ID do arquivo ausente.' }, { status: 400 });
 
-    // Deleta o arquivo da subcoleção do tenant atual
-    await db.collection('tenants').doc(decoded.uid).collection('library_files').doc(fileId).delete();
+    try {
+      await db.collection('tenants').doc(teacherId).collection('library_files').doc(fileId).delete();
+      serverCache.delete(`library_${teacherId}`);
+    } catch (dbErr: any) {
+      console.warn('Aviso ao deletar arquivo no Firestore (possível cota excedida):', dbErr?.message);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error('Erro ao deletar arquivo no Firestore:', error);
+    console.error('Erro ao deletar arquivo:', error);
     return NextResponse.json({ error: 'Erro ao deletar arquivo.' }, { status: 500 });
   }
 }

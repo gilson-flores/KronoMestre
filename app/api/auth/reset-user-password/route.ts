@@ -3,6 +3,7 @@ import { getSessionFromRequest } from '@/lib/auth-server';
 import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
 import { hashPasswordBcrypt } from '@/lib/crypto';
 import { cookies } from 'next/headers';
+import { serverCache } from '@/lib/server-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -82,13 +83,14 @@ export async function POST(req: NextRequest) {
       let docSnap = await targetRef.get();
 
       if (!docSnap.exists) {
-        const querySnap = await db.collectionGroup('students').get();
-        for (const doc of querySnap.docs) {
-          if (doc.id === targetId || doc.data().matricula === targetId) {
-            targetRef = doc.ref as any;
-            docSnap = doc;
-            break;
+        try {
+          const querySnap = await db.collectionGroup('students').where('matricula', '==', targetId).limit(1).get();
+          if (!querySnap.empty) {
+            targetRef = querySnap.docs[0].ref as any;
+            docSnap = querySnap.docs[0];
           }
+        } catch (cgErr: any) {
+          console.warn('Aviso consulta collectionGroup students:', cgErr?.message);
         }
       }
 
@@ -106,6 +108,8 @@ export async function POST(req: NextRequest) {
         },
         { merge: true }
       );
+
+      serverCache.delete(`students_${ownerTeacherId}`);
 
       const fullName = currentData.fullName || currentData.full_name || currentData.name || 'Aluno';
 
@@ -127,13 +131,14 @@ export async function POST(req: NextRequest) {
       let docSnap = await targetRef.get();
 
       if (!docSnap.exists) {
-        const querySnap = await db.collectionGroup('second_teachers').get();
-        for (const doc of querySnap.docs) {
-          if (doc.id === targetId || doc.data().email === targetId) {
-            targetRef = doc.ref as any;
-            docSnap = doc;
-            break;
+        try {
+          const querySnap = await db.collectionGroup('second_teachers').where('email', '==', targetId).limit(1).get();
+          if (!querySnap.empty) {
+            targetRef = querySnap.docs[0].ref as any;
+            docSnap = querySnap.docs[0];
           }
+        } catch (cgErr: any) {
+          console.warn('Aviso consulta collectionGroup second_teachers:', cgErr?.message);
         }
       }
 
@@ -152,6 +157,8 @@ export async function POST(req: NextRequest) {
         },
         { merge: true }
       );
+
+      serverCache.delete(`second_teachers_${ownerTeacherId}`);
 
       // Sincroniza ou cria usuário no Firebase Auth para garantir que o login funcione
       if (teacherEmail) {

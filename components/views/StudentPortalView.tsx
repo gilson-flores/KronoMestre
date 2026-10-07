@@ -165,7 +165,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       if (perm === 'granted') {
         await registerServiceWorker();
         sendBrowserNotification('📲 Notificações Push Ativadas!', {
-          body: `Olá, ${student.fullName.split(' ')[0]}! Seu celular agora receberá mensagens, avisos e notas do Prof. Gilson Flores.`,
+          body: `Olá, ${student.fullName.split(' ')[0]}! Seu celular agora receberá mensagens, avisos e notas do ${teacher?.name || 'Professor'}.`,
           tag: 'push-activated-welcome',
         });
         setPushToast('✅ Notificações Push no smartphone ativadas com sucesso!');
@@ -183,7 +183,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
   const handleTestPush = () => {
     sendBrowserNotification('🔔 Teste de Push no Celular', {
-      body: `Prof. Gilson Flores: Notificação de teste recebida no seu smartphone! O canal de alertas está funcionando perfeitamente.`,
+      body: `${teacher?.name || 'Professor'}: Notificação de teste recebida no seu smartphone! O canal de alertas está funcionando perfeitamente.`,
       tag: `test-push-${Date.now()}`,
     });
     setPushToast('📲 Notificação enviada para a barra de avisos do seu celular!');
@@ -656,7 +656,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               <span className="text-[10px] sm:text-xs font-bold text-primary uppercase tracking-wider bg-primary/10 px-2.5 py-0.5 rounded-full border border-primary/20">
                 Portal do Aluno
               </span>
-              <span className="text-[11px] sm:text-xs font-semibold text-muted">Sociologia</span>
+              <span className="text-[11px] sm:text-xs font-semibold text-muted">{teacher?.subject || 'Disciplinas'}</span>
             </div>
             <h1 className="text-xl sm:text-3xl font-extrabold text-foreground mt-1 truncate">
               {student.fullName}

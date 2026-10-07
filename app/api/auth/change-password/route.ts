@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest, signSessionToken, setSessionCookie, SessionPayload } from '@/lib/auth-server';
 import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
 import { hashPasswordBcrypt } from '@/lib/crypto';
+import { serverCache } from '@/lib/server-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,15 +68,16 @@ export async function POST(req: NextRequest) {
             { merge: true }
           );
           updated = true;
+          serverCache.delete(`students_${session.ownerTeacherId}`);
         }
       }
 
-      // Tentativa 2: Fallback por collectionGroup se não atualizou
+      // Tentativa 2: Fallback por collectionGroup limitado se não atualizou
       if (!updated) {
-        const querySnap = await db.collectionGroup('students').get();
-        for (const doc of querySnap.docs) {
-          if (doc.id === session.sub) {
-            await doc.ref.set(
+        try {
+          const querySnap = await db.collectionGroup('students').where('matricula', '==', session.matricula || session.sub).limit(1).get();
+          if (!querySnap.empty) {
+            await querySnap.docs[0].ref.set(
               {
                 passwordHash: newBcryptHash,
                 mustChangePassword: false,
@@ -84,8 +86,12 @@ export async function POST(req: NextRequest) {
               { merge: true }
             );
             updated = true;
-            break;
+            if (session.ownerTeacherId) {
+              serverCache.delete(`students_${session.ownerTeacherId}`);
+            }
           }
+        } catch (cgErr: any) {
+          console.warn('Aviso ao consultar fallback aluno:', cgErr?.message);
         }
       }
 
@@ -119,14 +125,15 @@ export async function POST(req: NextRequest) {
             { merge: true }
           );
           updated = true;
+          serverCache.delete(`second_teachers_${session.ownerTeacherId}`);
         }
       }
 
-      if (!updated) {
-        const querySnap = await db.collectionGroup('second_teachers').get();
-        for (const doc of querySnap.docs) {
-          if (doc.id === session.sub) {
-            await doc.ref.set(
+      if (!updated && session.email) {
+        try {
+          const querySnap = await db.collectionGroup('second_teachers').where('email', '==', session.email.toLowerCase().trim()).limit(1).get();
+          if (!querySnap.empty) {
+            await querySnap.docs[0].ref.set(
               {
                 passwordHash: newBcryptHash,
                 mustChangePassword: false,
@@ -135,8 +142,12 @@ export async function POST(req: NextRequest) {
               { merge: true }
             );
             updated = true;
-            break;
+            if (session.ownerTeacherId) {
+              serverCache.delete(`second_teachers_${session.ownerTeacherId}`);
+            }
           }
+        } catch (cgErr: any) {
+          console.warn('Aviso ao consultar fallback 2º prof:', cgErr?.message);
         }
       }
     }

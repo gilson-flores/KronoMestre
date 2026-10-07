@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
 import { hashPasswordBcrypt } from '@/lib/crypto';
 import { getSessionFromRequest } from '@/lib/auth-server';
+import { cookies } from 'next/headers';
+import { serverCache } from '@/lib/server-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,36 +13,56 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(req: NextRequest) {
   try {
-    const session = await getSessionFromRequest(req);
-    const db = getAdminDb();
-    const ownerTeacherId = session?.ownerTeacherId || session?.sub;
+    let ownerTeacherId: string | null = null;
+
+    // 1. Verificar cookie 'session' do Firebase Auth (Professor Titular)
+    try {
+      const cookieStore = await cookies();
+      const sessionCookie = cookieStore.get('session')?.value;
+      if (sessionCookie) {
+        const auth = getAdminAuth();
+        const decoded = await auth.verifySessionCookie(sessionCookie, true);
+        if (decoded?.uid) {
+          ownerTeacherId = decoded.uid;
+        }
+      }
+    } catch {}
+
+    // 2. Fallback JWT (Aluno ou 2º Professor)
+    if (!ownerTeacherId) {
+      const session = await getSessionFromRequest(req);
+      ownerTeacherId = session?.ownerTeacherId || session?.sub || null;
+    }
 
     let teachers: any[] = [];
 
     if (ownerTeacherId) {
-      const snap = await db
-        .collection('tenants')
-        .doc(ownerTeacherId)
-        .collection('second_teachers')
-        .orderBy('name')
-        .get();
+      const cacheKey = `second_teachers_${ownerTeacherId}`;
+      teachers = await serverCache.getOrSet(cacheKey, 180, async () => {
+        try {
+          const db = getAdminDb();
+          const snap = await db
+            .collection('tenants')
+            .doc(ownerTeacherId!)
+            .collection('second_teachers')
+            .orderBy('name')
+            .get();
 
-      teachers = snap.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-    } else {
-      const snap = await db.collectionGroup('second_teachers').get();
-      teachers = snap.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+          return snap.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+        } catch (dbErr: any) {
+          console.warn('Aviso ao consultar 2º professores do tenant:', dbErr?.message);
+          return [];
+        }
+      });
     }
 
     return NextResponse.json({ teachers, secondTeachers: teachers }, { status: 200 });
   } catch (err: any) {
-    console.error('Erro interno GET /api/second-teachers no Firestore:', err);
-    return NextResponse.json({ error: 'Erro interno ao listar professores' }, { status: 500 });
+    console.warn('Aviso GET /api/second-teachers no Firestore:', err?.message);
+    return NextResponse.json({ teachers: [], secondTeachers: [] }, { status: 200 });
   }
 }
 
@@ -110,6 +132,8 @@ export async function POST(req: NextRequest) {
       .collection('second_teachers')
       .doc(teacherId)
       .set(teacherData, { merge: true });
+
+    serverCache.delete(`second_teachers_${ownerTeacherId}`);
 
     return NextResponse.json({ success: true, teacher: teacherData }, { status: 201 });
   } catch (err: any) {
@@ -192,6 +216,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const updatedSnap = await targetDocRef.get();
+    serverCache.delete(`second_teachers_${ownerTeacherId}`);
     return NextResponse.json({ success: true, teacher: updatedSnap.data() }, { status: 200 });
   } catch (err: any) {
     console.error('Erro interno PUT /api/second-teachers no Firestore:', err);
@@ -280,6 +305,8 @@ export async function DELETE(req: NextRequest) {
       snap.docs.forEach((doc) => batch.delete(doc.ref));
       await batch.commit();
     }
+
+    serverCache.delete(`second_teachers_${ownerTeacherId}`);
 
     return NextResponse.json(
       { success: true, message: '2º Professor removido com sucesso e tutelas desvinculadas no Firestore.' },
