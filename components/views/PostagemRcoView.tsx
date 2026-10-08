@@ -492,8 +492,8 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
             <p className="text-xs">Verifique o filtro de busca ou cadastre alunos para a turma {selectedTurma}.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-muted">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full min-w-[500px] sm:min-w-full text-left text-xs text-muted">
               <thead className="bg-background text-[11px] font-bold text-muted uppercase tracking-wider border-b border-border">
                 <tr>
                   <th className="py-3.5 px-4 w-12 text-center">Nº</th>

@@ -114,28 +114,24 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-      {/* 
-        AQUI ESTÁ O PATCH CIRÚRGICO: 
-        Foi adicionado max-h-[90vh] para limitar o tamanho do painel e overflow-y-auto 
-        para criar barra de rolagem e permitir acesso ao botão de salvar quando expandir a aba PNE.
-      */}
-      <div className="w-full max-w-lg glass-panel rounded-3xl border border-border p-6 sm:p-8 space-y-6 shadow-2xl relative animate-fadeIn max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="w-full max-w-lg glass-panel rounded-2xl sm:rounded-3xl border border-border p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 shadow-2xl relative my-auto max-h-[90vh] overflow-y-auto custom-scrollbar animate-fadeIn">
         
         {/* Header travado/absoluto ajustado */}
-        <div className="flex justify-between items-start mb-2">
+        <div className="flex justify-between items-start mb-2 pr-10">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-primary/10 text-primary rounded-2xl border border-primary/20">
-              <UserPlus className="w-6 h-6" />
+            <div className="p-2.5 sm:p-3 bg-primary/10 text-primary rounded-2xl border border-primary/20 shrink-0">
+              <UserPlus className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-foreground">Cadastrar Novo Aluno</h2>
-              <p className="text-xs text-muted">Nome Completo (MAIÚSCULAS) e Turma</p>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-xl font-bold text-foreground truncate">Cadastrar Novo Aluno</h2>
+              <p className="text-xs text-muted truncate">Nome Completo (MAIÚSCULAS) e Turma</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-muted hover:text-foreground rounded-full hover:bg-surface-hover transition-colors cursor-pointer"
+            className="p-2 text-muted hover:text-foreground rounded-full hover:bg-surface-hover transition-colors cursor-pointer absolute top-3 sm:top-5 right-3 sm:right-5 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label="Fechar"
           >
             <X className="w-5 h-5" />
           </button>
@@ -144,13 +140,13 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
         {/* Note Box */}
         <div className="flex items-center gap-2 text-xs text-primary bg-primary/10 p-3 rounded-2xl border border-primary/20">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>Nome formatado automaticamente em MAIÚSCULAS e sem acentos.</span>
+          <span className="break-words">Nome formatado automaticamente em MAIÚSCULAS e sem acentos.</span>
         </div>
 
         {formError && (
           <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-600 rounded-2xl text-xs flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
-            <span>{formError}</span>
+            <span className="break-words">{formError}</span>
           </div>
         )}
 
@@ -170,7 +166,7 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
             <p className="text-[11px] text-[#869486] mt-1">Acentos e caracteres especiais são removidos automaticamente.</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-xs font-semibold text-muted mb-1">Turma (ex: 301)</label>
               <input

@@ -98,28 +98,29 @@ export const ResetPasswordByTeacherModal: React.FC<ResetPasswordByTeacherModalPr
   return (
     <div
       id="reset-password-teacher-modal-overlay"
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150"
     >
       <div
         id="reset-password-teacher-modal-card"
-        className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 space-y-6 relative animate-in zoom-in-95 duration-150"
+        className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 relative my-auto max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-150"
       >
         <button
           onClick={handleClose}
-          className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+          className="absolute top-3 sm:top-5 right-3 sm:right-5 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+          aria-label="Fechar"
         >
           <X className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-2xl border border-amber-500/20">
-            <KeyRound className="w-6 h-6" />
+        <div className="flex items-center gap-3 pr-8">
+          <div className="p-2.5 sm:p-3 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-2xl border border-amber-500/20 shrink-0">
+            <KeyRound className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+          <div className="min-w-0">
+            <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">
               Redefinir Senha de Acesso
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
               {targetType === 'student' ? 'Aluno' : '2º Professor'}: <strong className="text-slate-800 dark:text-slate-200">{targetName}</strong> {targetDetail && `(${targetDetail})`}
             </p>
           </div>

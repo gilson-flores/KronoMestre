@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Bell, Search, BookOpen, Menu, X } from 'lucide-react';
+import React from 'react';
+import { BookOpen, Menu } from 'lucide-react';
 import { UserRole, TeacherUser, StudentUser } from '@/lib/types';
 import { formatAvatarUrl } from '@/lib/utils';
 
@@ -9,20 +9,18 @@ interface NavbarTopProps {
   role: UserRole;
   user: TeacherUser | StudentUser | null;
   onOpenSettings?: () => void;
-  globalSearch: string;
-  setGlobalSearch: (q: string) => void;
+  globalSearch?: string;
+  setGlobalSearch?: (q: string) => void;
   onToggleMobileMenu?: () => void;
+  onlineStudentsCount?: number;
 }
 
 export const NavbarTop: React.FC<NavbarTopProps> = ({
   role,
   user,
-  globalSearch,
-  setGlobalSearch,
   onToggleMobileMenu,
+  onlineStudentsCount = 0,
 }) => {
-  const [showMobileSearch, setShowMobileSearch] = useState(false);
-
   return (
     <header className="w-full bg-background/90 backdrop-blur-md border-b border-border px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-30 min-h-[56px]">
       {/* Left Title / Branding + Mobile Menu Trigger */}
@@ -49,40 +47,23 @@ export const NavbarTop: React.FC<NavbarTopProps> = ({
         </div>
       </div>
 
-      {/* Middle Search - Desktop */}
-      <div className="flex-1 max-w-md mx-4 hidden md:block">
-        <div className="relative">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#869486]" />
-          <input
-            type="text"
-            value={globalSearch}
-            onChange={(e) => setGlobalSearch(e.target.value)}
-            placeholder="Buscar alunos, turmas ou atividades..."
-            className="w-full bg-surface border border-border rounded-full pl-10 pr-4 py-2 text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-primary/50 transition-all min-h-[40px]"
-          />
-        </div>
-      </div>
-
-      {/* Right Controls: Mobile Search Toggle + Notifications + User Profile */}
-      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-        {/* Mobile Search Toggle */}
-        <button
-          onClick={() => setShowMobileSearch(!showMobileSearch)}
-          className="p-2 text-muted hover:text-foreground hover:bg-[#171f33] rounded-full transition-colors md:hidden cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
-          title="Buscar"
-          aria-label="Buscar"
-        >
-          {showMobileSearch ? <X className="w-5 h-5" /> : <Search className="w-5 h-5" />}
-        </button>
-
-        <button
-          className="p-2 text-muted hover:text-foreground hover:bg-[#171f33] rounded-full transition-colors relative cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
-          title="Notificações"
-          aria-label="Notificações"
-        >
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full"></span>
-        </button>
+      {/* Right Controls: Online Students Counter + User Profile (Zero chamadas ao servidor, sem pesquisa, sem sino) */}
+      <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
+        {/* Contador de Alunos Online em Tempo Real (Cálculo em memória, zero chamadas ao servidor) */}
+        {onlineStudentsCount > 0 && (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium shadow-sm">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="hidden sm:inline">
+              <strong className="font-bold text-emerald-300">{onlineStudentsCount}</strong> alunos online
+            </span>
+            <span className="sm:hidden">
+              <strong className="font-bold text-emerald-300">{onlineStudentsCount}</strong> online
+            </span>
+          </div>
+        )}
 
         {user && (
           <div className="flex items-center gap-2 pl-2 border-l border-border">
@@ -105,23 +86,6 @@ export const NavbarTop: React.FC<NavbarTopProps> = ({
           </div>
         )}
       </div>
-
-      {/* Mobile Search Expandable Bar */}
-      {showMobileSearch && (
-        <div className="absolute top-full left-0 right-0 bg-background border-b border-border p-3 md:hidden z-40 shadow-xl animate-fadeIn">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#869486]" />
-            <input
-              type="text"
-              value={globalSearch}
-              onChange={(e) => setGlobalSearch(e.target.value)}
-              placeholder="Buscar alunos, turmas ou atividades..."
-              autoFocus
-              className="w-full bg-surface border border-border rounded-full pl-10 pr-4 py-2.5 text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-primary/50"
-            />
-          </div>
-        </div>
-      )}
     </header>
   );
 };

@@ -43,8 +43,8 @@ export const GradeConsolidationModal: React.FC<GradeConsolidationModalProps> = (
   if (!isOpen || !data) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
-      <div className="bg-surface border border-border rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fadeIn">
+      <div className="bg-surface border border-border rounded-2xl sm:rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden flex flex-col my-auto max-h-[90vh]">
         {/* Modal Header */}
         <div className="p-4 sm:p-6 border-b border-border flex items-start justify-between gap-3 sm:gap-4 bg-surface-hover/50">
           <div className="flex items-center gap-3 min-w-0">

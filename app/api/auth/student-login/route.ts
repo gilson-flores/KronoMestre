@@ -88,10 +88,13 @@ export async function POST(request: Request) {
       });
     } catch (snapErr: any) {
       console.warn('[Student Login API] Aviso ao buscar alunos do tenant:', snapErr?.message);
-      return NextResponse.json(
-        { error: 'O servidor está temporariamente indisponível para consulta de alunos. Tente novamente em alguns instantes.' },
-        { status: 503 }
-      );
+      studentList = serverCache.getLastKnown<any[]>(studentsCacheKey) || [];
+      if (studentList.length === 0) {
+        return NextResponse.json(
+          { error: 'O servidor está temporariamente indisponível para consulta de alunos. Tente novamente em alguns instantes.' },
+          { status: 503 }
+        );
+      }
     }
 
     let matchedStudent: any = null;

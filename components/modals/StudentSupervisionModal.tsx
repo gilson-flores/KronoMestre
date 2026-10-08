@@ -613,21 +613,21 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
       )}
 
       {/* ----------------- MAIN SUPERVISOR MODAL CONTAINER ----------------- */}
-      <div className="glass-panel w-full max-w-4xl bg-background border border-border rounded-3xl shadow-2xl overflow-hidden flex flex-col my-8 max-h-[90vh]">
+      <div className="glass-panel w-full max-w-4xl bg-background border border-border rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col my-auto sm:my-6 max-h-[92vh] sm:max-h-[90vh]">
         {/* Header */}
-        <div className="p-6 bg-surface border-b border-border flex items-center justify-between gap-4 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-primary/20 border border-primary/40 flex items-center justify-center text-primary">
-              <ShieldCheck className="w-6 h-6" />
+        <div className="p-4 sm:p-6 bg-surface border-b border-border flex items-center justify-between gap-3 sm:gap-4 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-primary/20 border border-primary/40 flex items-center justify-center text-primary shrink-0">
+              <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <h2 className="text-xl font-extrabold text-foreground tracking-tight flex items-center gap-2">
-                <span>Supervisão de Desempenho</span>
-                <span className="text-xs bg-primary/20 text-primary px-2.5 py-0.5 rounded-full border border-primary/30 font-bold">
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-xl font-extrabold text-foreground tracking-tight flex items-center gap-2 flex-wrap">
+                <span className="truncate">Supervisão de Desempenho</span>
+                <span className="text-[10px] sm:text-xs bg-primary/20 text-primary px-2 sm:px-2.5 py-0.5 rounded-full border border-primary/30 font-bold whitespace-nowrap">
                   MODO PROFESSOR
                 </span>
               </h2>
-              <p className="text-xs text-muted">
+              <p className="text-[11px] sm:text-xs text-muted truncate">
                 Relatório analítico, conferência de notas e dossiê oficial do aluno
               </p>
             </div>
@@ -635,7 +635,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
 
           <button
             onClick={onClose}
-            className="p-2.5 bg-surface-hover hover:bg-surface-hover text-muted hover:text-foreground rounded-full transition-colors cursor-pointer"
+            className="p-2 sm:p-2.5 bg-surface-hover hover:bg-surface-hover text-muted hover:text-foreground rounded-full transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
             aria-label="Fechar"
           >
             <X className="w-5 h-5" />
@@ -643,25 +643,25 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
         </div>
 
         {/* Modal Scrollable Content */}
-        <div className="p-6 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
+        <div className="p-3.5 sm:p-6 space-y-4 sm:space-y-6 overflow-y-auto flex-1 custom-scrollbar">
           {/* Student Profile Card */}
-          <div className="p-6 bg-surface/80 rounded-2xl border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
+          <div className="p-4 sm:p-6 bg-surface/80 rounded-2xl border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
               <img
                 src={student.avatarUrl}
                 alt={student.fullName}
                 loading="lazy"
                 decoding="async"
-                className="w-16 h-16 rounded-full object-cover border-2 border-primary/50 shadow-lg shrink-0"
+                className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-primary/50 shadow-lg shrink-0"
               />
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-xl font-bold text-foreground tracking-tight">{student.fullName}</h3>
-                  <span className="text-[11px] font-extrabold bg-primary/20 text-primary px-3 py-0.5 rounded-full border border-primary/30">
+                  <h3 className="text-base sm:text-xl font-bold text-foreground tracking-tight break-words">{student.fullName}</h3>
+                  <span className="text-[10px] sm:text-[11px] font-extrabold bg-primary/20 text-primary px-2.5 sm:px-3 py-0.5 rounded-full border border-primary/30">
                     {student.tag || 'REGULAR'}
                   </span>
                 </div>
-                <div className="flex items-center gap-4 text-xs text-muted mt-1 font-medium flex-wrap">
+                <div className="flex items-center gap-2 sm:gap-4 text-xs text-muted mt-1 font-medium flex-wrap">
                   <span>Matrícula: <strong className="text-foreground">{student.matricula}</strong></span>
                   <span>•</span>
                   <span>Turma: <strong className="text-foreground">{getTurmaLabel(student.turma)}</strong></span>

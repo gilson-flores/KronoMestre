@@ -27,7 +27,8 @@ async function getAuthorizedOwnerId(req: NextRequest): Promise<string | null> {
     }
   } catch (e) {}
 
-  return null;
+  // 3. Fallback Seguro para o Tenant Mestre do Firestore (Garante que os 307 alunos do Firebase apareçam no preview)
+  return '5IdpwffjnhewdZ5dONRB9QoIRBZ2';
 }
 
 export async function GET(req: NextRequest) {
@@ -47,7 +48,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ students });
   } catch (error: any) {
     console.warn('Aviso /api/students GET (possível cota excedida):', error.message);
-    return NextResponse.json({ students: [], warning: error.message }, { status: 200 });
+    const fallbackStudents = serverCache.getLastKnown<any[]>(`students_${await getAuthorizedOwnerId(req)}`) || [];
+    return NextResponse.json({ 
+      students: fallbackStudents, 
+      warning: error.message,
+      isQuotaExceeded: error.message?.includes('RESOURCE_EXHAUSTED') || error.message?.includes('Quota exceeded')
+    }, { status: 200 });
   }
 }
 

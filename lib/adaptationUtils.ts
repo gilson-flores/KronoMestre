@@ -4,9 +4,9 @@ export function extractCleanHtml(rawText: string): string {
   let html = rawText;
   
   try {
-    const htmlMatch = text.match(/<html/i);
+    const htmlMatch = rawText.match(/<html/i);
     if (htmlMatch) {
-      const matchIndex = htmlMatch.index;
+      const matchIndex = htmlMatch.index || 0;
       html = html.substring(matchIndex);
     }
   } catch(e) {}
@@ -68,28 +68,65 @@ export function extractCleanHtml(rawText: string): string {
 
 export function createAdaptedMildModerateActivity(
   activity: Activity,
-  adaptedText: string,
-  simplifiedQuestions: any[]
+  adaptedDataOrText: any,
+  simplifiedQuestions?: any[]
 ): Activity {
+  const isObject = typeof adaptedDataOrText === 'object' && adaptedDataOrText !== null;
+  const adaptedTitle =
+    isObject && adaptedDataOrText.adaptedTitle
+      ? adaptedDataOrText.adaptedTitle
+      : activity.title.includes('Adaptada')
+      ? activity.title
+      : `${activity.title} (Adaptada PNE)`;
+  const description = isObject
+    ? adaptedDataOrText.adaptedDescription || activity.description
+    : adaptedDataOrText || activity.description;
+  const rawQuestions = isObject
+    ? adaptedDataOrText.questions || activity.questions || []
+    : simplifiedQuestions && simplifiedQuestions.length > 0
+    ? simplifiedQuestions
+    : activity.questions || [];
+
   return {
     ...activity,
+    id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
     originalActivityId: activity.id,
+    adaptedFromId: activity.id,
+    isAdapted: true,
     adaptationType: 'mild_moderate',
-    description: adaptedText,
-    objectiveQuestions: simplifiedQuestions.length > 0 ? simplifiedQuestions : activity.objectiveQuestions,
+    title: adaptedTitle,
+    description,
+    questions: rawQuestions,
+    objectiveQuestions: rawQuestions.filter((q: any) => q.type === 'multiple_choice'),
+    essayQuestions: rawQuestions.filter((q: any) => q.type === 'essay'),
+    submissions: [],
+    totalSubmissions: 0,
+    pendingCorrection: 0,
   };
 }
 
 export function createAdaptedSeverePlayfulActivity(
   activity: Activity,
-  playfulHtml: string,
+  playfulHtml: string
 ): Activity {
+  const adaptedTitle = activity.title.includes('Jogo Lúdico')
+    ? activity.title
+    : `${activity.title} (Jogo Lúdico PNE)`;
+
   return {
     ...activity,
+    id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
     originalActivityId: activity.id,
+    adaptedFromId: activity.id,
+    isAdapted: true,
     adaptationType: 'severe_playful',
+    title: adaptedTitle,
     playfulGameHtml: extractCleanHtml(playfulHtml),
+    questions: [],
     objectiveQuestions: [],
-    essayQuestions: []
+    essayQuestions: [],
+    submissions: [],
+    totalSubmissions: 0,
+    pendingCorrection: 0,
   };
 }

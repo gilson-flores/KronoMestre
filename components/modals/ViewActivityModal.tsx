@@ -49,21 +49,21 @@ export const ViewActivityModal: React.FC<ViewActivityModalProps> = ({
   const optionLabels = ['A', 'B', 'C', 'D'];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fadeIn">
-      <div className="bg-surface border border-white/15 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-2.5 sm:p-4 md:p-6 overflow-y-auto animate-fadeIn">
+      <div className="bg-surface border border-white/15 rounded-2xl sm:rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto">
         {/* Header */}
-        <div className="p-5 sm:p-6 bg-[#131d35] border-b border-border flex items-start justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-[#1d273d] border border-border text-primary flex items-center justify-center shrink-0 mt-0.5 shadow-md">
-              <Icon className="w-6 h-6" />
+        <div className="p-4 sm:p-6 bg-[#131d35] border-b border-border flex items-start justify-between gap-3 sm:gap-4">
+          <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[#1d273d] border border-border text-primary flex items-center justify-center shrink-0 mt-0.5 shadow-md">
+              <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2 mb-1">
-                <span className="text-[11px] font-extrabold uppercase tracking-wider bg-primary/15 text-primary px-3 py-0.5 rounded-full border border-primary/30">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
+                <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider bg-primary/15 text-primary px-2.5 sm:px-3 py-0.5 rounded-full border border-primary/30">
                   {activity.type}
                 </span>
                 <span
-                  className={`text-[11px] font-bold px-3 py-0.5 rounded-full ${
+                  className={`text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-0.5 rounded-full ${
                     activity.status === 'Ativo'
                       ? 'bg-primary/20 text-primary border border-primary/30'
                       : activity.status === 'Prazo Encerrado'
@@ -74,15 +74,15 @@ export const ViewActivityModal: React.FC<ViewActivityModalProps> = ({
                   {activity.status}
                 </span>
                 {activity.isAdapted && (
-                  <span className="text-[11px] font-bold px-3 py-0.5 rounded-full bg-amber-100 text-amber-600 border border-amber-500/30">
+                  <span className="text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-0.5 rounded-full bg-amber-100 text-amber-600 border border-amber-500/30">
                     Adaptada PNE
                   </span>
                 )}
-                <span className="text-[11px] font-semibold bg-[#171f33] text-foreground px-3 py-0.5 rounded-full border border-border">
+                <span className="text-[10px] sm:text-[11px] font-semibold bg-[#171f33] text-foreground px-2.5 sm:px-3 py-0.5 rounded-full border border-border">
                   Turma: {activity.turma || 'Todas'}
                 </span>
               </div>
-              <h2 className="text-xl sm:text-2xl font-extrabold text-foreground leading-tight">
+              <h2 className="text-lg sm:text-2xl font-extrabold text-foreground leading-snug break-words">
                 {activity.title}
               </h2>
             </div>
@@ -90,16 +90,17 @@ export const ViewActivityModal: React.FC<ViewActivityModalProps> = ({
 
           <button
             onClick={onClose}
-            className="w-9 h-9 rounded-full bg-surface-hover hover:bg-surface-hover text-muted hover:text-foreground flex items-center justify-center transition-all cursor-pointer shrink-0"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-surface-hover hover:bg-white/10 text-muted hover:text-foreground flex items-center justify-center transition-all cursor-pointer shrink-0 min-h-[44px] min-w-[44px]"
+            aria-label="Fechar"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Modal Scrollable Content */}
-        <div className="p-5 sm:p-6 overflow-y-auto space-y-6 custom-scrollbar text-xs sm:text-sm text-foreground">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 sm:space-y-6 custom-scrollbar text-xs sm:text-sm text-foreground">
           {/* Metadata Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
             <div className="bg-surface p-3.5 rounded-2xl border border-border flex flex-col gap-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#869486]">
                 Matéria
@@ -332,24 +333,24 @@ export const ViewActivityModal: React.FC<ViewActivityModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 sm:p-5 bg-[#131d35] border-t border-border flex flex-wrap items-center justify-between gap-3">
+        <div className="p-3.5 sm:p-5 bg-[#131d35] border-t border-border flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3">
           <button
             onClick={onClose}
-            className="px-5 py-2.5 bg-surface-hover hover:bg-white/15 text-foreground rounded-full text-xs font-bold transition-all cursor-pointer"
+            className="w-full sm:w-auto px-5 py-2.5 bg-surface-hover hover:bg-white/15 text-foreground rounded-full text-xs font-bold transition-all cursor-pointer min-h-[44px] flex items-center justify-center"
           >
             Fechar
           </button>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
             {onEditActivity && (
               <button
                 onClick={() => {
                   onClose();
                   onEditActivity(activity);
                 }}
-                className="px-4 py-2.5 bg-[#171f33] hover:bg-surface-hover text-foreground hover:text-foreground rounded-full text-xs font-bold border border-border flex items-center gap-1.5 transition-all cursor-pointer"
+                className="w-full sm:w-auto px-4 py-2.5 bg-[#171f33] hover:bg-surface-hover text-foreground hover:text-foreground rounded-full text-xs font-bold border border-border flex items-center justify-center gap-1.5 transition-all cursor-pointer min-h-[44px]"
               >
-                <Edit className="w-3.5 h-3.5 text-primary" />
+                <Edit className="w-3.5 h-3.5 text-primary shrink-0" />
                 <span>Editar Atividade</span>
               </button>
             )}
@@ -360,9 +361,9 @@ export const ViewActivityModal: React.FC<ViewActivityModalProps> = ({
                   onClose();
                   onGoToGrading(activity);
                 }}
-                className="px-5 py-2.5 bg-primary hover:bg-primary-hover text-white font-extrabold rounded-full text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                className="w-full sm:w-auto px-5 py-2.5 bg-primary hover:bg-primary-hover text-white font-extrabold rounded-full text-xs flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer min-h-[44px]"
               >
-                <CheckCheck className="w-4 h-4 stroke-[2.5]" />
+                <CheckCheck className="w-4 h-4 stroke-[2.5] shrink-0" />
                 <span>Acessar Correções</span>
               </button>
             )}

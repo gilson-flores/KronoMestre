@@ -43,7 +43,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, files });
   } catch (error: any) {
     console.warn('Aviso ao ler biblioteca no Firestore (possível cota excedida):', error.message);
-    return NextResponse.json({ success: true, files: [], warning: error.message }, { status: 200 });
+    const teacherId = await getAuthorizedTeacherId(request).catch(() => null);
+    const fallbackFiles = teacherId ? serverCache.getLastKnown<any[]>(`library_${teacherId}`) || [] : [];
+    return NextResponse.json({ success: true, files: fallbackFiles, warning: error.message }, { status: 200 });
   }
 }
 

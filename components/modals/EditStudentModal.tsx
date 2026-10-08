@@ -137,29 +137,30 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-lg glass-panel rounded-3xl border border-border p-6 sm:p-8 space-y-6 shadow-2xl relative animate-fadeIn">
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="w-full max-w-lg glass-panel rounded-2xl sm:rounded-3xl border border-border p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 shadow-2xl relative my-auto max-h-[90vh] overflow-y-auto custom-scrollbar animate-fadeIn">
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 text-muted hover:text-foreground rounded-full hover:bg-surface-hover transition-colors cursor-pointer"
+          className="absolute top-3 sm:top-5 right-3 sm:right-5 p-2 text-muted hover:text-foreground rounded-full hover:bg-surface-hover transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+          aria-label="Fechar"
         >
           <X className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-primary/10 text-primary rounded-2xl border border-primary/20">
-            <Pencil className="w-6 h-6" />
+        <div className="flex items-center gap-3 pr-10">
+          <div className="p-2.5 sm:p-3 bg-primary/10 text-primary rounded-2xl border border-primary/20 shrink-0">
+            <Pencil className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-foreground">Editar Dados do Aluno</h2>
-            <p className="text-xs text-muted">Altere turma, tag ou informações cadastrais</p>
+          <div className="min-w-0">
+            <h2 className="text-base sm:text-xl font-bold text-foreground truncate">Editar Dados do Aluno</h2>
+            <p className="text-xs text-muted truncate">Altere turma, tag ou informações cadastrais</p>
           </div>
         </div>
 
         {formError && (
           <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-600 rounded-2xl text-xs flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
-            <span>{formError}</span>
+            <span className="break-words">{formError}</span>
           </div>
         )}
 
@@ -177,7 +178,7 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-xs font-semibold text-muted mb-1">Turma (ex: 301, 1001)</label>
               <input

@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { TeacherUser, StudentUser, Activity, LibraryFile, ChatMessage, AtestadoRadRecord } from '@/lib/types';
 import { formatAvatarUrl } from '@/lib/utils';
-import { getTurmaLabel } from '@/lib/studentUtils';
+import { getTurmaLabel, isStudentPNE } from '@/lib/studentUtils';
 import { getScopedLocalStorageItem, setScopedLocalStorageItem } from '@/lib/cacheUtils';
 import { StudentSupervisionModal } from '@/components/modals/StudentSupervisionModal';
 import { LibraryView } from '@/components/views/LibraryView';
@@ -144,8 +144,7 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
     return classRoster.filter((s) => {
       const matchSearch = s.fullName.toLowerCase().includes(rosterSearch.toLowerCase());
       const matchTurma = rosterTurmaFilter === 'all' || s.turma === rosterTurmaFilter;
-      const isPneStudent =
-        s.tag === 'PNE' || Boolean(s.pneConditions && s.pneConditions.length > 0);
+      const isPneStudent = isStudentPNE(s);
 
       let matchTag = true;
       if (rosterTagFilter === 'tutelados') {
@@ -635,8 +634,8 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
                   Nenhuma atividade entregue pelos alunos tutelados até o momento.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                <div className="overflow-x-auto custom-scrollbar">
+                  <table className="w-full min-w-[620px] text-left text-xs">
                     <thead>
                       <tr className="border-b border-border text-muted font-bold">
                         <th className="pb-2.5">Aluno Tutelado</th>
@@ -895,8 +894,8 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                <div className="overflow-x-auto custom-scrollbar">
+                  <table className="w-full min-w-[650px] text-left text-xs">
                     <thead>
                       <tr className="border-b border-border text-muted font-bold">
                         <th className="pb-3">Aluno</th>

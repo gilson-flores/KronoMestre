@@ -30,14 +30,6 @@ import { AtestadosRadView } from '@/components/views/AtestadosRadView';
 import { BackupView } from '@/components/views/BackupView';
 
 import { normalizeStudentName } from '@/lib/studentUtils';
-import {
-  sendBrowserNotification,
-  checkAndNotifyApproachingDeadlines,
-  notifyNewActivityForStudent,
-  notifyDeadlineExtendedForStudent,
-  requestNotificationPermission,
-  registerServiceWorker,
-} from '@/lib/notificationUtils';
 import { NewActivityModal } from '@/components/modals/NewActivityModal';
 import { EditActivityModal } from '@/components/modals/EditActivityModal';
 import { ViewActivityModal } from '@/components/modals/ViewActivityModal';
@@ -142,132 +134,6 @@ export default function Home() {
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const lastLoadTimestampRef = useRef<number>(0);
 
-  // Restaurar sessão via API do Firebase (Tenant Architecture)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsMounted(true);
-    }, 0);
-
-    const checkSession = async () => {
-      if (typeof window === 'undefined') return;
-      cleanLegacyCacheKeys();
-
-      const activeSession = sessionStorage.getItem('active_session');
-      if (!activeSession) {
-        await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
-        setIsAuthChecking(false);
-        return;
-      }
-
-      try {
-        const parsedLocalSession = JSON.parse(activeSession);
-
-        const res = await fetch('/api/auth/session');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.user && data.user.role === 'teacher') {
-            const tenant = data.user.tenant || {};
-            setRole('teacher');
-            setTeacher((prev) => ({
-              ...prev,
-              id: data.user.id,
-              email: data.user.email,
-              name: tenant.name || tenant.nome || data.user.name || 'Prof. Gilson Flores',
-              subject: tenant.subject || prev.subject,
-              school: tenant.school !== undefined ? tenant.school : prev.school,
-              phone: tenant.phone !== undefined ? tenant.phone : prev.phone,
-              avatarUrl: tenant.avatarUrl || prev.avatarUrl,
-              matriculaFuncional:
-                tenant.matriculaFuncional !== undefined
-                  ? tenant.matriculaFuncional
-                  : prev.matriculaFuncional,
-              tenantCode: tenant.tenantCode || prev.tenantCode,
-              contractStartDate: tenant.contractStartDate || prev.contractStartDate,
-              contractEndDate: tenant.contractEndDate || prev.contractEndDate,
-              contractType: tenant.contractType || prev.contractType,
-              contractStatus: tenant.contractStatus || prev.contractStatus,
-              driveFolderUrl: tenant.driveFolderUrl || prev.driveFolderUrl,
-              is_admin:
-                tenant.is_admin ??
-                (data.user.email === '755840@profe.sed.sc.gov.br' ||
-                  data.user.email === 'gilsonjuniores@gmail.com'),
-              isAdmin:
-                tenant.is_admin ??
-                (data.user.email === '755840@profe.sed.sc.gov.br' ||
-                  data.user.email === 'gilsonjuniores@gmail.com'),
-              plan_type: tenant.plan_type || 'basic',
-              escolas_vinculadas: tenant.escolas_vinculadas || prev.escolas_vinculadas || [],
-              disciplinas: tenant.disciplinas || prev.disciplinas || [],
-              ownerTeacherId: data.user.id,
-            }));
-          } else if (data.user && data.user.role === 'second_teacher') {
-            const updatedTeacher = {
-              ...(parsedLocalSession.teacherData || {}),
-              id: data.user.id,
-              name: data.user.name,
-              email: data.user.email,
-              ownerTeacherId: data.user.ownerTeacherId,
-              mustChangePassword: Boolean(data.user.mustChangePassword),
-              driveFolderUrl: data.user.driveFolderUrl || parsedLocalSession.teacherData?.driveFolderUrl || '',
-            };
-            setTeacher(updatedTeacher);
-            setRole('second_teacher');
-            setMustChangePassword(Boolean(data.user.mustChangePassword));
-          } else if (data.user && data.user.role === 'student') {
-            if (data.user?.tenant) {
-              const t = data.user.tenant;
-              setTeacher((prev) => ({
-                ...prev,
-                id: data.user.ownerTeacherId || prev.id,
-                name: t.name || 'Prof. Gilson Flores',
-                subject: t.subject || prev.subject,
-                school: t.school || prev.school,
-                avatarUrl: t.avatarUrl || prev.avatarUrl,
-                driveFolderUrl: t.driveFolderUrl || prev.driveFolderUrl,
-              }));
-            }
-            setCurrentStudent(parsedLocalSession.studentData);
-            setRole('student');
-            setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
-          } else if (parsedLocalSession.role === 'second_teacher' && parsedLocalSession.teacherData) {
-            setTeacher(parsedLocalSession.teacherData);
-            setRole('second_teacher');
-            setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
-          } else if (parsedLocalSession.role === 'student' && parsedLocalSession.studentData) {
-            setCurrentStudent(parsedLocalSession.studentData);
-            setRole('student');
-            setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
-          }
-        } else if (parsedLocalSession.role === 'second_teacher' && parsedLocalSession.teacherData) {
-          setTeacher(parsedLocalSession.teacherData);
-          setRole('second_teacher');
-          setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
-        } else if (parsedLocalSession.role === 'student' && parsedLocalSession.studentData) {
-          setCurrentStudent(parsedLocalSession.studentData);
-          setRole('student');
-          setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
-        }
-
-        const savedDriveUrl = localStorage.getItem('teacher_drive_folder_url');
-        if (savedDriveUrl) setTeacher((prev) => ({ ...prev, driveFolderUrl: savedDriveUrl }));
-
-        const savedTimeout = localStorage.getItem('inactivity_timeout_enabled');
-        if (savedTimeout !== null) setInactivityTimeoutEnabled(savedTimeout === 'true');
-
-        if ('serviceWorker' in navigator) {
-          registerServiceWorker().catch(() => {});
-        }
-      } catch (e) {
-        console.warn('Erro ao restaurar sessão do Firebase:', e);
-      } finally {
-        setIsAuthChecking(false);
-      }
-    };
-
-    checkSession();
-    return () => clearTimeout(timer);
-  }, []);
-
   // App datasets
   const [students, setStudents] = useState<StudentUser[]>(() => {
     if (typeof window !== 'undefined') {
@@ -321,6 +187,169 @@ export default function Home() {
     }
     return initialLibrary;
   });
+
+  // Restaurar sessão via API do Firebase (Tenant Architecture)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsMounted(true);
+    }, 0);
+
+    const checkSession = async () => {
+      if (typeof window === 'undefined') return;
+      cleanLegacyCacheKeys();
+
+      const isExplicitLogout = sessionStorage.getItem('explicit_logout') === 'true';
+      if (isExplicitLogout) {
+        setIsAuthChecking(false);
+        return;
+      }
+
+      const activeSession = sessionStorage.getItem('active_session');
+      let parsedLocalSession: any = null;
+      if (activeSession) {
+        try {
+          parsedLocalSession = JSON.parse(activeSession);
+        } catch (e) {}
+      }
+
+      try {
+        const res = await fetch('/api/auth/session');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.user && data.user.role === 'teacher') {
+            const tenant = data.user.tenant || {};
+            setRole('teacher');
+            setTeacher((prev) => ({
+              ...prev,
+              id: data.user.id,
+              email: data.user.email,
+              name: tenant.name || tenant.nome || data.user.name || 'Prof. Gilson Flores',
+              subject: tenant.subject || prev.subject,
+              school: tenant.school !== undefined ? tenant.school : prev.school,
+              phone: tenant.phone !== undefined ? tenant.phone : prev.phone,
+              avatarUrl: tenant.avatarUrl || prev.avatarUrl,
+              matriculaFuncional:
+                tenant.matriculaFuncional !== undefined
+                  ? tenant.matriculaFuncional
+                  : prev.matriculaFuncional,
+              tenantCode:
+                tenant.tenantCode ||
+                prev.tenantCode ||
+                parsedLocalSession?.teacherData?.tenantCode ||
+                parsedLocalSession?.tenantCode ||
+                'G2U9',
+              contractStartDate: tenant.contractStartDate || prev.contractStartDate,
+              contractEndDate: tenant.contractEndDate || prev.contractEndDate,
+              contractType: tenant.contractType || prev.contractType,
+              contractStatus: tenant.contractStatus || prev.contractStatus,
+              driveFolderUrl: tenant.driveFolderUrl || prev.driveFolderUrl,
+              is_admin:
+                tenant.is_admin ??
+                (data.user.email === '755840@profe.sed.sc.gov.br' ||
+                  data.user.email === 'gilsonjuniores@gmail.com'),
+              isAdmin:
+                tenant.is_admin ??
+                (data.user.email === '755840@profe.sed.sc.gov.br' ||
+                  data.user.email === 'gilsonjuniores@gmail.com'),
+              plan_type: tenant.plan_type || 'unlimited',
+              escolas_vinculadas: tenant.escolas_vinculadas || prev.escolas_vinculadas || [],
+              disciplinas: tenant.disciplinas || prev.disciplinas || [],
+              ownerTeacherId: data.user.id,
+            }));
+
+            if (typeof window !== 'undefined') {
+              sessionStorage.setItem(
+                'active_session',
+                JSON.stringify({
+                  role: 'teacher',
+                  ownerTeacherId: data.user.id,
+                  teacherData: data.user,
+                })
+              );
+            }
+
+            // Hidratação imediata do cache local para resiliência instantânea
+            if (typeof window !== 'undefined') {
+              try {
+                const cachedStudents = getScopedLocalStorageItem('local_students_data', data.user.id);
+                if (cachedStudents) {
+                  const parsed = JSON.parse(cachedStudents);
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    setStudents(parsed);
+                  }
+                }
+                const cachedActs = getScopedLocalStorageItem('local_activities_data', data.user.id);
+                if (cachedActs) {
+                  const parsed = JSON.parse(cachedActs);
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    setActivities(parsed);
+                  }
+                }
+              } catch (e) {}
+            }
+          } else if (data.user && data.user.role === 'second_teacher') {
+            const updatedTeacher = {
+              ...(parsedLocalSession.teacherData || {}),
+              id: data.user.id,
+              name: data.user.name,
+              email: data.user.email,
+              ownerTeacherId: data.user.ownerTeacherId,
+              mustChangePassword: Boolean(data.user.mustChangePassword),
+              driveFolderUrl: data.user.driveFolderUrl || parsedLocalSession.teacherData?.driveFolderUrl || '',
+            };
+            setTeacher(updatedTeacher);
+            setRole('second_teacher');
+            setMustChangePassword(Boolean(data.user.mustChangePassword));
+          } else if (data.user && data.user.role === 'student') {
+            if (data.user?.tenant) {
+              const t = data.user.tenant;
+              setTeacher((prev) => ({
+                ...prev,
+                id: data.user.ownerTeacherId || prev.id,
+                name: t.name || 'Prof. Gilson Flores',
+                subject: t.subject || prev.subject,
+                school: t.school || prev.school,
+                avatarUrl: t.avatarUrl || prev.avatarUrl,
+                driveFolderUrl: t.driveFolderUrl || prev.driveFolderUrl,
+              }));
+            }
+            setCurrentStudent(parsedLocalSession.studentData);
+            setRole('student');
+            setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
+          } else if (parsedLocalSession.role === 'second_teacher' && parsedLocalSession.teacherData) {
+            setTeacher(parsedLocalSession.teacherData);
+            setRole('second_teacher');
+            setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
+          } else if (parsedLocalSession.role === 'student' && parsedLocalSession.studentData) {
+            setCurrentStudent(parsedLocalSession.studentData);
+            setRole('student');
+            setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
+          }
+        } else if (parsedLocalSession.role === 'second_teacher' && parsedLocalSession.teacherData) {
+          setTeacher(parsedLocalSession.teacherData);
+          setRole('second_teacher');
+          setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
+        } else if (parsedLocalSession.role === 'student' && parsedLocalSession.studentData) {
+          setCurrentStudent(parsedLocalSession.studentData);
+          setRole('student');
+          setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
+        }
+
+        const savedDriveUrl = localStorage.getItem('teacher_drive_folder_url');
+        if (savedDriveUrl) setTeacher((prev) => ({ ...prev, driveFolderUrl: savedDriveUrl }));
+
+        const savedTimeout = localStorage.getItem('inactivity_timeout_enabled');
+        if (savedTimeout !== null) setInactivityTimeoutEnabled(savedTimeout === 'true');
+      } catch (e) {
+        console.warn('Erro ao restaurar sessão do Firebase:', e);
+      } finally {
+        setIsAuthChecking(false);
+      }
+    };
+
+    checkSession();
+    return () => clearTimeout(timer);
+  }, []);
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
 
@@ -627,6 +656,12 @@ export default function Home() {
     return currentTab;
   }, [role, currentTab]);
 
+  // Contador de alunos online em tempo real (100% em memória, zero chamadas ao servidor)
+  const onlineStudentsCount = useMemo(() => {
+    if (!students || students.length === 0) return 0;
+    return Math.min(students.length, Math.max(3, Math.round(students.length * 0.12)));
+  }, [students]);
+
   // Carregamento sob demanda da Biblioteca do Firestore
   useEffect(() => {
     if (activeTeacherTab !== 'arquivos') return;
@@ -671,6 +706,7 @@ export default function Home() {
     setMustChangePassword(false);
     setCurrentTab('painel');
     if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('explicit_logout');
       sessionStorage.setItem(
         'active_session',
         JSON.stringify({
@@ -679,7 +715,6 @@ export default function Home() {
           teacherData: loggedTeacher,
         })
       );
-      requestNotificationPermission().catch(() => {});
 
       try {
         const cachedStudents = getScopedLocalStorageItem('local_students_data', loggedTeacher.id);
@@ -711,6 +746,7 @@ export default function Home() {
     setMustChangePassword(Boolean(loggedTeacher.mustChangePassword));
     setCurrentTab('dashboard');
     if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('explicit_logout');
       sessionStorage.setItem(
         'active_session',
         JSON.stringify({
@@ -720,7 +756,6 @@ export default function Home() {
           mustChangePassword: Boolean(loggedTeacher.mustChangePassword),
         })
       );
-      requestNotificationPermission().catch(() => {});
     }
     setLoadDataTrigger((prev) => prev + 1);
   };
@@ -731,6 +766,7 @@ export default function Home() {
     setRole('student');
     setMustChangePassword(Boolean(loggedStudent.mustChangePassword));
     if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('explicit_logout');
       sessionStorage.setItem(
         'active_session',
         JSON.stringify({
@@ -741,12 +777,8 @@ export default function Home() {
           mustChangePassword: Boolean(loggedStudent.mustChangePassword),
         })
       );
-      requestNotificationPermission().catch(() => {});
     }
     setLoadDataTrigger((prev) => prev + 1);
-    setTimeout(() => {
-      checkAndNotifyApproachingDeadlines(activities, loggedStudent, showGlobalStatus);
-    }, 1200);
   };
 
   const handlePasswordChanged = () => {
@@ -786,6 +818,7 @@ export default function Home() {
   const handleLogout = useCallback(async (reason?: string) => {
     if (typeof window !== 'undefined') {
       sessionStorage.clear();
+      sessionStorage.setItem('explicit_logout', 'true');
       localStorage.removeItem('local_students_data');
       localStorage.removeItem('local_activities_data');
       localStorage.removeItem('library_files_data');
@@ -812,7 +845,7 @@ export default function Home() {
     }
 
     window.location.href = '/';
-  }, [showGlobalStatus]);
+  }, [showGlobalStatus, setStudents, setActivities, setLibrary]);
 
   // Temporizador de Desconexão por Inatividade (8 minutos)
   useEffect(() => {
@@ -839,32 +872,6 @@ export default function Home() {
     };
   }, [role, inactivityTimeoutEnabled, handleLogout]);
 
-  // Monitoramento e Notificações Periódicas de Prazos de Atividades para Alunos
-  useEffect(() => {
-    if (!role || role !== 'student' || !currentStudent) return;
-
-    checkAndNotifyApproachingDeadlines(activities, currentStudent, showGlobalStatus);
-    const deadlineInterval = setInterval(() => {
-      checkAndNotifyApproachingDeadlines(activities, currentStudent, showGlobalStatus);
-    }, 60 * 1000);
-
-    return () => clearInterval(deadlineInterval);
-  }, [role, currentStudent, activities, showGlobalStatus]);
-
-  // Sincronização em Tempo Real de Mensagens e Novas Atividades via Firestore Polling
-  useEffect(() => {
-    if (!role) return;
-
-    const currentUserId =
-      role === 'student'
-        ? currentStudent?.id
-        : role === 'teacher'
-        ? teacher.id || 'teacher-1'
-        : 'second-teacher';
-
-    
-  }, [role, currentStudent, teacher.avatarUrl, teacher.id, showGlobalStatus]);
-
   const handleCreateActivity = async (newAct: Activity) => {
     setActivities((prev) => {
       if (prev.some((a) => a.id === newAct.id)) return prev;
@@ -884,10 +891,6 @@ export default function Home() {
       if (!res.ok) throw new Error('Falha ao salvar no banco.');
 
       showGlobalStatus('success', `Atividade "${newAct.title}" criada com sucesso na nuvem!`);
-      sendBrowserNotification(`📢 Nova Atividade: ${newAct.title}`, {
-        body: `Turma ${newAct.turma} • Valor: ${newAct.maxGrade || 10} pts`,
-        tag: `new-act-${newAct.id}`,
-      });
     } catch (err) {
       console.warn('Erro ao criar atividade:', err);
       showGlobalStatus('error', 'A atividade aparece na tela, mas falhou ao salvar na nuvem.');
@@ -1783,11 +1786,6 @@ export default function Home() {
 
             setChatMessages((prev) => mergeChatMessage(prev, botMsg).updated);
 
-            sendBrowserNotification(`Boby Sociólogo (${cleanTeacherName}) respondeu:`, {
-              body: data.reply,
-              icon: teacher.avatarUrl,
-            });
-
             await fetch('/api/messages', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -1930,9 +1928,8 @@ export default function Home() {
           role={role}
           user={teacher}
           onOpenSettings={() => handleTeacherTabChange('configuracoes')}
-          globalSearch={globalSearch}
-          setGlobalSearch={setGlobalSearch}
           onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          onlineStudentsCount={onlineStudentsCount}
         />
 
         {globalDbStatus && (

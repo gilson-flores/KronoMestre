@@ -248,26 +248,27 @@ export const AdaptActivityModal: React.FC<AdaptActivityModalProps> = ({
     !isBusy;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fadeIn">
-      <div className="bg-surface border border-white/15 rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4 md:p-6 overflow-y-auto animate-fadeIn">
+      <div className="bg-surface border border-white/15 rounded-2xl sm:rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto">
         {/* Header */}
-        <div className="p-5 sm:p-6 border-b border-border flex items-center justify-between shrink-0 bg-surface/80">
-          <div>
-            <h2 className="text-base sm:text-lg font-bold text-foreground">Adaptação Pedagógica Inclusiva (PNE)</h2>
-            <p className="text-xs text-muted mt-0.5">
+        <div className="p-4 sm:p-6 border-b border-border flex items-start sm:items-center justify-between gap-3 shrink-0 bg-surface/80">
+          <div className="min-w-0 pr-2">
+            <h2 className="text-base sm:text-lg font-bold text-foreground leading-snug truncate">Adaptação Pedagógica Inclusiva (PNE)</h2>
+            <p className="text-xs text-muted mt-0.5 line-clamp-2 sm:line-clamp-1">
               Marque uma ou ambas as opções com as caixas de seleção para gerar as adaptações com o Gemini.
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-surface-hover rounded-full text-muted hover:text-foreground transition-colors cursor-pointer"
+            className="p-2 hover:bg-surface-hover rounded-full text-muted hover:text-foreground transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
+            aria-label="Fechar"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content Area */}
-        <div className="p-5 sm:p-6 overflow-y-auto space-y-6 flex-1 custom-scrollbar">
+        <div className="p-3.5 sm:p-6 overflow-y-auto space-y-4 sm:space-y-6 flex-1 custom-scrollbar">
           {/* Activity Info Banner */}
           <div className="p-4 bg-surface rounded-2xl border border-border flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -874,11 +875,11 @@ export const AdaptActivityModal: React.FC<AdaptActivityModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 sm:p-6 border-t border-border flex flex-wrap items-center justify-between gap-3 bg-surface/60 shrink-0">
+        <div className="p-3.5 sm:p-6 border-t border-border flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 bg-surface/80 shrink-0">
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2.5 rounded-full text-xs font-semibold text-muted hover:text-foreground hover:bg-surface-hover transition-colors cursor-pointer"
+            className="w-full sm:w-auto px-5 py-2.5 rounded-full text-xs font-semibold text-muted hover:text-foreground hover:bg-surface-hover transition-colors cursor-pointer min-h-[44px] flex items-center justify-center"
           >
             Cancelar
           </button>
@@ -887,7 +888,7 @@ export const AdaptActivityModal: React.FC<AdaptActivityModalProps> = ({
             type="button"
             onClick={handleSaveSelectedAdaptations}
             disabled={!canSave}
-            className="px-6 py-3 bg-primary hover:bg-primary-hover text-white font-bold rounded-full text-xs transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full sm:w-auto px-6 py-3 bg-primary hover:bg-primary-hover text-white font-bold rounded-full text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-primary/20 disabled:opacity-40 disabled:cursor-not-allowed min-h-[44px]"
           >
             <Sparkles className="w-4 h-4 stroke-[2.5]" />
             <span>

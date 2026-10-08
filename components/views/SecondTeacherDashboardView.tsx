@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { TeacherUser, StudentUser, Activity, AtestadoRadRecord } from '@/lib/types';
 import { formatAvatarUrl } from '@/lib/utils';
-import { getTurmaLabel } from '@/lib/studentUtils';
+import { getTurmaLabel, isStudentPNE } from '@/lib/studentUtils';
 import { supabase } from '@/lib/supabase';
 import { getScopedLocalStorageItem, setScopedLocalStorageItem } from '@/lib/cacheUtils';
 
@@ -356,7 +356,7 @@ export const SecondTeacherDashboardView: React.FC<SecondTeacherDashboardViewProp
                       
                       <div className="flex flex-wrap items-center gap-1.5 mt-2">
                         <span className="text-[10px] font-bold px-2 py-0.5 bg-rose-500/15 text-rose-500 border border-rose-500/30 rounded-full uppercase">
-                          {student.tag || 'PNE'}
+                          {isStudentPNE(student) ? (student.tag || 'PNE') : (student.tag || 'REGULAR')}
                         </span>
                         {student.pneConditions && student.pneConditions.length > 0 && (
                           <span
@@ -429,8 +429,8 @@ export const SecondTeacherDashboardView: React.FC<SecondTeacherDashboardViewProp
             Nenhuma atividade vinculada ou entrega registrada para os alunos tutelados selecionados.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full min-w-[640px] text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-border text-muted font-bold tracking-wider uppercase text-[10px]">
                   <th className="py-3 px-3">Atividade / Avaliação</th>
@@ -534,8 +534,8 @@ export const SecondTeacherDashboardView: React.FC<SecondTeacherDashboardViewProp
             Nenhum atestado ou RAD cadastrado para os seus alunos tutelados.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full min-w-[620px] text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-border text-muted font-bold tracking-wider uppercase text-[10px]">
                   <th className="py-2.5 px-3">Aluno</th>

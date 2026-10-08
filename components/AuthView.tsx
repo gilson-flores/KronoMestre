@@ -128,7 +128,14 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
         onLoginTeacher(teacherProfile);
       } else {
-        setTeacherError(data.error || 'Acesso negado: E-mail ou senha incorretos.');
+        const rawErr = data.error || '';
+        let friendlyErr = rawErr;
+        if (!rawErr || rawErr === 'INVALID_LOGIN_CREDENTIALS' || rawErr === 'INVALID_PASSWORD' || rawErr === 'EMAIL_NOT_FOUND') {
+          friendlyErr = 'E-mail ou senha incorretos. Verifique suas credenciais.';
+        } else if (rawErr.includes('TOO_MANY_ATTEMPTS')) {
+          friendlyErr = 'Muitas tentativas de login. Aguarde alguns instantes e tente novamente.';
+        }
+        setTeacherError(friendlyErr);
       }
     } catch (err: any) {
       setTeacherError('Erro de conexão: ' + (err.message || 'Verifique sua rede.'));

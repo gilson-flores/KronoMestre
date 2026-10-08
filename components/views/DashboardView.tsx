@@ -322,9 +322,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {!isCorrecoes && (
           <button
             onClick={onOpenNewActivityModal}
-            className="self-start sm:self-center py-3 px-6 bg-primary hover:bg-primary-hover text-white font-bold rounded-full transition-all duration-200 flex items-center gap-2 shadow-lg shadow-primary/20 cursor-pointer text-sm"
+            className="w-full sm:w-auto py-3 px-6 bg-primary hover:bg-primary-hover text-white font-bold rounded-full transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-primary/20 cursor-pointer text-sm min-h-[44px]"
           >
-            <Plus className="w-5 h-5 stroke-[2.5]" />
+            <Plus className="w-5 h-5 stroke-[2.5] shrink-0" />
             <span>Nova Atividade</span>
           </button>
         )}
@@ -332,28 +332,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Atividades Recentes List */}
       <div className="space-y-4 pt-2">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <h2 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-2">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <h2 className="text-lg sm:text-xl font-bold text-foreground tracking-tight flex items-center gap-2 truncate">
               <span>Missões & Atividades</span>
-              <span className="text-xs font-normal text-text-muted">
+              <span className="text-xs font-normal text-text-muted shrink-0">
                 ({orderedActivityItems.length} {orderedActivityItems.length === 1 ? 'item' : 'itens'})
               </span>
             </h2>
           </div>
 
           {/* Primary Tabs: Ativas vs Inativas */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center bg-surface p-1 rounded-2xl border border-border text-xs">
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+            <div className="flex items-center bg-surface p-1 rounded-2xl border border-border text-xs w-full sm:w-auto justify-center sm:justify-start">
               <button
                 onClick={() => setStatusTab('ativas')}
-                className={`px-4 py-2 rounded-xl font-extrabold transition-all cursor-pointer flex items-center gap-2 ${
+                className={`flex-1 sm:flex-none px-3.5 sm:px-4 py-2 rounded-xl font-extrabold transition-all cursor-pointer flex items-center justify-center gap-2 min-h-[38px] ${
                   statusTab === 'ativas'
                     ? 'bg-primary text-white shadow-md shadow-primary/20'
                     : 'text-text-muted hover:text-foreground'
                 }`}
               >
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
                 <span>Ativas</span>
                 <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] bg-black/20 font-mono">
                   {activities.filter(checkIsActivityActive).length}
@@ -362,13 +362,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
               <button
                 onClick={() => setStatusTab('inativas')}
-                className={`px-4 py-2 rounded-xl font-extrabold transition-all cursor-pointer flex items-center gap-2 ${
+                className={`flex-1 sm:flex-none px-3.5 sm:px-4 py-2 rounded-xl font-extrabold transition-all cursor-pointer flex items-center justify-center gap-2 min-h-[38px] ${
                   statusTab === 'inativas'
                     ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20'
                     : 'text-text-muted hover:text-foreground'
                 }`}
               >
-                <span className="w-2 h-2 rounded-full bg-rose-300" />
+                <span className="w-2 h-2 rounded-full bg-rose-300 shrink-0" />
                 <span>Inativas / Encerradas</span>
                 <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] bg-black/20 font-mono">
                   {activities.filter((a) => !checkIsActivityActive(a)).length}
@@ -377,10 +377,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
 
             {/* Secondary List Sub-Filter Tabs */}
-            <div className="flex items-center gap-1 bg-surface p-1 rounded-xl border border-border text-xs overflow-x-auto">
+            <div className="flex items-center gap-1 bg-surface p-1 rounded-xl border border-border text-xs overflow-x-auto custom-scrollbar max-w-full">
               <button
                 onClick={() => setActivityFilter('todas')}
-                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap min-h-[34px] ${
                   activityFilter === 'todas'
                     ? 'bg-[#1d273d] text-primary border border-primary/30'
                     : 'text-text-muted hover:text-foreground'
@@ -390,7 +390,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </button>
               <button
                 onClick={() => setActivityFilter('a_fazer')}
-                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap min-h-[34px] ${
                   activityFilter === 'a_fazer'
                     ? 'bg-[#1d273d] text-primary border border-primary/30'
                     : 'text-text-muted hover:text-foreground'
@@ -400,7 +400,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </button>
               <button
                 onClick={() => setActivityFilter('a_corrigir')}
-                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap min-h-[34px] ${
                   activityFilter === 'a_corrigir'
                     ? 'bg-[#1d273d] text-primary border border-primary/30'
                     : 'text-text-muted hover:text-foreground'
@@ -410,7 +410,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </button>
               <button
                 onClick={() => setActivityFilter('corrigidas')}
-                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap min-h-[34px] ${
                   activityFilter === 'corrigidas'
                     ? 'bg-[#1d273d] text-primary border border-primary/30'
                     : 'text-text-muted hover:text-foreground'
@@ -426,7 +426,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <button
                   type="button"
                   onClick={expandAllActivities}
-                  className="px-2.5 py-1.5 rounded-lg font-bold text-primary hover:bg-surface-hover transition-all flex items-center gap-1 cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-lg font-bold text-primary hover:bg-surface-hover transition-all flex items-center gap-1 cursor-pointer min-h-[34px]"
                   title="Expandir todas as atividades (+)"
                 >
                   <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -436,7 +436,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <button
                   type="button"
                   onClick={collapseAllActivities}
-                  className="px-2.5 py-1.5 rounded-lg font-bold text-text-muted hover:text-foreground hover:bg-surface-hover transition-all flex items-center gap-1 cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-lg font-bold text-text-muted hover:text-foreground hover:bg-surface-hover transition-all flex items-center gap-1 cursor-pointer min-h-[34px]"
                   title="Recolher todas as atividades (-)"
                 >
                   <Minus className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -508,21 +508,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     className={`glass-panel rounded-2xl md:rounded-3xl transition-all duration-200 border border-border hover:border-primary/40 ${
                       pendingCount > 0 ? 'ring-1 ring-[#4ade80]/30' : ''
                     } ${isRecoveryChild ? 'bg-indigo-500/[0.03]' : isAdaptationChild ? 'bg-amber-500/[0.03]' : ''} ${
-                      isExpanded ? 'p-4 sm:p-5 md:p-6 shadow-xl' : 'p-3 sm:p-4 hover:bg-surface/70'
+                      isExpanded ? 'p-3.5 sm:p-5 md:p-6 shadow-xl' : 'p-3 sm:p-4 hover:bg-surface/70'
                     }`}
                   >
                     {/* Linha Principal Otimizada (Nome da Atividade, Turma e Botão +/-) */}
                     <div
                       onClick={() => toggleActivityExpand(act.id)}
-                      className="flex items-center justify-between gap-3 cursor-pointer select-none"
+                      className="flex items-center justify-between gap-2.5 sm:gap-3 cursor-pointer select-none min-w-0"
                     >
                       {/* Left: Botão +/-, Ícone, Nome da Atividade e Turma */}
-                      <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
+                      <div className="flex items-center gap-2 sm:gap-3.5 min-w-0 flex-1">
                         {/* Botão + e - Retrátil */}
                         <button
                           type="button"
                           onClick={(e) => toggleActivityExpand(act.id, e)}
-                          className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                          className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all cursor-pointer shrink-0 min-h-[32px] min-w-[32px] ${
                             isExpanded
                               ? 'bg-amber-100 text-amber-600 border-amber-200 hover:bg-amber-500/30'
                               : 'bg-[#1d273d] text-primary border-primary/30 hover:bg-[#283654] hover:scale-105 shadow-sm'
@@ -542,23 +542,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         </div>
 
                         {/* Nome da Atividade & Turma na Mesma Linha */}
-                        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 min-w-0 flex-1">
-                          <h3 className="text-sm sm:text-base font-bold text-foreground leading-tight truncate">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 flex-1">
+                          <h3 className="text-xs sm:text-base font-bold text-foreground leading-snug break-words truncate max-w-full">
                             {act.title}
                           </h3>
 
                           {/* Turma Badge */}
-                          <span className="text-[11px] font-semibold bg-[#171f33] text-text-muted px-2.5 py-0.5 rounded-full border border-border whitespace-nowrap shrink-0">
+                          <span className="text-[10px] sm:text-[11px] font-semibold bg-[#171f33] text-text-muted px-2 sm:px-2.5 py-0.5 rounded-full border border-border whitespace-nowrap shrink-0">
                             Turma: <strong className="text-foreground">{act.turma}</strong>
                           </span>
                         </div>
                       </div>
 
                       {/* Right: Badges Resumidos na Linha */}
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                         {/* Status Badge */}
                         <span
-                          className={`text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-0.5 rounded-full whitespace-nowrap ${
+                          className={`text-[10px] sm:text-[11px] font-bold px-2 sm:px-3 py-0.5 rounded-full whitespace-nowrap ${
                             act.status === 'Ativo'
                               ? 'bg-primary/20 text-primary border border-primary/30'
                               : act.status === 'Prazo Encerrado'
@@ -592,7 +592,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         {/* Informações detalhadas, Badges e Metadados */}
                         <div className="space-y-2.5">
                           {/* Badges de Travas e Adaptações */}
-                          <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                             {act.isAdapted && act.adaptationType === 'severe_playful' && (
                               <span className="text-[10px] font-bold bg-amber-100 text-amber-600 px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1" title="Jogo Lúdico Gamificado em HTML (Síndromes Severas)">
                                 <Gamepad2 className="w-3 h-3 text-amber-400" />
@@ -632,22 +632,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           </div>
 
                           {/* Prazo e Desglose de Entregas com distinção de Recuperação */}
-                          <div className="flex flex-wrap items-center gap-2 text-xs">
-                            <span className="px-3 py-1 rounded-xl text-xs font-bold bg-surface text-amber-600 border border-amber-500/30 flex items-center gap-1.5 shadow-sm">
+                          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs">
+                            <span className="px-2.5 sm:px-3 py-1 rounded-xl text-xs font-bold bg-surface text-amber-600 border border-amber-500/30 flex items-center gap-1.5 shadow-sm">
                               <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                               <span>Prazo Limite: {act.deadline || 'Sem data'}</span>
                             </span>
 
                             {unifiedMetrics.hasRecovery ? (
                               <>
-                                <span className="px-3 py-1 rounded-xl text-xs font-bold bg-surface text-foreground border border-border flex items-center gap-1.5" title="Alunos que entregaram na 1ª chamada regular">
+                                <span className="px-2.5 sm:px-3 py-1 rounded-xl text-xs font-bold bg-surface text-foreground border border-border flex items-center gap-1.5" title="Alunos que entregaram na 1ª chamada regular">
                                   <span>👥 1ª Chamada:</span>
                                   <strong className="text-foreground">{unifiedMetrics.breakdown.mainCount}/{unifiedMetrics.expectedStudentsCount}</strong>
                                   <span className="text-[10px] text-primary">({unifiedMetrics.breakdown.mainRate}%)</span>
                                 </span>
 
-                                <span className="px-3 py-1 rounded-xl text-xs font-bold bg-indigo-500/10 text-indigo-600 border border-indigo-500/30 flex items-center gap-1.5" title="Entregas na Recuperação Paralela">
-                                  <RotateCcw className="w-3 h-3 text-indigo-400" />
+                                <span className="px-2.5 sm:px-3 py-1 rounded-xl text-xs font-bold bg-indigo-500/10 text-indigo-600 border border-indigo-500/30 flex items-center gap-1.5" title="Entregas na Recuperação Paralela">
+                                  <RotateCcw className="w-3 h-3 text-indigo-400 shrink-0" />
                                   <span>Recuperação:</span>
                                   <strong className="text-indigo-200">{unifiedMetrics.breakdown.recoveryCount}</strong>
                                   {unifiedMetrics.breakdown.recoveryOnlyCount > 0 && (
@@ -655,34 +655,34 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                                   )}
                                 </span>
 
-                                <span className="px-3 py-1 rounded-xl text-xs font-extrabold bg-primary/15 text-primary border border-primary/30 flex items-center gap-1.5" title="Engajamento Total Consolidado (sem duplicidade)">
+                                <span className="px-2.5 sm:px-3 py-1 rounded-xl text-xs font-extrabold bg-primary/15 text-primary border border-primary/30 flex items-center gap-1.5" title="Engajamento Total Consolidado (sem duplicidade)">
                                   <span>🎯 Total Unificado: {unifiedMetrics.subCount}/{unifiedMetrics.expectedStudentsCount} ({unifiedMetrics.completionRate}%)</span>
                                 </span>
                               </>
                             ) : isRecoveryChild ? (
-                              <span className="px-3 py-1 rounded-xl text-xs font-bold bg-indigo-500/15 text-indigo-600 border border-indigo-500/30 flex items-center gap-1.5">
-                                <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
+                              <span className="px-2.5 sm:px-3 py-1 rounded-xl text-xs font-bold bg-indigo-500/15 text-indigo-600 border border-indigo-500/30 flex items-center gap-1.5">
+                                <RotateCcw className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
                                 <span>Entregas nesta Recuperação: {subCount}</span>
                                 <span className="text-[10px] text-indigo-600/80">(integradas ao total da avaliação)</span>
                               </span>
                             ) : subCount > 0 ? (
-                              <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-surface text-foreground border border-border flex items-center gap-1.5">
+                              <span className="px-2.5 sm:px-3 py-1 rounded-xl text-xs font-semibold bg-surface text-foreground border border-border flex items-center gap-1.5">
                                 👥 {subCount}/{expectedStudentsCount} Entregas ({unifiedMetrics.completionRate}%)
                               </span>
                             ) : (
-                              <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-surface text-text-muted border border-border">
+                              <span className="px-2.5 sm:px-3 py-1 rounded-xl text-xs font-semibold bg-surface text-text-muted border border-border">
                                 📜 0/{expectedStudentsCount} Entregas (Pendente)
                               </span>
                             )}
 
                             {pendingCount > 0 && (
-                              <span className="px-3 py-1 rounded-xl text-xs font-extrabold bg-amber-100 text-amber-600 border border-amber-200 flex items-center gap-1.5">
+                              <span className="px-2.5 sm:px-3 py-1 rounded-xl text-xs font-extrabold bg-amber-100 text-amber-600 border border-amber-200 flex items-center gap-1.5">
                                 ⏳ {pendingCount} A Corrigir pelo Professor
                               </span>
                             )}
 
                             {gradedCount > 0 && (
-                              <span className="px-3 py-1 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 flex items-center gap-1.5">
+                              <span className="px-2.5 sm:px-3 py-1 rounded-xl text-xs font-semibold bg-emerald-500/15 text-emerald-600 border border-emerald-500/30 flex items-center gap-1.5">
                                 ✅ {gradedCount} Corrigidas
                               </span>
                             )}
@@ -708,12 +708,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         {/* Botões de Ação na Janela Retrátil */}
                         <div
                           onClick={(e) => e.stopPropagation()}
-                          className="flex flex-wrap items-center gap-2 pt-2 border-t border-border"
+                          className="flex flex-wrap items-center gap-2 pt-3 border-t border-border w-full"
                         >
                           {onViewActivity && (
                             <button
                               onClick={() => onViewActivity(act)}
-                              className="flex-1 sm:flex-none px-4 py-2.5 bg-[#1d273d] hover:bg-[#283654] text-foreground hover:text-foreground rounded-full text-xs font-bold border border-border flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px] min-w-[44px]"
+                              className="flex-1 min-w-[130px] sm:min-w-0 sm:flex-none px-3.5 sm:px-4 py-2.5 bg-[#1d273d] hover:bg-[#283654] text-foreground hover:text-foreground rounded-full text-xs font-bold border border-border flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
                               title="Ver detalhes e formulário da atividade"
                             >
                               <Eye className="w-4 h-4 text-sky-400 shrink-0" />
@@ -723,7 +723,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                           <button
                             onClick={() => onSelectActivityForGrading(act)}
-                            className="flex-1 sm:flex-none px-4 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-full text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-[#4ade80]/10 cursor-pointer min-h-[44px] min-w-[44px]"
+                            className="flex-1 min-w-[130px] sm:min-w-0 sm:flex-none px-4 py-2.5 bg-primary hover:bg-primary-hover text-white font-bold rounded-full text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-[#4ade80]/10 cursor-pointer min-h-[44px]"
                           >
                             <CheckCheck className="w-4 h-4 stroke-[2.5] shrink-0" />
                             <span>{pendingCount > 0 ? `Corrigir (${pendingCount})` : 'Acessar Correções'}</span>
@@ -734,30 +734,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               {onOpenParallelRecoveryModal && !isChild && !unifiedMetrics.hasRecovery && (
                                 <button
                                   onClick={() => onOpenParallelRecoveryModal(act)}
-                                  className="flex-1 sm:flex-none px-4 py-2.5 bg-[#171f33] hover:bg-surface-hover text-indigo-600 hover:text-indigo-200 rounded-full text-xs font-bold border border-indigo-500/30 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px] min-w-[44px]"
+                                  className="flex-1 min-w-[130px] sm:min-w-0 sm:flex-none px-3.5 sm:px-4 py-2.5 bg-[#171f33] hover:bg-surface-hover text-indigo-600 hover:text-indigo-200 rounded-full text-xs font-bold border border-indigo-500/30 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
                                   title="Criar Recuperação Paralela com abordagem diferente vinculada a esta atividade"
                                 >
                                   <RotateCcw className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                                  <span>Criar Recuperação Paralela</span>
+                                  <span>Criar Recuperação</span>
                                 </button>
                               )}
 
                               <button
                                 onClick={() => handleOpenSecurityModal(act)}
-                                className="flex-1 sm:flex-none px-4 py-2.5 bg-[#171f33] hover:bg-surface-hover text-foreground hover:text-foreground rounded-full text-xs font-bold border border-border flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px] min-w-[44px]"
+                                className="flex-1 min-w-[110px] sm:min-w-0 sm:flex-none px-3.5 sm:px-4 py-2.5 bg-[#171f33] hover:bg-surface-hover text-foreground hover:text-foreground rounded-full text-xs font-bold border border-border flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
                                 title="Configurar Trava de Foco, Cópia de Enunciado e Cola de Redação"
                               >
                                 <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                                 <span>Anti-Cola</span>
                                 {(act.securityFocusLock || act.securityBlockCopyStatement || act.securityBlockPasteEssay) && (
-                                  <span className="w-2 h-2 rounded-full bg-primary" />
+                                  <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
                                 )}
                               </button>
 
                               {doesTurmaHavePNEStudent(act.turma, students) && (
                                 <button
                                   onClick={() => setAdaptModalActivity(act)}
-                                  className="flex-1 sm:flex-none px-4 py-2.5 bg-[#171f33] hover:bg-surface-hover text-amber-600 hover:text-amber-200 rounded-full text-xs font-bold border border-amber-500/20 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px] min-w-[44px]"
+                                  className="flex-1 min-w-[120px] sm:min-w-0 sm:flex-none px-3.5 sm:px-4 py-2.5 bg-[#171f33] hover:bg-surface-hover text-amber-600 hover:text-amber-200 rounded-full text-xs font-bold border border-amber-500/20 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
                                   title="Adaptar Atividade para PNE (Metade das questões e 2 alternativas por objetiva)"
                                 >
                                   <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -767,7 +767,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                               <button
                                 onClick={() => onEditActivity(act)}
-                                className="flex-1 sm:flex-none px-4 py-2.5 bg-[#171f33] hover:bg-surface-hover text-foreground hover:text-foreground rounded-full text-xs font-bold border border-border flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px] min-w-[44px]"
+                                className="flex-1 min-w-[90px] sm:min-w-0 sm:flex-none px-3.5 sm:px-4 py-2.5 bg-[#171f33] hover:bg-surface-hover text-foreground hover:text-foreground rounded-full text-xs font-bold border border-border flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
                               >
                                 <Pencil className="w-3.5 h-3.5 text-primary shrink-0" />
                                 <span>Editar</span>
@@ -781,7 +781,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                                       status: act.status === 'Inativo' ? 'Ativo' : 'Inativo'
                                     });
                                   }}
-                                  className={`flex-1 sm:flex-none px-4 py-2.5 ${act.status === 'Inativo' ? 'bg-primary/10 hover:bg-primary/20 text-primary border-primary/20' : 'bg-rose-500/10 hover:bg-rose-100 text-rose-600 hover:text-rose-200 border-rose-500/20'} rounded-full text-xs font-bold border flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px] min-w-[44px]`}
+                                  className={`flex-1 min-w-[100px] sm:min-w-0 sm:flex-none px-3.5 sm:px-4 py-2.5 ${act.status === 'Inativo' ? 'bg-primary/10 hover:bg-primary/20 text-primary border-primary/20' : 'bg-rose-500/10 hover:bg-rose-100 text-rose-600 hover:text-rose-200 border-rose-500/20'} rounded-full text-xs font-bold border flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]`}
                                   title={act.status === 'Inativo' ? "Ativar (Mostrar para aluno)" : "Desativar (Ocultar do aluno)"}
                                 >
                                   {act.status === 'Inativo' ? <Eye className="w-3.5 h-3.5 shrink-0" /> : <EyeOff className="w-3.5 h-3.5 shrink-0" />}
@@ -794,7 +794,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           {act.status === 'Prazo Encerrado' && (
                             <button
                               onClick={() => onGenerateDossier(act)}
-                              className="flex-1 sm:flex-none px-4 py-2.5 bg-[#171f33] hover:bg-surface-hover text-foreground rounded-full text-xs font-bold border border-border flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px] min-w-[44px]"
+                              className="flex-1 min-w-[120px] sm:min-w-0 sm:flex-none px-3.5 sm:px-4 py-2.5 bg-[#171f33] hover:bg-surface-hover text-foreground rounded-full text-xs font-bold border border-border flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
                             >
                               <FileSpreadsheet className="w-3.5 h-3.5 text-[#c0c1ff] shrink-0" />
                               <span>Gerar Dossiê</span>
@@ -804,7 +804,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           {!isCorrecoes && onDeleteActivity && (
                             <button
                               onClick={() => setActivityToDelete(act)}
-                              className="px-3.5 py-2.5 bg-rose-500/10 hover:bg-rose-100 text-rose-600 hover:text-rose-200 rounded-full text-xs font-bold border border-rose-500/20 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px] min-w-[44px]"
+                              className="flex-1 min-w-[90px] sm:min-w-0 sm:flex-none px-3.5 py-2.5 bg-rose-500/10 hover:bg-rose-100 text-rose-600 hover:text-rose-200 rounded-full text-xs font-bold border border-rose-500/20 flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[44px]"
                               title="Excluir Atividade"
                             >
                               <Trash2 className="w-3.5 h-3.5 shrink-0" />
@@ -840,19 +840,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         const isDeleteBlocked = hasAppliedGradesOrWork && !allRcoSigned;
 
         return (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
-            <div className="bg-surface border border-white/15 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn overflow-y-auto">
+            <div className="bg-surface border border-white/15 rounded-2xl sm:rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl space-y-4 my-auto max-h-[90vh] overflow-y-auto">
               <div className="flex items-center gap-3 text-rose-400">
-                <div className="p-3 bg-rose-500/10 rounded-2xl border border-rose-500/20">
-                  <Trash2 className="w-6 h-6" />
+                <div className="p-3 bg-rose-500/10 rounded-2xl border border-rose-500/20 shrink-0">
+                  <Trash2 className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold text-foreground">Excluir Atividade</h3>
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-lg font-bold text-foreground truncate">Excluir Atividade</h3>
                   <p className="text-xs text-text-muted">Esta ação é irreversível.</p>
                 </div>
               </div>
 
-              <p className="text-xs text-foreground bg-surface p-4 rounded-2xl border border-border leading-relaxed">
+              <p className="text-xs sm:text-sm text-foreground bg-surface p-3.5 sm:p-4 rounded-2xl border border-border leading-relaxed break-words">
                 Tem certeza que deseja excluir a atividade <strong className="text-foreground">&quot;{activityToDelete.title}&quot;</strong>? Todas as entregas e correções associadas a ela serão removidas.
               </p>
 
@@ -868,11 +868,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-2.5 pt-2">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-2">
                 <button
                   type="button"
                   onClick={() => setActivityToDelete(null)}
-                  className="px-4 py-2.5 bg-surface-hover hover:bg-white/15 text-foreground rounded-full text-xs font-bold transition-all cursor-pointer"
+                  className="px-4 py-2.5 bg-surface-hover hover:bg-white/15 text-foreground rounded-full text-xs font-bold transition-all cursor-pointer min-h-[44px] flex items-center justify-center"
                 >
                   Cancelar
                 </button>
@@ -886,10 +886,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     }
                     setActivityToDelete(null);
                   }}
-                  className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all shadow-md ${
+                  className={`px-5 py-2.5 rounded-full text-xs font-bold transition-all shadow-md min-h-[44px] flex items-center justify-center text-center ${
                     isDeleteBlocked
                       ? 'bg-rose-500/40 text-foreground/50 cursor-not-allowed border border-rose-500/20'
-                      : 'bg-rose-500 hover:bg-rose-600 text-foreground shadow-rose-500/20 cursor-pointer'
+                      : 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/20 cursor-pointer'
                   }`}
                 >
                   {isDeleteBlocked ? 'Exclusão Bloqueada (RCO Pendente)' : 'Sim, Excluir Atividade'}
@@ -902,18 +902,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Anti-Cola Security Configuration Modal */}
       {securityModalActivity && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn overflow-y-auto">
-          <div className="bg-surface border border-white/15 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-6 relative my-auto">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn overflow-y-auto">
+          <div className="bg-surface border border-white/15 rounded-2xl sm:rounded-3xl p-4 sm:p-6 max-w-lg w-full shadow-2xl space-y-4 sm:space-y-6 relative my-auto max-h-[92vh] overflow-y-auto custom-scrollbar">
             
             {/* Modal Header */}
-            <div className="flex items-start justify-between border-b border-border pb-4 pr-8">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-amber-500/10 text-amber-400 rounded-2xl border border-amber-500/20 shrink-0">
-                  <ShieldAlert className="w-6 h-6" />
+            <div className="flex items-start justify-between border-b border-border pb-3 sm:pb-4 pr-10">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="p-2.5 sm:p-3 bg-amber-500/10 text-amber-400 rounded-2xl border border-amber-500/20 shrink-0">
+                  <ShieldAlert className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
-                <div>
-                  <h3 className="text-lg font-extrabold text-foreground">Seguranças Anti-Cola (Studio)</h3>
-                  <p className="text-xs text-text-muted">
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-lg font-extrabold text-foreground truncate">Seguranças Anti-Cola (Studio)</h3>
+                  <p className="text-xs text-text-muted truncate">
                     Atividade: <span className="text-foreground font-semibold">{securityModalActivity.title}</span> ({securityModalActivity.turma})
                   </p>
                 </div>
@@ -921,7 +921,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <button
                 type="button"
                 onClick={() => setSecurityModalActivity(null)}
-                className="p-2 text-text-muted hover:text-foreground rounded-full hover:bg-surface-hover transition-colors cursor-pointer absolute top-4 right-4 min-h-[44px] min-w-[44px] min-w-[44px] flex items-center justify-center"
+                className="p-2 text-text-muted hover:text-foreground rounded-full hover:bg-surface-hover transition-colors cursor-pointer absolute top-3 sm:top-4 right-3 sm:right-4 min-h-[44px] min-w-[44px] flex items-center justify-center"
                 aria-label="Fechar"
               >
                 <X className="w-5 h-5" />
@@ -1027,20 +1027,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
 
             {/* Modal Footer Actions */}
-            <div className="flex items-center justify-end gap-3 pt-2 border-t border-border">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-2 border-t border-border">
               <button
                 type="button"
                 onClick={() => setSecurityModalActivity(null)}
-                className="px-5 py-2.5 bg-surface-hover hover:bg-white/15 text-foreground rounded-full text-xs font-bold transition-all cursor-pointer"
+                className="px-5 py-2.5 bg-surface-hover hover:bg-white/15 text-foreground rounded-full text-xs font-bold transition-all cursor-pointer min-h-[44px] flex items-center justify-center text-center"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={handleSaveSecuritySettings}
-                className="px-6 py-2.5 bg-primary hover:bg-primary-hover text-white font-extrabold rounded-full text-xs transition-all shadow-md cursor-pointer flex items-center gap-2"
+                className="px-6 py-2.5 bg-primary hover:bg-primary-hover text-white font-extrabold rounded-full text-xs transition-all shadow-md cursor-pointer flex items-center justify-center gap-2 min-h-[44px] text-center"
               >
-                <ShieldCheck className="w-4 h-4" />
+                <ShieldCheck className="w-4 h-4 shrink-0" />
                 <span>Salvar Seguranças</span>
               </button>
             </div>

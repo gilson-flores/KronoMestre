@@ -81,7 +81,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ messages });
   } catch (error: any) {
     console.warn('Aviso ao buscar mensagens no Firestore (possível cota excedida):', error.message);
-    return NextResponse.json({ messages: [], warning: error.message }, { status: 200 });
+    const session = await resolveSession(request).catch(() => null);
+    const fallbackMessages = session ? serverCache.getLastKnown<any[]>(`messages_${session.tenantId}`) || [] : [];
+    return NextResponse.json({ messages: fallbackMessages, warning: error.message }, { status: 200 });
   }
 }
 

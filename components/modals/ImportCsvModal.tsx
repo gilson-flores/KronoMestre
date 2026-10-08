@@ -195,47 +195,48 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
   const invalidCount = parsedRows.filter((r) => !r.isValid).length;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="w-full max-w-3xl glass-panel rounded-3xl border border-border p-6 sm:p-8 space-y-6 shadow-2xl relative my-8 animate-fadeIn max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="w-full max-w-3xl glass-panel rounded-2xl sm:rounded-3xl border border-border p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 shadow-2xl relative my-auto sm:my-6 animate-fadeIn max-h-[90vh] flex flex-col">
         {/* Header Close */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 text-muted hover:text-foreground rounded-full hover:bg-surface-hover transition-colors cursor-pointer"
+          className="absolute top-3 sm:top-5 right-3 sm:right-5 p-2 text-muted hover:text-foreground rounded-full hover:bg-surface-hover transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+          aria-label="Fechar"
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Modal Title */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="p-3 bg-primary/10 text-primary rounded-2xl border border-primary/20">
-            <Upload className="w-6 h-6" />
+        <div className="flex items-center gap-3 shrink-0 pr-10">
+          <div className="p-2.5 sm:p-3 bg-primary/10 text-primary rounded-2xl border border-primary/20 shrink-0">
+            <Upload className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-foreground">Importar Alunos via CSV</h2>
-            <p className="text-xs text-muted">
+          <div className="min-w-0">
+            <h2 className="text-lg sm:text-xl font-bold text-foreground truncate">Importar Alunos via CSV</h2>
+            <p className="text-xs text-muted truncate">
               Padronização automática de nomes em MAIÚSCULAS e turmas de 3 ou 4 dígitos
             </p>
           </div>
         </div>
 
         {/* Instructions & English Header Spec */}
-        <div className="bg-surface p-4 rounded-2xl border border-border space-y-3 shrink-0 text-xs">
-          <div className="flex items-center justify-between">
+        <div className="bg-surface p-3.5 sm:p-4 rounded-2xl border border-border space-y-3 shrink-0 text-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-primary font-bold uppercase tracking-wider">
-              <Info className="w-4 h-4" />
+              <Info className="w-4 h-4 shrink-0" />
               <span>Cabeçalho Obrigatório no CSV (em inglês):</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={handleCopyExample}
-                className="py-1 px-3 bg-[#171f33] hover:bg-surface-hover text-foreground rounded-lg border border-border flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="py-1 px-3 bg-[#171f33] hover:bg-surface-hover text-foreground rounded-lg border border-border flex items-center gap-1.5 transition-colors cursor-pointer min-h-[36px]"
               >
                 {copied ? <Check className="w-3.5 h-3.5 text-primary" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copied ? 'Copiado!' : 'Copiar Exemplo'}</span>
               </button>
               <button
                 onClick={handleDownloadExample}
-                className="py-1 px-3 bg-[#171f33] hover:bg-surface-hover text-foreground rounded-lg border border-border flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="py-1 px-3 bg-[#171f33] hover:bg-surface-hover text-foreground rounded-lg border border-border flex items-center gap-1.5 transition-colors cursor-pointer min-h-[36px]"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Baixar Modelo</span>
@@ -350,10 +351,10 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
         )}
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-end gap-3 shrink-0 pt-2 border-t border-border">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3 shrink-0 pt-2 border-t border-border">
           <button
             onClick={onClose}
-            className="px-5 py-2.5 bg-[#171f33] hover:bg-surface-hover text-muted hover:text-foreground text-xs font-bold rounded-full transition-colors cursor-pointer"
+            className="w-full sm:w-auto px-5 py-2.5 bg-[#171f33] hover:bg-surface-hover text-muted hover:text-foreground text-xs font-bold rounded-full transition-colors cursor-pointer min-h-[44px] flex items-center justify-center text-center"
           >
             Cancelar
           </button>
@@ -361,13 +362,13 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
           <button
             onClick={handleConfirmImport}
             disabled={validCount === 0}
-            className={`py-2.5 px-6 font-bold rounded-full text-xs transition-all shadow-lg flex items-center gap-2 ${
+            className={`w-full sm:w-auto py-2.5 px-6 font-bold rounded-full text-xs transition-all shadow-lg flex items-center justify-center gap-2 min-h-[44px] text-center ${
               validCount > 0
                 ? 'bg-primary hover:bg-primary-hover text-white shadow-primary/20 cursor-pointer'
                 : 'bg-surface-hover text-foreground/40 cursor-not-allowed'
             }`}
           >
-            <Upload className="w-4 h-4" />
+            <Upload className="w-4 h-4 shrink-0" />
             <span>Importar {validCount} Alunos Válidos</span>
           </button>
         </div>

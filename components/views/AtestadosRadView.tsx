@@ -65,8 +65,30 @@ const getTodayStr = (): string => {
 
 export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students, isReadOnly = false, ownerTeacherId }) => {
   const effectiveOwner = ownerTeacherId || getCurrentOwnerTeacherId();
-  const [records, setRecords] = useState<AtestadoRadRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Chave de cache em sessionStorage para carregamento sob demanda e corte de cotas
+  const sessionCacheKey = `rad_cache_${students[0]?.ownerTeacherId || effectiveOwner || 'default'}`;
+
+  const [records, setRecords] = useState<AtestadoRadRecord[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem(`rad_cache_${students[0]?.ownerTeacherId || effectiveOwner || 'default'}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem(`rad_cache_${students[0]?.ownerTeacherId || effectiveOwner || 'default'}`);
+        if (cached && Array.isArray(JSON.parse(cached))) return false;
+      } catch {}
+    }
+    return true;
+  });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -107,85 +129,138 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students, is
     return (Number(diasAtestado) || 1) >= 15 ? 'RAD' : 'Atestado';
   }, [diasAtestado, customTipo]);
 
-  // Sync to LocalStorage com isolamento por professor titular
-  const saveRecordsToLocal = (newRecords: AtestadoRadRecord[]) => {
-    if (typeof window !== 'undefined') {
-      try {
-        setScopedLocalStorageItem('atestados_rad_records', JSON.stringify(newRecords), effectiveOwner);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  };
-
-  // Load records from Supabase and LocalStorage with bidirectional synchronization
-  const fetchRecords = async () => {
-    setIsLoading(true);
-    let loaded: AtestadoRadRecord[] = [];
-
-    // 1. Try LocalStorage first (instant UI feedback) com escopo seguro
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = getScopedLocalStorageItem('atestados_rad_records', effectiveOwner);
-        if (saved) {
-          loaded = JSON.parse(saved);
+  // Sync to LocalStorage e SessionStorage com isolamento multitenant
+  const saveRecordsToCache = useCallback(
+    (newRecords: AtestadoRadRecord[]) => {
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem(sessionCacheKey, JSON.stringify(newRecords));
+          setScopedLocalStorageItem('atestados_rad_records', JSON.stringify(newRecords), effectiveOwner);
+        } catch (e) {
+          console.error('Erro ao salvar cache de atestados:', e);
         }
-      } catch (e) {
-        console.error('Erro ao ler atestados do localStorage:', e);
       }
-    }
+    },
+    [sessionCacheKey, effectiveOwner]
+  );
 
-    // 2. Query API Route (Source of Truth with secure session & multi-tenant isolation)
-    try {
-      const res = await fetch('/api/atestados-rad');
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && Array.isArray(json.data)) {
-          const dbRecords: AtestadoRadRecord[] = json.data;
+  // Carrega registros priorizando o sessionStorage (evita leituras repetidas ao alternar de abas)
+  const fetchRecords = useCallback(
+    async (forceRefresh = false) => {
+      setIsLoading(true);
 
-          // Merge: DB records take precedence, but keep local items not yet in DB
-          const dbIds = new Set(dbRecords.map((r) => r.id));
-          const localPending = loaded.filter((l) => !dbIds.has(l.id));
-
-          // If there are local records that were not in DB, sync them up via API now
-          if (localPending.length > 0) {
-            fetch('/api/atestados-rad', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(localPending),
-            }).catch((syncErr) => console.warn('Aviso ao sincronizar atestados locais com o servidor:', syncErr));
+      // 1. Tenta carregar do sessionStorage se não for forceRefresh
+      if (!forceRefresh && typeof window !== 'undefined') {
+        try {
+          const cachedSession = sessionStorage.getItem(sessionCacheKey);
+          if (cachedSession) {
+            const parsed = JSON.parse(cachedSession);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setRecords(parsed);
+              setIsLoading(false);
+              setIsRefreshing(false);
+              return;
+            }
           }
-
-          loaded = [...dbRecords, ...localPending];
+        } catch (e) {
+          console.warn('Aviso ao ler rad_cache do sessionStorage:', e);
         }
-      } else {
-        console.warn('Aviso ao carregar atestados da API:', res.statusText);
       }
-    } catch (err: any) {
-      console.warn('Conexão com /api/atestados-rad:', err?.message || err);
-    }
 
-    setRecords(loaded);
-    saveRecordsToLocal(loaded);
-    setIsLoading(false);
-    setIsRefreshing(false);
-  };
+      let loaded: AtestadoRadRecord[] = [];
+
+      // 2. Fallback de LocalStorage com escopo seguro
+      if (typeof window !== 'undefined') {
+        try {
+          const saved = getScopedLocalStorageItem('atestados_rad_records', effectiveOwner);
+          if (saved) {
+            loaded = JSON.parse(saved);
+          }
+        } catch (e) {
+          console.error('Erro ao ler atestados do localStorage:', e);
+        }
+      }
+
+      // 3. Consulta à API Route (Firestore)
+      try {
+        const res = await fetch('/api/atestados-rad');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.data)) {
+            const dbRecords: AtestadoRadRecord[] = json.data;
+
+            const dbIds = new Set(dbRecords.map((r) => r.id));
+            const localPending = loaded.filter((l) => !dbIds.has(l.id));
+
+            if (localPending.length > 0) {
+              fetch('/api/atestados-rad', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(localPending),
+              }).catch((syncErr) => console.warn('Aviso ao sincronizar atestados locais com o servidor:', syncErr));
+            }
+
+            loaded = [...dbRecords, ...localPending];
+          }
+        } else {
+          console.warn('Aviso ao carregar atestados da API:', res.statusText);
+        }
+      } catch (err: any) {
+        console.warn('Conexão com /api/atestados-rad:', err?.message || err);
+      }
+
+      setRecords(loaded);
+      saveRecordsToCache(loaded);
+      setIsLoading(false);
+      setIsRefreshing(false);
+    },
+    [sessionCacheKey, effectiveOwner, saveRecordsToCache]
+  );
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await fetchRecords();
+    await fetchRecords(true);
   };
 
   useEffect(() => {
     let isSubscribed = true;
-    async function loadData() {
-      await fetchRecords();
+
+    // Se já temos os registros carregados no sessionStorage, não faz nova chamada de rede
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem(sessionCacheKey);
+        if (cached && Array.isArray(JSON.parse(cached))) {
+          return;
+        }
+      } catch {}
     }
+
+    const loadData = async () => {
+      try {
+        const res = await fetch('/api/atestados-rad');
+        if (res.ok) {
+          const json = await res.json();
+          if (isSubscribed && json.success && Array.isArray(json.data)) {
+            setRecords(json.data);
+            saveRecordsToCache(json.data);
+          }
+        }
+      } catch (err: any) {
+        console.warn('Conexão com /api/atestados-rad:', err?.message || err);
+      } finally {
+        if (isSubscribed) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+        }
+      }
+    };
+
     loadData();
+
     return () => {
       isSubscribed = false;
     };
-  }, []);
+  }, [sessionCacheKey, saveRecordsToCache]);
 
   // Submit Handler
   const handleSubmit = async (e: React.FormEvent) => {
@@ -227,10 +302,10 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students, is
       createdAt: new Date().toISOString(),
     };
 
-    // Save to State & LocalStorage immediately
+    // Save to State, SessionStorage & LocalStorage immediately
     const updatedRecords = [newRecord, ...records];
     setRecords(updatedRecords);
-    saveRecordsToLocal(updatedRecords);
+    saveRecordsToCache(updatedRecords);
 
     // Save to API
     try {
@@ -275,7 +350,7 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students, is
 
     const updated = records.filter((r) => r.id !== id);
     setRecords(updated);
-    saveRecordsToLocal(updated);
+    saveRecordsToCache(updated);
 
     try {
       const res = await fetch('/api/atestados-rad', {

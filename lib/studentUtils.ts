@@ -132,11 +132,22 @@ export const canStudentAccessActivity = (actOrActivityTurma: any, studentOrStude
   // 2. STATUS DA ATIVIDADE
   if (act.status !== 'Ativo') return false;
 
-  // 3. ATIVIDADES ADAPTADAS (PNE)
-  if (act.isAdapted) {
-    const actTag = act.adaptationType ? act.adaptationType : '';
-    const stuTag = student.tag ? student.tag : '';
-    if (actTag.trim().toLowerCase() !== stuTag.trim().toLowerCase()) return false;
+  // 3. ATIVIDADES ADAPTADAS (PNE) vs REGULARES
+  const isAdapted = Boolean(act.isAdapted || act.adaptationType || act.adaptedFromId);
+  const isStudentAdaptive = isStudentPNE(student);
+
+  if (isAdapted) {
+    // Atividade adaptada: exclusiva para estudantes com necessidades especiais (PNE/AEE)
+    if (!isStudentAdaptive) return false;
+  } else {
+    // Atividade regular: se o aluno for PNE, só acessa se tiver sido explicitamente incluído
+    if (isStudentAdaptive) {
+      const isIncluded =
+        Boolean(act.includedPneStudentIds?.includes(student.id)) ||
+        Boolean(student.matricula && act.includedPneStudentIds?.includes(student.matricula)) ||
+        Boolean(student.fullName && act.includedPneStudentIds?.includes(student.fullName));
+      if (!isIncluded) return false;
+    }
   }
 
   // 4. LÓGICA DE TURMAS FLEXÍVEL
