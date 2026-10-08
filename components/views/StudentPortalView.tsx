@@ -5,12 +5,6 @@ import { StudentUser, TeacherUser, Activity, LibraryFile, ChatMessage, ActivityQ
 import { canStudentAccessActivity, getActivityGradeDistribution, isStudentPNE } from '@/lib/studentUtils';
 import { extractCleanHtml } from '@/lib/adaptationUtils';
 import { scrollToTop } from '@/lib/utils';
-import {
-  getNotificationPermission,
-  requestNotificationPermission,
-  sendBrowserNotification,
-  registerServiceWorker,
-} from '@/lib/notificationUtils';
 import { MessagesView } from './MessagesView';
 import {
   LogOut,
@@ -140,55 +134,6 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
   // Fullscreen / Immersive Mode for PNE Severe Playful Activities
   const [fullscreenGameActivityId, setFullscreenGameActivityId] = useState<string | null>(null);
-
-  // Smartphone Push Notifications State
-  const [pushStatus, setPushStatus] = useState<NotificationPermission>(() => {
-    if (typeof window !== 'undefined') {
-      return getNotificationPermission();
-    }
-    return 'default';
-  });
-  const [pushToast, setPushToast] = useState<string | null>(null);
-  const [isActivatingPush, setIsActivatingPush] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && pushStatus === 'granted') {
-      registerServiceWorker().catch(() => {});
-    }
-  }, [pushStatus]);
-
-  const handleActivatePush = async () => {
-    setIsActivatingPush(true);
-    try {
-      const perm = await requestNotificationPermission();
-      setPushStatus(perm);
-      if (perm === 'granted') {
-        await registerServiceWorker();
-        sendBrowserNotification('📲 Notificações Push Ativadas!', {
-          body: `Olá, ${student.fullName.split(' ')[0]}! Seu celular agora receberá mensagens, avisos e notas do ${teacher?.name || 'Professor'}.`,
-          tag: 'push-activated-welcome',
-        });
-        setPushToast('✅ Notificações Push no smartphone ativadas com sucesso!');
-        setTimeout(() => setPushToast(null), 5000);
-      } else {
-        setPushToast('⚠️ Permissão de notificações não concedida. Por favor, permita notificações nas configurações do seu navegador.');
-        setTimeout(() => setPushToast(null), 6000);
-      }
-    } catch (err) {
-      console.warn('Erro ao ativar push:', err);
-    } finally {
-      setIsActivatingPush(false);
-    }
-  };
-
-  const handleTestPush = () => {
-    sendBrowserNotification('🔔 Teste de Push no Celular', {
-      body: `${teacher?.name || 'Professor'}: Notificação de teste recebida no seu smartphone! O canal de alertas está funcionando perfeitamente.`,
-      tag: `test-push-${Date.now()}`,
-    });
-    setPushToast('📲 Notificação enviada para a barra de avisos do seu celular!');
-    setTimeout(() => setPushToast(null), 4000);
-  };
 
   // Interactive student answers per activity
   // essayInputs[activityId] -> string
