@@ -45,6 +45,7 @@ interface InteractiveActivitiesViewProps {
   activities: Activity[];
   students: StudentUser[];
   teacher: TeacherUser;
+  onOpenNewActivityModal?: () => void;
   onSaveCreatedActivity: (activity: Activity) => Promise<void> | void;
   onEditActivity?: (activity: Activity) => void;
   onDeleteActivity?: (activityId: string) => void;

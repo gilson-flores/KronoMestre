@@ -366,29 +366,50 @@ export default function Home() {
   const activeStudents = useMemo(() => students.filter((s) => !s.isArchived), [students]);
   const activeActivities = useMemo(() => activities.filter((a) => !a.isArchived), [activities]);
 
-  const visibleStudentsForRole = useMemo(() => {
-    if (role === 'second_teacher' && teacher) {
-      return activeStudents.filter((s) => {
-        const tId = teacher.id?.toString().trim().toLowerCase();
-        const tName = teacher.name?.trim().toLowerCase();
-        const tEmail = teacher.email?.trim().toLowerCase();
+  // Extração estável dos identificadores do professor para evitar recálculo desnecessário de visibleStudentsForRole
+  const teacherId = teacher?.id?.toString().trim().toLowerCase() || '';
+  const teacherName = teacher?.name?.trim().toLowerCase() || '';
+  const teacherEmail = teacher?.email?.trim().toLowerCase() || '';
 
+  const visibleStudentsForRole = useMemo(() => {
+    if (role === 'second_teacher' && (teacherId || teacherName || teacherEmail)) {
+      return activeStudents.filter((s) => {
         const stId = s.secondTeacherId?.toString().trim().toLowerCase();
         const stName = s.secondTeacherName?.trim().toLowerCase();
 
-        const matchId = Boolean(stId && tId && stId === tId);
-        const matchEmail = Boolean(stId && tEmail && stId === tEmail);
+        const matchId = Boolean(stId && teacherId && stId === teacherId);
+        const matchEmail = Boolean(stId && teacherEmail && stId === teacherEmail);
         const matchName = Boolean(
           stName &&
-            ((tName && (stName === tName || stName.includes(tName) || tName.includes(stName))) ||
-              (tEmail && stName === tEmail))
+            ((teacherName && (stName === teacherName || stName.includes(teacherName) || teacherName.includes(stName))) ||
+              (teacherEmail && stName === teacherEmail))
         );
 
         return matchId || matchEmail || matchName;
       });
     }
     return activeStudents;
-  }, [role, teacher, activeStudents]);
+  }, [role, teacherId, teacherName, teacherEmail, activeStudents]);
+
+  // Estrutura memoizada de agrupamento por turma: O(1) de acesso para filtros de turmas
+  const studentsByTurma = useMemo(() => {
+    const map = new Map<string, StudentUser[]>();
+    for (const student of visibleStudentsForRole) {
+      const turma = student.turma || 'Sem Turma';
+      const list = map.get(turma);
+      if (list) {
+        list.push(student);
+      } else {
+        map.set(turma, [student]);
+      }
+    }
+    return map;
+  }, [visibleStudentsForRole]);
+
+  // Lista ordenada única de turmas ativas memoizada
+  const availableTurmas = useMemo(() => {
+    return Array.from(studentsByTurma.keys()).sort((a, b) => a.localeCompare(b));
+  }, [studentsByTurma]);
 
   const [selectedActivityForGrading, setSelectedActivityForGrading] = useState<Activity | null>(null);
   const [globalSearch, setGlobalSearch] = useState('');
@@ -711,7 +732,23 @@ export default function Home() {
     };
   }, [role, currentStudent?.id, teacher?.id]);
 
-  // Contador de presença real de alunos (zero dados fantasmas e sem número 37 estático)
+  // Assinatura de presença memoizada: só invalida quando o status real de atividade online muda,
+  // poupando ciclos de CPU e conversões repetitivas de Data nos renders da árvore de componentes
+  const presenceSignature = useMemo(() => {
+    if (role === 'student') return 'student_self';
+    if (liveOnlineCount > 0) return `live_${liveOnlineCount}`;
+
+    const targetStudents = role === 'second_teacher' ? visibleStudentsForRole : activeStudents;
+    if (!Array.isArray(targetStudents) || targetStudents.length === 0) return 'empty';
+
+    return targetStudents
+      .filter((s) => s.isOnline === true && s.lastActiveAt)
+      .map((s) => `${s.id}:${s.lastActiveAt}`)
+      .join('|');
+  }, [role, liveOnlineCount, role === 'second_teacher' ? visibleStudentsForRole : activeStudents]);
+
+  // Contador de presença real de alunos (zero dados fantasmas e sem número 37 estático),
+  // protegido por memoização com verificação leve de janela temporal de 5 minutos
   const onlineStudentsCount = useMemo(() => {
     if (role === 'student' && currentStudent?.id) {
       return 1;
@@ -722,26 +759,28 @@ export default function Home() {
       return liveOnlineCount;
     }
 
+    const targetStudents = role === 'second_teacher' ? visibleStudentsForRole : activeStudents;
+    if (!Array.isArray(targetStudents) || targetStudents.length === 0) {
+      return 0;
+    }
+
     // Validação estrita sobre a lista local de estudantes:
     // NUNCA marca online se lastActiveAt não existir ou se for mais antigo que 5 minutos
     const now = Date.now();
     const fiveMinutesMs = 5 * 60 * 1000;
-    const activeStudentIds = new Set<string>();
+    let count = 0;
 
-    if (Array.isArray(students)) {
-      students.forEach((st) => {
-        if (st.isArchived) return;
-        if (st.isOnline === true && st.lastActiveAt) {
-          const diff = now - new Date(st.lastActiveAt).getTime();
-          if (diff <= fiveMinutesMs) {
-            activeStudentIds.add(st.id);
-          }
+    for (const st of targetStudents) {
+      if (st.isOnline === true && st.lastActiveAt) {
+        const activeTime = new Date(st.lastActiveAt).getTime();
+        if (!isNaN(activeTime) && now - activeTime <= fiveMinutesMs) {
+          count++;
         }
-      });
+      }
     }
 
-    return activeStudentIds.size;
-  }, [role, currentStudent?.id, liveOnlineCount, students]);
+    return count;
+  }, [role, currentStudent?.id, liveOnlineCount, presenceSignature, role === 'second_teacher' ? visibleStudentsForRole : activeStudents]);
 
   // Carregamento sob demanda da Biblioteca do Firestore
   useEffect(() => {
@@ -2103,7 +2142,10 @@ export default function Home() {
               students={visibleStudentsForRole}
               teacher={teacher}
               onOpenNewActivityModal={() => setIsNewActivityModalOpen(true)}
-              onDeleteActivity={handleDeleteActivity}
+              onDeleteActivity={(actId) => {
+                const target = activities.find((a) => a.id === actId);
+                if (target) handleDeleteActivity(target);
+              }}
               onSaveCreatedActivity={async (act) => {
                 await handleCreateActivity(act);
               }}
@@ -2119,7 +2161,10 @@ export default function Home() {
               students={visibleStudentsForRole}
               teacher={teacher}
               onOpenNewActivityModal={() => setIsNewActivityModalOpen(true)}
-              onDeleteActivity={handleDeleteActivity}
+              onDeleteActivity={(actId) => {
+                const target = activities.find((a) => a.id === actId);
+                if (target) handleDeleteActivity(target);
+              }}
               onSaveCreatedActivity={async (act) => {
                 await handleCreateActivity(act);
               }}

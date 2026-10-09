@@ -201,7 +201,7 @@ export const SecondTeacherMessagesModal: React.FC<Props> = ({
                       </div>
                       <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                       <span className="text-[9px] opacity-60 mt-2 block text-right">
-                        {new Date(msg.timestamp).toLocaleString()}
+                        {new Date(msg.timestamp || msg.createdAt || Date.now()).toLocaleString()}
                       </span>
                     </div>
                   </div>

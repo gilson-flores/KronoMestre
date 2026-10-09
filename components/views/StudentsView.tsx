@@ -151,6 +151,17 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
     });
   }, [students, searchTerm, isAllTurmasSelected, selectedTurmas, selectedTagFilter]);
 
+  const selectedTurmaFilter = selectedTurmas.length === 1 ? selectedTurmas[0] : 'all';
+  const handleSelectTurmaFilter = (turma: string) => {
+    setSelectedTurmas(turma === 'all' ? ['all'] : [turma]);
+  };
+  const filterMode: 'all' | 'pne' = selectedTagFilter === 'PNE' ? 'pne' : 'all';
+  const handleFilterModeChange = (mode: 'all' | 'pne') => {
+    setSelectedTagFilter(mode === 'pne' ? 'PNE' : 'all');
+  };
+  const totalStudentsInActiveTurma = filteredStudents.length;
+  const pneStudentsInActiveTurma = filteredStudents.filter((s) => s.tag?.toUpperCase() === 'PNE').length;
+
   return (
     <div className="space-y-8 animate-fadeIn">
       {/* Header */}
@@ -574,7 +585,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
         isOpen={isFilterModalOpen}
         onClose={() => setIsFilterModalOpen(false)}
         selectedTurmaFilter={selectedTurmaFilter}
-        onSelectTurmaFilter={setSelectedTurmaFilter}
+        onSelectTurmaFilter={handleSelectTurmaFilter}
         turmasList={turmasList}
         filterMode={filterMode}
         onFilterModeChange={handleFilterModeChange}

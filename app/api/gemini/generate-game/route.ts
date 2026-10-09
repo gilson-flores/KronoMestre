@@ -649,6 +649,11 @@ export async function POST(req: NextRequest) {
         context: 'sala de aula em duplas ou grupos (julgamento dialético)',
         style: '6 rodadas onde uma falácia do senso comum é exposta e os alunos escolhem a refutação científica sólida.'
       },
+      structural_detective: {
+        name: 'Detetive Estrutural',
+        context: 'sala de aula em duplas ou grupos (investigação sociológica)',
+        style: '6 enigmas de investigação social onde pistas estruturais revelam os mecanismos ocultos dos fenômenos sociais.'
+      },
       rpg_campaign: {
         name: 'Crônicas da Pólis - Campanha de RPG',
         context: 'atividade de casa individual ou coletiva',

@@ -170,12 +170,14 @@ export interface Activity {
   id: string;
   title: string;
   subject?: string;
+  topic?: string;
   description: string;
   supportMaterial?: string;
   turma: string;
   type: ActivityType;
   status: 'Ativo' | 'Prazo Encerrado' | 'Inativo';
   deadline: string;
+  dueDate?: string;
   maxGrade?: number;
   allowGroupWork?: boolean;
   securityFocusLock?: boolean; // Trava 1: Trava de foco (Aviso ao sair da tela, limite de 4 avisos -> auto entrega)
@@ -197,6 +199,7 @@ export interface Activity {
   playfulGameHtml?: string; // Código HTML do jogo interativo lúdico para síndromes severas
   playfulGameScoreMax?: number; // Pontuação máxima do jogo lúdico
   adaptedFromId?: string; // ID da atividade original vinculada
+  originalActivityId?: string; // ID da atividade de origem quando aplicável
 
   // KronoGames & Gamificação
   isGameActivity?: boolean;
@@ -215,6 +218,8 @@ export interface Activity {
   recoveryApproach?: string; // Abordagem pedagógica diferenciada aplicada na recuperação
   includedPneStudentIds?: string[]; // IDs dos alunos PNE selecionados por proficiência para fazer a atividade normal
   questions?: ActivityQuestion[];
+  objectiveQuestions?: any[];
+  essayQuestions?: any[];
   totalSubmissions: number;
   totalStudents: number;
   pendingCorrection: number;
@@ -266,12 +271,14 @@ export interface ChatMessage {
   threadId: string; // ID da conversa (ex: studentId)
   senderId: string;
   senderName: string;
-  senderRole: 'teacher' | 'student';
+  senderRole: 'teacher' | 'student' | 'second_teacher';
   senderAvatar?: string;
   recipientId: string;
   recipientName: string;
+  recipientRole?: 'teacher' | 'student' | 'second_teacher';
   content: string;
   createdAt: string; // ISO string ou HH:mm
+  timestamp?: string;
   read?: boolean;
   activityId?: string; // Opcional: vinculado a uma atividade
   activityTitle?: string;
@@ -348,6 +355,8 @@ export interface RcoEmissionRecord {
   emittedAt: string;
   createdAt: string;
 }
+
+export type { AdaptationRecommendation } from './studentUtils';
 
 
 

@@ -58,6 +58,7 @@ export type KronoIconVariant =
   | 'badge'      // Moldura com profundidade e chanfro escuro
   | 'danger'     // Rubi/carmesim para alertas ou ações críticas
   | 'amber'      // Âmbar dourado de alerta e cronômetro
+  | 'flame'      // Fogo flamejante laranja/rubi para KronoGames e desafios
   | 'ghost'      // Minimalista translúcido
   | 'active';    // Destaque luminoso para item selecionado
 
@@ -93,6 +94,7 @@ const variantClasses: Record<KronoIconVariant, string> = {
   badge: 'bg-[#171f33] text-foreground border border-border/90 shadow-inner',
   danger: 'bg-gradient-to-br from-rose-500/25 via-rose-600/15 to-red-950/50 text-rose-300 border border-rose-500/50 shadow-md shadow-rose-500/15 ring-1 ring-rose-400/30',
   amber: 'bg-gradient-to-br from-amber-500/25 via-yellow-600/15 to-stone-900/60 text-amber-300 border border-amber-400/50 shadow-md shadow-amber-500/15 ring-1 ring-amber-400/30',
+  flame: 'bg-gradient-to-br from-amber-500/25 via-orange-600/20 to-red-950/50 text-orange-400 border border-orange-500/50 shadow-md shadow-orange-500/20 ring-1 ring-orange-400/30',
   ghost: 'bg-transparent text-muted hover:text-foreground border border-transparent hover:border-border',
   active: 'bg-gradient-to-br from-emerald-500/35 via-emerald-600/25 to-slate-900 text-emerald-200 border border-emerald-400/70 shadow-lg shadow-emerald-500/25 ring-2 ring-emerald-400/40 font-bold',
 };

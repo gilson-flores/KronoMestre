@@ -48,6 +48,7 @@ import {
   getCanonicalActivities,
   getUnifiedActivityMetrics,
   getSubmissionTotalGrade,
+  isActivityAdapted,
 } from '@/lib/studentUtils';
 import { AdaptActivityModal } from '@/components/modals/AdaptActivityModal';
 import { KronoIcon } from '@/components/ui/KronoIcon';
@@ -307,7 +308,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return result;
   }, []);
 
-  const orderedActivityItems = useMemo(() => {
+  const orderedActivityItems: Array<{
+    activity: Activity;
+    isChild: boolean;
+    childType?: 'adaptation' | 'recovery';
+    parentTitle?: string;
+  }> = useMemo(() => {
     if (sortBy === 'deadline') {
       const sorted = [...filteredActivities].sort((a, b) => {
         const da = parseDeadlineDateToISO(a.deadline) || '9999-99-99';

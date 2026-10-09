@@ -261,6 +261,7 @@ export const KronoGamePlayer: React.FC<KronoGamePlayerProps> = ({
   const modeInfo: Record<GameMode, { label: string; icon: any; color: string }> = {
     millionaire: { label: 'Arena do Milhão', icon: Trophy, color: 'text-amber-500' },
     dialectic_tribunal: { label: 'Tribunal Dialético', icon: Shield, color: 'text-indigo-500' },
+    structural_detective: { label: 'Detetive Estrutural', icon: Sparkles, color: 'text-purple-500' },
     rpg_campaign: { label: 'Crônicas da Pólis (RPG)', icon: Crown, color: 'text-emerald-500' },
     real_life_lab: { label: 'Laboratório da Vida Real', icon: Zap, color: 'text-cyan-500' },
   };

@@ -42,7 +42,8 @@ import {
   UserRole,
   ActivityQuestion,
   MultipleChoiceQuestion,
-  EssayQuestion
+  EssayQuestion,
+  ChatMessage
 } from '@/lib/types';
 import { NewSecondTeacherModal } from '@/components/modals/NewSecondTeacherModal';
 import { EditSecondTeacherModal } from '@/components/modals/EditSecondTeacherModal';
