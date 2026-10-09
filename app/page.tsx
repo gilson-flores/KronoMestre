@@ -28,6 +28,8 @@ import { SecondTeacherDashboardView } from '@/components/views/SecondTeacherDash
 import { SecondTeacherPortalView } from '@/components/views/SecondTeacherPortalView';
 import { AtestadosRadView } from '@/components/views/AtestadosRadView';
 import { BackupView } from '@/components/views/BackupView';
+import { AdaptedActivitiesView } from '@/components/views/AdaptedActivitiesView';
+import { InteractiveActivitiesView } from '@/components/views/InteractiveActivitiesView';
 
 import { normalizeStudentName } from '@/lib/studentUtils';
 import { NewActivityModal } from '@/components/modals/NewActivityModal';
@@ -213,8 +215,15 @@ export default function Home() {
       }
 
       try {
-        const res = await fetch('/api/auth/session');
-        if (res.ok) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        let res: Response | null = null;
+        try {
+          res = await fetch('/api/auth/session', { signal: controller.signal });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+        if (res && res.ok) {
           const data = await res.json();
           if (data.user && data.user.role === 'teacher') {
             const tenant = data.user.tenant || {};
@@ -656,11 +665,83 @@ export default function Home() {
     return currentTab;
   }, [role, currentTab]);
 
-  // Contador de alunos online em tempo real (100% em memória, zero chamadas ao servidor)
+  // Estado de alunos online em tempo real (orientado a eventos via SSE / Firestore, sem polling)
+  const [liveOnlineCount, setLiveOnlineCount] = useState<number>(0);
+
+  // Efeito orientado a eventos para escutar sessões genuínas de alunos via SSE
+  useEffect(() => {
+    if (role === 'student' && currentStudent?.id) {
+      setLiveOnlineCount(1);
+      return;
+    }
+
+    if (typeof window === 'undefined') return;
+
+    let eventSource: EventSource | null = null;
+    let isMounted = true;
+
+    try {
+      const teacherId = teacher?.id || '5IdpwffjnhewdZ5dONRB9QoIRBZ2';
+      eventSource = new EventSource(`/api/students/presence/stream?teacherId=${encodeURIComponent(teacherId)}`);
+
+      eventSource.onmessage = (event) => {
+        if (!isMounted) return;
+        try {
+          const data = JSON.parse(event.data);
+          if (typeof data.onlineCount === 'number') {
+            setLiveOnlineCount(data.onlineCount);
+          }
+        } catch {
+          // Ignora mensagens malformadas ou comentários keepalive
+        }
+      };
+
+      eventSource.onerror = () => {
+        // EventSource reconecta automaticamente em segundo plano
+      };
+    } catch (err) {
+      console.warn('[Presence] Falha ao inicializar EventSource de presença:', err);
+    }
+
+    return () => {
+      isMounted = false;
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, [role, currentStudent?.id, teacher?.id]);
+
+  // Contador de presença real de alunos (zero dados fantasmas e sem número 37 estático)
   const onlineStudentsCount = useMemo(() => {
-    if (!students || students.length === 0) return 0;
-    return Math.min(students.length, Math.max(3, Math.round(students.length * 0.12)));
-  }, [students]);
+    if (role === 'student' && currentStudent?.id) {
+      return 1;
+    }
+
+    // Se temos a contagem do stream em tempo real do Firestore, respeitamos diretamente
+    if (liveOnlineCount > 0) {
+      return liveOnlineCount;
+    }
+
+    // Validação estrita sobre a lista local de estudantes:
+    // NUNCA marca online se lastActiveAt não existir ou se for mais antigo que 5 minutos
+    const now = Date.now();
+    const fiveMinutesMs = 5 * 60 * 1000;
+    const activeStudentIds = new Set<string>();
+
+    if (Array.isArray(students)) {
+      students.forEach((st) => {
+        if (st.isArchived) return;
+        if (st.isOnline === true && st.lastActiveAt) {
+          const diff = now - new Date(st.lastActiveAt).getTime();
+          if (diff <= fiveMinutesMs) {
+            activeStudentIds.add(st.id);
+          }
+        }
+      });
+    }
+
+    return activeStudentIds.size;
+  }, [role, currentStudent?.id, liveOnlineCount, students]);
 
   // Carregamento sob demanda da Biblioteca do Firestore
   useEffect(() => {
@@ -1224,6 +1305,13 @@ export default function Home() {
           targetStudents.forEach((targetSt) => {
             const existingIndex = updatedSubmissions.findIndex((s) => s.studentId === targetSt.id);
 
+            const isAutoGradedGame = Boolean(
+              act.isGameActivity ||
+              act.type === 'Jogo Avaliativo' ||
+              (maxEssayScore === 0 && objectiveScore !== undefined)
+            );
+            const submissionStatus = isAutoGradedGame ? ('graded' as const) : ('pending' as const);
+
             if (existingIndex >= 0) {
               updatedSubmissions[existingIndex] = {
                 ...updatedSubmissions[existingIndex],
@@ -1236,7 +1324,10 @@ export default function Home() {
                   groupMembers !== undefined
                     ? groupMembers
                     : updatedSubmissions[existingIndex].groupMembers,
-                status: 'pending' as const,
+                status: submissionStatus,
+                teacherFeedback: isAutoGradedGame
+                  ? (updatedSubmissions[existingIndex].teacherFeedback || '🎮 Avaliação automática KronoGames concluída.')
+                  : updatedSubmissions[existingIndex].teacherFeedback,
               };
             } else {
               updatedSubmissions.push({
@@ -1249,11 +1340,11 @@ export default function Home() {
                 objectiveScore,
                 maxObjectiveScore,
                 maxEssayScore,
-                status: 'pending',
+                status: submissionStatus,
                 essayAnswer,
                 selectedObjectiveAnswers,
                 groupMembers: groupMembers || undefined,
-                teacherFeedback: '',
+                teacherFeedback: isAutoGradedGame ? '🎮 Avaliação automática KronoGames concluída.' : '',
               });
             }
           });
@@ -1850,9 +1941,9 @@ export default function Home() {
   // 0. Server-side rendering / initial hydration shell / data loading
   if (!isMounted || isAuthChecking || isDataLoading) {
     return (
-      <div className="min-h-screen bg-background text-foreground flex flex-col justify-center items-center">
-        <div className="flex items-center gap-3 text-sm font-medium text-muted bg-surface px-6 py-4 rounded-full border border-border shadow-xl">
-          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" />
+      <div className="min-h-screen bg-[#0b0f19] text-[#f8fafc] flex flex-col justify-center items-center p-4">
+        <div className="flex items-center gap-3 text-sm font-medium text-[#94a3b8] bg-[#111827] px-6 py-4 rounded-full border border-[#1e293b] shadow-xl">
+          <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin shrink-0" />
           <span>Carregando plataforma KronoMestre...</span>
         </div>
       </div>
@@ -2003,6 +2094,35 @@ export default function Home() {
               onSaveActivity={handleSaveActivity}
               onCreateAdaptedActivity={handleCreateActivity}
               onOpenParallelRecoveryModal={(act) => setParallelRecoveryParentActivity(act)}
+            />
+          )}
+
+          {activeTeacherTab === 'atividades_interativas' && role !== 'second_teacher' && (
+            <InteractiveActivitiesView
+              activities={activeActivities}
+              students={visibleStudentsForRole}
+              teacher={teacher}
+              onOpenNewActivityModal={() => setIsNewActivityModalOpen(true)}
+              onDeleteActivity={handleDeleteActivity}
+              onSaveCreatedActivity={async (act) => {
+                await handleCreateActivity(act);
+              }}
+              onPlayGamePreview={(act) => {
+                setViewingActivity(act);
+              }}
+            />
+          )}
+
+          {activeTeacherTab === 'atividades_adaptadas' && (
+            <AdaptedActivitiesView
+              activities={activeActivities}
+              students={visibleStudentsForRole}
+              teacher={teacher}
+              onOpenNewActivityModal={() => setIsNewActivityModalOpen(true)}
+              onDeleteActivity={handleDeleteActivity}
+              onSaveCreatedActivity={async (act) => {
+                await handleCreateActivity(act);
+              }}
             />
           )}
 

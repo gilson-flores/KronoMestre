@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Save, Pencil, AlertTriangle, HeartHandshake } from 'lucide-react';
+import { X, Save, Pencil, AlertTriangle, HeartHandshake, RefreshCw } from 'lucide-react';
 import { StudentUser, TeacherUser } from '@/lib/types';
 import { PneConditionsSelect } from '@/components/PneConditionsSelect';
 import { supabase } from '@/lib/supabase';
@@ -11,6 +11,8 @@ import {
   isValidTurmaCode,
 } from '@/lib/studentUtils';
 import { getScopedLocalStorageItem, setScopedLocalStorageItem } from '@/lib/cacheUtils';
+import { KRONO_AVATARS } from '@/lib/avatarRegistry';
+import { KronoIcon } from '@/components/ui/KronoIcon';
 
 interface EditStudentModalProps {
   isOpen: boolean;
@@ -30,6 +32,8 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
   const [turma, setTurma] = useState(student?.turma || '301');
   const [matricula, setMatricula] = useState(student?.matricula || '');
   const [tag, setTag] = useState<'REGULAR' | 'PNE' | 'RAD'>(student?.tag || 'REGULAR');
+  const [avatarUrl, setAvatarUrl] = useState(student?.avatarUrl || '');
+  const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
   const [pneConditions, setPneConditions] = useState<string[]>(student?.pneConditions || []);
   const [secondTeacherId, setSecondTeacherId] = useState(student?.secondTeacherId || '');
   const [availableSecondTeachers, setAvailableSecondTeachers] = useState<TeacherUser[]>([]);
@@ -92,6 +96,7 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
     setTurma(student.turma);
     setMatricula(student.matricula);
     setTag(student.tag || 'REGULAR');
+    setAvatarUrl(student.avatarUrl || '');
     setPneConditions(student.pneConditions || []);
     setSecondTeacherId(student.secondTeacherId || '');
     setFormError('');
@@ -104,6 +109,13 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
     const normalized = normalizeStudentName(raw);
     setFullName(normalized);
     if (formError) setFormError('');
+  };
+
+  const handleRandomizeAvatar = () => {
+    const random = KRONO_AVATARS[Math.floor(Math.random() * KRONO_AVATARS.length)];
+    if (random) {
+      setAvatarUrl(random.url);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -129,6 +141,7 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
       turma: turma.trim(),
       matricula,
       tag,
+      avatarUrl: avatarUrl || student.avatarUrl,
       pneConditions: tag === 'PNE' && pneConditions.length > 0 ? pneConditions : (student.pneConditions || undefined),
       secondTeacherId: secondTeacherId ? secondTeacherId : undefined,
       secondTeacherName: matchedTeacher ? matchedTeacher.name : (secondTeacherId ? student.secondTeacherName : undefined),
@@ -148,12 +161,10 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
         </button>
 
         <div className="flex items-center gap-3 pr-10">
-          <div className="p-2.5 sm:p-3 bg-primary/10 text-primary rounded-2xl border border-primary/20 shrink-0">
-            <Pencil className="w-5 h-5 sm:w-6 sm:h-6" />
-          </div>
+          <KronoIcon icon={Pencil} variant="viking" size="md" />
           <div className="min-w-0">
             <h2 className="text-base sm:text-xl font-bold text-foreground truncate">Editar Dados do Aluno</h2>
-            <p className="text-xs text-muted truncate">Altere turma, tag ou informações cadastrais</p>
+            <p className="text-xs text-muted truncate">Altere turma, avatar, tag ou informações cadastrais</p>
           </div>
         </div>
 
@@ -165,6 +176,68 @@ export const EditStudentModal: React.FC<EditStudentModalProps> = ({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Seletor do Avatar Criativo do Aluno */}
+          <div className="p-3.5 bg-surface border border-border rounded-2xl flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <img
+                src={avatarUrl || student.avatarUrl}
+                alt="Avatar do Aluno"
+                className="w-12 h-12 rounded-full object-cover border-2 border-primary/50 shrink-0 bg-slate-900"
+              />
+              <div className="min-w-0">
+                <span className="text-[10px] uppercase font-bold text-primary block">Personagem Krono</span>
+                <p className="text-xs font-semibold text-foreground truncate">Avatar Exclusivo (52 Opções)</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleRandomizeAvatar}
+                className="p-2 bg-[#171f33] hover:bg-surface-hover text-muted hover:text-foreground rounded-xl border border-border transition-all cursor-pointer"
+                title="Sortear outro avatar"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsAvatarPickerOpen(!isAvatarPickerOpen)}
+                className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl text-xs font-bold border border-primary/30 transition-all cursor-pointer"
+              >
+                {isAvatarPickerOpen ? 'Fechar' : 'Trocar'}
+              </button>
+            </div>
+          </div>
+
+          {/* Galeria Expansível de Avatares */}
+          {isAvatarPickerOpen && (
+            <div className="p-3 bg-[#171f33] border border-border rounded-2xl space-y-2 animate-fadeIn max-h-56 overflow-y-auto custom-scrollbar">
+              <span className="text-[11px] font-bold text-muted block">Escolha entre RPG, Vikings, Feras e Cômicos:</span>
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                {KRONO_AVATARS.map((av) => (
+                  <button
+                    key={av.id}
+                    type="button"
+                    onClick={() => {
+                      setAvatarUrl(av.url);
+                      setIsAvatarPickerOpen(false);
+                    }}
+                    className={`p-1.5 rounded-xl border transition-all cursor-pointer flex flex-col items-center gap-1 ${
+                      avatarUrl === av.url
+                        ? 'border-primary bg-primary/20 ring-2 ring-primary/40'
+                        : 'border-border/60 bg-surface/80 hover:bg-surface-hover hover:border-primary/50'
+                    }`}
+                    title={av.name}
+                  >
+                    <img src={av.url} alt={av.name} className="w-10 h-10 object-contain rounded-full" />
+                    <span className="text-[9px] font-medium text-foreground truncate w-full text-center">
+                      {av.name.split(' ')[0]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-semibold text-muted mb-1">
               Nome Completo (MAIÚSCULAS SEM ACENTOS)

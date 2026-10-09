@@ -167,6 +167,29 @@ export async function POST(request: Request) {
     delete cleanStudent.password_hash;
     cleanStudent.ownerTeacherId = ownerTeacherId;
 
+    // Registra presença real do aluno (ativação sem dados fantasmas)
+    const nowIso = new Date().toISOString();
+    cleanStudent.lastActiveAt = nowIso;
+    cleanStudent.isOnline = true;
+    try {
+      await db
+        .collection('tenants')
+        .doc(ownerTeacherId)
+        .collection('students')
+        .doc(matchedStudent.id)
+        .set(
+          {
+            lastActiveAt: nowIso,
+            isOnline: true,
+          },
+          { merge: true }
+        );
+      // Atualiza o cache de alunos para refletir o status online imediatamente
+      serverCache.delete(`students_${ownerTeacherId}`);
+    } catch (presenceErr: any) {
+      console.warn('[Student Login API] Aviso ao gravar presença real do aluno:', presenceErr?.message);
+    }
+
     let tenantInfo: any = {};
     try {
       const tenantDoc = await db.collection('tenants').doc(ownerTeacherId).get();

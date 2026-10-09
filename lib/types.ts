@@ -45,6 +45,8 @@ export interface StudentUser {
   mustChangePassword?: boolean;
   ownerTeacherId?: string;
   owner_teacher_id?: string;
+  isOnline?: boolean;
+  lastActiveAt?: string;
 }
 
 export const PNE_CONDITIONS_LIST = [
@@ -109,7 +111,60 @@ export type ActivityQuestion =
   | ({ type: 'multiple_choice' } & MultipleChoiceQuestion)
   | ({ type: 'essay' } & EssayQuestion);
 
-export type ActivityType = 'Simulado' | 'Redação' | 'Dinâmica' | 'Avaliação' | 'Trabalho em grupo' | 'Projeto de pesquisa' | 'Recuperação Paralela';
+export type ActivityType = 'Simulado' | 'Redação' | 'Dinâmica' | 'Avaliação' | 'Trabalho em grupo' | 'Projeto de pesquisa' | 'Recuperação Paralela' | 'Jogo Avaliativo';
+
+export type ActivityDomain = 'formal' | 'interactive_game' | 'adapted_aee';
+export type AeeMechanic = 'visual_cards' | 'binary_trail' | 'social_story' | 'block_builder';
+
+export type GameMode = 'millionaire' | 'dialectic_tribunal' | 'structural_detective' | 'rpg_campaign' | 'real_life_lab';
+export type GameExecutionContext = 'classroom_group' | 'homework_individual';
+
+export interface GameStageOption {
+  text: string;
+  isCorrect: boolean;
+  pointsWeight: number;
+  feedback: string;
+  iconEmoji?: string;
+}
+
+export interface GameMildStage {
+  scenario: string;
+  options: Array<{ text: string; isCorrect: boolean; feedback: string }>;
+}
+
+export interface GameSevereCard {
+  iconEmoji: string;
+  label: string;
+  isCorrect: boolean;
+  feedback: string;
+}
+
+export interface GameSevereStage {
+  playfulPrompt: string;
+  visualCards: GameSevereCard[];
+}
+
+export interface GameStage {
+  id: string;
+  title: string;
+  scenario: string;
+  clue?: string;
+  options: GameStageOption[];
+  pneMildStage?: GameMildStage;
+  pneSevereStage?: GameSevereStage;
+}
+
+export interface GameData {
+  introText: string;
+  stages: GameStage[];
+}
+
+export interface AeePromptSettings {
+  literalLanguage: boolean;
+  cognitiveReduction: boolean;
+  uppercaseText: boolean;
+  concreteExamples: boolean;
+}
 
 export interface Activity {
   id: string;
@@ -126,11 +181,34 @@ export interface Activity {
   securityFocusLock?: boolean; // Trava 1: Trava de foco (Aviso ao sair da tela, limite de 4 avisos -> auto entrega)
   securityBlockCopyStatement?: boolean; // Trava 2: Trava de cópia dos enunciados
   securityBlockPasteEssay?: boolean; // Trava 3: Trava de copia e cola nas respostas dissertativas
+  
+  // Três domínios estruturais de avaliação
+  activityDomain?: ActivityDomain;
+  isInteractive?: boolean;
+  isStandaloneAdaptation?: boolean; // Quando true, a atividade adaptada existe por conta própria sem precisar de adaptedFromId
+  linkedActivityId?: string; // Vínculo OPCIONAL a uma atividade formal ou interativa
+
+  // Educação Inclusiva & AEE
   isAdapted?: boolean; // Indica se esta atividade foi adaptada para alunos PNE
   adaptationType?: 'mild_moderate' | 'severe_playful'; // Tipo de adaptação pedagógica
+  adaptationReason?: string;
+  aeeMechanic?: AeeMechanic;
+  aeePromptSettings?: AeePromptSettings;
   playfulGameHtml?: string; // Código HTML do jogo interativo lúdico para síndromes severas
   playfulGameScoreMax?: number; // Pontuação máxima do jogo lúdico
-  adaptedFromId?: string; // ID da atividade original
+  adaptedFromId?: string; // ID da atividade original vinculada
+
+  // KronoGames & Gamificação
+  isGameActivity?: boolean;
+  gameMode?: GameMode;
+  executionContext?: GameExecutionContext;
+  gameData?: GameData;
+
+  // Suporte futuro para Liga & Desafios
+  isChallenge?: boolean;
+  challengeWeek?: number;
+  challengePoints?: number;
+
   isRecovery?: boolean; // Indica se esta atividade é uma Recuperação Paralela vinculada
   recoveryFromId?: string; // ID da atividade raiz da qual esta é a recuperação paralela
   recoveryManualParentName?: string; // Nome da atividade mãe digitado manualmente na exceção (ex: atividades em papel)

@@ -25,7 +25,7 @@ import {
   AlertTriangle,
   AlertCircle,
 } from 'lucide-react';
-import { Activity, ActivityQuestion, ActivityType, StudentUser } from '@/lib/types';
+import { Activity, ActivityQuestion, ActivityType, StudentUser, GameMode, GameExecutionContext, GameData } from '@/lib/types';
 import { doesTurmaHavePNEStudent, canStudentAccessActivity, isStudentPNE, getOriginalTurmas } from '@/lib/studentUtils';
 import { TurmaMultiSelect } from '@/components/TurmaMultiSelect';
 import {
@@ -105,6 +105,14 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   const [maxGrade, setMaxGrade] = useState<number>(10);
   const [allowGroupWork, setAllowGroupWork] = useState<boolean>(false);
   
+  // KronoGames & Standalone Adaptation States
+  const [isStandaloneAdaptation, setIsStandaloneAdaptation] = useState(false);
+  const [gameExecutionContext, setGameExecutionContext] = useState<GameExecutionContext>('classroom_group');
+  const [gameMode, setGameMode] = useState<GameMode>('millionaire');
+  const [isGeneratingGame, setIsGeneratingGame] = useState(false);
+  const [gameData, setGameData] = useState<GameData | null>(null);
+  const [gameGenError, setGameGenError] = useState<string | null>(null);
+
   // Available non-recovery parent evaluations for subordination
   const availableParentActivities = React.useMemo(() => {
     return (activities || []).filter(
@@ -136,6 +144,37 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   // State for Decision Step upon Saving
   const [pendingActivityForDecision, setPendingActivityForDecision] = useState<Activity | null>(null);
   const [isGeneratingPlayful, setIsGeneratingPlayful] = useState(false);
+
+  const handleGenerateGameWithGemini = async () => {
+    if (!title.trim()) {
+      alert('Por favor, informe o Título da atividade antes de gerar o KronoGame.');
+      return;
+    }
+    setIsGeneratingGame(true);
+    setGameGenError(null);
+    try {
+      const res = await fetch('/api/gemini/generate-game', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          subject,
+          topic: title,
+          supportMaterial: supportMaterial || '',
+          gameMode,
+          isAdaptedOnly: isStandaloneAdaptation,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao gerar jogo.');
+      setGameData(data.gameData);
+    } catch (err: any) {
+      console.error('Erro ao gerar KronoGame:', err);
+      setGameGenError(err?.message || 'Falha ao gerar o KronoGame com IA. Tente novamente.');
+    } finally {
+      setIsGeneratingGame(false);
+    }
+  };
 
   // Add a 4-option multiple choice question
   const handleAddMultipleChoice = () => {
@@ -229,6 +268,12 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
     const activityId = generateActivityId();
 
     const isParallelRecovery = type === 'Recuperação Paralela';
+    const isGame = type === 'Jogo Avaliativo';
+
+    if (isGame && !gameData) {
+      alert('Por favor, clique no botão "Gerar Roteiro do Jogo com IA (Gemini)" antes de salvar a atividade.');
+      return;
+    }
 
     const newActivity: Activity = {
       id: activityId,
@@ -241,20 +286,32 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
       status: 'Ativo',
       deadline: formattedDeadline,
       maxGrade,
-      allowGroupWork: isParallelRecovery ? false : allowGroupWork,
-      securityFocusLock,
-      securityBlockCopyStatement,
-      securityBlockPasteEssay,
+      allowGroupWork: isParallelRecovery ? false : (isGame ? gameExecutionContext === 'classroom_group' : allowGroupWork),
+      securityFocusLock: isGame ? false : securityFocusLock,
+      securityBlockCopyStatement: isGame ? false : securityBlockCopyStatement,
+      securityBlockPasteEssay: isGame ? false : securityBlockPasteEssay,
       isRecovery: isParallelRecovery || Boolean(recoveryFromId),
       recoveryFromId: isParallelRecovery && recoveryFromId ? recoveryFromId : undefined,
       recoveryApproach: isParallelRecovery ? 'Estudos de caso e aplicações práticas do cotidiano' : undefined,
       includedPneStudentIds,
       questions,
+      isGameActivity: isGame,
+      gameMode: isGame ? gameMode : undefined,
+      executionContext: isGame ? gameExecutionContext : undefined,
+      gameData: isGame && gameData ? gameData : undefined,
+      isAdapted: isStandaloneAdaptation ? true : undefined,
+      isStandaloneAdaptation: isStandaloneAdaptation ? true : undefined,
       totalSubmissions: 0,
       totalStudents: resolvedTurma ? 35 : 120,
       pendingCorrection: 0,
       submissions: [],
     };
+
+    if (isGame || isStandaloneAdaptation) {
+      onCreateActivity(newActivity);
+      resetFormAndClose();
+      return;
+    }
 
     // Parallel recovery handling
     if (isParallelRecovery) {
@@ -894,6 +951,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
                 className="w-full bg-surface border border-border rounded-2xl px-3 py-3 text-xs text-foreground focus:outline-none focus:border-primary"
               >
                 <option value="Avaliação" className="bg-background">Avaliação</option>
+                <option value="Jogo Avaliativo" className="bg-background">🎮 Jogo Avaliativo (KronoGames)</option>
                 <option value="Simulado" className="bg-background">Simulado</option>
                 <option value="Redação" className="bg-background">Redação</option>
                 <option value="Dinâmica" className="bg-background">Dinâmica</option>
@@ -904,7 +962,173 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
             </div>
           </div>
 
-          {/* Campo de Subordinação à Avaliação Original (Exibido quando Tipo = Recuperação Paralela) */}
+          {/* KRONOGAMES CONFIGURATION SECTION */}
+          {type === 'Jogo Avaliativo' && (
+            <div className="bg-gradient-to-br from-primary/10 via-surface to-surface p-5 sm:p-6 rounded-3xl border border-primary/30 space-y-4 shadow-xl animate-fadeIn">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-primary text-black">
+                    <Gamepad2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-foreground">
+                      Configuração do KronoGame
+                    </h4>
+                    <p className="text-[11px] text-muted">
+                      Jogos avaliativos interativos com inclusão PNE embutida e custo zero na partida
+                    </p>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-primary/20 text-primary border border-primary/30">
+                  Custo Zero na Partida
+                </span>
+              </div>
+
+              {/* Contexto de Execução */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-muted mb-1">
+                    Contexto de Execução *
+                  </label>
+                  <select
+                    value={gameExecutionContext}
+                    onChange={(e) => {
+                      const ctx = e.target.value as GameExecutionContext;
+                      setGameExecutionContext(ctx);
+                      if (ctx === 'classroom_group') {
+                        setGameMode('millionaire');
+                      } else {
+                        setGameMode('rpg_campaign');
+                      }
+                    }}
+                    className="w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-xs text-foreground focus:outline-none focus:border-primary"
+                  >
+                    <option value="classroom_group">🏫 Sala de Aula (Dupla ou Grupo com PNE)</option>
+                    <option value="homework_individual">🏠 Para Casa (Individual)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-muted mb-1">
+                    Modo de Jogo *
+                  </label>
+                  <select
+                    value={gameMode}
+                    onChange={(e) => setGameMode(e.target.value as GameMode)}
+                    className="w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-xs text-foreground focus:outline-none focus:border-primary"
+                  >
+                    {gameExecutionContext === 'classroom_group' ? (
+                      <>
+                        <option value="millionaire">🏆 Arena do Milhão (Escada com Dicas dos Clássicos)</option>
+                        <option value="dialectic_tribunal">⚖️ Tribunal Dialético (Julgamento do Senso Comum)</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="rpg_campaign">👑 Crônicas da Pólis (Campanha de RPG em 6 Atos)</option>
+                        <option value="real_life_lab">🔬 Laboratório da Vida Real (Estudos de Casos Concretos)</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+              </div>
+
+              {/* Standalone AEE Adaptation toggle */}
+              <label className="flex items-start gap-3 p-3 bg-surface/70 rounded-2xl border border-border cursor-pointer hover:border-amber-500/40 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={isStandaloneAdaptation}
+                  onChange={(e) => setIsStandaloneAdaptation(e.target.checked)}
+                  className="w-4 h-4 rounded border-border bg-surface text-primary focus:ring-0 mt-0.5"
+                />
+                <div>
+                  <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    Atividade Adaptada AEE Independente (Sem Vínculo Obrigatório)
+                  </span>
+                  <p className="text-[10px] text-muted leading-relaxed">
+                    Classifica este jogo como adaptação curricular autônoma para estudantes com laudo/deficiências.
+                  </p>
+                </div>
+              </label>
+
+              {/* Botão de Geração com IA */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleGenerateGameWithGemini}
+                  disabled={isGeneratingGame}
+                  className="w-full py-3.5 px-4 rounded-2xl bg-primary hover:bg-primary-hover text-black font-extrabold text-xs sm:text-sm shadow-lg shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+                >
+                  {isGeneratingGame ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Gerando Roteiro com Gemini IA (6 Rodadas Inclusivas)...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>{gameData ? 'Regerar Roteiro do Jogo com Gemini' : 'Gerar Roteiro do Jogo com IA (Gemini)'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {gameGenError && (
+                <div className="p-3 bg-rose-500/15 border border-rose-500/30 rounded-xl text-xs text-rose-400 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{gameGenError}</span>
+                </div>
+              )}
+
+              {/* Feedback de sucesso na geração do jogo */}
+              {gameData && (
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl space-y-2 text-xs text-emerald-400 animate-fadeIn">
+                  <div className="flex items-center gap-2 font-bold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Roteiro de 6 Rodadas Gerado com Sucesso!</span>
+                  </div>
+                  <p className="text-muted text-[11px] leading-relaxed">
+                    {gameData.introText}
+                  </p>
+                  <div className="flex flex-wrap gap-2 pt-1 text-[10px] font-bold">
+                    <span className="px-2 py-0.5 rounded-md bg-surface border border-border text-foreground">
+                      ✅ 6 Desafios Padrão
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      ✅ Rodadas PNE Leve/Mod Prontas
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      ✅ Cartões Lúdicos PNE Severo Prontos
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
+                      ⚡ Custo Zero: 0 chamadas no jogo dos alunos
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* STANDALONE AEE ADAPTATION CHECKBOX FOR CONVENTIONAL ACTIVITIES */}
+          {type !== 'Jogo Avaliativo' && (
+            <label className="flex items-start gap-3 p-3.5 bg-surface rounded-2xl border border-border cursor-pointer hover:border-amber-500/40 transition-colors">
+              <input
+                type="checkbox"
+                checked={isStandaloneAdaptation}
+                onChange={(e) => setIsStandaloneAdaptation(e.target.checked)}
+                className="w-4 h-4 rounded border-border bg-surface text-primary focus:ring-0 mt-0.5"
+              />
+              <div>
+                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  Atividade Adaptada AEE Independente (Sem Vínculo Obrigatório)
+                </span>
+                <p className="text-[10px] text-muted leading-relaxed">
+                  Marque para salvar esta atividade diretamente como adaptação pedagógica autônoma, visível exclusivamente para o 2º Professor e estudantes com necessidades especiais (PNE).
+                </p>
+              </div>
+            </label>
+          )}
           {type === 'Recuperação Paralela' && (
             <div className="bg-surface border border-indigo-200 rounded-2xl p-4 space-y-3 shadow-lg animate-fadeIn">
               <div className="flex items-center gap-2.5">

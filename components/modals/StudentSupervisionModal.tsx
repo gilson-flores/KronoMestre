@@ -22,6 +22,7 @@ import {
   Lock,
   HeartHandshake,
 } from 'lucide-react';
+import { KronoIcon } from '@/components/ui/KronoIcon';
 import { StudentUser, Activity, ActivitySubmission } from '@/lib/types';
 import {
   canStudentAccessActivity,
@@ -617,9 +618,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
         {/* Header */}
         <div className="p-4 sm:p-6 bg-surface border-b border-border flex items-center justify-between gap-3 sm:gap-4 shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-primary/20 border border-primary/40 flex items-center justify-center text-primary shrink-0">
-              <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />
-            </div>
+            <KronoIcon icon={ShieldCheck} variant="emerald" size="md" />
             <div className="min-w-0">
               <h2 className="text-base sm:text-xl font-extrabold text-foreground tracking-tight flex items-center gap-2 flex-wrap">
                 <span className="truncate">Supervisão de Desempenho</span>

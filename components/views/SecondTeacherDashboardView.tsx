@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { TeacherUser, StudentUser, Activity, AtestadoRadRecord } from '@/lib/types';
 import { formatAvatarUrl } from '@/lib/utils';
-import { getTurmaLabel, isStudentPNE } from '@/lib/studentUtils';
+import { getTurmaLabel, isStudentPNE, isActivityAdapted } from '@/lib/studentUtils';
 import { supabase } from '@/lib/supabase';
 import { getScopedLocalStorageItem, setScopedLocalStorageItem } from '@/lib/cacheUtils';
 
@@ -148,7 +148,7 @@ export const SecondTeacherDashboardView: React.FC<SecondTeacherDashboardViewProp
               activityId: act.id,
               activityTitle: act.title,
               turma: act.turma,
-              isAdapted: act.isAdapted || Boolean(act.adaptationType),
+              isAdapted: isActivityAdapted(act),
               studentId: student.id,
               studentName: student.fullName,
               studentTurma: student.turma,
@@ -164,7 +164,7 @@ export const SecondTeacherDashboardView: React.FC<SecondTeacherDashboardViewProp
               activityId: act.id,
               activityTitle: act.title,
               turma: act.turma,
-              isAdapted: act.isAdapted || Boolean(act.adaptationType),
+              isAdapted: isActivityAdapted(act),
               studentId: student.id,
               studentName: student.fullName,
               studentTurma: student.turma,

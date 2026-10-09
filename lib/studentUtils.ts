@@ -133,7 +133,7 @@ export const canStudentAccessActivity = (actOrActivityTurma: any, studentOrStude
   if (act.status !== 'Ativo') return false;
 
   // 3. ATIVIDADES ADAPTADAS (PNE) vs REGULARES
-  const isAdapted = Boolean(act.isAdapted || act.adaptationType || act.adaptedFromId);
+  const isAdapted = isActivityAdapted(act);
   const isStudentAdaptive = isStudentPNE(student);
 
   if (isAdapted) {
@@ -433,7 +433,9 @@ export function isActivityRecovery(act?: Activity | null): boolean {
  */
 export function isActivityAdapted(act?: Activity | null): boolean {
   if (!act) return false;
+  if (act.activityDomain === 'adapted_aee') return true;
   if (act.isAdapted) return true;
+  if (act.isStandaloneAdaptation) return true;
   if (Boolean(act.adaptedFromId)) return true;
   if (Boolean(act.adaptationType)) return true;
   const title = (act.title || '').trim().toLowerCase();

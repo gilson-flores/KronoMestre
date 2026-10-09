@@ -1,12 +1,32 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Search, Plus, UserPlus, Pencil, Trash2, Eye, ShieldCheck, Upload, Heart, AlertCircle, HeartHandshake, KeyRound } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import {
+  Search,
+  Plus,
+  UserPlus,
+  Pencil,
+  Trash2,
+  Eye,
+  ShieldCheck,
+  Upload,
+  Heart,
+  AlertCircle,
+  HeartHandshake,
+  KeyRound,
+  SlidersHorizontal,
+  ChevronDown,
+  Check,
+  Filter,
+  Users
+} from 'lucide-react';
 import { StudentUser } from '@/lib/types';
 import { ImportCsvModal } from '@/components/modals/ImportCsvModal';
 import { ResetPasswordByTeacherModal } from '@/components/modals/ResetPasswordByTeacherModal';
+import { StudentFilterModal } from '@/components/modals/StudentFilterModal';
 import { getTurmaLabel } from '@/lib/studentUtils';
 import { formatAvatarUrl } from '@/lib/utils';
+import { KronoIcon } from '@/components/ui/KronoIcon';
 
 interface StudentsViewProps {
   students: StudentUser[];
@@ -32,27 +52,104 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
   onSimulateStudent,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedTurmaFilter, setSelectedTurmaFilter] = useState('all');
+  // Lista suspensa com suporte a escolher uma, várias ou todas as turmas
+  const [selectedTurmas, setSelectedTurmas] = useState<string[]>(['all']);
+  const [isTurmaDropdownOpen, setIsTurmaDropdownOpen] = useState(false);
+  const turmaDropdownRef = useRef<HTMLDivElement>(null);
+
   const [selectedTagFilter, setSelectedTagFilter] = useState<'all' | 'PNE' | 'RAD' | 'REGULAR'>('all');
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [studentToDelete, setStudentToDelete] = useState<StudentUser | null>(null);
   const [studentToResetPassword, setStudentToResetPassword] = useState<StudentUser | null>(null);
   const [resetSuccessMsg, setResetSuccessMsg] = useState('');
 
-  // Only include turmas from registered students (no unlinked deduced classes)
+  // Turmas únicas cadastradas entre os alunos
   const turmasSet = new Set(students.map((s) => s.turma).filter(Boolean));
   const turmasList = Array.from(turmasSet).sort((a, b) => a.localeCompare(b));
 
-  const filteredStudents = students.filter((s) => {
-    const matchesName =
-      s.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.matricula.includes(searchTerm);
-    const matchesTurma = selectedTurmaFilter === 'all' || s.turma === selectedTurmaFilter;
-    const matchesTag =
-      selectedTagFilter === 'all' ||
-      (s.tag && s.tag.toUpperCase() === selectedTagFilter);
-    return matchesName && matchesTurma && matchesTag;
-  });
+  // Fecha o menu da lista suspensa ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (turmaDropdownRef.current && !turmaDropdownRef.current.contains(event.target as Node)) {
+        setIsTurmaDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const isAllTurmasSelected = useMemo(() => {
+    return (
+      selectedTurmas.length === 0 ||
+      selectedTurmas.includes('all') ||
+      (turmasList.length > 0 && selectedTurmas.length === turmasList.length)
+    );
+  }, [selectedTurmas, turmasList]);
+
+  const isTurmaChecked = (t: string) => {
+    if (isAllTurmasSelected) return true;
+    return selectedTurmas.includes(t);
+  };
+
+  const toggleTurma = (t: string) => {
+    if (isAllTurmasSelected) {
+      // Se estava tudo marcado e o usuário clica em uma turma específica, isola as outras
+      const remaining = turmasList.filter((item) => item !== t);
+      setSelectedTurmas(remaining.length === 0 ? ['all'] : remaining);
+      return;
+    }
+
+    if (selectedTurmas.includes(t)) {
+      const next = selectedTurmas.filter((item) => item !== t);
+      setSelectedTurmas(next.length === 0 ? ['all'] : next);
+    } else {
+      const next = [...selectedTurmas, t];
+      if (next.length === turmasList.length) {
+        setSelectedTurmas(['all']);
+      } else {
+        setSelectedTurmas(next);
+      }
+    }
+  };
+
+  const handleSelectAllTurmas = () => {
+    setSelectedTurmas(['all']);
+  };
+
+  const handleClearTurmas = () => {
+    setSelectedTurmas(['all']);
+  };
+
+  const handleSelectOnlyTurma = (t: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedTurmas([t]);
+    setIsTurmaDropdownOpen(false);
+  };
+
+  const turmaDropdownLabel = useMemo(() => {
+    if (isAllTurmasSelected) {
+      return `Todas as Turmas (${turmasList.length})`;
+    }
+    if (selectedTurmas.length === 1) {
+      return `Turma ${getTurmaLabel(selectedTurmas[0])}`;
+    }
+    return `${selectedTurmas.length} turmas selecionadas`;
+  }, [isAllTurmasSelected, selectedTurmas, turmasList]);
+
+  const filteredStudents = useMemo(() => {
+    return students.filter((s) => {
+      const matchesName =
+        s.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.matricula.includes(searchTerm);
+      const matchesTurma =
+        isAllTurmasSelected || selectedTurmas.includes(s.turma);
+      const matchesTag =
+        selectedTagFilter === 'all' ||
+        (s.tag && s.tag.toUpperCase() === selectedTagFilter);
+      return matchesName && matchesTurma && matchesTag;
+    });
+  }, [students, searchTerm, isAllTurmasSelected, selectedTurmas, selectedTagFilter]);
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -72,82 +169,34 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
           )}
         </div>
 
-        {!isReadOnly && (
-          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
-            <button
-              onClick={() => setIsImportModalOpen(true)}
-              className="flex-1 sm:flex-none py-2.5 sm:py-3 px-4 sm:px-5 bg-[#171f33] hover:bg-surface-hover text-primary font-bold rounded-full transition-all duration-200 flex items-center justify-center gap-2 border border-primary/30 shadow-md cursor-pointer text-xs sm:text-sm min-h-[44px]"
-            >
-              <Upload className="w-4 h-4 shrink-0" />
-              <span>Importar CSV</span>
-            </button>
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
+          {!isReadOnly && (
+            <>
+              <button
+                onClick={() => setIsImportModalOpen(true)}
+                className="flex-1 sm:flex-none py-2.5 sm:py-3 px-4 sm:px-5 bg-[#171f33] hover:bg-surface-hover text-primary font-bold rounded-full transition-all duration-200 flex items-center justify-center gap-2 border border-primary/30 shadow-md cursor-pointer text-xs sm:text-sm min-h-[44px]"
+              >
+                <KronoIcon icon={Upload} variant="viking" size="xs" />
+                <span>Importar CSV</span>
+              </button>
 
-            <button
-              onClick={onOpenNewStudentModal}
-              className="flex-1 sm:flex-none py-2.5 sm:py-3 px-5 sm:px-6 bg-primary hover:bg-primary-hover text-white font-bold rounded-full transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-primary/20 cursor-pointer text-xs sm:text-sm min-h-[44px]"
-            >
-              <UserPlus className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5] shrink-0" />
-              <span>Cadastrar Aluno</span>
-            </button>
-          </div>
-        )}
+              <button
+                onClick={onOpenNewStudentModal}
+                className="flex-1 sm:flex-none py-2.5 sm:py-3 px-5 sm:px-6 bg-primary hover:bg-primary-hover text-white font-bold rounded-full transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-primary/20 cursor-pointer text-xs sm:text-sm min-h-[44px]"
+              >
+                <KronoIcon icon={UserPlus} variant="emerald" size="xs" />
+                <span>Cadastrar Aluno</span>
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Filter and Search Container */}
+      {/* Container de Filtros com Lista Suspensa Multi-turma (Substitui botões de filtro por lista suspensa) */}
       <div className="glass-panel p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-border space-y-3.5 sm:space-y-4">
-        {/* Category Pills (Todos, PNE, RAD, Regular) */}
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-          <span className="text-xs font-bold text-muted w-full sm:w-auto mb-1 sm:mb-0 mr-1">Categoria / Atendimento:</span>
-
-          <button
-            onClick={() => setSelectedTagFilter('all')}
-            className={`py-2 px-3.5 sm:px-4 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer min-h-[38px] flex items-center justify-center gap-1.5 border active:scale-95 ${
-              selectedTagFilter === 'all'
-                ? 'bg-primary text-white border-primary shadow-sm'
-                : 'bg-surface text-muted hover:text-foreground border-border hover:bg-surface-hover'
-            }`}
-          >
-            Todos ({students.length})
-          </button>
-
-          <button
-            onClick={() => setSelectedTagFilter('PNE')}
-            className={`py-2 px-3.5 sm:px-4 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer min-h-[38px] flex items-center justify-center gap-1.5 border active:scale-95 ${
-              selectedTagFilter === 'PNE'
-                ? 'bg-primary text-white border-primary shadow-sm'
-                : 'bg-surface text-muted hover:text-foreground border-border hover:bg-surface-hover'
-            }`}
-          >
-            <Heart className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-            <span>PNE ({students.filter((s) => s.tag?.toUpperCase() === 'PNE').length})</span>
-          </button>
-
-          <button
-            onClick={() => setSelectedTagFilter('RAD')}
-            className={`py-2 px-3.5 sm:px-4 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer min-h-[38px] flex items-center justify-center gap-1.5 border active:scale-95 ${
-              selectedTagFilter === 'RAD'
-                ? 'bg-primary text-white border-primary shadow-sm'
-                : 'bg-surface text-muted hover:text-foreground border-border hover:bg-surface-hover'
-            }`}
-          >
-            <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span>RAD ({students.filter((s) => s.tag?.toUpperCase() === 'RAD').length})</span>
-          </button>
-
-          <button
-            onClick={() => setSelectedTagFilter('REGULAR')}
-            className={`py-2 px-3.5 sm:px-4 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer min-h-[38px] flex items-center justify-center gap-1.5 border active:scale-95 ${
-              selectedTagFilter === 'REGULAR'
-                ? 'bg-primary text-white border-primary shadow-sm'
-                : 'bg-surface text-muted hover:text-foreground border-border hover:bg-surface-hover'
-            }`}
-          >
-            Regular ({students.filter((s) => !s.tag || s.tag.toUpperCase() === 'REGULAR').length})
-          </button>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 pt-2 border-t border-border">
-          <div className="relative flex-1 w-full">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4 items-center">
+          {/* Busca por Nome ou Matrícula */}
+          <div className="md:col-span-5 relative w-full">
             <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-[#869486] pointer-events-none" />
             <input
               type="text"
@@ -158,18 +207,189 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
             />
           </div>
 
-          <select
-            value={selectedTurmaFilter}
-            onChange={(e) => setSelectedTurmaFilter(e.target.value)}
-            className="w-full sm:w-64 bg-surface border border-border rounded-full px-4 sm:px-5 py-2.5 sm:py-3 text-sm text-foreground focus:outline-none focus:border-primary min-h-[44px] cursor-pointer"
-          >
-            <option value="all">Todas as Turmas</option>
-            {turmasList.map((t) => (
-              <option key={t} value={t} className="bg-background text-foreground">
-                {getTurmaLabel(t)}
+          {/* Lista Suspensa de Turmas (Opção de Escolher Uma, Várias ou Todas as Turmas) */}
+          <div className="md:col-span-4 relative" ref={turmaDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setIsTurmaDropdownOpen(!isTurmaDropdownOpen)}
+              className="w-full bg-surface hover:bg-surface-hover border border-border focus:border-primary rounded-full px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm text-foreground flex items-center justify-between gap-2 transition-all cursor-pointer min-h-[44px] shadow-sm select-none"
+              aria-haspopup="listbox"
+              aria-expanded={isTurmaDropdownOpen}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <KronoIcon icon={Filter} variant="viking" size="xs" />
+                <span className="font-bold truncate text-foreground">
+                  {turmaDropdownLabel}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {!isAllTurmasSelected && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-primary/20 text-primary border border-primary/30">
+                    {selectedTurmas.length}
+                  </span>
+                )}
+                <ChevronDown
+                  className={`w-4 h-4 text-muted transition-transform duration-200 ${
+                    isTurmaDropdownOpen ? 'rotate-180 text-primary' : ''
+                  }`}
+                />
+              </div>
+            </button>
+
+            {/* Menu Suspenso de Seleção de Turmas */}
+            {isTurmaDropdownOpen && (
+              <div
+                className="absolute left-0 right-0 top-full mt-2 bg-surface/95 backdrop-blur-xl border border-border/80 rounded-2xl shadow-2xl z-50 p-3 space-y-2.5 animate-fadeIn max-h-[380px] overflow-y-auto custom-scrollbar"
+                role="listbox"
+              >
+                {/* Cabeçalho do Dropdown com Ações Rápidas */}
+                <div className="flex items-center justify-between pb-2 border-b border-border/80 text-xs">
+                  <span className="font-bold text-foreground flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-primary" />
+                    <span>Turmas do Professor</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSelectAllTurmas}
+                      className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
+                    >
+                      Todas
+                    </button>
+                    <span className="text-muted">•</span>
+                    <button
+                      type="button"
+                      onClick={handleClearTurmas}
+                      className="text-[11px] font-bold text-muted hover:text-foreground cursor-pointer"
+                    >
+                      Redefinir
+                    </button>
+                  </div>
+                </div>
+
+                {/* Opção Todas as Turmas */}
+                <div
+                  onClick={handleSelectAllTurmas}
+                  className={`flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                    isAllTurmasSelected
+                      ? 'bg-primary/15 border-primary text-foreground font-bold shadow-sm'
+                      : 'bg-surface hover:bg-surface-hover border-transparent text-muted'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={isAllTurmasSelected}
+                      onChange={handleSelectAllTurmas}
+                      className="rounded accent-primary w-4 h-4 pointer-events-none"
+                    />
+                    <span className="truncate">Todas as Turmas (Todas as classes)</span>
+                  </div>
+                  <span className="text-[11px] text-muted shrink-0 font-medium ml-2">
+                    {students.length} alunos
+                  </span>
+                </div>
+
+                {/* Lista de Turmas Individuais com Seleção Múltipla */}
+                <div className="space-y-1.5 pt-1">
+                  {turmasList.length === 0 ? (
+                    <div className="p-3 text-center text-xs text-muted">
+                      Nenhuma turma encontrada nos cadastros.
+                    </div>
+                  ) : (
+                    turmasList.map((t) => {
+                      const isChecked = isTurmaChecked(t);
+                      const countInTurma = students.filter((s) => s.turma === t).length;
+                      const pneInTurma = students.filter((s) => s.turma === t && s.tag?.toUpperCase() === 'PNE').length;
+
+                      return (
+                        <div
+                          key={t}
+                          onClick={() => toggleTurma(t)}
+                          className={`flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                            isChecked
+                              ? 'bg-surface-hover border-border text-foreground font-semibold'
+                              : 'hover:bg-surface-hover/70 border-transparent text-muted opacity-75 hover:opacity-100'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleTurma(t)}
+                              className="rounded accent-primary w-4 h-4 pointer-events-none shrink-0"
+                            />
+                            <span className="truncate">{getTurmaLabel(t)}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            {pneInTurma > 0 && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-bold border border-amber-500/30">
+                                {pneInTurma} PNE
+                              </span>
+                            )}
+                            <span className="text-[11px] text-muted">
+                              {countInTurma}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => handleSelectOnlyTurma(t, e)}
+                              className="text-[10px] text-primary/80 hover:text-primary font-bold hover:underline px-1 py-0.5"
+                              title="Selecionar apenas esta turma"
+                            >
+                              Apenas
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Filtro por Categoria / Atendimento via Lista Suspensa */}
+          <div className="md:col-span-3">
+            <select
+              value={selectedTagFilter}
+              onChange={(e) => setSelectedTagFilter(e.target.value as any)}
+              className="w-full bg-surface border border-border hover:border-primary/50 rounded-full px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm text-foreground focus:outline-none focus:border-primary min-h-[44px] cursor-pointer shadow-sm font-medium"
+            >
+              <option value="all" className="bg-background text-foreground">
+                Todos os Alunos ({students.length})
               </option>
-            ))}
-          </select>
+              <option value="PNE" className="bg-background text-foreground">
+                Somente PNE ({students.filter((s) => s.tag?.toUpperCase() === 'PNE').length})
+              </option>
+              <option value="RAD" className="bg-background text-foreground">
+                Somente RAD ({students.filter((s) => s.tag?.toUpperCase() === 'RAD').length})
+              </option>
+              <option value="REGULAR" className="bg-background text-foreground">
+                Somente Regular ({students.filter((s) => !s.tag || s.tag.toUpperCase() === 'REGULAR').length})
+              </option>
+            </select>
+          </div>
+        </div>
+
+        {/* Resumo Dinâmico do Filtro Aplicado */}
+        <div className="flex items-center justify-between text-xs text-muted pt-2 border-t border-border px-1">
+          <span>
+            Exibindo <strong>{filteredStudents.length}</strong> de <strong>{students.length}</strong> alunos
+          </span>
+          {(!isAllTurmasSelected || selectedTagFilter !== 'all' || searchTerm) && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedTurmas(['all']);
+                setSelectedTagFilter('all');
+                setSearchTerm('');
+              }}
+              className="text-xs text-primary hover:underline font-bold cursor-pointer"
+            >
+              Limpar Todos os Filtros
+            </button>
+          )}
         </div>
       </div>
 
@@ -235,7 +455,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                     className="flex-1 sm:flex-none py-2 px-3 sm:px-4 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 font-bold rounded-full text-xs transition-all border border-emerald-500/30 shadow-md cursor-pointer flex items-center justify-center gap-1.5 min-h-[44px]"
                     title="Simular ambiente deste aluno (Admin Supremo)"
                   >
-                    <Eye className="w-3.5 h-3.5 shrink-0" />
+                    <KronoIcon icon={Eye} variant="emerald" size="xs" />
                     <span>Simular Aluno</span>
                   </button>
                 )}
@@ -251,29 +471,29 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                   <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 ml-auto sm:ml-0">
                     <button
                       onClick={() => setStudentToResetPassword(student)}
-                      className="p-2.5 bg-[#171f33] hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 rounded-full border border-amber-500/30 transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+                      className="p-1 rounded-full transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
                       title="Redefinir Senha do Aluno"
                       aria-label="Redefinir Senha do Aluno"
                     >
-                      <KeyRound className="w-4 h-4 shrink-0" />
+                      <KronoIcon icon={KeyRound} variant="amber" size="sm" />
                     </button>
 
                     <button
                       onClick={() => onEditStudent(student)}
-                      className="p-2.5 bg-[#171f33] hover:bg-surface-hover text-foreground hover:text-foreground rounded-full border border-border transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+                      className="p-1 rounded-full transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
                       title="Editar Aluno"
                       aria-label="Editar Aluno"
                     >
-                      <Pencil className="w-4 h-4 shrink-0" />
+                      <KronoIcon icon={Pencil} variant="viking" size="sm" />
                     </button>
 
                     <button
                       onClick={() => setStudentToDelete(student)}
-                      className="p-2.5 bg-[#171f33] hover:bg-rose-100 text-foreground hover:text-rose-600 rounded-full border border-border transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
+                      className="p-1 rounded-full transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
                       title="Excluir Aluno"
                       aria-label="Excluir Aluno"
                     >
-                      <Trash2 className="w-4 h-4 shrink-0" />
+                      <KronoIcon icon={Trash2} variant="danger" size="sm" />
                     </button>
                   </div>
                 )}
@@ -348,6 +568,19 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
           }}
         />
       )}
+
+      {/* Student Filter Modal */}
+      <StudentFilterModal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        selectedTurmaFilter={selectedTurmaFilter}
+        onSelectTurmaFilter={setSelectedTurmaFilter}
+        turmasList={turmasList}
+        filterMode={filterMode}
+        onFilterModeChange={handleFilterModeChange}
+        totalStudentsInActiveTurma={totalStudentsInActiveTurma}
+        pneStudentsInActiveTurma={pneStudentsInActiveTurma}
+      />
     </div>
   );
 };

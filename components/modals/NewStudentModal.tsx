@@ -9,6 +9,7 @@ import {
   validateStudentName,
   isValidTurmaCode,
 } from '@/lib/studentUtils';
+import { KRONO_AVATARS } from '@/lib/avatarRegistry';
 
 interface NewStudentModalProps {
   isOpen: boolean;
@@ -101,7 +102,8 @@ export const NewStudentModal: React.FC<NewStudentModalProps> = ({
       secondTeacherName: matchedTeacher ? matchedTeacher.name : undefined,
       passwordHash: initialPassword, // SEGURANÇA: NUNCA reintroduzir senha padrão fixa aqui
       avatarUrl:
-        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+        KRONO_AVATARS[Math.floor(Math.random() * KRONO_AVATARS.length)]?.url ||
+        'https://api.dicebear.com/9.x/adventurer/svg?seed=KronoArchmage&radius=50',
     };
     onCreateStudent(newStudent);
     setFullName('');

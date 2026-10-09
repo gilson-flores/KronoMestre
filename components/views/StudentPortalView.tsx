@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { StudentUser, TeacherUser, Activity, LibraryFile, ChatMessage, ActivityQuestion, MultipleChoiceQuestion, EssayQuestion } from '@/lib/types';
-import { canStudentAccessActivity, getActivityGradeDistribution, isStudentPNE } from '@/lib/studentUtils';
+import { canStudentAccessActivity, getActivityGradeDistribution, isStudentPNE, isActivityAdapted } from '@/lib/studentUtils';
 import { extractCleanHtml } from '@/lib/adaptationUtils';
 import { scrollToTop } from '@/lib/utils';
 import { MessagesView } from './MessagesView';
+import { KronoGamePlayer } from '@/components/views/KronoGamePlayer';
+import { KRONO_AVATARS, AVATAR_CATEGORIES, AvatarItem } from '@/lib/avatarRegistry';
 import {
   LogOut,
   CheckCircle2,
@@ -45,6 +47,11 @@ import {
   Bell,
   BellRing,
   BellOff,
+  Filter,
+  SlidersHorizontal,
+  Search,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 interface StudentPortalViewProps {
@@ -81,28 +88,6 @@ interface StudentPortalViewProps {
   onUpdateAvatar?: (studentId: string, newAvatarUrl: string) => void;
 }
 
-const POP_AVATARS = [
-  // Femininos
-  'https://api.dicebear.com/9.x/adventurer/svg?seed=Arwen',        // Senhor dos Anéis
-  'https://api.dicebear.com/9.x/adventurer/svg?seed=Eowyn',        // Senhor dos Anéis (Guerreira/Brava)
-  'https://api.dicebear.com/9.x/avataaars/svg?seed=SpiderGwen',    // Homem-Aranha
-  'https://api.dicebear.com/9.x/micah/svg?seed=MaryJane',          // Homem-Aranha (Inspirada)
-  'https://api.dicebear.com/9.x/adventurer/svg?seed=Nami',         // One Piece
-  'https://api.dicebear.com/9.x/micah/svg?seed=NicoRobin',         // One Piece (Séria)
-  'https://api.dicebear.com/9.x/adventurer/svg?seed=Nezuko',       // Demon Slayer
-  'https://api.dicebear.com/9.x/bottts/svg?seed=Anri',             // Jaspion (Andróide)
-  
-  // Masculinos
-  'https://api.dicebear.com/9.x/adventurer/svg?seed=Frodo',        // Senhor dos Anéis (Inspirado)
-  'https://api.dicebear.com/9.x/adventurer/svg?seed=Aragorn',      // Senhor dos Anéis (Bravo/Corajoso)
-  'https://api.dicebear.com/9.x/avataaars/svg?seed=PeterParker',   // Homem-Aranha
-  'https://api.dicebear.com/9.x/micah/svg?seed=MilesMorales',      // Homem-Aranha (Estiloso)
-  'https://api.dicebear.com/9.x/adventurer/svg?seed=Luffy',        // One Piece (Feliz)
-  'https://api.dicebear.com/9.x/micah/svg?seed=RoronoaZoro',       // One Piece (Sério)
-  'https://api.dicebear.com/9.x/adventurer/svg?seed=Tanjiro',      // Demon Slayer (Focado)
-  'https://api.dicebear.com/9.x/bottts/svg?seed=Jaspion'           // Jaspion (Mecha/Robô)
-];
-
 export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   student,
   teacher = {
@@ -126,14 +111,34 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   // Tab state: 'atividades' | 'correcoes' | 'mensagens' | 'arquivos'
   const [activeTab, setActiveTab] = useState<'atividades' | 'correcoes' | 'mensagens' | 'arquivos'>('atividades');
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+  const [avatarCategoryFilter, setAvatarCategoryFilter] = useState<string>('todos');
+  const [avatarSearchQuery, setAvatarSearchQuery] = useState<string>('');
+
+  const filteredAvatars = useMemo(() => {
+    return KRONO_AVATARS.filter((av) => {
+      const matchesCategory = avatarCategoryFilter === 'todos' || av.category === avatarCategoryFilter;
+      const query = avatarSearchQuery.trim().toLowerCase();
+      const matchesSearch = !query || 
+        av.name.toLowerCase().includes(query) || 
+        av.tagline.toLowerCase().includes(query) ||
+        av.categoryLabel.toLowerCase().includes(query);
+      return matchesCategory && matchesSearch;
+    });
+  }, [avatarCategoryFilter, avatarSearchQuery]);
 
   // List filter state for students: 'todas' | 'a_fazer' | 'a_corrigir' | 'corrigidas'
   const [studentFilter, setStudentFilter] = useState<'todas' | 'a_fazer' | 'a_corrigir' | 'corrigidas'>('todas');
+  const [studentSearchQuery, setStudentSearchQuery] = useState<string>('');
+  const [studentTypeFilter, setStudentTypeFilter] = useState<string>('todos');
+  const [isStudentFilterOpen, setIsStudentFilterOpen] = useState<boolean>(false);
   // Selected Activity for detail/execution view (null = show list view)
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
 
   // Fullscreen / Immersive Mode for PNE Severe Playful Activities
   const [fullscreenGameActivityId, setFullscreenGameActivityId] = useState<string | null>(null);
+
+  // KronoGames Active Game Activity
+  const [activeKronoGameActivity, setActiveKronoGameActivity] = useState<Activity | null>(null);
 
   // Interactive student answers per activity
   // essayInputs[activityId] -> string
@@ -166,7 +171,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         return false;
       }
 
-      const isActivityAdapted = Boolean(a.isAdapted || a.adaptationType);
+      const isActAdapted = isActivityAdapted(a);
 
       // Aluno PNE: por padrão vê adaptações, exceto se incluído na atividade normal por proficiência
       if (isCurrentStudentPNE) {
@@ -180,7 +185,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           );
         };
 
-        if (isActivityAdapted) {
+        if (isActAdapted) {
           // Se esta é a adaptação de uma atividade onde o aluno foi selecionado para fazer a normal, oculta a adaptação
           const parentAct = activities.find((parent) => parent.id === a.adaptedFromId);
           if (isStudentIncludedInActivity(parentAct)) {
@@ -194,7 +199,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       }
 
       // Aluno regular só vê atividades regulares (não vê adaptações)
-      return !isActivityAdapted;
+      return !isActAdapted;
     });
   }, [activities, student.turma, student.id, student.matricula, student.fullName, isCurrentStudentPNE]);
 
@@ -352,6 +357,25 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   // Filtered activities list for Student Portal based on current filter
   const filteredStudentActivities = useMemo(() => {
     return authorizedActivities.filter((act) => {
+      // 1. Busca textual
+      if (studentSearchQuery.trim()) {
+        const q = studentSearchQuery.toLowerCase().trim();
+        const matchesTitle = act.title?.toLowerCase().includes(q);
+        const matchesSubject = act.subject?.toLowerCase().includes(q);
+        const matchesTopic = act.topic?.toLowerCase().includes(q);
+        if (!matchesTitle && !matchesSubject && !matchesTopic) return false;
+      }
+
+      // 2. Filtro por tipo
+      if (studentTypeFilter !== 'todos') {
+        if (studentTypeFilter === 'kronogames') {
+          if (!act.isGameActivity && !act.gameData && act.type !== 'Jogo Avaliativo') return false;
+        } else if (act.type?.toLowerCase() !== studentTypeFilter.toLowerCase()) {
+          return false;
+        }
+      }
+
+      // 3. Filtro por situação de entrega
       const sub = act.submissions.find(
         (s) => s.studentId === student.id || s.studentName === student.fullName
       );
@@ -366,7 +390,21 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       }
       return true; // 'todas'
     });
-  }, [authorizedActivities, student.id, student.fullName, studentFilter]);
+  }, [authorizedActivities, student.id, student.fullName, studentFilter, studentSearchQuery, studentTypeFilter]);
+
+  const activeStudentFiltersCount = useMemo(() => {
+    let count = 0;
+    if (studentSearchQuery.trim()) count++;
+    if (studentTypeFilter !== 'todos') count++;
+    if (studentFilter !== 'todas') count++;
+    return count;
+  }, [studentSearchQuery, studentTypeFilter, studentFilter]);
+
+  const handleClearStudentFilters = () => {
+    setStudentSearchQuery('');
+    setStudentTypeFilter('todos');
+    setStudentFilter('todas');
+  };
 
   // Filter library files for this student's turma
   const studentLibraryFiles = useMemo(() => {
@@ -383,6 +421,34 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         [questionId]: optionIndex,
       },
     }));
+  };
+
+  const handleFinishKronoGame = (score: number, groupMembersStr?: string) => {
+    if (!activeKronoGameActivity) return;
+    const act = activeKronoGameActivity;
+    const maxScore = act.maxGrade || 10;
+
+    onSubmitAnswer(
+      act.id,
+      student.id,
+      '🎮 KronoGames: Partida avaliativa concluída com sucesso no motor de jogos.',
+      score,
+      maxScore,
+      0,
+      {},
+      groupMembersStr
+    );
+
+    setSubmissionSuccessMsg(
+      `🎉 Parabéns! Sua equipe concluiu o desafio KronoGames conquistando nota ${score.toFixed(1)} / ${maxScore.toFixed(1)} pts!`
+    );
+    scrollToTop();
+    setTimeout(() => setSubmissionSuccessMsg(null), 7000);
+
+    setActiveKronoGameActivity(null);
+    setSelectedActivityId(null);
+    setStudentFilter('corrigidas');
+    setActiveTab('atividades');
   };
 
   const handleSubmit = (act: Activity, isAutoSubmit: boolean = false) => {
@@ -580,6 +646,52 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     };
   }, [selectedActivityId, activities, activeTab, student.id, student.fullName]);
 
+  // Presença real do aluno em tempo real (ativação sem dados fantasmas)
+  useEffect(() => {
+    if (!student?.id || !student?.ownerTeacherId) return;
+
+    const sendPing = (action: 'ping' | 'offline' = 'ping') => {
+      try {
+        if (action === 'offline' && typeof navigator !== 'undefined' && navigator.sendBeacon) {
+          const blob = new Blob(
+            [JSON.stringify({ studentId: student.id, ownerTeacherId: student.ownerTeacherId, action: 'offline' })],
+            { type: 'application/json' }
+          );
+          navigator.sendBeacon('/api/students/heartbeat', blob);
+          return;
+        }
+
+        fetch('/api/students/heartbeat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            studentId: student.id,
+            ownerTeacherId: student.ownerTeacherId,
+            action,
+          }),
+        }).catch(() => {});
+      } catch (e) {}
+    };
+
+    sendPing('ping');
+
+    // Ping leve a cada 4 minutos para manter status ativo enquanto o aluno estiver no portal
+    const interval = setInterval(() => {
+      sendPing('ping');
+    }, 4 * 60 * 1000);
+
+    const handleBeforeUnload = () => {
+      sendPing('offline');
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      sendPing('offline');
+    };
+  }, [student?.id, student?.ownerTeacherId]);
 
   return (
     <div className="min-h-screen bg-background text-foreground p-3 sm:p-8 max-w-5xl mx-auto space-y-6 sm:space-y-8 animate-fadeIn">
@@ -621,7 +733,20 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         </div>
 
         <button
-          onClick={onLogout}
+          onClick={() => {
+            if (student?.id && student?.ownerTeacherId) {
+              fetch('/api/students/heartbeat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  studentId: student.id,
+                  ownerTeacherId: student.ownerTeacherId,
+                  action: 'offline',
+                }),
+              }).catch(() => {});
+            }
+            onLogout();
+          }}
           className="w-full sm:w-auto justify-center py-2.5 px-5 min-h-[44px] min-w-[44px] bg-[#171f33] hover:bg-rose-100 text-rose-600 hover:text-rose-200 rounded-full text-xs font-bold border border-border flex items-center gap-2 transition-all cursor-pointer shrink-0"
         >
           <LogOut className="w-4 h-4 shrink-0" />
@@ -714,80 +839,197 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       {/* TAB: ATIVIDADES E CORREÇÕES (LIST & FILTER SYSTEM) */}
       {activeTab === 'atividades' && (
         <div className="space-y-6">
-          {/* Sub-filter bar for Student Activities */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-1.5 bg-surface rounded-2xl border border-border shadow-inner">
-            <button
-              onClick={() => {
-                setStudentFilter('todas');
-                setSelectedActivityId(null);
-              }}
-              className={`px-3 py-2.5 min-h-[44px] min-w-[44px] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
-                studentFilter === 'todas'
-                  ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
-                  : 'text-muted hover:text-foreground hover:bg-surface-hover'
-              }`}
-            >
-              <BookOpen className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">Todas</span>
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${studentFilter === 'todas' ? 'bg-[#003919] text-primary' : 'bg-black/30 text-foreground'}`}>
-                {authorizedActivities.length}
-              </span>
-            </button>
+          {/* Sub-filter bar for Student Activities com Botão de Acesso a Filtros */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+            {/* Quick status tabs */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-surface rounded-2xl border border-border shadow-inner flex-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setStudentFilter('todas');
+                  setSelectedActivityId(null);
+                }}
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
+                  studentFilter === 'todas'
+                    ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
+                    : 'text-muted hover:text-foreground hover:bg-surface-hover'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">Todas</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${studentFilter === 'todas' ? 'bg-[#003919] text-primary' : 'bg-black/30 text-foreground'}`}>
+                  {authorizedActivities.length}
+                </span>
+              </button>
 
-            <button
-              onClick={() => {
-                setStudentFilter('a_fazer');
-                setSelectedActivityId(null);
-              }}
-              className={`px-3 py-2.5 min-h-[44px] min-w-[44px] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
-                studentFilter === 'a_fazer'
-                  ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
-                  : 'text-muted hover:text-foreground hover:bg-surface-hover'
-              }`}
-            >
-              <FileQuestion className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">A Fazer</span>
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${studentFilter === 'a_fazer' ? 'bg-[#003919] text-primary' : 'bg-black/30 text-foreground'}`}>
-                {pendingActivities.length}
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStudentFilter('a_fazer');
+                  setSelectedActivityId(null);
+                }}
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
+                  studentFilter === 'a_fazer'
+                    ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
+                    : 'text-muted hover:text-foreground hover:bg-surface-hover'
+                }`}
+              >
+                <FileQuestion className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">A Fazer</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${studentFilter === 'a_fazer' ? 'bg-[#003919] text-primary' : 'bg-black/30 text-foreground'}`}>
+                  {pendingActivities.length}
+                </span>
+              </button>
 
-            <button
-              onClick={() => {
-                setStudentFilter('a_corrigir');
-                setSelectedActivityId(null);
-              }}
-              className={`px-3 py-2.5 min-h-[44px] min-w-[44px] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
-                studentFilter === 'a_corrigir'
-                  ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
-                  : 'text-muted hover:text-foreground hover:bg-surface-hover'
-              }`}
-            >
-              <Clock className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">A Corrigir</span>
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${studentFilter === 'a_corrigir' ? 'bg-[#003919] text-primary' : 'bg-black/30 text-foreground'}`}>
-                {toCorrectActivities.length}
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStudentFilter('a_corrigir');
+                  setSelectedActivityId(null);
+                }}
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
+                  studentFilter === 'a_corrigir'
+                    ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
+                    : 'text-muted hover:text-foreground hover:bg-surface-hover'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">A Corrigir</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${studentFilter === 'a_corrigir' ? 'bg-[#003919] text-primary' : 'bg-black/30 text-foreground'}`}>
+                  {toCorrectActivities.length}
+                </span>
+              </button>
 
-            <button
-              onClick={() => {
-                setStudentFilter('corrigidas');
-                setSelectedActivityId(null);
-              }}
-              className={`px-3 py-2.5 min-h-[44px] min-w-[44px] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
-                studentFilter === 'corrigidas'
-                  ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
-                  : 'text-muted hover:text-foreground hover:bg-surface-hover'
-              }`}
-            >
-              <Award className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">Corrigidas</span>
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${studentFilter === 'corrigidas' ? 'bg-[#003919] text-primary' : 'bg-black/30 text-foreground'}`}>
-                {gradedActivities.length}
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStudentFilter('corrigidas');
+                  setSelectedActivityId(null);
+                }}
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
+                  studentFilter === 'corrigidas'
+                    ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
+                    : 'text-muted hover:text-foreground hover:bg-surface-hover'
+                }`}
+              >
+                <Award className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">Corrigidas</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${studentFilter === 'corrigidas' ? 'bg-[#003919] text-primary' : 'bg-black/30 text-foreground'}`}>
+                  {gradedActivities.length}
+                </span>
+              </button>
+            </div>
+
+            {/* BOTÃO DE ACESSO A FILTROS (ALUNO) */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsStudentFilterOpen((prev) => !prev)}
+                className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer border min-h-[44px] ${
+                  isStudentFilterOpen || activeStudentFiltersCount > 0
+                    ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20'
+                    : 'bg-surface hover:bg-surface-hover text-foreground border-border'
+                }`}
+              >
+                <SlidersHorizontal className="w-4 h-4 shrink-0" />
+                <span>Filtros</span>
+                {activeStudentFiltersCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-white/20 text-white">
+                    {activeStudentFiltersCount}
+                  </span>
+                )}
+                {isStudentFilterOpen ? (
+                  <ChevronUp className="w-3.5 h-3.5 shrink-0 opacity-80" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-80" />
+                )}
+              </button>
+
+              {activeStudentFiltersCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearStudentFilters}
+                  className="px-3 py-2.5 rounded-2xl text-xs font-bold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 transition-all flex items-center justify-center gap-1 cursor-pointer min-h-[44px]"
+                  title="Limpar todos os filtros"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Limpar</span>
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* PAINEL REFINADO DE FILTROS DO ALUNO (EXPANSÍVEL PELO BOTÃO) */}
+          {isStudentFilterOpen && (
+            <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-primary/30 bg-surface/95 backdrop-blur-md shadow-xl space-y-3.5 animate-fadeIn">
+              <div className="flex items-center justify-between border-b border-border pb-2.5">
+                <span className="text-xs font-black uppercase tracking-wider text-primary flex items-center gap-1.5">
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <span>Filtros e Busca de Missões</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsStudentFilterOpen(false)}
+                  className="text-text-muted hover:text-foreground p-1 rounded-lg cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Busca rápida */}
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+                  <input
+                    type="text"
+                    value={studentSearchQuery}
+                    onChange={(e) => setStudentSearchQuery(e.target.value)}
+                    placeholder="Buscar atividade por título ou disciplina..."
+                    className="w-full pl-10 pr-9 py-2.5 rounded-2xl bg-background border border-border text-foreground placeholder-muted text-xs focus:outline-none focus:border-primary"
+                  />
+                  {studentSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setStudentSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Filtro por Tipo */}
+                <div>
+                  <select
+                    value={studentTypeFilter}
+                    onChange={(e) => setStudentTypeFilter(e.target.value)}
+                    className="w-full py-2.5 px-3 rounded-2xl bg-background border border-border text-foreground text-xs focus:outline-none focus:border-primary cursor-pointer font-medium"
+                  >
+                    <option value="todos">Todos os Formatos</option>
+                    <option value="kronogames">🎮 KronoGames (Jogos Avaliativos)</option>
+                    <option value="Avaliação">Avaliações Formais</option>
+                    <option value="Redação">Redações</option>
+                    <option value="Simulado">Simulados / Treinamentos</option>
+                    <option value="Dinâmica">Dinâmicas / Trabalhos</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Footer do painel */}
+              <div className="flex items-center justify-between pt-2 border-t border-border text-xs text-muted">
+                <span>
+                  Exibindo <strong>{filteredStudentActivities.length}</strong> de <strong>{authorizedActivities.length}</strong> missões.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsStudentFilterOpen(false)}
+                  className="px-3.5 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary font-bold rounded-xl text-xs transition-all cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* LIST VIEW (when no activity is selected) */}
           {selectedActivityId === null && (
@@ -821,7 +1063,9 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                         <div className="space-y-2 max-w-2xl min-w-0">
                           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                             <span className="text-[10px] sm:text-[11px] font-bold bg-primary/20 text-primary px-2.5 sm:px-3 py-0.5 rounded-full border border-primary/30">
-                              {act.type === 'Simulado'
+                              {act.isGameActivity || act.gameData || act.type === 'Jogo Avaliativo'
+                                ? '🎮 KronoGames'
+                                : act.type === 'Simulado'
                                 ? 'Treinamento Tático'
                                 : act.type === 'Redação'
                                 ? 'Redação'
@@ -873,7 +1117,13 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                         <div className="shrink-0 pt-1 sm:pt-0 w-full sm:w-auto">
                           <button
                             onClick={() => {
-                              if (act.playfulGameHtml || act.adaptationType === 'severe_playful') {
+                              if (act.isGameActivity || act.gameData || act.type === 'Jogo Avaliativo') {
+                                if (isPending) {
+                                  setActiveKronoGameActivity(act);
+                                } else {
+                                  handleOpenActivity(act.id);
+                                }
+                              } else if (act.playfulGameHtml || act.adaptationType === 'severe_playful') {
                                 setFullscreenGameActivityId(act.id);
                               } else {
                                 handleOpenActivity(act.id);
@@ -883,8 +1133,14 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                           >
                             {isPending ? (
                               <>
-                                <PenTool className="w-4 h-4" />
-                                <span>{act.playfulGameHtml || act.adaptationType === 'severe_playful' ? 'Fazer Atividade' : 'Resolver Atividade'}</span>
+                                <Gamepad2 className="w-4 h-4" />
+                                <span>
+                                  {act.isGameActivity || act.gameData || act.type === 'Jogo Avaliativo'
+                                    ? 'Jogar KronoGame 🎮'
+                                    : act.playfulGameHtml || act.adaptationType === 'severe_playful'
+                                    ? 'Fazer Atividade'
+                                    : 'Resolver Atividade'}
+                                </span>
                               </>
                             ) : (
                               <>
@@ -1090,6 +1346,51 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                         <span className="bg-cyan-100 text-cyan-700 px-2.5 py-0.5 rounded-full border border-cyan-500/30 font-semibold text-[11px] flex items-center gap-1">
                           <span>📸 Anti-Print Ativo</span>
                         </span>
+                      </div>
+                    )}
+
+                    {/* BANNER ESPECIAL DE JOGO AVALIATIVO (KRONOGAMES) */}
+                    {(act.isGameActivity || act.gameData || act.type === 'Jogo Avaliativo') && (
+                      <div className="bg-gradient-to-r from-amber-500/20 via-primary/20 to-purple-500/20 border-2 border-amber-500/40 p-6 rounded-3xl space-y-4 shadow-xl">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <Gamepad2 className="w-6 h-6 text-amber-400 animate-pulse" />
+                              <span className="text-xs font-black uppercase tracking-wider text-amber-400">
+                                KronoGames • Desafio Gamificado
+                              </span>
+                            </div>
+                            <h4 className="text-lg sm:text-xl font-black text-foreground">
+                              {act.title}
+                            </h4>
+                            <p className="text-xs text-muted max-w-xl">
+                              {act.gameData?.introText || act.description || 'Participe deste desafio interativo com fases dinâmicas e correção 100% automática!'}
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setActiveKronoGameActivity(act)}
+                            className="px-6 py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white font-black text-sm rounded-2xl shadow-xl shadow-amber-500/25 flex items-center justify-center gap-2.5 transition-all cursor-pointer active:scale-95 shrink-0"
+                          >
+                            <Gamepad2 className="w-5 h-5" />
+                            <span>Entrar no Jogo Agora 🚀</span>
+                          </button>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-amber-500/20 text-[11px] font-bold text-muted">
+                          <span className="flex items-center gap-1.5 text-amber-300">
+                            🏆 Fases: {act.gameData?.stages?.length || 6} Rodadas
+                          </span>
+                          <span>•</span>
+                          <span className="flex items-center gap-1.5 text-primary">
+                            ⚡ Modo: {act.executionContext === 'classroom_group' ? 'Sala de Aula (Dupla/Grupo)' : 'Individual (Casa)'}
+                          </span>
+                          <span>•</span>
+                          <span className="flex items-center gap-1.5 text-emerald-300">
+                            💯 Correção Instantânea (0 a 10 pts)
+                          </span>
+                        </div>
                       </div>
                     )}
 
@@ -1971,86 +2272,151 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
       {/* Avatar Selection Modal */}
       {isAvatarModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-surface border border-border rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl space-y-6 relative max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
+          <div className="bg-surface border border-border rounded-3xl p-5 sm:p-7 max-w-3xl w-full shadow-2xl space-y-5 relative max-h-[92vh] flex flex-col">
             <button
               onClick={() => setIsAvatarModalOpen(false)}
-              className="absolute top-4 right-4 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted hover:text-foreground bg-surface hover:bg-rose-100 rounded-full transition-colors cursor-pointer"
+              className="absolute top-4 right-4 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted hover:text-foreground bg-surface hover:bg-rose-500/20 rounded-full transition-colors cursor-pointer border border-border"
+              aria-label="Fechar"
             >
               <X className="w-5 h-5" />
             </button>
             
             <div>
-              <h2 className="text-xl font-extrabold text-foreground flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-amber-400" />
-                Escolha seu Avatar
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  52 Avatares Exclusivos
+                </span>
+                <span className="text-xs text-muted">RPG • Vikings • Feras • Cômicos</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-foreground flex items-center gap-2 mt-1">
+                <Sparkles className="w-6 h-6 text-amber-400" />
+                Escolha seu Personagem
               </h2>
-              <p className="text-sm text-muted mt-1">
-                Selecione o seu personagem favorito para usar no seu perfil!
+              <p className="text-xs sm:text-sm text-muted mt-0.5">
+                Personalize o seu perfil de estudante com um avatar que represente sua personalidade e jornada!
               </p>
             </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-6">
-              <div>
-                <h3 className="text-sm font-bold text-pink-400 mb-3 border-b border-pink-500/20 pb-2">Meninas Heróinas & Pop</h3>
-                <div className="grid grid-cols-4 sm:grid-cols-5 gap-4">
-                  {POP_AVATARS.slice(0, 10).map((avatarUrl, idx) => (
+            {/* Categorias & Busca */}
+            <div className="space-y-3 pt-1">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                {AVATAR_CATEGORIES.map((cat) => {
+                  const isActive = avatarCategoryFilter === cat.id;
+                  const count = cat.id === 'todos' 
+                    ? KRONO_AVATARS.length 
+                    : KRONO_AVATARS.filter((a) => a.category === cat.id).length;
+                  return (
                     <button
-                      key={`fem-${idx}`}
-                      onClick={() => {
-                        if (onUpdateAvatar) onUpdateAvatar(student.id, avatarUrl);
-                        setIsAvatarModalOpen(false);
-                      }}
-                      className="aspect-square min-h-[44px] min-w-[44px] rounded-2xl border-2 border-transparent hover:border-pink-400 focus:border-pink-400 bg-surface-hover hover:bg-surface-hover transition-all p-2 cursor-pointer relative group"
+                      key={cat.id}
+                      onClick={() => setAvatarCategoryFilter(cat.id)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border active:scale-95 ${
+                        isActive
+                          ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 ring-1 ring-primary/40'
+                          : 'bg-surface hover:bg-surface-hover text-muted hover:text-foreground border-border'
+                      }`}
                     >
-                      <img
-                        src={avatarUrl}
-                        alt="Avatar"
-                        loading="lazy"
-                        decoding="async"
-                        className="w-full h-full object-contain group-hover:scale-110 transition-transform"
-                      />
-                      {student.avatarUrl === avatarUrl && (
-                        <div className="absolute -top-2 -right-2 bg-pink-500 text-foreground p-1 rounded-full border-2 border-[#0e172a]">
-                          <Check className="w-3 h-3 stroke-[3]" />
-                        </div>
-                      )}
+                      <span>{cat.emoji}</span>
+                      <span>{cat.label}</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${isActive ? 'bg-white/20 text-white' : 'bg-surface-hover text-muted'}`}>
+                        {count}
+                      </span>
                     </button>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
 
-              <div>
-                <h3 className="text-sm font-bold text-blue-400 mb-3 border-b border-primary/20 pb-2">Heróis & Lendas Pop</h3>
-                <div className="grid grid-cols-4 sm:grid-cols-5 gap-4">
-                  {POP_AVATARS.slice(10, 20).map((avatarUrl, idx) => (
-                    <button
-                      key={`masc-${idx}`}
-                      onClick={() => {
-                        if (onUpdateAvatar) onUpdateAvatar(student.id, avatarUrl);
-                        setIsAvatarModalOpen(false);
-                      }}
-                      className="aspect-square min-h-[44px] min-w-[44px] rounded-2xl border-2 border-transparent hover:border-blue-400 focus:border-blue-400 bg-surface-hover hover:bg-surface-hover transition-all p-2 cursor-pointer relative group"
-                    >
-                      <img
-                        src={avatarUrl}
-                        alt="Avatar"
-                        loading="lazy"
-                        decoding="async"
-                        className="w-full h-full object-contain group-hover:scale-110 transition-transform"
-                      />
-                      {student.avatarUrl === avatarUrl && (
-                        <div className="absolute -top-2 -right-2 bg-primary text-white p-1 rounded-full border-2 border-[#0e172a]">
-                          <Check className="w-3 h-3 stroke-[3]" />
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
+              {/* Input de Busca */}
+              <div className="relative">
+                <input
+                  type="text"
+                  value={avatarSearchQuery}
+                  onChange={(e) => setAvatarSearchQuery(e.target.value)}
+                  placeholder="Buscar por herói, viking, fera mística, mago, robô ou criatura..."
+                  className="w-full bg-[#171f33] border border-border rounded-xl px-4 py-2.5 text-xs sm:text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-primary transition-colors"
+                />
+                {avatarSearchQuery && (
+                  <button
+                    onClick={() => setAvatarSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted hover:text-foreground"
+                  >
+                    Limpar
+                  </button>
+                )}
               </div>
+            </div>
+
+            {/* Grid dos Avatares */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
+              {filteredAvatars.length === 0 ? (
+                <div className="p-8 text-center text-muted border border-dashed border-border rounded-2xl">
+                  Nenhum personagem encontrado para essa busca. Tente outro termo!
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-3.5">
+                  {filteredAvatars.map((av) => {
+                    const isSelected = student.avatarUrl === av.url;
+                    return (
+                      <button
+                        key={av.id}
+                        onClick={() => {
+                          if (onUpdateAvatar) onUpdateAvatar(student.id, av.url);
+                          setIsAvatarModalOpen(false);
+                        }}
+                        className={`group p-3 rounded-2xl border transition-all text-left flex flex-col justify-between gap-2 cursor-pointer relative ${
+                          isSelected
+                            ? 'bg-primary/15 border-primary shadow-lg shadow-primary/10 ring-2 ring-primary/50'
+                            : 'bg-surface/90 hover:bg-surface-hover border-border hover:border-primary/40'
+                        }`}
+                        title={av.tagline}
+                      >
+                        <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[#101726] flex items-center justify-center p-2 border border-border/50">
+                          <img
+                            src={av.url}
+                            alt={av.name}
+                            loading="lazy"
+                            decoding="async"
+                            className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-200"
+                          />
+                          {isSelected && (
+                            <div className="absolute top-1.5 right-1.5 bg-primary text-white p-1 rounded-full border-2 border-[#0e172a] shadow-md">
+                              <Check className="w-3 h-3 stroke-[3]" />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0 w-full space-y-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-surface border border-border text-primary uppercase tracking-wider truncate">
+                              {av.categoryLabel}
+                            </span>
+                          </div>
+                          <h4 className="text-xs font-bold text-foreground truncate group-hover:text-primary transition-colors">
+                            {av.name}
+                          </h4>
+                          <p className="text-[11px] text-muted line-clamp-2 leading-tight">
+                            {av.tagline}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
+      )}
+
+      {/* KronoGames Inclusive Engine Player Modal */}
+      {activeKronoGameActivity && (
+        <KronoGamePlayer
+          activity={activeKronoGameActivity}
+          student={student}
+          allStudents={students}
+          onFinishGame={handleFinishKronoGame}
+          onClose={() => setActiveKronoGameActivity(null)}
+        />
       )}
     </div>
   );

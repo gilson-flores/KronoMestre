@@ -14,10 +14,13 @@ import {
   MessageSquare,
   HeartHandshake,
   FileSpreadsheet,
-  Database
+  Database,
+  Sparkles,
+  Gamepad2
 } from 'lucide-react';
 import { TeacherUser } from '@/lib/types';
 import { formatAvatarUrl } from '@/lib/utils';
+import { KronoIcon, KronoIconVariant } from '@/components/ui/KronoIcon';
 
 interface SidebarProps {
   currentTab: string;
@@ -67,25 +70,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isMobileOpen, onCloseMobile]);
 
-  const baseNavItems = role === 'second_teacher'
+  const baseNavItems: Array<{ id: string; label: string; icon: any; variant: KronoIconVariant; badge?: number }> = role === 'second_teacher'
     ? [
-        { id: 'desempenho', label: 'Acompanhamento PNE', icon: LayoutDashboard },
-        { id: 'alunos', label: 'Meus Alunos', icon: Users },
-        { id: 'atestados', label: 'Atestados e RAD', icon: BookOpen },
-        { id: 'biblioteca', label: 'Biblioteca de Arquivos', icon: FolderOpen },
-        { id: 'mensagens', label: 'Mensagens', icon: MessageSquare, badge: unreadMessagesCount },
+        { id: 'desempenho', label: 'Acompanhamento PNE', icon: LayoutDashboard, variant: 'rpg' },
+        { id: 'atividades_adaptadas', label: 'Atividades Adaptadas (AEE)', icon: Sparkles, variant: 'mystic' },
+        { id: 'alunos', label: 'Meus Alunos', icon: Users, variant: 'viking' },
+        { id: 'atestados', label: 'Atestados e RAD', icon: BookOpen, variant: 'badge' },
+        { id: 'biblioteca', label: 'Biblioteca de Arquivos', icon: FolderOpen, variant: 'comic' },
+        { id: 'mensagens', label: 'Mensagens', icon: MessageSquare, variant: 'glow', badge: unreadMessagesCount },
       ]
     : [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { id: 'atividades', label: 'Atividades', icon: FileCheck },
-        { id: 'correcoes', label: 'Correções', icon: FileCheck2, badge: pendingCorrectionsCount },
-        { id: 'postagem_rco', label: 'Postagem RCO', icon: FileSpreadsheet },
-        { id: 'mensagens', label: 'Mensagens', icon: MessageSquare, badge: unreadMessagesCount },
-        { id: 'alunos', label: 'Alunos', icon: Users },
-        { id: 'atestados_rad', label: 'Atestados e RAD', icon: BookOpen },
-        { id: 'arquivos', label: 'Arquivos', icon: FolderOpen },
-        { id: '2_professor', label: '2º Professor', icon: HeartHandshake },
-        { id: 'backup_recuperacao', label: 'Backup e Recuperação', icon: Database },
+        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, variant: 'rpg' },
+        { id: 'atividades', label: 'Atividades Formais', icon: FileCheck, variant: 'viking' },
+        { id: 'atividades_interativas', label: 'KronoGames (Interativas)', icon: Gamepad2, variant: 'flame' },
+        { id: 'atividades_adaptadas', label: 'Atividades Adaptadas (AEE)', icon: Sparkles, variant: 'mystic' },
+        { id: 'correcoes', label: 'Correções', icon: FileCheck2, variant: 'emerald', badge: pendingCorrectionsCount },
+        { id: 'postagem_rco', label: 'Postagem RCO', icon: FileSpreadsheet, variant: 'amber' },
+        { id: 'mensagens', label: 'Mensagens', icon: MessageSquare, variant: 'glow', badge: unreadMessagesCount },
+        { id: 'alunos', label: 'Alunos', icon: Users, variant: 'viking' },
+        { id: 'atestados_rad', label: 'Atestados e RAD', icon: BookOpen, variant: 'badge' },
+        { id: 'arquivos', label: 'Arquivos', icon: FolderOpen, variant: 'comic' },
+        { id: '2_professor', label: '2º Professor', icon: HeartHandshake, variant: 'mystic' },
+        { id: 'backup_recuperacao', label: 'Backup e Recuperação', icon: Database, variant: 'glow' },
       ];
 
   const navItems = baseNavItems;
@@ -143,7 +149,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   : 'bg-[#171f33] text-muted hover:text-foreground hover:bg-surface-hover border border-border'
               }`}
             >
-              <Settings className="w-4 h-4 shrink-0" />
+              <KronoIcon icon={Settings} variant="badge" size="xs" isActive={currentTab === 'configuracoes'} />
               <span>Configurações</span>
             </button>
 
@@ -155,7 +161,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-xs font-semibold text-rose-400 hover:text-rose-600 hover:bg-rose-500/10 border border-rose-500/20 transition-all duration-200 cursor-pointer w-full max-w-[220px] min-h-[44px] active:scale-95"
               >
-                <LogOut className="w-4 h-4 shrink-0" />
+                <KronoIcon icon={LogOut} variant="danger" size="xs" />
                 <span>Sair</span>
               </button>
             )}
@@ -165,7 +171,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Nav links */}
         <nav className="space-y-1.5 pt-2">
           {navItems.map((item) => {
-            const Icon = item.icon;
             const isActive = currentTab === item.id;
             return (
               <button
@@ -178,7 +183,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-white' : 'text-muted'}`} />
+                  <KronoIcon
+                    icon={item.icon}
+                    variant={item.variant}
+                    size="sm"
+                    isActive={isActive}
+                    withGlow={isActive}
+                  />
                   <span className="truncate">{item.label}</span>
                 </div>
                 {item.badge && item.badge > 0 ? (

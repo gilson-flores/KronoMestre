@@ -4,6 +4,7 @@ import React from 'react';
 import { BookOpen, Menu } from 'lucide-react';
 import { UserRole, TeacherUser, StudentUser } from '@/lib/types';
 import { formatAvatarUrl } from '@/lib/utils';
+import { KronoIcon } from '@/components/ui/KronoIcon';
 
 interface NavbarTopProps {
   role: UserRole;
@@ -28,17 +29,15 @@ export const NavbarTop: React.FC<NavbarTopProps> = ({
         {onToggleMobileMenu && (
           <button
             onClick={onToggleMobileMenu}
-            className="p-2 text-muted hover:text-foreground hover:bg-[#171f33] rounded-xl transition-colors md:hidden cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0 active:scale-95"
+            className="p-1 rounded-xl transition-colors md:hidden cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0 active:scale-95"
             title="Menu de Navegação"
             aria-label="Abrir Menu"
           >
-            <Menu className="w-6 h-6 text-primary" />
+            <KronoIcon icon={Menu} variant="viking" size="sm" />
           </button>
         )}
 
-        <div className="p-2 rounded-xl bg-[#171f33] border border-border text-primary shrink-0 hidden sm:flex">
-          <BookOpen className="w-5 h-5" />
-        </div>
+        <KronoIcon icon={BookOpen} variant="rpg" size="sm" withGlow className="hidden sm:inline-flex" />
         <div className="min-w-0">
           <h1 className="text-sm sm:text-base font-bold text-primary tracking-tight truncate">
             KronoMestre
@@ -47,23 +46,44 @@ export const NavbarTop: React.FC<NavbarTopProps> = ({
         </div>
       </div>
 
-      {/* Right Controls: Online Students Counter + User Profile (Zero chamadas ao servidor, sem pesquisa, sem sino) */}
+      {/* Right Controls: Online Students Counter + User Profile (Presença Real sem dados fantasmas) */}
       <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
-        {/* Contador de Alunos Online em Tempo Real (Cálculo em memória, zero chamadas ao servidor) */}
-        {onlineStudentsCount > 0 && (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium shadow-sm">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            <span className="hidden sm:inline">
-              <strong className="font-bold text-emerald-300">{onlineStudentsCount}</strong> alunos online
-            </span>
-            <span className="sm:hidden">
-              <strong className="font-bold text-emerald-300">{onlineStudentsCount}</strong> online
-            </span>
-          </div>
-        )}
+        {/* Contador de Alunos Online em Tempo Real (Presença Real sem dados fantasmas) */}
+        <div
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium shadow-sm transition-all ${
+            onlineStudentsCount > 0
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+              : 'bg-surface border-border text-muted'
+          }`}
+          title={
+            onlineStudentsCount > 0
+              ? `${onlineStudentsCount} aluno(s) com presença ativa no portal`
+              : 'Nenhum aluno ativo no portal no momento'
+          }
+        >
+          <span className="relative flex h-2 w-2">
+            {onlineStudentsCount > 0 ? (
+              <>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </>
+            ) : (
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-500/60"></span>
+            )}
+          </span>
+          <span className="hidden sm:inline">
+            <strong className={`font-bold ${onlineStudentsCount > 0 ? 'text-emerald-300' : 'text-foreground'}`}>
+              {onlineStudentsCount}
+            </strong>{' '}
+            {onlineStudentsCount === 1 ? 'aluno online' : 'alunos online'}
+          </span>
+          <span className="sm:hidden">
+            <strong className={`font-bold ${onlineStudentsCount > 0 ? 'text-emerald-300' : 'text-foreground'}`}>
+              {onlineStudentsCount}
+            </strong>{' '}
+            online
+          </span>
+        </div>
 
         {user && (
           <div className="flex items-center gap-2 pl-2 border-l border-border">
