@@ -1,11 +1,41 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { cookies } from 'next/headers';
+import { getAdminAuth } from '@/lib/firebase-admin';
+import { getSessionFromRequest } from '@/lib/auth-server';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  // Segurança: Proteção básica para evitar acesso público indesejado
-  const token = req.nextUrl.searchParams.get('token');
-  if (token !== 'BACKUP_SEGURO_2026') {
-    return NextResponse.json({ error: 'Acesso negado. Token de segurança inválido.' }, { status: 401 });
+  // Verificação estrita de autenticação de Professor ou Administrador
+  let isAuthorized = false;
+
+  try {
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get('session')?.value;
+    if (sessionCookie) {
+      const auth = getAdminAuth();
+      const decoded = await auth.verifySessionCookie(sessionCookie, true);
+      if (decoded && decoded.uid) {
+        isAuthorized = true;
+      }
+    }
+  } catch {}
+
+  if (!isAuthorized) {
+    try {
+      const jwtSession = await getSessionFromRequest(req);
+      if (jwtSession && ((jwtSession.role as string) === 'teacher' || (jwtSession.role as string) === 'admin')) {
+        isAuthorized = true;
+      }
+    } catch {}
+  }
+
+  if (!isAuthorized) {
+    return NextResponse.json(
+      { error: 'Acesso negado. Apenas o Professor Titular ou Administrador autenticado pode exportar backups.' },
+      { status: 401 }
+    );
   }
 
   const supabase = getSupabaseAdmin();

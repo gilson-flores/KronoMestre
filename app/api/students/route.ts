@@ -7,7 +7,7 @@ import { serverCache } from '@/lib/server-cache';
 export const dynamic = 'force-dynamic';
 
 // Helper de Autorização Universal (Reconhece o Professor Titular e o 2º Professor)
-async function getAuthorizedOwnerId(req: NextRequest): Promise<string | null> {
+async function getAuthorizedOwnerId(req: NextRequest, isMutation = false): Promise<string | null> {
   // 1. Tenta validar o Titular pelo cookie seguro do Firebase Admin
   try {
     const cookieStore = await cookies();
@@ -27,8 +27,12 @@ async function getAuthorizedOwnerId(req: NextRequest): Promise<string | null> {
     }
   } catch (e) {}
 
-  // 3. Fallback Seguro para o Tenant Mestre do Firestore (Garante que os 307 alunos do Firebase apareçam no preview)
-  return '5IdpwffjnhewdZ5dONRB9QoIRBZ2';
+  // 3. Fallback Seguro APENAS para leituras (GET), garantindo catálogo no preview sem permitir mutações não autenticadas
+  if (!isMutation) {
+    return '5IdpwffjnhewdZ5dONRB9QoIRBZ2';
+  }
+
+  return null;
 }
 
 export async function GET(req: NextRequest) {
@@ -59,7 +63,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const ownerTeacherId = await getAuthorizedOwnerId(req);
+    const ownerTeacherId = await getAuthorizedOwnerId(req, true);
     if (!ownerTeacherId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
     const db = getAdminDb();
@@ -108,7 +112,7 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const ownerTeacherId = await getAuthorizedOwnerId(req);
+    const ownerTeacherId = await getAuthorizedOwnerId(req, true);
     if (!ownerTeacherId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
     const db = getAdminDb();
@@ -135,7 +139,7 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const ownerTeacherId = await getAuthorizedOwnerId(req);
+    const ownerTeacherId = await getAuthorizedOwnerId(req, true);
     if (!ownerTeacherId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
 
     const { searchParams } = new URL(req.url);
@@ -145,8 +149,16 @@ export async function DELETE(req: NextRequest) {
     const db = getAdminDb();
     const studentsRef = db.collection('tenants').doc(ownerTeacherId).collection('students');
 
-    // ====== EXCLUSÃO EM MASSA ======
+    // ====== EXCLUSÃO EM MASSA (Segurança adicional contra chamadas acidentais) ======
     if (id === 'all') {
+      const cookieStore = await cookies();
+      const sessionCookie = cookieStore.get('session')?.value;
+      if (!sessionCookie) {
+        return NextResponse.json(
+          { error: 'Exclusão em massa restrita ao Professor Titular autenticado por sessão segura.' },
+          { status: 403 }
+        );
+      }
       const snapshot = await studentsRef.get();
       const batch = db.batch();
       snapshot.docs.forEach(doc => {

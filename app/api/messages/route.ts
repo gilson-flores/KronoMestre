@@ -78,11 +78,32 @@ export async function GET(request: Request) {
       }));
     });
 
-    return NextResponse.json({ messages });
+    const authorizedMessages = session.role === 'student'
+      ? messages.filter((m: any) =>
+          m.senderId === session.userId ||
+          m.recipientId === session.userId ||
+          m.recipientId === 'broadcast' ||
+          m.recipientId === 'all' ||
+          !m.recipientId ||
+          m.threadId === 'broadcast'
+        )
+      : messages;
+
+    return NextResponse.json({ messages: authorizedMessages });
   } catch (error: any) {
     console.warn('Aviso ao buscar mensagens no Firestore (possível cota excedida):', error.message);
     const session = await resolveSession(request).catch(() => null);
-    const fallbackMessages = session ? serverCache.getLastKnown<any[]>(`messages_${session.tenantId}`) || [] : [];
+    const rawFallback = session ? serverCache.getLastKnown<any[]>(`messages_${session.tenantId}`) || [] : [];
+    const fallbackMessages = session?.role === 'student'
+      ? rawFallback.filter((m: any) =>
+          m.senderId === session.userId ||
+          m.recipientId === session.userId ||
+          m.recipientId === 'broadcast' ||
+          m.recipientId === 'all' ||
+          !m.recipientId ||
+          m.threadId === 'broadcast'
+        )
+      : rawFallback;
     return NextResponse.json({ messages: fallbackMessages, warning: error.message }, { status: 200 });
   }
 }
