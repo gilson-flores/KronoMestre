@@ -295,52 +295,49 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
       ========================================================================= */}
       {internalTab === 'gallery' && (
         <div className="space-y-6">
-          {/* Barra de Filtro de Turmas */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-slate-900/80 rounded-2xl border border-slate-800">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Filtrar por Turma:</span>
-              <div className="relative" ref={turmaDropdownRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsTurmaDropdownOpen(!isTurmaDropdownOpen)}
-                  className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-xl text-xs font-bold border border-cyan-500/30 flex items-center gap-2 transition-all cursor-pointer"
-                >
-                  <Filter className="w-3.5 h-3.5" />
-                  <span>{selectedTurmaFilter === 'todas' ? 'Todas as Turmas' : `Turma ${selectedTurmaFilter}`}</span>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                </button>
-
-                {isTurmaDropdownOpen && (
-                  <div className="absolute left-0 mt-2 w-48 bg-slate-900 border border-cyan-500/30 rounded-xl shadow-2xl p-1 z-30 space-y-1">
-                    <button
-                      type="button"
-                      onClick={() => { setSelectedTurmaFilter('todas'); setIsTurmaDropdownOpen(false); }}
-                      className={`w-full text-left px-3 py-1.5 text-xs rounded-lg transition-all ${
-                        selectedTurmaFilter === 'todas' ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-slate-300 hover:bg-slate-800'
-                      }`}
-                    >
-                      Todas as Turmas
-                    </button>
-                    {turmasList.map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => { setSelectedTurmaFilter(t); setIsTurmaDropdownOpen(false); }}
-                        className={`w-full text-left px-3 py-1.5 text-xs rounded-lg transition-all ${
-                          selectedTurmaFilter === t ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-slate-300 hover:bg-slate-800'
-                        }`}
-                      >
-                        Turma {getTurmaLabel(t)}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+          {/* Barra de Filtro de Turmas (Padrão Unificado) */}
+          <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-border bg-surface space-y-2 shadow-md">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <label className="text-xs font-bold text-muted flex items-center gap-1.5 uppercase tracking-wider">
+                <Users className="w-3.5 h-3.5 text-primary" />
+                <span>Filtrar por Turma:</span>
+              </label>
+              <span className="text-xs text-muted">
+                Total de Jogos Interativos: <strong className="text-primary font-bold">{interactiveActivities.length}</strong>
+              </span>
             </div>
-
-            <span className="text-xs text-slate-400">
-              Total de Jogos Interativos: <strong className="text-cyan-300">{interactiveActivities.length}</strong>
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedTurmaFilter('todas')}
+                className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all duration-200 cursor-pointer border active:scale-95 ${
+                  selectedTurmaFilter === 'todas'
+                    ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 font-extrabold'
+                    : 'bg-background text-muted hover:text-foreground border-border hover:bg-surface-hover'
+                }`}
+              >
+                Todas as Turmas
+              </button>
+              {turmasList.map((t) => {
+                const countStudents = students.filter((s) => s.turma === t).length;
+                const isSelected = selectedTurmaFilter === t;
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setSelectedTurmaFilter(isSelected ? 'todas' : t)}
+                    className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 border active:scale-95 ${
+                      isSelected
+                        ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 font-extrabold'
+                        : 'bg-background text-muted hover:text-foreground border-border hover:bg-surface-hover'
+                    }`}
+                  >
+                    <span>Turma {getTurmaLabel(t)}</span>
+                    <span className="text-[10px] opacity-75 font-mono">({countStudents})</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Grid de Cards de Jogos */}

@@ -49,6 +49,7 @@ import {
   getUnifiedActivityMetrics,
   getSubmissionTotalGrade,
   isActivityAdapted,
+  getOriginalTurmas,
 } from '@/lib/studentUtils';
 import { AdaptActivityModal } from '@/components/modals/AdaptActivityModal';
 import { KronoIcon } from '@/components/ui/KronoIcon';
@@ -109,6 +110,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [activities, students]);
+
+  // Lista ordenada de turmas originais dos alunos (1ºs, 2ºs, 3ºs anos)
+  const originalTurmas = useMemo(() => {
+    const fromStudents = getOriginalTurmas(students);
+    if (fromStudents.length > 0) return fromStudents;
+    return availableTurmas;
+  }, [students, availableTurmas]);
 
   const availableTypes = useMemo(() => {
     const set = new Set<string>();
@@ -581,6 +589,49 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             )}
           </div>
         </div>
+
+        {/* Seletor de Turmas em Abas/Pills (Padrão Unificado) */}
+        {originalTurmas.length > 0 && (
+          <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-border bg-surface space-y-2 shadow-md">
+            <label className="text-xs font-bold text-muted flex items-center gap-1.5 uppercase tracking-wider">
+              <Users className="w-3.5 h-3.5 text-primary" />
+              <span>Filtrar por Turma:</span>
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setTurmaFilter('todas')}
+                className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all duration-200 cursor-pointer border active:scale-95 ${
+                  turmaFilter === 'todas'
+                    ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 font-extrabold'
+                    : 'bg-background text-muted hover:text-foreground border-border hover:bg-surface-hover'
+                }`}
+              >
+                Todas as Turmas
+              </button>
+
+              {originalTurmas.map((turmaCode) => {
+                const countStudents = students.filter((s) => s.turma === turmaCode).length;
+                const isSelected = turmaFilter === turmaCode;
+                return (
+                  <button
+                    key={turmaCode}
+                    type="button"
+                    onClick={() => setTurmaFilter(isSelected ? 'todas' : turmaCode)}
+                    className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 border active:scale-95 ${
+                      isSelected
+                        ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 font-extrabold'
+                        : 'bg-background text-muted hover:text-foreground border-border hover:bg-surface-hover'
+                    }`}
+                  >
+                    <span>Turma {turmaCode}</span>
+                    <span className="text-[10px] opacity-75 font-mono">({countStudents})</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* PAINEL REFINADO DE FILTROS AVANÇADOS (EXPANSÍVEL PELO BOTÃO) */}
         {isFilterPanelOpen && (

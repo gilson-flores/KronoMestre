@@ -363,32 +363,39 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
 
       {/* Selectors Panel (Turma e Atividade) */}
       <div className="glass-panel p-5 rounded-3xl border border-border bg-surface space-y-4 shadow-md">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Seletor de Turma */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-muted flex items-center gap-1.5 uppercase tracking-wider">
-              <Users className="w-3.5 h-3.5 text-primary" />
-              <span>1. Selecione a Turma:</span>
-            </label>
-            <select
-              value={selectedTurma}
-              onChange={(e) => {
-                setUserSelectedTurma(e.target.value);
-                setSelectedActivityId('all'); // Mantem padrão em 'all'
-              }}
-              className="w-full bg-background border border-white/15 rounded-2xl px-4 py-3 text-sm text-foreground font-bold focus:outline-none focus:border-primary cursor-pointer"
-            >
-              {allTurmas.length === 0 ? (
-                <option value="">Nenhuma turma cadastrada</option>
-              ) : (
-                allTurmas.map((t) => (
-                  <option key={t} value={t} className="bg-background text-foreground py-1">
-                    Turma {t} ({students.filter((s) => s.turma === t).length} alunos)
-                  </option>
-                ))
-              )}
-            </select>
+        {/* Seletor de Turma em Abas/Pills (Padrão Unificado) */}
+        <div className="space-y-2 pb-2">
+          <label className="text-xs font-bold text-muted flex items-center gap-1.5 uppercase tracking-wider">
+            <Users className="w-3.5 h-3.5 text-primary" />
+            <span>Filtrar por Turma:</span>
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            {allTurmas.map((turmaCode) => {
+              const countStudents = students.filter((s) => s.turma === turmaCode).length;
+              const isSelected = selectedTurma === turmaCode;
+              return (
+                <button
+                  key={turmaCode}
+                  type="button"
+                  onClick={() => {
+                    setUserSelectedTurma(turmaCode);
+                    setSelectedActivityId('all');
+                  }}
+                  className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 border active:scale-95 ${
+                    isSelected
+                      ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 font-extrabold'
+                      : 'bg-background text-muted hover:text-foreground border-border hover:bg-surface-hover'
+                  }`}
+                >
+                  <span>Turma {turmaCode}</span>
+                  <span className="text-[10px] opacity-75 font-mono">({countStudents})</span>
+                </button>
+              );
+            })}
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 pt-2 border-t border-border">
 
           {/* Seletor de Atividade (Todas as atividades: ativas e inativas) */}
           <div className="space-y-1.5">

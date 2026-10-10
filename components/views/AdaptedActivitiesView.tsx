@@ -246,21 +246,38 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
             Área exclusiva para adaptação neuro-pedagógica com motor anti-fragmentação de laudos. Alunos regulares nunca têm acesso e a 2ª Professora acompanha tudo em tempo real.
           </p>
         </div>
-
-        {/* Seletor Rápido de Turma */}
-        <div className="flex items-center gap-2 bg-surface p-2 rounded-2xl border border-border">
-          <span className="text-xs font-bold text-muted pl-1">Turma:</span>
-          <select
-            value={selectedTurma}
-            onChange={(e) => setSelectedTurma(e.target.value)}
-            className="bg-background border border-border rounded-xl px-3 py-1.5 text-xs text-foreground font-bold focus:outline-none focus:border-primary"
-          >
-            {turmasList.map((t) => (
-              <option key={t} value={t}>Turma {getTurmaLabel(t)}</option>
-            ))}
-          </select>
-        </div>
       </div>
+
+      {/* Seletor de Turma em Abas/Pills (Padrão Unificado) */}
+      {turmasList.length > 0 && (
+        <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-border bg-surface space-y-2 shadow-md">
+          <label className="text-xs font-bold text-muted flex items-center gap-1.5 uppercase tracking-wider">
+            <Users className="w-3.5 h-3.5 text-primary" />
+            <span>Filtrar por Turma:</span>
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            {turmasList.map((turmaCode) => {
+              const countStudents = students.filter((s) => s.turma === turmaCode).length;
+              const isSelected = selectedTurma === turmaCode;
+              return (
+                <button
+                  key={turmaCode}
+                  type="button"
+                  onClick={() => setSelectedTurma(turmaCode)}
+                  className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 border active:scale-95 ${
+                    isSelected
+                      ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 font-extrabold'
+                      : 'bg-background text-muted hover:text-foreground border-border hover:bg-surface-hover'
+                  }`}
+                >
+                  <span>Turma {getTurmaLabel(turmaCode)}</span>
+                  <span className="text-[10px] opacity-75 font-mono">({countStudents})</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Menu Superior Exclusivo da Central AEE */}
       <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
