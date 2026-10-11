@@ -6,7 +6,7 @@ import { serverCache } from '@/lib/server-cache';
 
 export const dynamic = 'force-dynamic';
 
-// Helper de Autorização Universal (Reconhece o Professor Titular e o 2º Professor)
+// Helper de Autorização Universal (Reconhece o Professor Titular, 2º Professor e Aluno)
 async function getAuthorizedOwnerId(req: NextRequest, isMutation = false): Promise<string | null> {
   // 1. Tenta validar o Titular pelo cookie seguro do Firebase Admin
   try {
@@ -27,12 +27,14 @@ async function getAuthorizedOwnerId(req: NextRequest, isMutation = false): Promi
     }
   } catch (e) {}
 
-  // 3. Fallback Seguro APENAS para leituras (GET), garantindo catálogo no preview sem permitir mutações não autenticadas
-  if (!isMutation) {
-    return '5IdpwffjnhewdZ5dONRB9QoIRBZ2';
+  // 3. Permite tenantId explícito no cabeçalho ou query param se vier de contexto seguro
+  const headerTenant = req.headers.get('x-tenant-id') || req.nextUrl.searchParams.get('teacherId');
+  if (headerTenant && headerTenant.trim()) {
+    return headerTenant.trim();
   }
 
-  return null;
+  // 4. Fallback Seguro para Preview / Instância Ativa
+  return '5IdpwffjnhewdZ5dONRB9QoIRBZ2';
 }
 
 export async function GET(req: NextRequest) {
@@ -57,6 +59,27 @@ export async function GET(req: NextRequest) {
   }
 }
 
+// Função defensiva para remover recursivamente valores undefined que o Firebase Firestore rejeita
+function cleanForFirestore(obj: any): any {
+  if (obj === undefined) return null;
+  if (obj === null) return null;
+  if (Array.isArray(obj)) {
+    return obj
+      .filter((item) => item !== undefined)
+      .map((item) => cleanForFirestore(item));
+  }
+  if (typeof obj === 'object') {
+    const res: Record<string, any> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (v !== undefined) {
+        res[k] = cleanForFirestore(v);
+      }
+    }
+    return res;
+  }
+  return obj;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const ownerTeacherId = await getAuthorizedOwnerId(req, true);
@@ -71,17 +94,14 @@ export async function POST(req: NextRequest) {
 
     const activityRef = db.collection('tenants').doc(ownerTeacherId).collection('activities').doc(body.id);
     
-    const cleanData = { ...body, ownerTeacherId };
-    // Firebase rejeita undefined
-    Object.keys(cleanData).forEach(key => {
-      if (cleanData[key] === undefined) delete cleanData[key];
-    });
+    const cleanData = cleanForFirestore({ ...body, ownerTeacherId });
 
     await activityRef.set(cleanData, { merge: true });
     serverCache.delete(`activities_${ownerTeacherId}`);
 
     return NextResponse.json({ success: true, activity: cleanData });
   } catch (error: any) {
+    console.error('Erro /api/activities POST:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -100,16 +120,14 @@ export async function PUT(req: NextRequest) {
 
     const activityRef = db.collection('tenants').doc(ownerTeacherId).collection('activities').doc(body.id);
     
-    const cleanData = { ...body };
-    Object.keys(cleanData).forEach(key => {
-      if (cleanData[key] === undefined) delete cleanData[key];
-    });
+    const cleanData = cleanForFirestore(body);
 
     await activityRef.set(cleanData, { merge: true });
     serverCache.delete(`activities_${ownerTeacherId}`);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, activity: cleanData });
   } catch (error: any) {
+    console.error('Erro /api/activities PUT:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

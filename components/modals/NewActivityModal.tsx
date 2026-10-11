@@ -706,7 +706,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   if (pendingActivityForDecision) {
     return (
       <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fadeIn">
-        <div className="w-full max-w-2xl bg-surface rounded-3xl border border-white/15 p-6 sm:p-8 space-y-6 shadow-2xl relative my-auto">
+        <div className="w-full max-w-2xl bg-surface rounded-3xl border border-white/15 p-6 sm:p-8 space-y-6 shadow-2xl relative my-auto max-h-[92vh] overflow-y-auto custom-scrollbar">
           <div className="flex items-center justify-between border-b border-border pb-4">
             <div className="flex items-center gap-3">
               <div className="p-3 bg-amber-100 text-amber-400 rounded-2xl border border-amber-500/30">

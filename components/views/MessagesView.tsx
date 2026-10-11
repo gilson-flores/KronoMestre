@@ -392,7 +392,16 @@ export const MessagesView: React.FC<MessagesViewProps> = ({
         <div className={`flex-1 bg-[#09101f] flex flex-col transition-all duration-300 min-w-0 h-full min-h-0 ${!isMobileChatOpen && currentUserRole === 'teacher' ? 'hidden md:flex' : 'flex'}`}>
           <div className="p-3 sm:p-4 bg-surface border-b border-border flex items-center justify-between shrink-0 min-w-0">
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              {currentUserRole === 'teacher' && <button onClick={() => setIsMobileChatOpen(false)} className="md:hidden p-1.5 text-muted hover:text-foreground rounded-full"><ArrowLeft className="w-5 h-5" /></button>}
+              {currentUserRole === 'teacher' && (
+                <button
+                  type="button"
+                  onClick={() => setIsMobileChatOpen(false)}
+                  className="md:hidden p-2 text-muted hover:text-foreground hover:bg-surface-hover rounded-full min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer active:scale-95 transition-all"
+                  aria-label="Voltar para a lista de conversas"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+              )}
               {currentUserRole === 'teacher' ? (
                 activeStudent ? (
                   <div className="flex items-center gap-2.5 min-w-0">

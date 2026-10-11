@@ -110,8 +110,8 @@ export const NewSecondTeacherModal: React.FC<NewSecondTeacherModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
-      <div className="glass-panel w-full max-w-lg rounded-3xl border border-border p-6 sm:p-8 space-y-6 relative bg-surface shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm animate-fadeIn overflow-y-auto">
+      <div className="glass-panel w-full max-w-lg rounded-3xl border border-border p-6 sm:p-8 space-y-6 relative bg-surface shadow-2xl max-h-[92vh] overflow-y-auto custom-scrollbar my-auto">
         {/* Close Button */}
         <button
           onClick={onClose}

@@ -203,7 +203,7 @@ export const ParallelRecoveryModal: React.FC<ParallelRecoveryModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fadeIn">
-      <div className="w-full max-w-3xl bg-surface rounded-3xl border border-white/15 p-5 sm:p-7 space-y-6 shadow-2xl relative my-auto">
+      <div className="w-full max-w-3xl bg-surface rounded-3xl border border-white/15 p-5 sm:p-7 space-y-6 shadow-2xl relative my-auto max-h-[92vh] overflow-y-auto custom-scrollbar">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border pb-4">
           <div className="flex items-center gap-3">

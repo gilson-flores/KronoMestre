@@ -611,11 +611,11 @@ export default function Home() {
           }
         }
 
-        // 2. Carregar Atividades do Firestore (com cache no backend e cliente)
+        // 2. Carregar Atividades do Firestore (com sincronização segura)
         const actRes = await fetch('/api/activities');
         if (actRes.ok) {
           const actData = await actRes.json();
-          if (Array.isArray(actData.activities) && actData.activities.length > 0) {
+          if (Array.isArray(actData.activities)) {
             setActivities(actData.activities);
             if (typeof window !== 'undefined') {
               setScopedLocalStorageItem('local_activities_data', JSON.stringify(actData.activities), teacher.id);
@@ -1333,89 +1333,100 @@ export default function Home() {
         });
       }
 
-      let targetActivityToSave: Activity | null = null;
-
-      setActivities((prev) =>
-        prev.map((act) => {
-          if (act.id !== activityId) return act;
-
-          const updatedSubmissions = [...act.submissions];
-
-          targetStudents.forEach((targetSt) => {
-            const existingIndex = updatedSubmissions.findIndex((s) => s.studentId === targetSt.id);
-
-            const isAutoGradedGame = Boolean(
-              act.isGameActivity ||
-              act.type === 'Jogo Avaliativo' ||
-              (maxEssayScore === 0 && objectiveScore !== undefined)
-            );
-            const submissionStatus = isAutoGradedGame ? ('graded' as const) : ('pending' as const);
-
-            if (existingIndex >= 0) {
-              updatedSubmissions[existingIndex] = {
-                ...updatedSubmissions[existingIndex],
-                essayAnswer,
-                objectiveScore,
-                maxObjectiveScore,
-                maxEssayScore,
-                selectedObjectiveAnswers,
-                groupMembers:
-                  groupMembers !== undefined
-                    ? groupMembers
-                    : updatedSubmissions[existingIndex].groupMembers,
-                status: submissionStatus,
-                teacherFeedback: isAutoGradedGame
-                  ? (updatedSubmissions[existingIndex].teacherFeedback || '🎮 Avaliação automática KronoGames concluída.')
-                  : updatedSubmissions[existingIndex].teacherFeedback,
-              };
-            } else {
-              updatedSubmissions.push({
-                studentId: targetSt.id,
-                studentName: targetSt.fullName,
-                matricula: targetSt.matricula,
-                tag: targetSt.tag,
-                avatarUrl: targetSt.avatarUrl,
-                submittedAt: new Date().toLocaleDateString('pt-BR'),
-                objectiveScore,
-                maxObjectiveScore,
-                maxEssayScore,
-                status: submissionStatus,
-                essayAnswer,
-                selectedObjectiveAnswers,
-                groupMembers: groupMembers || undefined,
-                teacherFeedback: isAutoGradedGame ? '🎮 Avaliação automática KronoGames concluída.' : '',
-              });
-            }
-          });
-
-          const pendingCorrection = updatedSubmissions.filter((s) => s.status === 'pending').length;
-
-          const updatedAct = {
-            ...act,
-            totalSubmissions: updatedSubmissions.length,
-            pendingCorrection,
-            submissions: updatedSubmissions,
-          };
-
-          targetActivityToSave = updatedAct;
-          return updatedAct;
-        })
-      );
-
-      if (selectedActivityForGrading && selectedActivityForGrading.id === activityId) {
-        if (targetActivityToSave) {
-          setSelectedActivityForGrading(targetActivityToSave);
-        }
+      const currentAct = activities.find((a) => a.id === activityId);
+      if (!currentAct) {
+        showGlobalStatus('error', 'Atividade não encontrada na lista.');
+        return;
       }
 
-      if (targetActivityToSave) {
-        const res = await fetch('/api/activities', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(targetActivityToSave),
-        });
+      const updatedSubmissions = [...currentAct.submissions];
 
-        if (!res.ok) throw new Error('Falha ao gravar resposta na nuvem.');
+      targetStudents.forEach((targetSt) => {
+        const existingIndex = updatedSubmissions.findIndex((s) => s.studentId === targetSt.id);
+
+        const isAutoGradedGame = Boolean(
+          currentAct.isGameActivity ||
+          currentAct.type === 'Jogo Avaliativo' ||
+          (maxEssayScore === 0 && objectiveScore !== undefined)
+        );
+        const submissionStatus = isAutoGradedGame ? ('graded' as const) : ('pending' as const);
+
+        if (existingIndex >= 0) {
+          updatedSubmissions[existingIndex] = {
+            ...updatedSubmissions[existingIndex],
+            essayAnswer,
+            objectiveScore,
+            maxObjectiveScore,
+            maxEssayScore,
+            selectedObjectiveAnswers,
+            groupMembers:
+              groupMembers !== undefined
+                ? groupMembers
+                : updatedSubmissions[existingIndex].groupMembers,
+            status: submissionStatus,
+            teacherFeedback: isAutoGradedGame
+              ? (updatedSubmissions[existingIndex].teacherFeedback || '🎮 Avaliação automática KronoGames concluída.')
+              : updatedSubmissions[existingIndex].teacherFeedback,
+          };
+        } else {
+          updatedSubmissions.push({
+            studentId: targetSt.id,
+            studentName: targetSt.fullName,
+            matricula: targetSt.matricula,
+            tag: targetSt.tag,
+            avatarUrl: targetSt.avatarUrl,
+            submittedAt: new Date().toLocaleDateString('pt-BR'),
+            objectiveScore,
+            maxObjectiveScore,
+            maxEssayScore,
+            status: submissionStatus,
+            essayAnswer,
+            selectedObjectiveAnswers,
+            groupMembers: groupMembers || undefined,
+            teacherFeedback: isAutoGradedGame ? '🎮 Avaliação automática KronoGames concluída.' : '',
+          });
+        }
+      });
+
+      const pendingCorrection = updatedSubmissions.filter((s) => s.status === 'pending').length;
+
+      const targetActivityToSave: Activity = {
+        ...currentAct,
+        totalSubmissions: updatedSubmissions.length,
+        pendingCorrection,
+        submissions: updatedSubmissions,
+      };
+
+      // 1. Atualiza estado e cache local de forma atômica
+      const targetOwnerId = studentUser.ownerTeacherId || teacher.id || '5IdpwffjnhewdZ5dONRB9QoIRBZ2';
+      setActivities((prev) => {
+        const next = prev.map((act) => (act.id === activityId ? targetActivityToSave : act));
+        if (typeof window !== 'undefined') {
+          setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), targetOwnerId);
+        }
+        return next;
+      });
+
+      if (selectedActivityForGrading && selectedActivityForGrading.id === activityId) {
+        setSelectedActivityForGrading(targetActivityToSave);
+      }
+
+      // 2. Grava diretamente no Firestore (com retry preventivo)
+      const res = await fetch('/api/activities', {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-tenant-id': targetOwnerId,
+        },
+        body: JSON.stringify({
+          ...targetActivityToSave,
+          ownerTeacherId: targetOwnerId,
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `HTTP ${res.status}`);
       }
 
       showGlobalStatus('success', 'Resposta da atividade enviada com sucesso para o Professor!');

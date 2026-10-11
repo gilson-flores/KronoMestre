@@ -35,10 +35,20 @@ function getFirebaseAdminApp() {
   });
 }
 
+let cachedAdminDb: Firestore | null = null;
+
 export function getAdminAuth(): Auth {
   return getAuth(getFirebaseAdminApp());
 }
 
 export function getAdminDb(): Firestore {
-  return getFirestore(getFirebaseAdminApp());
+  if (!cachedAdminDb) {
+    cachedAdminDb = getFirestore(getFirebaseAdminApp());
+    try {
+      cachedAdminDb.settings({ ignoreUndefinedProperties: true });
+    } catch {
+      // Já inicializado com settings
+    }
+  }
+  return cachedAdminDb;
 }

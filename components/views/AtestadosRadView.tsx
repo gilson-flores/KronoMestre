@@ -568,15 +568,17 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students, is
                 ? 'Nenhum atestado corresponde aos filtros selecionados.'
                 : 'Nenhum atestado ou RAD registrado até o momento. Clique no botão acima para cadastrar.'}
             </p>
-            <button
-              onClick={() => {
-                resetForm();
-                setIsModalOpen(true);
-              }}
-              className="py-2.5 px-6 bg-amber-400 hover:bg-amber-300 text-black font-bold rounded-2xl transition-all text-xs cursor-pointer shadow-lg shadow-amber-400/20"
-            >
-              Registrar Primeiro Atestado
-            </button>
+            {!isReadOnly && (
+              <button
+                onClick={() => {
+                  resetForm();
+                  setIsModalOpen(true);
+                }}
+                className="py-2.5 px-6 bg-amber-400 hover:bg-amber-300 text-black font-bold rounded-2xl transition-all text-xs cursor-pointer shadow-lg shadow-amber-400/20"
+              >
+                Registrar Primeiro Atestado
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

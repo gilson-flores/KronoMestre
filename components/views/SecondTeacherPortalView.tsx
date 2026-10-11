@@ -421,7 +421,8 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsMobileMenuOpen(true)}
-              className="p-2 -ml-2 text-foreground hover:bg-surface-hover rounded-xl transition-colors cursor-pointer"
+              className="p-2 -ml-2 text-foreground hover:bg-surface-hover rounded-xl transition-colors cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center active:scale-95"
+              aria-label="Abrir Menu de Navegação"
             >
               <Menu className="w-5 h-5" />
             </button>
