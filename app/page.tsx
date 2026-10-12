@@ -294,6 +294,13 @@ export default function Home() {
                     setActivities(parsed);
                   }
                 }
+                const cachedMsgs = getScopedLocalStorageItem('local_messages_data', data.user.id);
+                if (cachedMsgs) {
+                  const parsed = JSON.parse(cachedMsgs);
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    setChatMessages(parsed);
+                  }
+                }
               } catch (e) {}
             }
           } else if (data.user && data.user.role === 'second_teacher') {
@@ -623,12 +630,15 @@ export default function Home() {
           }
         }
 
-        // 3. Carregar Mensagens de Chat do Firestore
+        // 3. Carregar Mensagens de Chat do Firestore (com cache local resiliente)
         const msgRes = await fetch('/api/messages');
         if (msgRes.ok) {
           const msgData = await msgRes.json();
-          if (Array.isArray(msgData.messages) && msgData.messages.length > 0) {
+          if (Array.isArray(msgData.messages)) {
             setChatMessages(msgData.messages);
+            if (typeof window !== 'undefined') {
+              setScopedLocalStorageItem('local_messages_data', JSON.stringify(msgData.messages), teacher.id);
+            }
           }
         }
 

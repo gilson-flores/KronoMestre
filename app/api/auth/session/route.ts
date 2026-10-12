@@ -117,34 +117,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 3. Fallback Seguro do Tenant do Firestore (Garante que no Preview os dados reais do professor e seus 307 alunos sejam carregados)
-    const defaultOwnerId = '5IdpwffjnhewdZ5dONRB9QoIRBZ2';
-    const tenantData = await getTenantDataCached(defaultOwnerId);
-    const response = NextResponse.json({
-      user: {
-        id: defaultOwnerId,
-        email: tenantData?.email || '755840@profe.sed.sc.gov.br',
-        name: tenantData?.name || tenantData?.nome || 'Prof. Gilson Flores',
-        role: 'teacher',
-        tenant: tenantData,
-      },
-    });
-
-    try {
-      const fallbackPayload: SessionPayload = {
-        sub: defaultOwnerId,
-        role: 'teacher',
-        ownerTeacherId: defaultOwnerId,
-        email: tenantData?.email || '755840@profe.sed.sc.gov.br',
-        name: tenantData?.name || tenantData?.nome || 'Prof. Gilson Flores',
-      };
-      const token = await signSessionToken(fallbackPayload, '7d');
-      setSessionCookie(response, token, 7 * 24 * 60 * 60);
-    } catch (e) {
-      console.warn('[Session API] Falha ao assinar cookie fallback:', e);
-    }
-
-    return response;
+    // 3. Sem sessão válida: Retorna user: null para exibir a tela de login
+    return NextResponse.json({ user: null });
   } catch (err) {
     console.error('Erro ao verificar sessão:', err);
     return NextResponse.json({ user: null }, { status: 500 });
