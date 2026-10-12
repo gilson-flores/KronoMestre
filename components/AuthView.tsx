@@ -5,6 +5,7 @@ import { StudentUser, TeacherUser } from '@/lib/types';
 import { BookOpen, User, GraduationCap, Lock, ArrowRight, CheckCircle2, HeartHandshake, KeyRound, X } from 'lucide-react';
 import { DEFAULT_TURMAS, getTurmaLabel, normalizeStudentName } from '@/lib/studentUtils';
 import { verifyPassword } from '@/lib/crypto';
+import { purgeAllAuthAndTenantCaches, setTenantSessionItem } from '@/lib/cacheUtils';
 
 interface AuthViewProps {
   students: StudentUser[];
@@ -59,10 +60,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
     // EXTERMINADOR DE CACHE: Garante que nenhuma sessão fantasma sobreviva
     if (typeof window !== 'undefined') {
-      sessionStorage.clear();
-      localStorage.removeItem('local_students_data');
-      localStorage.removeItem('local_activities_data');
-      localStorage.removeItem('library_files_data');
+      purgeAllAuthAndTenantCaches();
     }
 
     try {
@@ -150,10 +148,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
     setSecondTeacherLoading(true);
 
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('active_session'); 
-      localStorage.removeItem('local_students_data');
-      localStorage.removeItem('local_activities_data');
-      localStorage.removeItem('library_files_data');
+      purgeAllAuthAndTenantCaches();
     }
 
     const INCLUSION_ICON = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iYmciIHgxPSIwIiB5MT0iMCIgeDI9IjI1NiIgeTI9IjI1NiI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMxZTI5M2IiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMGYxNzJhIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJwcmltYXJ5IiB4MT0iMCIgeTE9IjAiIHgyPSIyNTYiIHkyPSIyNTYiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjZjU5ZTBiIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iI2Q5NzcwNiIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0ic2Vjb25kYXJ5IiB4MT0iMCIgeTE9IjAiIHgyPSIyNTYiIHkyPSIyNTYiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjZmJiZjI0Ii8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iI2Y1OWUwYiIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICA8L2RlZnM+CiAgPHJlY3Qgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIGZpbGw9InVybCgjYmcpIi8+CiAgPHBhdGggZD0iTTQwIDEyOCBBIDg4IDg4IDAgMSAxIDIxNiAxMjggQSA4OCA4OCAwIDEgMSA0MCAxMjgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZiYmYyNCIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtZGFzaGFycmF5PSI4IDgiIG9wYWNpdHk9IjAuMTUiLz4KICA8Y2lyY2xlIGN4PSIxMDQiIGN5PSIxMDAiIHI9IjI4IiBmaWxsPSJ1cmwoI3ByaW1hcnkpIi8+CiAgPHBhdGggZD0iTTEwNCAxNDAgQzYwIDE0MCA0MCAxODAgMzIgMjMwIEwxNzYgMjMwIEMxNjggMTgwIDE0OCAxNDAgMTA0IDE0MCBaIiBmaWxsPSJ1cmwoI3ByaW1hcnkpIi8+CiAgPGNpcmNsZSBjeD0iMTY4IiBjeT0iMTMyIiByPSIyMiIgZmlsbD0idXJsKCNzZWNvbmRhcnkpIi8+CiAgPHBhdGggZD0iTTE2OCAxNjUgQzE0MCAxNjUgMTI1IDE5MCAxMjAgMjMwIEwyMTYgMjMwIEMyMTEgMTkwIDE5NiAxNjUgMTY4IDE2NSBaIiBmaWxsPSJ1cmwoI3NlY29uZGFyeSkiLz4KICA8cGF0aCBkPSJNMTgwIDUwIEwxODUgNzAgTDIwNSA3NSBMMTg1IDgwIEwxODAgMTAwIEwxNzUgODAgTDE1NSA3NSBMMTc1IDcwIFoiIGZpbGw9IiNmY2QzNGQiIG9wYWNpdHk9IjAuOSIvPgogIDxjaXJjbGUgY3g9IjcwIiBjeT0iNzAiIHI9IjYiIGZpbGw9IiNmYmJmMjQiIG9wYWNpdHk9IjAuNiIvPgo8L3N2Zz4=';
@@ -213,14 +208,15 @@ export const AuthView: React.FC<AuthViewProps> = ({
         };
 
         if (typeof window !== 'undefined') {
-          sessionStorage.setItem(
+          setTenantSessionItem(
             'active_session',
             JSON.stringify({
               role: 'second_teacher',
               ownerTeacherId: secondTeacherProfile.ownerTeacherId,
               teacherData: secondTeacherProfile,
               mustChangePassword: secondTeacherProfile.mustChangePassword,
-            })
+            }),
+            secondTeacherProfile.id
           );
         }
 
@@ -246,9 +242,9 @@ export const AuthView: React.FC<AuthViewProps> = ({
     e.preventDefault();
     setStudentError('');
 
-    // Limpeza de segurança da sessão ativa, mas PRESERVA o cache local de alunos para permitir o login
+    // Limpeza de segurança da sessão ativa com isolamento de tenant
     if (typeof window !== 'undefined') {
-      sessionStorage.clear();
+      purgeAllAuthAndTenantCaches();
     }
 
     const rawInput = studentFullName.trim();

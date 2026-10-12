@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getGeminiClient } from "@/lib/gemini";
+import { getGeminiClient, isGeminiAuthError } from "@/lib/gemini";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -251,7 +251,10 @@ Responda como Boby, aplicando sua personalidade carismática e respeitando silen
         });
         if (response && response.text) break;
       } catch (err: any) {
-        console.warn(`Aviso teacher-bot (${modelName}):`, err?.message);
+        if (isGeminiAuthError(err)) {
+          break;
+        }
+        console.warn(`Aviso teacher-bot (${modelName}):`, err?.message || err);
       }
     }
 

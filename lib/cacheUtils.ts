@@ -192,6 +192,105 @@ export function removeScopedLocalStorageItem(
   }
 }
 
+/**
+ * Obtém o ID único do usuário ou tenant atual (ex: teacher.id, student.id, ou ownerTeacherId)
+ */
+export function getCurrentUserId(): string {
+  if (typeof window !== 'undefined') {
+    try {
+      const activeId = sessionStorage.getItem('current_active_user_id');
+      if (activeId && activeId.trim()) return activeId.trim();
+
+      const sessionStr = sessionStorage.getItem('active_session');
+      if (sessionStr) {
+        const session = JSON.parse(sessionStr);
+        if (session.studentId) return session.studentId;
+        if (session.studentData?.id) return session.studentData.id;
+        if (session.teacherData?.id) return session.teacherData.id;
+        if (session.ownerTeacherId) return session.ownerTeacherId;
+      }
+    } catch (e) {}
+  }
+  return '';
+}
+
+/**
+ * Retorna a chave com prefixo único por tenant/usuário para isolamento no sessionStorage.
+ */
+export function getTenantSessionKey(key: string, tenantOrUserId?: string | null): string {
+  const scope = (tenantOrUserId && tenantOrUserId.trim()) || getCurrentUserId() || getCurrentOwnerTeacherId();
+  return scope ? `tenant_${scope}_${key}` : `tenant_shared_${key}`;
+}
+
+/**
+ * Lê item isolado por Tenant/User do sessionStorage.
+ * Previne rigorosamente que sessões de pai/professor vazem para o filho/aluno na mesma máquina ou navegador.
+ */
+export function getTenantSessionItem(key: string, tenantOrUserId?: string | null): string | null {
+  if (typeof window === 'undefined') return null;
+  const scope = (tenantOrUserId && tenantOrUserId.trim()) || getCurrentUserId() || getCurrentOwnerTeacherId();
+  if (scope) {
+    const scopedVal = sessionStorage.getItem(`tenant_${scope}_${key}`);
+    if (scopedVal !== null) return scopedVal;
+  }
+  // Se não foi fornecido escopo explícito, lê chave legada como fallback
+  if (!tenantOrUserId) {
+    return sessionStorage.getItem(key);
+  }
+  return null;
+}
+
+/**
+ * Grava item isolado por Tenant/User no sessionStorage com chave prefixada e ponteiro do usuário ativo.
+ */
+export function setTenantSessionItem(key: string, value: string, tenantOrUserId?: string | null): void {
+  if (typeof window === 'undefined') return;
+  const scope = (tenantOrUserId && tenantOrUserId.trim()) || getCurrentUserId() || getCurrentOwnerTeacherId();
+  if (scope) {
+    sessionStorage.setItem(`tenant_${scope}_${key}`, value);
+    sessionStorage.setItem('current_active_user_id', scope);
+  }
+  // Mantém chave base sincronizada na aba ativa
+  sessionStorage.setItem(key, value);
+}
+
+/**
+ * Remove item isolado do sessionStorage em todas as variações prefixadas e legadas.
+ */
+export function removeTenantSessionItem(key: string, tenantOrUserId?: string | null): void {
+  if (typeof window === 'undefined') return;
+  const scope = (tenantOrUserId && tenantOrUserId.trim()) || getCurrentUserId() || getCurrentOwnerTeacherId();
+  if (scope) {
+    sessionStorage.removeItem(`tenant_${scope}_${key}`);
+  }
+  sessionStorage.removeItem(key);
+}
+
+/**
+ * Limpa completamente todo o cache e resquícios de autenticação global e local
+ * em cada novo login ou troca de usuário para isolamento absoluto (Tenant Isolation).
+ */
+export function purgeAllAuthAndTenantCaches(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.clear();
+    // Limpar chaves legadas e todos os caches globais do localStorage
+    LEGACY_CACHE_KEYS.forEach((k) => {
+      try {
+        localStorage.removeItem(k);
+      } catch {}
+    });
+    localStorage.removeItem('local_messages_data');
+    localStorage.removeItem('teacher_drive_folder_url');
+    localStorage.removeItem('explicit_logout');
+
+    // Remove chaves de auth do Firebase e Supabase
+    cleanLegacyCacheKeys();
+  } catch (e) {
+    console.warn('Aviso ao purgar caches de autenticação:', e);
+  }
+}
+
 /** Limpa chaves legadas e resquícios de autenticação do localStorage no arranque */
 export function cleanLegacyCacheKeys(): void {
   if (typeof window === 'undefined') return;

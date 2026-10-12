@@ -24,9 +24,90 @@ async function getTenantDataCached(tenantId: string): Promise<any> {
   });
 }
 
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+  'Surrogate-Control': 'no-store',
+};
+
 export async function GET(req: NextRequest) {
   try {
-    // 1. Tentar validar sessão do Professor Titular / Admin Supremo (Cookie 'session' do Firebase)
+    // 1. Tentar validar sessão ativa via JWT (Aluno, 2º Professor ou Professor Titular)
+    // O JWT representa a ação de login explícita mais recente do usuário nesta aba/dispositivo
+    const jwtSession = await getSessionFromRequest(req);
+    if (jwtSession && jwtSession.sub) {
+      const ownerTeacherId = jwtSession.ownerTeacherId || jwtSession.sub;
+
+      if (jwtSession.role === 'teacher') {
+        const tenantData = await getTenantDataCached(jwtSession.sub);
+
+        return NextResponse.json(
+          {
+            user: {
+              id: jwtSession.sub,
+              email: jwtSession.email || '',
+              name: tenantData?.name || tenantData?.nome || jwtSession.name || 'Prof. Gilson Flores',
+              role: 'teacher',
+              tenant: tenantData,
+            },
+          },
+          { headers: NO_CACHE_HEADERS }
+        );
+      }
+
+      if (jwtSession.role === 'second_teacher') {
+        const tenantData = await getTenantDataCached(ownerTeacherId);
+
+        return NextResponse.json(
+          {
+            user: {
+              id: jwtSession.sub,
+              email: jwtSession.email || '',
+              name: jwtSession.name || '2º Professor',
+              role: 'second_teacher',
+              ownerTeacherId,
+              mustChangePassword: Boolean(jwtSession.mustChangePassword),
+              tenant: {
+                driveFolderUrl: tenantData?.driveFolderUrl || '',
+                school: tenantData?.school || "EEB Prof. Jandira D'Ávila",
+              },
+            },
+          },
+          { headers: NO_CACHE_HEADERS }
+        );
+      }
+
+      if (jwtSession.role === 'student') {
+        const tenantData = await getTenantDataCached(ownerTeacherId);
+
+        return NextResponse.json(
+          {
+            user: {
+              id: jwtSession.sub,
+              name: jwtSession.name || 'Aluno',
+              role: 'student',
+              turma: jwtSession.turma || '',
+              matricula: jwtSession.matricula || '',
+              tag: jwtSession.tag || 'REGULAR',
+              avatarUrl: jwtSession.avatarUrl || '',
+              ownerTeacherId,
+              mustChangePassword: Boolean(jwtSession.mustChangePassword),
+              tenant: {
+                name: tenantData?.name || tenantData?.nome || 'Prof. Gilson Flores',
+                subject: tenantData?.subject || 'Sociologia',
+                school: tenantData?.school || "EEB Prof. Jandira D'Ávila",
+                avatarUrl: tenantData?.avatarUrl || '',
+                driveFolderUrl: tenantData?.driveFolderUrl || '',
+              },
+            },
+          },
+          { headers: NO_CACHE_HEADERS }
+        );
+      }
+    }
+
+    // 2. Fallback: Validar sessão do Professor Titular (Cookie 'session' do Firebase Admin)
     try {
       const cookieStore = await cookies();
       const sessionCookie = cookieStore.get('session')?.value;
@@ -38,89 +119,28 @@ export async function GET(req: NextRequest) {
         if (decoded && decoded.uid) {
           const tenantData = await getTenantDataCached(decoded.uid);
 
-          return NextResponse.json({
-            user: {
-              id: decoded.uid,
-              email: decoded.email || '',
-              name: tenantData?.name || tenantData?.nome || decoded.name || 'Prof. Gilson Flores',
-              role: 'teacher',
-              tenant: tenantData,
+          return NextResponse.json(
+            {
+              user: {
+                id: decoded.uid,
+                email: decoded.email || '',
+                name: tenantData?.name || tenantData?.nome || decoded.name || 'Prof. Gilson Flores',
+                role: 'teacher',
+                tenant: tenantData,
+              },
             },
-          });
+            { headers: NO_CACHE_HEADERS }
+          );
         }
       }
     } catch {
-      // Se o cookie 'session' não existir ou tiver expirado, segue para o fluxo JWT abaixo
+      // Se o cookie 'session' não existir ou tiver expirado, prossegue para o retorno não autenticado
     }
 
-    // 2. Tentar validar sessão de Professor, 2º Professor ou Aluno (Cookie JWT via lib/auth-server)
-    const jwtSession = await getSessionFromRequest(req);
-    if (jwtSession && jwtSession.sub) {
-      const ownerTeacherId = jwtSession.ownerTeacherId || jwtSession.sub;
-
-      if (jwtSession.role === 'teacher') {
-        const tenantData = await getTenantDataCached(jwtSession.sub);
-
-        return NextResponse.json({
-          user: {
-            id: jwtSession.sub,
-            email: jwtSession.email || '',
-            name: tenantData?.name || tenantData?.nome || jwtSession.name || 'Prof. Gilson Flores',
-            role: 'teacher',
-            tenant: tenantData,
-          },
-        });
-      }
-
-      if (jwtSession.role === 'second_teacher') {
-        const tenantData = await getTenantDataCached(ownerTeacherId);
-
-        return NextResponse.json({
-          user: {
-            id: jwtSession.sub,
-            email: jwtSession.email || '',
-            name: jwtSession.name || '2º Professor',
-            role: 'second_teacher',
-            ownerTeacherId,
-            mustChangePassword: Boolean(jwtSession.mustChangePassword),
-            tenant: {
-              driveFolderUrl: tenantData?.driveFolderUrl || '',
-              school: tenantData?.school || "EEB Prof. Jandira D'Ávila",
-            },
-          },
-        });
-      }
-
-      if (jwtSession.role === 'student') {
-        const tenantData = await getTenantDataCached(ownerTeacherId);
-
-        return NextResponse.json({
-          user: {
-            id: jwtSession.sub,
-            name: jwtSession.name || 'Aluno',
-            role: 'student',
-            turma: jwtSession.turma || '',
-            matricula: jwtSession.matricula || '',
-            tag: jwtSession.tag || 'REGULAR',
-            avatarUrl: jwtSession.avatarUrl || '',
-            ownerTeacherId,
-            mustChangePassword: Boolean(jwtSession.mustChangePassword),
-            tenant: {
-              name: tenantData?.name || tenantData?.nome || 'Prof. Gilson Flores',
-              subject: tenantData?.subject || 'Sociologia',
-              school: tenantData?.school || "EEB Prof. Jandira D'Ávila",
-              avatarUrl: tenantData?.avatarUrl || '',
-              driveFolderUrl: tenantData?.driveFolderUrl || '',
-            },
-          },
-        });
-      }
-    }
-
-    // 3. Sem sessão válida: Retorna user: null para exibir a tela de login
-    return NextResponse.json({ user: null });
+    // 3. Sem sessão válida: Retorna user: null com cabeçalhos anti-cache estritos
+    return NextResponse.json({ user: null }, { headers: NO_CACHE_HEADERS });
   } catch (err) {
     console.error('Erro ao verificar sessão:', err);
-    return NextResponse.json({ user: null }, { status: 500 });
+    return NextResponse.json({ user: null }, { status: 500, headers: NO_CACHE_HEADERS });
   }
 }

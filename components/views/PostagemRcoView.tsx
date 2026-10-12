@@ -60,13 +60,40 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
   const [copiedNotification, setCopiedNotification] = useState<boolean>(false);
   const [isPdfModalOpen, setIsPdfModalOpen] = useState<boolean>(false);
 
-  // Selected turma that dynamically adapts to active turmas (e.g. after archiving)
+  // Mapeamento preciso de entregas por turma para feedback visual e priorização
+  const turmaSubmissionsCountMap = useMemo(() => {
+    const map = new Map<string, number>();
+    const allSubs = activities.flatMap((a) => a.submissions || []);
+    allTurmas.forEach((turmaCode) => {
+      const turmaStudents = students.filter(
+        (s) => s.turma?.trim().toLowerCase() === turmaCode.trim().toLowerCase()
+      );
+      const studentIdSet = new Set(turmaStudents.map((s) => s.id));
+      const matriculaSet = new Set(turmaStudents.map((s) => s.matricula).filter(Boolean));
+      const nameSet = new Set(
+        turmaStudents.map((s) => s.fullName?.trim().toLowerCase()).filter(Boolean)
+      );
+
+      const count = allSubs.filter(
+        (sub) =>
+          (sub.studentId && studentIdSet.has(sub.studentId)) ||
+          (sub.matricula && matriculaSet.has(sub.matricula)) ||
+          (sub.studentName && nameSet.has(sub.studentName.trim().toLowerCase()))
+      ).length;
+
+      map.set(turmaCode, count);
+    });
+    return map;
+  }, [activities, allTurmas, students]);
+
+  // Selected turma that dynamically adapts to active turmas and prioritizes classes with submissions
   const selectedTurma = useMemo(() => {
     if (userSelectedTurma && allTurmas.includes(userSelectedTurma)) {
       return userSelectedTurma;
     }
-    return allTurmas[0] || '';
-  }, [userSelectedTurma, allTurmas]);
+    const turmaWithSubs = allTurmas.find((t) => (turmaSubmissionsCountMap.get(t) || 0) > 0);
+    return turmaWithSubs || allTurmas[0] || '';
+  }, [userSelectedTurma, allTurmas, turmaSubmissionsCountMap]);
 
   // Filter activities available for the selected turma (todas: ativas e inativas)
   const activitiesForTurma = useMemo(() => {
@@ -126,8 +153,17 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
           // Maior nota obtida entre atividade mãe ou filhas (ex: recuperação)
           let bestGrade = -1;
           let bestSub = subsForStudent[0];
+          let hasCalculatedGrade = false;
 
           subsForStudent.forEach((s) => {
+            const hasScoreIndicator =
+              s.status === 'graded' ||
+              (s.essayScore !== undefined && s.essayScore !== null) ||
+              Number(s.objectiveScore) > 0;
+            if (hasScoreIndicator) {
+              hasCalculatedGrade = true;
+            }
+
             const obj = Number(s.objectiveScore) || 0;
             const ess = Number(s.essayScore) || 0;
             const ext = Number(s.extraPoints) || 0;
@@ -139,7 +175,7 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
           });
 
           sub = bestSub;
-          totalGrade = bestGrade >= 0 ? bestGrade : null;
+          totalGrade = hasCalculatedGrade && bestGrade >= 0 ? bestGrade : null;
 
           if (bestSub.status === 'graded') {
             status = 'graded';
@@ -196,8 +232,17 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
           // Seleciona a maior nota obtida entre atividade mãe, adaptação ou recuperação paralela
           let bestGrade = -1;
           let bestSub = subsForStudent[0];
+          let hasCalculatedGrade = false;
 
           subsForStudent.forEach((sub) => {
+            const hasScoreIndicator =
+              sub.status === 'graded' ||
+              (sub.essayScore !== undefined && sub.essayScore !== null) ||
+              Number(sub.objectiveScore) > 0;
+            if (hasScoreIndicator) {
+              hasCalculatedGrade = true;
+            }
+
             const obj = Number(sub.objectiveScore) || 0;
             const ess = Number(sub.essayScore) || 0;
             const ext = Number(sub.extraPoints) || 0;
@@ -208,7 +253,7 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
             }
           });
 
-          g = bestGrade >= 0 ? bestGrade : null;
+          g = hasCalculatedGrade && bestGrade >= 0 ? bestGrade : null;
           stt = bestSub.status;
 
           if (bestSub.status === 'graded') {
@@ -372,6 +417,7 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             {allTurmas.map((turmaCode) => {
               const countStudents = students.filter((s) => s.turma === turmaCode).length;
+              const countSubs = turmaSubmissionsCountMap.get(turmaCode) || 0;
               const isSelected = selectedTurma === turmaCode;
               return (
                 <button
@@ -388,7 +434,9 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
                   }`}
                 >
                   <span>Turma {turmaCode}</span>
-                  <span className="text-[10px] opacity-75 font-mono">({countStudents})</span>
+                  <span className="text-[10px] opacity-75 font-mono">
+                    ({countStudents} {countSubs > 0 ? `• ${countSubs} ${countSubs === 1 ? 'entrega' : 'entregas'}` : ''})
+                  </span>
                 </button>
               );
             })}
@@ -465,7 +513,7 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
               {currentActivity ? `Nota Máxima: ${currentActivity.maxGrade || 10} pontos` : 'Escala: 0 a 10'}
             </span>
             <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-primary font-bold border border-emerald-500/20">
-              {studentGradesList.filter((item) => item.totalGrade !== null).length} / {studentGradesList.length} notas calculadas
+              {studentGradesList.filter((item) => item.status !== 'not_submitted').length} / {studentGradesList.length} entregas ({studentGradesList.filter((item) => item.totalGrade !== null).length} avaliadas)
             </span>
           </div>
 

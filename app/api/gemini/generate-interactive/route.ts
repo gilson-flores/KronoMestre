@@ -1,6 +1,6 @@
 import { Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
-import { getGeminiClient } from '@/lib/gemini';
+import { getGeminiClient, isGeminiAuthError } from '@/lib/gemini';
 import {
   GameData,
   GameMode,
@@ -448,7 +448,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+    const modelsToTry = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
     let generatedText: string | null = null;
 
     const isAee = mode === 'adapted_aee';
@@ -532,7 +532,10 @@ Em TODOS os 6 estágios, gere:
           break;
         }
       } catch (err: any) {
-        console.warn(`[Generate Interactive] Falha com modelo ${model}:`, err?.message);
+        if (isGeminiAuthError(err)) {
+          break;
+        }
+        console.warn(`[Generate Interactive] Falha com modelo ${model}:`, err?.message || err);
       }
     }
 

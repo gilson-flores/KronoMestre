@@ -200,19 +200,33 @@ export async function POST(request: Request) {
       console.warn('[Student Login API] Aviso ao buscar dados do tenant:', tDocErr?.message);
     }
 
-    const response = NextResponse.json({
-      success: true,
-      student: cleanStudent,
-      ownerTeacherId,
-      teacherProfile: {
-        id: ownerTeacherId,
-        name: tenantInfo.name || tenantInfo.nome || 'Prof. Gilson Flores',
-        subject: tenantInfo.subject || 'Sociologia',
-        school: tenantInfo.school || "EEB Prof. Jandira D'Ávila",
-        avatarUrl: tenantInfo.avatarUrl || '',
-        driveFolderUrl: tenantInfo.driveFolderUrl || '',
+    const response = NextResponse.json(
+      {
+        success: true,
+        student: cleanStudent,
+        ownerTeacherId,
+        teacherProfile: {
+          id: ownerTeacherId,
+          name: tenantInfo.name || tenantInfo.nome || 'Prof. Gilson Flores',
+          subject: tenantInfo.subject || 'Sociologia',
+          school: tenantInfo.school || "EEB Prof. Jandira D'Ávila",
+          avatarUrl: tenantInfo.avatarUrl || '',
+          driveFolderUrl: tenantInfo.driveFolderUrl || '',
+        },
       },
-    });
+      {
+        headers: {
+          'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'Surrogate-Control': 'no-store',
+        },
+      }
+    );
+
+    // ISOLAMENTO DE TENANT: Remove explicitamente o cookie de sessão de Professor do Firebase
+    // para evitar que um aluno no mesmo navegador/aparelho herde a sessão de Professor
+    response.cookies.set('session', '', { maxAge: 0, path: '/' });
 
     // Grava o cookie HttpOnly de sessão do aluno (validade de 24 horas)
     setSessionCookie(response, token, 24 * 60 * 60);

@@ -46,6 +46,10 @@ import {
   getScopedLocalStorageItem,
   setScopedLocalStorageItem,
   cleanLegacyCacheKeys,
+  getTenantSessionItem,
+  setTenantSessionItem,
+  removeTenantSessionItem,
+  purgeAllAuthAndTenantCaches,
 } from '@/lib/cacheUtils';
 import { CheckCircle2, AlertTriangle } from 'lucide-react';
 
@@ -206,7 +210,11 @@ export default function Home() {
         return;
       }
 
-      const activeSession = sessionStorage.getItem('active_session');
+      // ISOLAMENTO DE TENANT: Busca a sessão associada ao usuário ativo no sessionStorage
+      const currentActiveUid = sessionStorage.getItem('current_active_user_id') || '';
+      const activeSession =
+        (currentActiveUid ? getTenantSessionItem('active_session', currentActiveUid) : null) ||
+        sessionStorage.getItem('active_session');
       let parsedLocalSession: any = null;
       if (activeSession) {
         try {
@@ -219,7 +227,14 @@ export default function Home() {
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         let res: Response | null = null;
         try {
-          res = await fetch('/api/auth/session', { signal: controller.signal });
+          res = await fetch('/api/auth/session', {
+            signal: controller.signal,
+            cache: 'no-store',
+            headers: {
+              'Cache-Control': 'no-cache, no-store',
+              'Pragma': 'no-cache',
+            },
+          });
         } finally {
           clearTimeout(timeoutId);
         }
@@ -267,14 +282,12 @@ export default function Home() {
             }));
 
             if (typeof window !== 'undefined') {
-              sessionStorage.setItem(
-                'active_session',
-                JSON.stringify({
-                  role: 'teacher',
-                  ownerTeacherId: data.user.id,
-                  teacherData: data.user,
-                })
-              );
+              const sessionPayload = {
+                role: 'teacher',
+                ownerTeacherId: data.user.id,
+                teacherData: data.user,
+              };
+              setTenantSessionItem('active_session', JSON.stringify(sessionPayload), data.user.id);
             }
 
             // Hidratação imediata do cache local para resiliência instantânea
@@ -305,17 +318,27 @@ export default function Home() {
             }
           } else if (data.user && data.user.role === 'second_teacher') {
             const updatedTeacher = {
-              ...(parsedLocalSession.teacherData || {}),
+              ...(parsedLocalSession?.teacherData || {}),
               id: data.user.id,
               name: data.user.name,
               email: data.user.email,
               ownerTeacherId: data.user.ownerTeacherId,
               mustChangePassword: Boolean(data.user.mustChangePassword),
-              driveFolderUrl: data.user.driveFolderUrl || parsedLocalSession.teacherData?.driveFolderUrl || '',
+              driveFolderUrl: data.user.driveFolderUrl || parsedLocalSession?.teacherData?.driveFolderUrl || '',
             };
             setTeacher(updatedTeacher);
             setRole('second_teacher');
             setMustChangePassword(Boolean(data.user.mustChangePassword));
+
+            if (typeof window !== 'undefined') {
+              const sessionPayload = {
+                role: 'second_teacher',
+                ownerTeacherId: data.user.ownerTeacherId,
+                teacherData: updatedTeacher,
+                mustChangePassword: Boolean(data.user.mustChangePassword),
+              };
+              setTenantSessionItem('active_session', JSON.stringify(sessionPayload), data.user.id);
+            }
           } else if (data.user && data.user.role === 'student') {
             if (data.user?.tenant) {
               const t = data.user.tenant;
@@ -329,26 +352,44 @@ export default function Home() {
                 driveFolderUrl: t.driveFolderUrl || prev.driveFolderUrl,
               }));
             }
-            setCurrentStudent(parsedLocalSession.studentData);
+            const studentPayload = {
+              ...(parsedLocalSession?.studentData || {}),
+              ...data.user,
+            };
+            setCurrentStudent(studentPayload);
             setRole('student');
-            setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
-          } else if (parsedLocalSession.role === 'second_teacher' && parsedLocalSession.teacherData) {
+            setMustChangePassword(Boolean(data.user.mustChangePassword));
+
+            if (typeof window !== 'undefined') {
+              const sessionPayload = {
+                role: 'student',
+                studentId: data.user.id,
+                studentData: studentPayload,
+                ownerTeacherId: data.user.ownerTeacherId || '',
+                mustChangePassword: Boolean(data.user.mustChangePassword),
+              };
+              setTenantSessionItem('active_session', JSON.stringify(sessionPayload), data.user.id);
+            }
+          } else {
+            // O servidor respondeu com sucesso que NÃO HÁ USUÁRIO AUTENTICADO (user: null)
+            // Purga caches residuais para impedir herança acidental de sessão
+            purgeAllAuthAndTenantCaches();
+            setRole(null);
+            setCurrentStudent(null);
+          }
+        } else {
+          // Em caso de falha de conexão com o servidor, só restaura se houver sessão legítima de aluno/2º professor
+          if (parsedLocalSession?.role === 'second_teacher' && parsedLocalSession?.teacherData) {
             setTeacher(parsedLocalSession.teacherData);
             setRole('second_teacher');
             setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
-          } else if (parsedLocalSession.role === 'student' && parsedLocalSession.studentData) {
+          } else if (parsedLocalSession?.role === 'student' && parsedLocalSession?.studentData) {
             setCurrentStudent(parsedLocalSession.studentData);
             setRole('student');
             setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
+          } else {
+            setRole(null);
           }
-        } else if (parsedLocalSession.role === 'second_teacher' && parsedLocalSession.teacherData) {
-          setTeacher(parsedLocalSession.teacherData);
-          setRole('second_teacher');
-          setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
-        } else if (parsedLocalSession.role === 'student' && parsedLocalSession.studentData) {
-          setCurrentStudent(parsedLocalSession.studentData);
-          setRole('student');
-          setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
         }
 
         const savedDriveUrl = localStorage.getItem('teacher_drive_folder_url');
@@ -490,12 +531,15 @@ export default function Home() {
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem('teacher_drive_folder_url', cleanUrl);
-        const sessionStr = sessionStorage.getItem('active_session');
+        const currentActiveUid = sessionStorage.getItem('current_active_user_id') || teacher.id || '';
+        const sessionStr =
+          (currentActiveUid ? getTenantSessionItem('active_session', currentActiveUid) : null) ||
+          sessionStorage.getItem('active_session');
         if (sessionStr) {
           const session = JSON.parse(sessionStr);
           if (session.teacherData) {
             session.teacherData.driveFolderUrl = cleanUrl;
-            sessionStorage.setItem('active_session', JSON.stringify(session));
+            setTenantSessionItem('active_session', JSON.stringify(session), currentActiveUid);
           }
         }
       } catch (e) {
@@ -836,15 +880,13 @@ export default function Home() {
     setMustChangePassword(false);
     setCurrentTab('painel');
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('explicit_logout');
-      sessionStorage.setItem(
-        'active_session',
-        JSON.stringify({
-          role: 'teacher',
-          ownerTeacherId: loggedTeacher.id,
-          teacherData: loggedTeacher,
-        })
-      );
+      purgeAllAuthAndTenantCaches();
+      const sessionPayload = {
+        role: 'teacher',
+        ownerTeacherId: loggedTeacher.id,
+        teacherData: loggedTeacher,
+      };
+      setTenantSessionItem('active_session', JSON.stringify(sessionPayload), loggedTeacher.id);
 
       try {
         const cachedStudents = getScopedLocalStorageItem('local_students_data', loggedTeacher.id);
@@ -876,16 +918,14 @@ export default function Home() {
     setMustChangePassword(Boolean(loggedTeacher.mustChangePassword));
     setCurrentTab('dashboard');
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('explicit_logout');
-      sessionStorage.setItem(
-        'active_session',
-        JSON.stringify({
-          role: 'second_teacher',
-          ownerTeacherId: loggedTeacher.id,
-          teacherData: loggedTeacher,
-          mustChangePassword: Boolean(loggedTeacher.mustChangePassword),
-        })
-      );
+      purgeAllAuthAndTenantCaches();
+      const sessionPayload = {
+        role: 'second_teacher',
+        ownerTeacherId: loggedTeacher.id,
+        teacherData: loggedTeacher,
+        mustChangePassword: Boolean(loggedTeacher.mustChangePassword),
+      };
+      setTenantSessionItem('active_session', JSON.stringify(sessionPayload), loggedTeacher.id);
     }
     setLoadDataTrigger((prev) => prev + 1);
   };
@@ -896,17 +936,15 @@ export default function Home() {
     setRole('student');
     setMustChangePassword(Boolean(loggedStudent.mustChangePassword));
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('explicit_logout');
-      sessionStorage.setItem(
-        'active_session',
-        JSON.stringify({
-          role: 'student',
-          studentId: loggedStudent.id,
-          studentData: loggedStudent,
-          ownerTeacherId: loggedStudent.ownerTeacherId || '',
-          mustChangePassword: Boolean(loggedStudent.mustChangePassword),
-        })
-      );
+      purgeAllAuthAndTenantCaches();
+      const sessionPayload = {
+        role: 'student',
+        studentId: loggedStudent.id,
+        studentData: loggedStudent,
+        ownerTeacherId: loggedStudent.ownerTeacherId || '',
+        mustChangePassword: Boolean(loggedStudent.mustChangePassword),
+      };
+      setTenantSessionItem('active_session', JSON.stringify(sessionPayload), loggedStudent.id);
     }
     setLoadDataTrigger((prev) => prev + 1);
   };
@@ -916,13 +954,16 @@ export default function Home() {
     showGlobalStatus('success', 'Nova senha pessoal cadastrada com sucesso! Acesso liberado.');
     if (typeof window !== 'undefined') {
       try {
-        const sessionStr = sessionStorage.getItem('active_session');
+        const currentActiveUid = sessionStorage.getItem('current_active_user_id') || '';
+        const sessionStr =
+          (currentActiveUid ? getTenantSessionItem('active_session', currentActiveUid) : null) ||
+          sessionStorage.getItem('active_session');
         if (sessionStr) {
           const session = JSON.parse(sessionStr);
           session.mustChangePassword = false;
           if (session.studentData) session.studentData.mustChangePassword = false;
           if (session.teacherData) session.teacherData.mustChangePassword = false;
-          sessionStorage.setItem('active_session', JSON.stringify(session));
+          setTenantSessionItem('active_session', JSON.stringify(session), currentActiveUid);
         }
       } catch (e) {
         console.warn('Erro ao atualizar active_session no cliente:', e);
@@ -947,11 +988,8 @@ export default function Home() {
 
   const handleLogout = useCallback(async (reason?: string) => {
     if (typeof window !== 'undefined') {
-      sessionStorage.clear();
+      purgeAllAuthAndTenantCaches();
       sessionStorage.setItem('explicit_logout', 'true');
-      localStorage.removeItem('local_students_data');
-      localStorage.removeItem('local_activities_data');
-      localStorage.removeItem('library_files_data');
     }
 
     try {
@@ -1271,9 +1309,10 @@ export default function Home() {
       setCurrentStudent(updatedCurr);
       if (typeof window !== 'undefined') {
         try {
-          sessionStorage.setItem(
+          setTenantSessionItem(
             'active_session',
-            JSON.stringify({ role: 'student', studentId: updatedCurr.id, studentData: updatedCurr })
+            JSON.stringify({ role: 'student', studentId: updatedCurr.id, studentData: updatedCurr }),
+            updatedCurr.id
           );
         } catch (e) {}
       }

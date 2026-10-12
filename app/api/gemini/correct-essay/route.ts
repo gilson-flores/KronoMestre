@@ -1,6 +1,6 @@
 import { Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
-import { getGeminiClient } from '@/lib/gemini';
+import { getGeminiClient, isGeminiAuthError } from '@/lib/gemini';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -222,12 +222,11 @@ Retorne obrigatoriamente um objeto JSON com o formato:
           break;
         }
       } catch (err: any) {
-        const errMsg = String(err?.message || '');
-        if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid')) {
-          // Chave de API ausente ou inválida: encerra silenciosamente o loop e recorre à avaliação heurística
+        if (isGeminiAuthError(err)) {
+          // Erro de credenciais/autenticação: encerra imediatamente as tentativas e recorre à avaliação heurística
           break;
         }
-        console.warn(`Tentativa com modelo ${modelName} na correção:`, errMsg);
+        console.warn(`Tentativa com modelo ${modelName} na correção:`, err?.message || err);
       }
     }
 

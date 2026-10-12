@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getGeminiClient } from '@/lib/gemini';
+import { getGeminiClient, isGeminiAuthError } from '@/lib/gemini';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -188,11 +188,10 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido:
         });
         if (response && response.text) break;
       } catch (err: any) {
-        const errMsg = String(err?.message || '');
-        if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid')) {
+        if (isGeminiAuthError(err)) {
           break;
         }
-        console.warn(`Tentativa com ${modelName} na recuperação:`, errMsg);
+        console.warn(`Tentativa com ${modelName} na recuperação:`, err?.message || err);
       }
     }
 

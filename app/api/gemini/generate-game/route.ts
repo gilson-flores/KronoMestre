@@ -1,6 +1,6 @@
 import { Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
-import { getGeminiClient } from '@/lib/gemini';
+import { getGeminiClient, isGeminiAuthError } from '@/lib/gemini';
 import { GameData, GameMode, GameStage } from '@/lib/types';
 
 export const maxDuration = 60;
@@ -702,7 +702,6 @@ Retorne EXCLUSIVAMENTE o JSON no esquema solicitado.
 `;
 
     const candidateModels = [
-      'gemini-2.5-flash',
       'gemini-3.8-flash',
       'gemini-3.1-flash-lite',
       'gemini-flash-latest'
@@ -800,6 +799,9 @@ Retorne EXCLUSIVAMENTE o JSON no esquema solicitado.
           }
         }
       } catch (err: any) {
+        if (isGeminiAuthError(err)) {
+          break;
+        }
         console.warn(`[generate-game] Erro com modelo ${modelName}:`, err?.message || err);
       }
     }

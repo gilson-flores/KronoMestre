@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getGeminiClient } from "@/lib/gemini";
+import { getGeminiClient, isGeminiAuthError } from "@/lib/gemini";
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -248,12 +248,11 @@ ${formatSpecificRulesCreative}
           break;
         }
       } catch (err: any) {
-        const errMsg = String(err?.message || '');
-        // If API key is invalid, don't keep retrying all models uselessly
-        if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid')) {
+        if (isGeminiAuthError(err)) {
+          // Erro de credenciais/autenticação: encerra imediatamente as tentativas e recorre ao feedback pedagógico seguro
           break;
         }
-        console.warn(`Tentativa com modelo ${modelName} no feedback:`, errMsg);
+        console.warn(`Tentativa com modelo ${modelName} no feedback:`, err?.message || err);
       }
     }
 

@@ -1,6 +1,6 @@
 import { Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
-import { getGeminiClient } from '@/lib/gemini';
+import { getGeminiClient, isGeminiAuthError } from '@/lib/gemini';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -122,7 +122,7 @@ Retorne um objeto JSON contendo:
             const isQuotaExhausted = status === 429 || errMsg.includes('Quota exceeded') || errMsg.includes('RESOURCE_EXHAUSTED');
             const isHighDemand = status === 503 || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE');
 
-            if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid')) {
+            if (isGeminiAuthError(err)) {
               break;
             }
 

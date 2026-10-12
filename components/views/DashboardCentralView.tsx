@@ -33,6 +33,7 @@ import {
   isStudentPNE,
   getSubmissionTotalGrade,
   getChildRecoveryActivities,
+  getChildAdaptations,
   isActivityRecovery,
   isActivityAdapted,
 } from '@/lib/studentUtils';
@@ -49,6 +50,13 @@ interface DashboardCentralViewProps {
   onSelectActivityForGrading?: (act: Activity) => void;
   onOpenParallelRecoveryModal?: (act: Activity) => void;
   onViewActivity?: (act: Activity) => void;
+}
+
+export interface TurmaRcoInfo {
+  turma: string;
+  submissionsCount: number;
+  gradedCount: number;
+  studentsCount: number;
 }
 
 type OperationalTabFilter = 'todas' | 'correcoes' | 'prazos' | 'recuperacao' | 'rco';
@@ -227,18 +235,78 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
   );
 
   const turmasReadyForRco = useMemo(() => {
-    return originalTurmas.filter((turma) => {
+    const list: TurmaRcoInfo[] = [];
+
+    originalTurmas.forEach((turma) => {
+      const turmaStudents = students.filter(
+        (s) => s.turma?.trim().toLowerCase() === turma.trim().toLowerCase()
+      );
+      if (turmaStudents.length === 0) return;
+
+      const studentIdSet = new Set(turmaStudents.map((s) => s.id));
+      const matriculaSet = new Set(turmaStudents.map((s) => s.matricula).filter(Boolean));
+      const nameSet = new Set(
+        turmaStudents.map((s) => s.fullName?.trim().toLowerCase()).filter(Boolean)
+      );
+
       const turmaActs = canonicalActivities.filter((a) =>
         canStudentAccessActivity(a.turma, turma)
       );
-      if (turmaActs.length === 0) return false;
-      // Verificar se ao menos 1 atividade tem notas lançadas
-      const hasGraded = turmaActs.some((a) =>
-        (a.submissions || []).some((s) => s.status === 'graded' || s.essayScore !== undefined)
-      );
-      return hasGraded;
+      if (turmaActs.length === 0) return;
+
+      let submissionsCount = 0;
+      let gradedCount = 0;
+      const countedStudentKeys = new Set<string>();
+
+      turmaActs.forEach((act) => {
+        const childAdaps = getChildAdaptations(act, activities);
+        const childRecs = getChildRecoveryActivities(act, activities);
+        const allRelatedActs = [act, ...childAdaps, ...childRecs];
+
+        allRelatedActs.forEach((relatedAct) => {
+          (relatedAct.submissions || []).forEach((sub) => {
+            const isMatch =
+              (sub.studentId && studentIdSet.has(sub.studentId)) ||
+              (sub.matricula && matriculaSet.has(sub.matricula)) ||
+              (sub.studentName && nameSet.has(sub.studentName.trim().toLowerCase()));
+
+            if (isMatch) {
+              const uniqueKey = `${act.id}_${sub.studentId || sub.matricula || sub.studentName}`;
+              if (!countedStudentKeys.has(uniqueKey)) {
+                countedStudentKeys.add(uniqueKey);
+                submissionsCount++;
+                const isGraded =
+                  sub.status === 'graded' ||
+                  (sub.essayScore !== undefined && sub.essayScore !== null) ||
+                  Number(sub.objectiveScore) > 0;
+                if (isGraded) {
+                  gradedCount++;
+                }
+              }
+            }
+          });
+        });
+      });
+
+      // Apenas turmas que REALMENTE possuem entregas registradas por seus alunos
+      if (submissionsCount > 0) {
+        list.push({
+          turma,
+          submissionsCount,
+          gradedCount,
+          studentsCount: turmaStudents.length,
+        });
+      }
     });
-  }, [originalTurmas, canonicalActivities]);
+
+    // Ordenar turmas com mais entregas primeiro
+    list.sort((a, b) => b.submissionsCount - a.submissionsCount);
+    return list;
+  }, [originalTurmas, canonicalActivities, activities, students]);
+
+  const totalRcoSubmissions = useMemo(() => {
+    return turmasReadyForRco.reduce((acc, t) => acc + t.submissionsCount, 0);
+  }, [turmasReadyForRco]);
 
   // Média Geral
   const overallAverage = useMemo(() => {
@@ -514,8 +582,8 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
               <div className="text-base font-bold text-foreground mt-1">Turmas para RCO</div>
               <p className="text-xs text-text-muted mt-1 leading-relaxed">
                 {turmasReadyForRco.length > 0
-                  ? `${turmasReadyForRco.length} turma(s) com notas prontas para postagem no RCO.`
-                  : 'Sem fechamentos pendentes de lançamento no RCO.'}
+                  ? `${turmasReadyForRco.length} turma(s) com ${totalRcoSubmissions} entrega(s) para postagem no RCO.`
+                  : 'Sem turmas com entregas pendentes de lançamento no RCO.'}
               </p>
             </div>
             <div className="mt-5 grid grid-cols-2 gap-2">
@@ -810,9 +878,9 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
 
           {/* Seção RCO na Fila */}
           {(activeQueueFilter === 'todas' || activeQueueFilter === 'rco') &&
-            turmasReadyForRco.map((turma) => (
+            turmasReadyForRco.map((turmaInfo) => (
               <div
-                key={`rco-${turma}`}
+                key={`rco-${turmaInfo.turma}`}
                 className="p-4 sm:p-5 rounded-2xl bg-surface border border-border hover:border-emerald-500/40 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm"
               >
                 <div className="flex items-start gap-3.5">
@@ -822,15 +890,18 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 text-xs font-bold">
-                        Pronto para Lançamento
+                        {turmaInfo.gradedCount > 0 ? 'Notas Prontas' : 'Entregas Registradas'}
                       </span>
-                      <span className="text-xs font-semibold text-text-muted">Turma {turma}</span>
+                      <span className="text-xs font-semibold text-text-muted">Turma {turmaInfo.turma}</span>
+                      <span className="text-xs font-bold text-foreground/80 bg-background px-2 py-0.5 rounded-md border border-border">
+                        {turmaInfo.submissionsCount} {turmaInfo.submissionsCount === 1 ? 'entrega' : 'entregas'}
+                      </span>
                     </div>
                     <h3 className="text-base sm:text-lg font-bold text-foreground mt-1">
-                      Postagem RCO — Turma {turma}
+                      Postagem RCO — Turma {turmaInfo.turma}
                     </h3>
                     <p className="text-xs sm:text-sm text-text-muted mt-0.5">
-                      Notas consolidadas prontas para cópia formatada ou exportação de relatório para o sistema estadual.
+                      {turmaInfo.submissionsCount} entrega(s) de alunos nesta turma ({turmaInfo.gradedCount} com nota calculada) prontas para lançamento no RCO / SED estadual.
                     </p>
                   </div>
                 </div>
