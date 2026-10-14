@@ -134,71 +134,30 @@ export default function Home() {
   const [mustChangePassword, setMustChangePassword] = useState<boolean>(false);
   const [inactivityTimeoutEnabled, setInactivityTimeoutEnabled] = useState<boolean>(true);
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
-  const [isDataLoading, setIsDataLoading] = useState<boolean>(() => Boolean(isSupabaseConfigured && supabase));
+  const [isDataLoading, setIsDataLoading] = useState<boolean>(false);
   const [dataLoadError, setDataLoadError] = useState<boolean>(false);
   const [loadDataTrigger, setLoadDataTrigger] = useState<number>(0);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const lastLoadTimestampRef = useRef<number>(0);
 
-  // App datasets
-  const [students, setStudents] = useState<StudentUser[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = getScopedLocalStorageItem('local_students_data');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
-          }
-        }
-      } catch (e) {
-        console.warn('Erro ao restaurar alunos locais na inicialização:', e);
-      }
-    }
-    return initialStudents;
-  });
-
-  const [activities, setActivities] = useState<Activity[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = getScopedLocalStorageItem('local_activities_data');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
-          }
-        }
-      } catch (e) {
-        console.warn('Erro ao restaurar atividades locais na inicialização:', e);
-      }
-    }
-    return initialActivities;
-  });
-
+  // App datasets (inicializados de forma pura e estática para garantir paridade 100% entre SSR e hidratação)
+  const [students, setStudents] = useState<StudentUser[]>(initialStudents);
+  const [activities, setActivities] = useState<Activity[]>(initialActivities);
   const [schedule] = useState(initialSchedule);
+  const [library, setLibrary] = useState<LibraryFile[]>(initialLibrary);
 
-  const [library, setLibrary] = useState<LibraryFile[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = getScopedLocalStorageItem('library_files_data');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
-          }
-        }
-      } catch (e) {
-        console.warn('Erro ao restaurar biblioteca local na inicialização:', e);
-      }
-    }
-    return initialLibrary;
-  });
-
-  // Restaurar sessão via API do Firebase (Tenant Architecture)
+  // Restaurar sessão de autenticação de forma limpa, prevenindo hydration mismatch
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsMounted(true);
-    }, 0);
+    setIsMounted(true);
+
+    // Hidratação segura de preferências locais do navegador pós-montagem
+    try {
+      const savedTheme = localStorage.getItem('app_theme_mode');
+      if (savedTheme === 'light') setThemeMode('light');
+
+      const savedAiReply = localStorage.getItem('teacher_ai_auto_reply_enabled');
+      if (savedAiReply !== null) setIsAiAutoReplyEnabled(savedAiReply === 'true');
+    } catch (e) {}
 
     const checkSession = async () => {
       if (typeof window === 'undefined') return;
@@ -405,7 +364,6 @@ export default function Home() {
     };
 
     checkSession();
-    return () => clearTimeout(timer);
   }, []);
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
@@ -477,13 +435,7 @@ export default function Home() {
   const [newTeacherPassword, setNewTeacherPassword] = useState('');
 
   // Theme preference state
-  const [themeMode, setThemeMode] = useState<'dark' | 'light'>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('app_theme_mode');
-      if (saved === 'light') return 'light';
-    }
-    return 'dark';
-  });
+  const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -499,13 +451,7 @@ export default function Home() {
   }, [themeMode]);
 
   // AI Auto-Reply State for Teacher (Boby Sociólogo / Prof. Gilson)
-  const [isAiAutoReplyEnabled, setIsAiAutoReplyEnabled] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('teacher_ai_auto_reply_enabled');
-      return saved !== null ? saved === 'true' : true;
-    }
-    return true;
-  });
+  const [isAiAutoReplyEnabled, setIsAiAutoReplyEnabled] = useState<boolean>(true);
 
   const handleToggleAiAutoReply = (enabled: boolean) => {
     setIsAiAutoReplyEnabled(enabled);

@@ -38,17 +38,30 @@ export function getGeminiApiKey(): string | undefined {
  */
 export function isGeminiAuthError(err: any): boolean {
   if (!err) return false;
-  const status = err?.status || err?.code;
+  const status = err?.status || err?.code || err?.error?.code;
   if (status === 401 || status === 403) return true;
-  const msg = String(err?.message || '').toLowerCase();
+  const errStr = (
+    String(err?.message || '') +
+    ' ' +
+    String(err?.error?.message || '') +
+    ' ' +
+    String(err?.statusText || '') +
+    ' ' +
+    (typeof err === 'string' ? err : '') +
+    ' ' +
+    (typeof err === 'object' ? JSON.stringify(err) : '')
+  ).toLowerCase();
+
   return (
-    msg.includes('unauthenticated') ||
-    msg.includes('api_key_invalid') ||
-    msg.includes('api key not valid') ||
-    msg.includes('invalid authentication credentials') ||
-    msg.includes('access_token_type_unsupported') ||
-    msg.includes('api_key_service_blocked') ||
-    msg.includes('permission_denied')
+    errStr.includes('unauthenticated') ||
+    errStr.includes('401') ||
+    errStr.includes('403') ||
+    errStr.includes('api_key_invalid') ||
+    errStr.includes('api key not valid') ||
+    errStr.includes('invalid authentication credentials') ||
+    errStr.includes('access_token_type_unsupported') ||
+    errStr.includes('api_key_service_blocked') ||
+    errStr.includes('permission_denied')
   );
 }
 
