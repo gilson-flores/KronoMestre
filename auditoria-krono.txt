@@ -1,0 +1,2819 @@
+export type UserRole = 'teacher' | 'student' | 'second_teacher' | null;
+
+export interface TeacherUser {
+  id: string;
+  name: string;
+  subject: string;
+  email: string;
+  avatarUrl: string;
+  phone?: string;
+  school?: string;
+  driveFolderUrl?: string;
+  matriculaFuncional?: string;
+  tenantCode?: string; // NOVO: Código único de acesso do aluno (Ex: A1B2)
+  contractStartDate?: string; // YYYY-MM-DD
+  contractEndDate?: string; // YYYY-MM-DD
+  contractType?: 'ACT / Contratado' | 'Efetivo' | 'Substituto' | string;
+  contractStatus?: 'ativo' | 'encerrado' | 'afastado' | string;
+  mustChangePassword?: boolean;
+  ownerTeacherId?: string;
+  owner_teacher_id?: string;
+  is_admin?: boolean;
+  isAdmin?: boolean;
+  plan_type?: 'basic' | 'pro' | 'unlimited' | string;
+  escolas_vinculadas?: string[];
+  disciplinas?: string[];
+}
+
+export interface StudentUser {
+  id: string;
+  fullName: string;
+  turma: string;
+  matricula: string;
+  tag?: 'REGULAR' | 'PNE' | 'RAD';
+  pneConditions?: string[]; // Doenças, deficiências ou necessidades específicas
+  passwordHash: string; // SEGURANÇA: Senha real cadastrada (NUNCA reintroduzir senha padrão fixa aqui)
+  avatarUrl: string;
+  pedagogicalNotes?: string;
+  secondTeacherId?: string;
+  secondTeacherName?: string;
+  isArchived?: boolean;
+  archivedAt?: string;
+  archivedReason?: string;
+  archivedVinculoId?: string; // Código/numeração única do vínculo (ex: VINC-092026)
+  archivedSchool?: string; // Escola de vinculação
+  mustChangePassword?: boolean;
+  ownerTeacherId?: string;
+  owner_teacher_id?: string;
+  isOnline?: boolean;
+  lastActiveAt?: string;
+}
+
+export const PNE_CONDITIONS_LIST = [
+  'Altas Habilidades / Superdotação',
+  'Autismo leve',
+  'Autismo moderado',
+  'Autismo severo',
+  'Baixa Visão / Cegueira',
+  'Deficiência Auditiva / Surdez',
+  'Deficiência Física',
+  'Deficiência Intelectual',
+  'Deficiência Motora',
+  'Deficiência Múltipla',
+  'Discalculia',
+  'Disgrafia / Disortografia',
+  'Dislexia',
+  'Outra Necessidade Específica',
+  'Paralisia Cerebral',
+  'Síndrome de Down',
+  'TDAH (Déficit de Atenção e Hiperatividade)',
+  'TOD (Transtorno Opositor Desafiador)',
+] as const;
+
+export type PneCondition = (typeof PNE_CONDITIONS_LIST)[number];
+
+export interface ActivitySubmission {
+  studentId: string;
+  studentName: string;
+  matricula: string;
+  tag?: 'REGULAR' | 'PNE' | 'RAD';
+  avatarUrl: string;
+  submittedAt?: string;
+  objectiveScore: number; // e.g. 5.0 (sai na hora)
+  maxObjectiveScore: number; // e.g. 5.0
+  essayScore?: number; // e.g. 4.0 (preenchido após o professor mandar/corrigir)
+  maxEssayScore: number; // e.g. 5.0
+  extraPoints?: number; // Ponto extra por desempenho
+  status: 'pending' | 'draft' | 'graded' | 'returned';
+  essayAnswer?: string;
+  selectedObjectiveAnswers?: { [questionId: string]: number };
+  teacherFeedback?: string;
+  registeredInStateSystem?: boolean; // Atividade já registrada no sistema do estado (RCO/SED)
+  groupMembers?: string; // Nomes dos alunos do grupo
+  returnCount?: number; // Contador de devoluções pelo professor (1x, 2x, 3x; 4ª bloqueada)
+}
+
+export interface MultipleChoiceQuestion {
+  id: string;
+  statement: string;
+  options: string[];
+  correctOptionIndex: number;
+}
+
+export interface EssayQuestion {
+  id: string;
+  statement: string;
+  minCharacters: number;
+  keywords?: string; // Palavras-chave de atenção para a IA e aluno
+}
+
+export type ActivityQuestion = 
+  | ({ type: 'multiple_choice' } & MultipleChoiceQuestion)
+  | ({ type: 'essay' } & EssayQuestion);
+
+export type ActivityType = 'Simulado' | 'Redação' | 'Dinâmica' | 'Avaliação' | 'Trabalho em grupo' | 'Projeto de pesquisa' | 'Recuperação Paralela' | 'Jogo Avaliativo';
+
+export type ActivityDomain = 'formal' | 'interactive_game' | 'adapted_aee';
+export type AeeMechanic = 'visual_cards' | 'binary_trail' | 'social_story' | 'block_builder';
+
+export type GameMode = 'millionaire' | 'dialectic_tribunal' | 'structural_detective' | 'rpg_campaign' | 'real_life_lab';
+export type GameExecutionContext = 'classroom_group' | 'homework_individual';
+
+export interface GameStageOption {
+  text: string;
+  isCorrect: boolean;
+  pointsWeight: number;
+  feedback: string;
+  iconEmoji?: string;
+}
+
+export interface GameMildStage {
+  scenario: string;
+  options: Array<{ text: string; isCorrect: boolean; feedback: string }>;
+}
+
+export interface GameSevereCard {
+  iconEmoji: string;
+  label: string;
+  isCorrect: boolean;
+  feedback: string;
+}
+
+export interface GameSevereStage {
+  playfulPrompt: string;
+  visualCards: GameSevereCard[];
+}
+
+export interface GameStage {
+  id: string;
+  title: string;
+  scenario: string;
+  clue?: string;
+  options: GameStageOption[];
+  pneMildStage?: GameMildStage;
+  pneSevereStage?: GameSevereStage;
+}
+
+export interface GameData {
+  introText: string;
+  stages: GameStage[];
+}
+
+export interface AeePromptSettings {
+  literalLanguage: boolean;
+  cognitiveReduction: boolean;
+  uppercaseText: boolean;
+  concreteExamples: boolean;
+}
+
+export interface Activity {
+  id: string;
+  title: string;
+  subject?: string;
+  topic?: string;
+  description: string;
+  supportMaterial?: string;
+  turma: string;
+  type: ActivityType;
+  status: 'Ativo' | 'Prazo Encerrado' | 'Inativo';
+  deadline: string;
+  dueDate?: string;
+  maxGrade?: number;
+  allowGroupWork?: boolean;
+  securityFocusLock?: boolean; // Trava 1: Trava de foco (Aviso ao sair da tela, limite de 4 avisos -> auto entrega)
+  securityBlockCopyStatement?: boolean; // Trava 2: Trava de cópia dos enunciados
+  securityBlockPasteEssay?: boolean; // Trava 3: Trava de copia e cola nas respostas dissertativas
+  
+  // Três domínios estruturais de avaliação
+  activityDomain?: ActivityDomain;
+  isInteractive?: boolean;
+  isStandaloneAdaptation?: boolean; // Quando true, a atividade adaptada existe por conta própria sem precisar de adaptedFromId
+  linkedActivityId?: string; // Vínculo OPCIONAL a uma atividade formal ou interativa
+
+  // Educação Inclusiva & AEE
+  isAdapted?: boolean; // Indica se esta atividade foi adaptada para alunos PNE
+  adaptationType?: 'mild_moderate' | 'severe_playful'; // Tipo de adaptação pedagógica
+  adaptationReason?: string;
+  aeeMechanic?: AeeMechanic;
+  aeePromptSettings?: AeePromptSettings;
+  playfulGameHtml?: string; // Código HTML do jogo interativo lúdico para síndromes severas
+  playfulGameScoreMax?: number; // Pontuação máxima do jogo lúdico
+  adaptedFromId?: string; // ID da atividade original vinculada
+  originalActivityId?: string; // ID da atividade de origem quando aplicável
+
+  // KronoGames & Gamificação
+  isGameActivity?: boolean;
+  gameMode?: GameMode;
+  executionContext?: GameExecutionContext;
+  gameData?: GameData;
+
+  // Suporte futuro para Liga & Desafios
+  isChallenge?: boolean;
+  challengeWeek?: number;
+  challengePoints?: number;
+
+  isRecovery?: boolean; // Indica se esta atividade é uma Recuperação Paralela vinculada
+  recoveryFromId?: string; // ID da atividade raiz da qual esta é a recuperação paralela
+  recoveryManualParentName?: string; // Nome da atividade mãe digitado manualmente na exceção (ex: atividades em papel)
+  recoveryApproach?: string; // Abordagem pedagógica diferenciada aplicada na recuperação
+  includedPneStudentIds?: string[]; // IDs dos alunos PNE selecionados por proficiência para fazer a atividade normal
+  questions?: ActivityQuestion[];
+  objectiveQuestions?: any[];
+  essayQuestions?: any[];
+  totalSubmissions: number;
+  totalStudents: number;
+  pendingCorrection: number;
+  averageGrade?: number;
+  completedDate?: string;
+  isArchived?: boolean;
+  archivedAt?: string;
+  archivedReason?: string;
+  archivedVinculoId?: string; // Código/numeração única do vínculo (ex: VINC-092026)
+  archivedSchool?: string; // Escola de vinculação
+  submissions: ActivitySubmission[];
+}
+
+export interface ArchivedVinculo {
+  id: string; // Identificador único do vínculo (ex: VINC-092026-...)
+  vinculoCode: string; // Numeração formatada do vínculo (ex: "Vínculo 09/2026")
+  school: string; // Escola associada
+  monthYear: string; // Mês e ano de encerramento (ex: "09/2026")
+  closedAt: string; // Data ISO de encerramento
+  reason: string; // Motivo do arquivamento
+  students: StudentUser[];
+  activities: Activity[];
+  turmas: string[];
+  totalStudents: number;
+  totalActivities: number;
+}
+
+export interface ScheduleItem {
+  id: string;
+  day: string;
+  time: string;
+  turma: string;
+  room: string;
+  subject: string;
+}
+
+export interface LibraryFile {
+  id: string;
+  title: string;
+  category: string;
+  turma: string;
+  fileSize: string;
+  updatedAt: string;
+  driveUrl?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  threadId: string; // ID da conversa (ex: studentId)
+  senderId: string;
+  senderName: string;
+  senderRole: 'teacher' | 'student' | 'second_teacher';
+  senderAvatar?: string;
+  recipientId: string;
+  recipientName: string;
+  recipientRole?: 'teacher' | 'student' | 'second_teacher';
+  content: string;
+  createdAt: string; // ISO string ou HH:mm
+  timestamp?: string;
+  read?: boolean;
+  activityId?: string; // Opcional: vinculado a uma atividade
+  activityTitle?: string;
+}
+
+export interface ChatThread {
+  id: string; // id do aluno
+  studentId: string;
+  studentName: string;
+  studentTurma: string;
+  studentAvatar: string;
+  lastMessage?: string;
+  lastMessageAt?: string;
+  unreadCountTeacher?: number;
+  unreadCountStudent?: number;
+}
+
+export interface InclusionEvaluation {
+  id: string;
+  date: string;
+  teacherName?: string;
+  category: 'Acompanhamento' | 'Evolução' | 'Adaptação' | 'Ocorrência' | 'Reunião Família';
+  content: string;
+}
+
+export interface InclusionRecord {
+  id?: string;
+  studentId: string;
+  studentName: string;
+  turma?: string;
+  diagnosisNotes: string; // Diagnóstico/Laudo e Necessidades Específicas
+  peiGoals: string; // Objetivos do PEI
+  adaptedResources: string; // Recursos Adaptados & Metodologia Assistiva
+  evaluationsHistory: InclusionEvaluation[]; // Histórico de pareceres de acompanhamento
+  secondTeacherId?: string;
+  secondTeacherName?: string;
+  updatedAt?: string;
+}
+
+export interface AtestadoRadRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentTurma?: string;
+  dataFalta: string; // Data da falta justificada (YYYY-MM-DD)
+  dataAtestado: string; // Data do atestado (YYYY-MM-DD)
+  diasAtestado: number; // Dias de atestado
+  dataFinal: string; // Data final calculada automaticamente (YYYY-MM-DD)
+  motivo?: string; // Motivo para justificar (opcional)
+  tipo: 'Atestado' | 'RAD'; // RAD se diasAtestado >= 15 ou Atestado
+  createdAt: string;
+}
+
+export interface RcoEmissionRecord {
+  id: string;
+  emissionHash: string;
+  teacherId: string;
+  teacherName: string;
+  subject: string;
+  school: string;
+  scope: 'all' | 'single';
+  turma?: string;
+  totalStudents: number;
+  totalActivities: number;
+  turmasSummary: Array<{
+    turmaName: string;
+    studentsCount: number;
+    activitiesCount: number;
+    averageGrade: number;
+    pneCount: number;
+    radCount: number;
+  }>;
+  fullSnapshot: any;
+  emittedAt: string;
+  createdAt: string;
+}
+
+export type { AdaptationRecommendation } from './studentUtils';
+
+
+
+'use client';
+
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import {
+  Gamepad2,
+  Users,
+  Trophy,
+  Sparkles,
+  Play,
+  Plus,
+  Trash2,
+  Pencil,
+  Eye,
+  CheckCircle2,
+  Clock,
+  Layers,
+  Link2,
+  ShieldAlert,
+  ChevronDown,
+  Filter,
+  Check,
+  Zap,
+  HelpCircle,
+  Home,
+  Building2,
+  Swords,
+  Scale,
+  Search,
+  FlaskConical,
+  RotateCcw
+} from 'lucide-react';
+import {
+  Activity,
+  StudentUser,
+  TeacherUser,
+  GameMode,
+  GameData,
+  GameStage,
+  GameExecutionContext,
+} from '@/lib/types';
+import { getOriginalTurmas, getTurmaLabel } from '@/lib/studentUtils';
+import { KronoIcon } from '@/components/ui/KronoIcon';
+
+interface InteractiveActivitiesViewProps {
+  activities: Activity[];
+  students: StudentUser[];
+  teacher: TeacherUser;
+  onOpenNewActivityModal?: () => void;
+  onSaveCreatedActivity: (activity: Activity) => Promise<void> | void;
+  onEditActivity?: (activity: Activity) => void;
+  onDeleteActivity?: (activityId: string) => void;
+  onPlayGamePreview?: (activity: Activity) => void;
+}
+
+const getDefaultGameDeadlineString = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 7);
+  return d.toISOString().split('T')[0];
+};
+
+export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps> = ({
+  activities,
+  students,
+  teacher,
+  onSaveCreatedActivity,
+  onEditActivity,
+  onDeleteActivity,
+  onPlayGamePreview,
+}) => {
+  // Navegação Interna: Galeria, Criar Jogo de Sala (Dupla/Grupo), Criar Missão de Casa (Individual)
+  const [internalTab, setInternalTab] = useState<'gallery' | 'create_classroom' | 'create_homework'>('gallery');
+
+  // Turmas extraídas dos alunos
+  const turmasList = useMemo(() => getOriginalTurmas(students), [students]);
+  const [selectedTurmaFilter, setSelectedTurmaFilter] = useState<string>('todas');
+  const [isTurmaDropdownOpen, setIsTurmaDropdownOpen] = useState(false);
+  const turmaDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Fecha dropdown ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (turmaDropdownRef.current && !turmaDropdownRef.current.contains(event.target as Node)) {
+        setIsTurmaDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Jogos Interativos existentes (filtrados por turma se selecionada)
+  const interactiveActivities = useMemo(() => {
+    return activities.filter((act) => {
+      const isGame = act.isInteractive === true || act.activityDomain === 'interactive_game' || act.isGameActivity === true;
+      if (!isGame) return false;
+      if (selectedTurmaFilter === 'todas') return true;
+      return act.turma === selectedTurmaFilter || act.turma?.includes(selectedTurmaFilter);
+    });
+  }, [activities, selectedTurmaFilter]);
+
+  // Atividades formais para vínculo opcional
+  const formalActivitiesForBinding = useMemo(() => {
+    return activities.filter((act) => !act.isInteractive && act.activityDomain !== 'interactive_game' && !act.isAdapted);
+  }, [activities]);
+
+  // ==========================================
+  // ESTADOS DO FORMULÁRIO DE CRIAÇÃO
+  // ==========================================
+  const [targetTurma, setTargetTurma] = useState<string>(turmasList[0] || '101');
+  const [gameTitle, setGameTitle] = useState('');
+  const [gameTopic, setGameTopic] = useState('');
+  const [gameMaterial, setGameMaterial] = useState('');
+  const [selectedGameMode, setSelectedGameMode] = useState<GameMode>('millionaire');
+  const [deadline, setDeadline] = useState(getDefaultGameDeadlineString);
+  const [bindingMode, setBindingMode] = useState<'standalone' | 'linked'>('standalone');
+  const [linkedFormalActivityId, setLinkedFormalActivityId] = useState<string>('');
+
+  // Estados de IA e Pré-Publicação
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [stagedGameData, setStagedGameData] = useState<GameData | null>(null);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [successBanner, setSuccessBanner] = useState<string | null>(null);
+
+  // Iniciar criação para Sala
+  const handleOpenCreateClassroom = () => {
+    setSelectedGameMode('millionaire');
+    setInternalTab('create_classroom');
+  };
+
+  // Iniciar criação para Casa
+  const handleOpenCreateHomework = () => {
+    setSelectedGameMode('rpg_campaign');
+    setInternalTab('create_homework');
+  };
+
+  // Disparar geração com IA
+  const handleGenerateGame = async () => {
+    if (!gameTopic.trim() && !gameTitle.trim()) {
+      alert('Por favor, informe o tema ou título do jogo antes de gerar.');
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const res = await fetch('/api/gemini/generate-interactive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'krono_game',
+          title: gameTitle.trim() || `Missão de ${teacher.subject || 'Sociologia'}`,
+          subject: teacher.subject || 'Sociologia',
+          topic: gameTopic.trim(),
+          supportMaterial: gameMaterial.trim(),
+          gameMode: selectedGameMode,
+        }),
+      });
+
+      if (!res.ok) throw new Error('Falha ao gerar o jogo');
+      const data = await res.json();
+
+      if (data.gameData && Array.isArray(data.gameData.stages)) {
+        setStagedGameData(data.gameData);
+        setIsReviewOpen(true);
+      }
+    } catch (err: any) {
+      console.error('Erro na rota de IA:', err);
+      alert('Houve um erro ao processar o jogo. Tente novamente.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Publicar KronoGame
+  const handlePublishGame = async () => {
+    if (!stagedGameData) return;
+
+    const isGroup = internalTab === 'create_classroom';
+    const executionContext: GameExecutionContext = isGroup ? 'classroom_group' : 'homework_individual';
+
+    const newActivity: Activity = {
+      id: `game_${Date.now()}`,
+      title: gameTitle.trim() || `[KronoGame] ${gameTopic || 'Missão Interativa'}`,
+      subject: teacher.subject || 'Sociologia',
+      turma: targetTurma,
+      deadline,
+      description: stagedGameData.introText || `Jogo avaliativo interativo sobre ${gameTopic}.`,
+      supportMaterial: gameMaterial || '',
+      type: 'Jogo Avaliativo',
+      status: 'Ativo',
+      maxGrade: 10,
+      allowGroupWork: isGroup,
+      isInteractive: true,
+      activityDomain: 'interactive_game',
+      isGameActivity: true,
+      gameMode: selectedGameMode,
+      executionContext,
+      linkedActivityId: bindingMode === 'linked' ? linkedFormalActivityId : undefined,
+      gameData: stagedGameData,
+      submissions: [],
+      totalSubmissions: 0,
+      totalStudents: students.filter((s) => s.turma === targetTurma).length,
+      pendingCorrection: 0,
+    };
+
+    await onSaveCreatedActivity(newActivity);
+    setSuccessBanner(`🎮 Jogo "${newActivity.title}" publicado com sucesso para a Turma ${targetTurma}!`);
+    setStagedGameData(null);
+    setIsReviewOpen(false);
+    setGameTitle('');
+    setGameTopic('');
+    setGameMaterial('');
+    setInternalTab('gallery');
+    setTimeout(() => setSuccessBanner(null), 5000);
+  };
+
+  return (
+    <div className="space-y-6 sm:space-y-8 animate-fadeIn pb-12 bg-[#09101f] text-slate-100 min-h-screen p-4 sm:p-6 rounded-3xl border border-cyan-500/20 shadow-2xl">
+      {/* Top Header com Identidade KronoGames Neon */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-cyan-500/20">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="p-2 rounded-xl bg-cyan-500/15 border border-cyan-400/40 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.3)]">
+              <Gamepad2 className="w-5 h-5" />
+            </span>
+            <span className="text-xs font-black uppercase tracking-wider text-cyan-400">
+              Estúdio de Avaliações Gamificadas
+            </span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-white tracking-tight flex items-center gap-3">
+            <span>KronoGames</span>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 font-bold uppercase">
+              Interativo
+            </span>
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-2xl leading-relaxed">
+            Desenvolva missões em dupla/grupo para a sala de aula ou campanhas individuais para casa, com co-op inclusivo automático e correção instantânea com custo zero de API na execução.
+          </p>
+        </div>
+
+        {/* Menu Superior de Acesso Rápido */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            onClick={() => setInternalTab('gallery')}
+            className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer border ${
+              internalTab === 'gallery'
+                ? 'bg-cyan-500 text-slate-950 border-cyan-300 shadow-[0_0_20px_rgba(6,182,212,0.4)]'
+                : 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 border-slate-700'
+            }`}
+          >
+            <Gamepad2 className="w-4 h-4" />
+            <span>🕹️ Galeria de Jogos</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20 font-mono">
+              {interactiveActivities.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleOpenCreateClassroom}
+            className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer border ${
+              internalTab === 'create_classroom'
+                ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-[0_0_20px_rgba(245,158,11,0.4)]'
+                : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border-amber-500/30'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            <span>🏛️ Jogo de Sala (Grupo)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleOpenCreateHomework}
+            className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer border ${
+              internalTab === 'create_homework'
+                ? 'bg-purple-500 text-slate-950 border-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.4)]'
+                : 'bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border-purple-500/30'
+            }`}
+          >
+            <Home className="w-4 h-4" />
+            <span>🏠 Missão de Casa (Individual)</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Banner de Sucesso */}
+      {successBanner && (
+        <div className="p-4 bg-emerald-500/20 border border-emerald-400 text-emerald-300 rounded-2xl text-xs sm:text-sm flex items-center gap-3 animate-fadeIn shadow-lg">
+          <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" />
+          <span className="font-bold">{successBanner}</span>
+        </div>
+      )}
+
+      {/* =========================================================================
+          ABA 1: GALERIA DE JOGOS DA TURMA
+      ========================================================================= */}
+      {internalTab === 'gallery' && (
+        <div className="space-y-6">
+          {/* Barra de Filtro de Turmas (Padrão Unificado) */}
+          <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-border bg-surface space-y-2 shadow-md">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <label className="text-xs font-bold text-muted flex items-center gap-1.5 uppercase tracking-wider">
+                <Users className="w-3.5 h-3.5 text-primary" />
+                <span>Filtrar por Turma:</span>
+              </label>
+              <span className="text-xs text-muted">
+                Total de Jogos Interativos: <strong className="text-primary font-bold">{interactiveActivities.length}</strong>
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedTurmaFilter('todas')}
+                className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all duration-200 cursor-pointer border active:scale-95 ${
+                  selectedTurmaFilter === 'todas'
+                    ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 font-extrabold'
+                    : 'bg-background text-muted hover:text-foreground border-border hover:bg-surface-hover'
+                }`}
+              >
+                Todas as Turmas
+              </button>
+              {turmasList.map((t) => {
+                const countStudents = students.filter((s) => s.turma === t).length;
+                const isSelected = selectedTurmaFilter === t;
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setSelectedTurmaFilter(isSelected ? 'todas' : t)}
+                    className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 border active:scale-95 ${
+                      isSelected
+                        ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 font-extrabold'
+                        : 'bg-background text-muted hover:text-foreground border-border hover:bg-surface-hover'
+                    }`}
+                  >
+                    <span>Turma {getTurmaLabel(t)}</span>
+                    <span className="text-[10px] opacity-75 font-mono">({countStudents})</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Grid de Cards de Jogos */}
+          {interactiveActivities.length === 0 ? (
+            <div className="p-12 text-center rounded-3xl border border-dashed border-slate-800 bg-slate-900/40 text-slate-400 space-y-3">
+              <Gamepad2 className="w-12 h-12 text-slate-600 mx-auto" />
+              <p className="text-base font-bold text-slate-300">Nenhum KronoGame ativo para esta turma.</p>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Crie um jogo cooperativo de sala ou uma missão individual de casa usando o gerador com IA.
+              </p>
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <button
+                  onClick={handleOpenCreateClassroom}
+                  className="px-4 py-2 bg-amber-500 text-slate-950 rounded-xl text-xs font-bold hover:bg-amber-400 cursor-pointer shadow-md"
+                >
+                  Criar Jogo de Sala
+                </button>
+                <button
+                  onClick={handleOpenCreateHomework}
+                  className="px-4 py-2 bg-purple-500 text-slate-950 rounded-xl text-xs font-bold hover:bg-purple-400 cursor-pointer shadow-md"
+                >
+                  Criar Missão de Casa
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+              {interactiveActivities.map((game) => {
+                const isGroup = game.allowGroupWork || game.executionContext === 'classroom_group';
+                const stagesCount = game.gameData?.stages?.length || 6;
+                const subsCount = game.submissions?.length || 0;
+
+                return (
+                  <div
+                    key={game.id}
+                    className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-cyan-500/50 transition-all shadow-xl hover:shadow-cyan-500/10 flex flex-col justify-between gap-4 group"
+                  >
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border ${
+                            isGroup
+                              ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                              : 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                          }`}
+                        >
+                          {isGroup ? '🏛️ Sala (Dupla/Grupo)' : '🏠 Casa (Individual)'}
+                        </span>
+
+                        <span className="text-[11px] font-bold text-cyan-400 bg-cyan-950/60 px-2 py-0.5 rounded-md border border-cyan-800/50">
+                          Turma {game.turma}
+                        </span>
+                      </div>
+
+                      <h3 className="text-base font-extrabold text-white group-hover:text-cyan-300 transition-colors line-clamp-2">
+                        {game.title}
+                      </h3>
+
+                      <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                        {game.description}
+                      </p>
+
+                      <div className="flex items-center gap-3 pt-2 text-[11px] text-slate-400 border-t border-slate-800/80">
+                        <span>Fases: <strong className="text-slate-200">{stagesCount}</strong></span>
+                        <span>•</span>
+                        <span>Entregas: <strong className="text-emerald-400">{subsCount}</strong></span>
+                        {game.linkedActivityId && (
+                          <>
+                            <span>•</span>
+                            <span className="text-amber-400 flex items-center gap-1" title="Vinculado a uma atividade formal">
+                              <Link2 className="w-3 h-3" /> Vinculado
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-800">
+                      {onPlayGamePreview && (
+                        <button
+                          type="button"
+                          onClick={() => onPlayGamePreview(game)}
+                          className="flex-1 py-2 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>Testar Jogo</span>
+                        </button>
+                      )}
+
+                      {onEditActivity && (
+                        <button
+                          type="button"
+                          onClick={() => onEditActivity(game)}
+                          className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl border border-slate-700 transition-all cursor-pointer"
+                          title="Editar jogo"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                      )}
+
+                      {onDeleteActivity && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`Deseja realmente excluir o jogo "${game.title}"?`)) {
+                              onDeleteActivity(game.id);
+                            }
+                          }}
+                          className="p-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-xl border border-rose-500/30 transition-all cursor-pointer"
+                          title="Excluir jogo"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =========================================================================
+          ABA 2 & 3: FORMULÁRIO DE CRIAÇÃO (SALA EM GRUPO OU MISSÃO DE CASA)
+      ========================================================================= */}
+      {(internalTab === 'create_classroom' || internalTab === 'create_homework') && (
+        <div className="space-y-6 max-w-4xl mx-auto">
+          <div className="p-6 bg-slate-900/90 border border-cyan-500/30 rounded-3xl shadow-2xl space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <span className="p-2.5 rounded-2xl bg-cyan-500/20 text-cyan-300 border border-cyan-400/40">
+                  <Sparkles className="w-6 h-6" />
+                </span>
+                <div>
+                  <h2 className="text-xl font-black text-white">
+                    {internalTab === 'create_classroom'
+                      ? 'Novo Jogo Cooperativo de Sala (Dupla / Grupo)'
+                      : 'Nova Missão Individual de Casa (Gamificada)'}
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    {internalTab === 'create_classroom'
+                      ? 'Lobby em equipe automático com suporte a rodadas inclusivas PNE na mesma tela.'
+                      : 'Missão reflexiva gamificada focada no progresso individual com notas automáticas.'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setInternalTab('gallery')}
+                className="text-xs text-slate-400 hover:text-white underline cursor-pointer"
+              >
+                Voltar à Galeria
+              </button>
+            </div>
+
+            {/* Seleção do Modo de Jogo */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-300 block">
+                Escolha a Mecânica Pedagógica do KronoGame:
+              </label>
+
+              {internalTab === 'create_classroom' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGameMode('millionaire')}
+                    className={`p-3.5 rounded-2xl border text-left space-y-1.5 transition-all cursor-pointer ${
+                      selectedGameMode === 'millionaire'
+                        ? 'bg-amber-500/20 border-amber-400 ring-2 ring-amber-400/30 text-white'
+                        : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-black text-xs sm:text-sm text-amber-300">
+                      <Trophy className="w-4 h-4 text-amber-400" />
+                      <span>Arena do Milhão</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-snug">
+                      Escalada coletiva de 6 rodadas com pistas reflexivas e debate em equipe.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGameMode('dialectic_tribunal')}
+                    className={`p-3.5 rounded-2xl border text-left space-y-1.5 transition-all cursor-pointer ${
+                      selectedGameMode === 'dialectic_tribunal'
+                        ? 'bg-cyan-500/20 border-cyan-400 ring-2 ring-cyan-400/30 text-white'
+                        : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-black text-xs sm:text-sm text-cyan-300">
+                      <Scale className="w-4 h-4 text-cyan-400" />
+                      <span>Tribunal Dialético</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-snug">
+                      Julgamento de dilemas sociais com identificação de argumentos e falácias.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGameMode('structural_detective')}
+                    className={`p-3.5 rounded-2xl border text-left space-y-1.5 transition-all cursor-pointer ${
+                      selectedGameMode === 'structural_detective'
+                        ? 'bg-emerald-500/20 border-emerald-400 ring-2 ring-emerald-400/30 text-white'
+                        : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-black text-xs sm:text-sm text-emerald-300">
+                      <Search className="w-4 h-4 text-emerald-400" />
+                      <span>Detetive Estrutural</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-snug">
+                      Investigação de causas sociais invisíveis a partir de indícios do caso.
+                    </p>
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGameMode('rpg_campaign')}
+                    className={`p-3.5 rounded-2xl border text-left space-y-1.5 transition-all cursor-pointer ${
+                      selectedGameMode === 'rpg_campaign'
+                        ? 'bg-purple-500/20 border-purple-400 ring-2 ring-purple-400/30 text-white'
+                        : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-black text-xs sm:text-sm text-purple-300">
+                      <Swords className="w-4 h-4 text-purple-400" />
+                      <span>Crônicas da Pólis (RPG)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-snug">
+                      Jornada heroica de tomada de decisões cívicas e impacto comunitário.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGameMode('real_life_lab')}
+                    className={`p-3.5 rounded-2xl border text-left space-y-1.5 transition-all cursor-pointer ${
+                      selectedGameMode === 'real_life_lab'
+                        ? 'bg-blue-500/20 border-blue-400 ring-2 ring-blue-400/30 text-white'
+                        : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-black text-xs sm:text-sm text-blue-300">
+                      <FlaskConical className="w-4 h-4 text-blue-400" />
+                      <span>Laboratório da Vida Real</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-snug">
+                      Simulação prática de dilemas do cotidiano e consequências sociais.
+                    </p>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Informações Básicas */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">Turma Alvo</label>
+                <select
+                  value={targetTurma}
+                  onChange={(e) => setTargetTurma(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400"
+                >
+                  {turmasList.map((t) => (
+                    <option key={t} value={t}>Turma {getTurmaLabel(t)}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-xs font-bold text-slate-300 block mb-1">Tema da Missão / Conteúdo</label>
+                <input
+                  type="text"
+                  value={gameTopic}
+                  onChange={(e) => setGameTopic(e.target.value)}
+                  placeholder="Ex: Cidadania, Direitos Humanos, Desigualdade Social..."
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 placeholder:text-slate-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">Título Personalizado (Opcional)</label>
+                <input
+                  type="text"
+                  value={gameTitle}
+                  onChange={(e) => setGameTitle(e.target.value)}
+                  placeholder="Ex: Arena do Milhão: O Caso da Cidadania"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400 placeholder:text-slate-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1">Prazo de Entrega</label>
+                <input
+                  type="date"
+                  value={deadline}
+                  onChange={(e) => setDeadline(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+            </div>
+
+            {/* Material de Apoio */}
+            <div>
+              <label className="text-xs font-bold text-slate-300 block mb-1">Texto Base / Material de Apoio (Opcional)</label>
+              <textarea
+                value={gameMaterial}
+                onChange={(e) => setGameMaterial(e.target.value)}
+                rows={3}
+                placeholder="Cole um resumo, trecho de livro ou conceitos fundamentais que a IA deve utilizar para compor as fases..."
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-cyan-400 placeholder:text-slate-500"
+              />
+            </div>
+
+            {/* Seletor de Vínculo Opcional */}
+            <div className="p-4 bg-slate-800/60 rounded-2xl border border-slate-700 space-y-3">
+              <label className="text-xs font-bold text-cyan-300 flex items-center gap-2">
+                <Link2 className="w-4 h-4" />
+                <span>Vínculo com Avaliação Formal (Opcional):</span>
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label
+                  className={`p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-all ${
+                    bindingMode === 'standalone'
+                      ? 'bg-cyan-500/15 border-cyan-400 text-white'
+                      : 'bg-slate-800 border-slate-700 text-slate-400'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="bindingMode"
+                    checked={bindingMode === 'standalone'}
+                    onChange={() => setBindingMode('standalone')}
+                    className="accent-cyan-400"
+                  />
+                  <div>
+                    <strong className="text-xs block text-slate-200">Avaliação Autônoma</strong>
+                    <span className="text-[10px] text-slate-400">Existe por conta própria, com nota individual/grupo.</span>
+                  </div>
+                </label>
+
+                <label
+                  className={`p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-all ${
+                    bindingMode === 'linked'
+                      ? 'bg-cyan-500/15 border-cyan-400 text-white'
+                      : 'bg-slate-800 border-slate-700 text-slate-400'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="bindingMode"
+                    checked={bindingMode === 'linked'}
+                    onChange={() => setBindingMode('linked')}
+                    className="accent-cyan-400"
+                  />
+                  <div>
+                    <strong className="text-xs block text-slate-200">Vincular a uma Prova Formal</strong>
+                    <span className="text-[10px] text-slate-400">Conta como etapa gamificada da avaliação mãe.</span>
+                  </div>
+                </label>
+              </div>
+
+              {bindingMode === 'linked' && (
+                <div className="pt-2 animate-fadeIn">
+                  <select
+                    value={linkedFormalActivityId}
+                    onChange={(e) => setLinkedFormalActivityId(e.target.value)}
+                    className="w-full bg-slate-900 border border-cyan-500/40 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                  >
+                    <option value="">-- Selecione a atividade formal da turma --</option>
+                    {formalActivitiesForBinding.map((act) => (
+                      <option key={act.id} value={act.id}>
+                        {act.title} (Turma {act.turma})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Botão de Geração */}
+            <button
+              type="button"
+              onClick={handleGenerateGame}
+              disabled={isGenerating}
+              className="w-full py-3.5 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-slate-950 font-black text-sm rounded-2xl transition-all shadow-[0_0_25px_rgba(6,182,212,0.4)] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              <Sparkles className="w-5 h-5 fill-current" />
+              <span>{isGenerating ? 'Compilando 6 Estágios com a IA...' : 'Gerar 6 Fases com Co-Op Inclusivo ✨'}</span>
+            </button>
+          </div>
+
+          {/* =========================================================================
+              EDITOR DE FASES PRÉ-PUBLICAÇÃO
+          ========================================================================= */}
+          {isReviewOpen && stagedGameData && (
+            <div className="p-6 bg-slate-900 border-2 border-cyan-400/50 rounded-3xl shadow-2xl space-y-6 animate-fadeIn">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="p-2 rounded-xl bg-cyan-500/20 text-cyan-300">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h3 className="text-base font-black text-white">Revisão Pré-Publicação das 6 Fases</h3>
+                    <p className="text-xs text-slate-400">Edite enunciados e confira as rodadas adaptadas antes de publicar para os alunos.</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsReviewOpen(false)}
+                  className="text-xs text-slate-400 hover:text-white"
+                >
+                  Recolher
+                </button>
+              </div>
+
+              {/* Texto de Introdução */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-300">Texto Introdutório do Jogo:</label>
+                <textarea
+                  value={stagedGameData.introText}
+                  onChange={(e) => setStagedGameData({ ...stagedGameData, introText: e.target.value })}
+                  rows={2}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none"
+                />
+              </div>
+
+              {/* Fases */}
+              <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
+                {stagedGameData.stages.map((stg, sIdx) => (
+                  <div key={stg.id || sIdx} className="p-4 bg-slate-800/80 rounded-2xl border border-slate-700 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-cyan-400 uppercase tracking-wider">
+                        Fase {sIdx + 1}: {stg.title}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold">
+                        Co-Op Inclusivo Ativo
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-400">Enunciado Regular:</label>
+                      <textarea
+                        value={stg.scenario}
+                        onChange={(e) => {
+                          const updated = [...stagedGameData.stages];
+                          updated[sIdx].scenario = e.target.value;
+                          setStagedGameData({ ...stagedGameData, stages: updated });
+                        }}
+                        rows={2}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white"
+                      />
+                    </div>
+
+                    {/* Alternativas Regulares */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {stg.options.map((opt, oIdx) => (
+                        <div
+                          key={oIdx}
+                          className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+                            opt.isCorrect
+                              ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-200'
+                              : 'bg-slate-900 border-slate-700 text-slate-300'
+                          }`}
+                        >
+                          <span className="truncate">{opt.iconEmoji || '•'} {opt.text}</span>
+                          <span className="text-[10px] font-bold shrink-0">
+                            {opt.isCorrect ? '✓ Correta' : 'Distrator'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Destaque Inclusivo PNE */}
+                    <div className="p-3 bg-cyan-950/30 rounded-xl border border-cyan-800/40 flex items-center justify-between text-xs text-slate-300">
+                      <span>🌟 <strong>Rodada Inclusiva Integrada:</strong> Caso haja colega PNE no grupo em sala, a tela alternará automaticamente para opções diretas e cartões ilustrados.</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Botão Final de Publicação */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsReviewOpen(false)}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
+                >
+                  Continuar Editando
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePublishGame}
+                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm rounded-xl transition-all shadow-lg shadow-emerald-500/20 cursor-pointer flex items-center gap-2"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Publicar KronoGame 🚀</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+'use client';
+
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import {
+  Sparkles,
+  Users,
+  Gamepad2,
+  FileText,
+  Plus,
+  CheckCircle2,
+  AlertCircle,
+  BookOpen,
+  Send,
+  Layers,
+  Link2,
+  Eye,
+  Trash2,
+  Clock,
+  ShieldCheck,
+  ChevronRight,
+  Loader2,
+  Award,
+  ChevronDown,
+  Filter,
+  Check,
+  HeartHandshake,
+  Heart,
+  Dna,
+  Wrench,
+  FolderOpen,
+  HelpCircle,
+  Play
+} from 'lucide-react';
+import {
+  Activity,
+  StudentUser,
+  TeacherUser,
+  AeeMechanic,
+  AeePromptSettings,
+  GameData,
+} from '@/lib/types';
+import {
+  isStudentPNE,
+  isActivityAdapted,
+  getRecommendedAdaptationForClass,
+  isSevereCondition,
+  getOriginalTurmas,
+  getTurmaLabel
+} from '@/lib/studentUtils';
+import { KronoIcon } from '@/components/ui/KronoIcon';
+
+interface AdaptedActivitiesViewProps {
+  activities: Activity[];
+  students: StudentUser[];
+  teacher: TeacherUser;
+  onOpenNewActivityModal?: () => void;
+  onOpenAdaptActivityModal?: (activity: Activity) => void;
+  onDeleteActivity?: (activityId: string) => void;
+  onSaveCreatedActivity: (activity: Activity) => Promise<void> | void;
+  onPlayGamePreview?: (activity: Activity) => void;
+}
+
+const getDefaultAeeDeadlineString = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 7);
+  return d.toISOString().split('T')[0];
+};
+
+export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
+  activities,
+  students,
+  teacher,
+  onOpenAdaptActivityModal,
+  onDeleteActivity,
+  onSaveCreatedActivity,
+  onPlayGamePreview,
+}) => {
+  // Menu Superior Exclusivo da Central AEE:
+  // 1. Radar Neuro-Pedagógico da Turma (Anti-Fragmentação)
+  // 2. Construtor AEE (Estrutura de Pedidos Adaptados)
+  // 3. Banco de Atividades Adaptadas Ativas
+  const [activeMenuTab, setActiveMenuTab] = useState<'radar' | 'builder' | 'bank'>('radar');
+
+  // Turmas da escola
+  const turmasList = useMemo(() => getOriginalTurmas(students), [students]);
+  const [selectedTurma, setSelectedTurma] = useState<string>(turmasList[0] || '101');
+
+  // Alunos PNE da turma selecionada
+  const pneStudentsInTurma = useMemo(() => {
+    return students.filter((s) => s.turma === selectedTurma && isStudentPNE(s));
+  }, [students, selectedTurma]);
+
+  // Diagnóstico / Radar Neuro-Pedagógico Anti-Fragmentação
+  const classRecommendation = useMemo(() => {
+    return getRecommendedAdaptationForClass(selectedTurma, students);
+  }, [selectedTurma, students]);
+
+  // Atividades Adaptadas existentes no banco
+  const adaptedActivitiesList = useMemo(() => {
+    return activities.filter((act) => {
+      const adapted = isActivityAdapted(act) || act.activityDomain === 'adapted_aee';
+      if (!adapted) return false;
+      if (selectedTurma === 'todas') return true;
+      return act.turma === selectedTurma || act.turma?.includes(selectedTurma);
+    });
+  }, [activities, selectedTurma]);
+
+  // Atividades Regulares da turma para vínculo opcional
+  const regularActivitiesInTurma = useMemo(() => {
+    return activities.filter((act) => !isActivityAdapted(act) && act.activityDomain !== 'adapted_aee' && act.turma === selectedTurma);
+  }, [activities, selectedTurma]);
+
+  // ==========================================
+  // ESTADOS DO CONSTRUTOR AEE
+  // ==========================================
+  const [aeeTopic, setAeeTopic] = useState('');
+  const [aeeMaterial, setAeeMaterial] = useState('');
+  const [aeeDeadline, setAeeDeadline] = useState(getDefaultAeeDeadlineString);
+  const [selectedMechanic, setSelectedMechanic] = useState<AeeMechanic>('visual_cards');
+  
+  // Painel de Diretrizes Sensoriais e Cognitivas
+  const [promptSettings, setPromptSettings] = useState<AeePromptSettings>({
+    literalLanguage: true,
+    cognitiveReduction: true,
+    uppercaseText: false,
+    concreteExamples: true,
+  });
+
+  // Gestor de Vínculo Opcional
+  const [bindingMode, setBindingMode] = useState<'standalone' | 'linked'>('standalone');
+  const [linkedParentId, setLinkedParentId] = useState<string>('');
+
+  // Estados de IA e Pré-Publicação
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedGameData, setGeneratedGameData] = useState<GameData | null>(null);
+  const [successBanner, setSuccessBanner] = useState<string | null>(null);
+
+  // Iniciar criação direta a partir da recomendação do radar
+  const handleApplyRecommendationToBuilder = () => {
+    if (classRecommendation.recommendedType === 'severe_playful') {
+      setSelectedMechanic('visual_cards');
+      setPromptSettings((prev) => ({ ...prev, uppercaseText: true, literalLanguage: true }));
+    } else {
+      setSelectedMechanic('binary_trail');
+      setPromptSettings((prev) => ({ ...prev, cognitiveReduction: true, literalLanguage: true }));
+    }
+    setActiveMenuTab('builder');
+  };
+
+  // Gerar Atividade Adaptada com IA
+  const handleGenerateAeeActivity = async () => {
+    if (!aeeTopic.trim()) {
+      alert('Informe o tema ou objetivo de aprendizagem para gerar a atividade adaptada.');
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const res = await fetch('/api/gemini/generate-interactive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'adapted_aee',
+          title: `[AEE Adaptada] ${aeeTopic}`,
+          subject: teacher.subject || 'Educação Especial / AEE',
+          topic: aeeTopic.trim(),
+          supportMaterial: aeeMaterial.trim(),
+          aeeMechanic: selectedMechanic,
+          aeePromptSettings: promptSettings,
+          adaptationRecommendation: classRecommendation,
+        }),
+      });
+
+      if (!res.ok) throw new Error('Falha ao gerar atividade adaptada');
+      const data = await res.json();
+
+      if (data.gameData) {
+        setGeneratedGameData(data.gameData);
+      }
+    } catch (err: any) {
+      console.error('Erro ao compilar atividade AEE:', err);
+      alert('Houve um erro ao gerar a atividade adaptada. Tente novamente.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Publicar Atividade Adaptada na Central
+  const handlePublishAdaptedActivity = async () => {
+    if (!generatedGameData) return;
+
+    const newActivity: Activity = {
+      id: `aee_${Date.now()}`,
+      title: `[AEE Inclusiva] ${aeeTopic.trim() || 'Atividade Adaptada'}`,
+      subject: teacher.subject || 'Educação Especial',
+      turma: selectedTurma,
+      deadline: aeeDeadline,
+      description: generatedGameData.introText || `Atividade adaptada de inclusão para os alunos PNE da turma ${selectedTurma}.`,
+      supportMaterial: aeeMaterial || '',
+      type: 'Jogo Avaliativo',
+      status: 'Ativo',
+      maxGrade: 10,
+      allowGroupWork: false, // Atividades adaptadas são individuais e focadas na autonomia
+      isAdapted: true,
+      activityDomain: 'adapted_aee',
+      isStandaloneAdaptation: bindingMode === 'standalone',
+      adaptedFromId: bindingMode === 'linked' ? linkedParentId : undefined,
+      adaptationType: classRecommendation.recommendedType === 'severe_playful' ? 'severe_playful' : 'mild_moderate',
+      adaptationReason: classRecommendation.summaryText,
+      aeeMechanic: selectedMechanic,
+      aeePromptSettings: promptSettings,
+      isGameActivity: true,
+      gameData: generatedGameData,
+      submissions: [],
+      totalSubmissions: 0,
+      totalStudents: pneStudentsInTurma.length,
+      pendingCorrection: 0,
+    };
+
+    await onSaveCreatedActivity(newActivity);
+    setSuccessBanner(`✨ Atividade Inclusiva publicada com sucesso para os ${pneStudentsInTurma.length} alunos PNE da Turma ${selectedTurma}!`);
+    setGeneratedGameData(null);
+    setAeeTopic('');
+    setAeeMaterial('');
+    setActiveMenuTab('bank');
+    setTimeout(() => setSuccessBanner(null), 5000);
+  };
+
+  return (
+    <div className="space-y-6 sm:space-y-8 animate-fadeIn pb-12">
+      {/* Header Central AEE */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-border">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
+              <Sparkles className="w-5 h-5" />
+            </span>
+            <span className="text-xs font-black uppercase tracking-wider text-amber-400">
+              Educação Inclusiva & AEE • Ensino Médio
+            </span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-foreground tracking-tight">
+            Central de Atividades Adaptadas
+          </h1>
+          <p className="text-xs sm:text-sm text-muted mt-1 max-w-2xl leading-relaxed">
+            Área exclusiva para adaptação neuro-pedagógica com motor anti-fragmentação de laudos. Alunos regulares nunca têm acesso e a 2ª Professora acompanha tudo em tempo real.
+          </p>
+        </div>
+      </div>
+
+      {/* Seletor de Turma em Abas/Pills (Padrão Unificado) */}
+      {turmasList.length > 0 && (
+        <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-border bg-surface space-y-2 shadow-md">
+          <label className="text-xs font-bold text-muted flex items-center gap-1.5 uppercase tracking-wider">
+            <Users className="w-3.5 h-3.5 text-primary" />
+            <span>Filtrar por Turma:</span>
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            {turmasList.map((turmaCode) => {
+              const countStudents = students.filter((s) => s.turma === turmaCode).length;
+              const isSelected = selectedTurma === turmaCode;
+              return (
+                <button
+                  key={turmaCode}
+                  type="button"
+                  onClick={() => setSelectedTurma(turmaCode)}
+                  className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 border active:scale-95 ${
+                    isSelected
+                      ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 font-extrabold'
+                      : 'bg-background text-muted hover:text-foreground border-border hover:bg-surface-hover'
+                  }`}
+                >
+                  <span>Turma {getTurmaLabel(turmaCode)}</span>
+                  <span className="text-[10px] opacity-75 font-mono">({countStudents})</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Menu Superior Exclusivo da Central AEE */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveMenuTab('radar')}
+          className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer border ${
+            activeMenuTab === 'radar'
+              ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md ring-1 ring-amber-400/30'
+              : 'bg-surface hover:bg-surface-hover text-muted border-border'
+          }`}
+        >
+          <Dna className="w-4 h-4 text-amber-400" />
+          <span>🧬 Radar Neuro-Pedagógico (Anti-Fragmentação)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMenuTab('builder')}
+          className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer border ${
+            activeMenuTab === 'builder'
+              ? 'bg-primary/20 text-primary border-primary/50 shadow-md ring-1 ring-primary/30'
+              : 'bg-surface hover:bg-surface-hover text-muted border-border'
+          }`}
+        >
+          <Wrench className="w-4 h-4 text-primary" />
+          <span>🛠️ Construtor AEE (Pedidos Adaptados)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMenuTab('bank')}
+          className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer border ${
+            activeMenuTab === 'bank'
+              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-md ring-1 ring-emerald-400/30'
+              : 'bg-surface hover:bg-surface-hover text-muted border-border'
+          }`}
+        >
+          <FolderOpen className="w-4 h-4 text-emerald-400" />
+          <span>📂 Banco de Atividades Adaptadas</span>
+          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-surface-hover font-mono font-bold">
+            {adaptedActivitiesList.length}
+          </span>
+        </button>
+      </div>
+
+      {/* Banner de Sucesso */}
+      {successBanner && (
+        <div className="p-4 bg-emerald-500/15 border border-emerald-400/50 text-emerald-300 rounded-2xl text-xs sm:text-sm flex items-center gap-3 animate-fadeIn">
+          <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" />
+          <span className="font-bold">{successBanner}</span>
+        </div>
+      )}
+
+      {/* =========================================================================
+          ABA 1: RADAR NEURO-PEDAGÓGICO DA TURMA (ANTI-FRAGMENTAÇÃO DE LAUDOS)
+      ========================================================================= */}
+      {activeMenuTab === 'radar' && (
+        <div className="space-y-6 animate-fadeIn">
+          <div className="glass-panel p-6 rounded-3xl border border-amber-500/30 space-y-5 bg-gradient-to-br from-amber-500/5 via-surface to-background shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-border">
+              <div className="flex items-center gap-3">
+                <span className="p-3 rounded-2xl bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  <Dna className="w-6 h-6" />
+                </span>
+                <div>
+                  <h2 className="text-lg sm:text-xl font-black text-foreground">
+                    Diagnóstico Neuro-Pedagógico da Turma {selectedTurma}
+                  </h2>
+                  <p className="text-xs text-muted">
+                    Motor Anti-Fragmentação: Agrupa todos os laudos da turma e recomenda uma única estratégia inclusiva integrada.
+                  </p>
+                </div>
+              </div>
+
+              <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-500/15 text-amber-300 border border-amber-500/30 w-fit">
+                {pneStudentsInTurma.length} Aluno(s) PNE na Turma
+              </span>
+            </div>
+
+            {/* Resumo da Recomendação Anti-Fragmentação */}
+            <div className="p-4 bg-surface rounded-2xl border border-border space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
+                  Diretriz Pedagógica Consolidada:
+                </span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-bold">
+                  {classRecommendation.recommendedType === 'severe_playful'
+                    ? 'Adaptação Lúdica / Visual (Laudos Severos Presentes)'
+                    : 'Adaptação Curricular Leve/Moderada (Cognição Preservada)'}
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-foreground leading-relaxed font-medium">
+                {classRecommendation.summaryText}
+              </p>
+            </div>
+
+            {/* Lista de Alunos e Laudos Agrupados */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold text-muted uppercase tracking-wider">
+                Alunos com Laudo PNE / AEE nesta Turma:
+              </h3>
+
+              {pneStudentsInTurma.length === 0 ? (
+                <div className="p-6 text-center text-xs text-muted border border-dashed border-border rounded-2xl">
+                  Nenhum aluno com laudo PNE cadastrado na Turma {selectedTurma}.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  {pneStudentsInTurma.map((st) => (
+                    <div
+                      key={st.id}
+                      className="p-3.5 rounded-2xl bg-surface border border-border flex items-start gap-3 shadow-sm"
+                    >
+                      <img
+                        src={st.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'}
+                        alt={st.fullName}
+                        className="w-10 h-10 rounded-full object-cover border border-amber-500/40 shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <strong className="text-xs font-bold text-foreground block truncate">
+                          {st.fullName}
+                        </strong>
+                        <span className="text-[10px] text-muted block">Matrícula: {st.matricula}</span>
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {(st.pneConditions && st.pneConditions.length > 0
+                            ? st.pneConditions
+                            : ['Laudo PNE Geral']
+                          ).map((c, idx) => (
+                            <span
+                              key={idx}
+                              className={`text-[9px] px-1.5 py-0.2 rounded-md font-bold ${
+                                isSevereCondition(c)
+                                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              }`}
+                            >
+                              {c}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Ação Rápida: Transição Direta para o Construtor */}
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={handleApplyRecommendationToBuilder}
+                className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer"
+              >
+                <span>Aplicar Diretriz no Construtor AEE</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          ABA 2: CONSTRUTOR AEE (ESTRUTURA DE PEDIDOS ADAPTADOS COM IA)
+      ========================================================================= */}
+      {activeMenuTab === 'builder' && (
+        <div className="space-y-6 max-w-4xl mx-auto animate-fadeIn">
+          <div className="glass-panel p-6 rounded-3xl border border-primary/30 space-y-6 shadow-xl bg-surface">
+            <div className="border-b border-border pb-4">
+              <div className="flex items-center gap-3">
+                <span className="p-2.5 rounded-2xl bg-primary/10 text-primary border border-primary/20">
+                  <Wrench className="w-6 h-6" />
+                </span>
+                <div>
+                  <h2 className="text-xl font-black text-foreground">
+                    Construtor de Atividades Adaptadas (Central AEE)
+                  </h2>
+                  <p className="text-xs text-muted">
+                    Configure a mecânica inclusiva, ajuste as diretrizes cognitivas e compile a atividade com apoio pedagógico.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* 1. Escolha da Mecânica Inclusiva */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-foreground block">
+                1. Escolha a Mecânica Pedagógica Inclusiva:
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedMechanic('visual_cards')}
+                  className={`p-3.5 rounded-2xl border text-left space-y-1 transition-all cursor-pointer ${
+                    selectedMechanic === 'visual_cards'
+                      ? 'bg-amber-500/20 border-amber-400 ring-2 ring-amber-400/30'
+                      : 'bg-background hover:bg-surface-hover border-border'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-amber-400">
+                    <span>🃏 Mapa Visual Lúdico</span>
+                    <span className="text-[10px] px-2 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-extrabold">Laudos Severos</span>
+                  </div>
+                  <p className="text-[11px] text-muted leading-snug">
+                    Cartões ilustrados com emojis gigantes e resposta por toque visual direto.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedMechanic('binary_trail')}
+                  className={`p-3.5 rounded-2xl border text-left space-y-1 transition-all cursor-pointer ${
+                    selectedMechanic === 'binary_trail'
+                      ? 'bg-primary/20 border-primary ring-2 ring-primary/30'
+                      : 'bg-background hover:bg-surface-hover border-border'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-primary">
+                    <span>⚡ Trilha Guiada de 2 Escolhas</span>
+                    <span className="text-[10px] px-2 py-0.2 rounded-full bg-primary/20 text-primary font-extrabold">Leve / Moderado</span>
+                  </div>
+                  <p className="text-[11px] text-muted leading-snug">
+                    Apenas 2 alternativas contrastantes, eliminando sobrecarga cognitiva.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedMechanic('social_story')}
+                  className={`p-3.5 rounded-2xl border text-left space-y-1 transition-all cursor-pointer ${
+                    selectedMechanic === 'social_story'
+                      ? 'bg-purple-500/20 border-purple-400 ring-2 ring-purple-400/30'
+                      : 'bg-background hover:bg-surface-hover border-border'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-purple-400">
+                    <span>📖 História Social Cotidiana</span>
+                    <span className="text-[10px] px-2 py-0.2 rounded-full bg-purple-500/20 text-purple-300 font-extrabold">Foco TEA</span>
+                  </div>
+                  <p className="text-[11px] text-muted leading-snug">
+                    Narrativa linear passo a passo com situações concretas do dia a dia.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedMechanic('block_builder')}
+                  className={`p-3.5 rounded-2xl border text-left space-y-1 transition-all cursor-pointer ${
+                    selectedMechanic === 'block_builder'
+                      ? 'bg-emerald-500/20 border-emerald-400 ring-2 ring-emerald-400/30'
+                      : 'bg-background hover:bg-surface-hover border-border'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-emerald-400">
+                    <span>🧱 Oficina de Blocos de Ideias</span>
+                    <span className="text-[10px] px-2 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-extrabold">Sem Digitação</span>
+                  </div>
+                  <p className="text-[11px] text-muted leading-snug">
+                    Montagem estruturada de ideias por blocos conceituais guiados.
+                  </p>
+                </button>
+              </div>
+            </div>
+
+            {/* 2. Painel de Diretrizes Sensoriais e Cognitivas */}
+            <div className="p-4 bg-background rounded-2xl border border-border space-y-3">
+              <label className="text-xs font-bold text-foreground block">
+                2. Diretrizes Sensoriais e Cognitivas (AEE):
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <label className="flex items-center gap-2.5 p-2 rounded-xl bg-surface border border-border cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={promptSettings.literalLanguage}
+                    onChange={(e) => setPromptSettings({ ...promptSettings, literalLanguage: e.target.checked })}
+                    className="accent-primary w-4 h-4 rounded"
+                  />
+                  <span>Linguagem 100% Literal (Sem Metáforas)</span>
+                </label>
+
+                <label className="flex items-center gap-2.5 p-2 rounded-xl bg-surface border border-border cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={promptSettings.cognitiveReduction}
+                    onChange={(e) => setPromptSettings({ ...promptSettings, cognitiveReduction: e.target.checked })}
+                    className="accent-primary w-4 h-4 rounded"
+                  />
+                  <span>Enunciados Curtos (Redução Cognitiva)</span>
+                </label>
+
+                <label className="flex items-center gap-2.5 p-2 rounded-xl bg-surface border border-border cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={promptSettings.uppercaseText}
+                    onChange={(e) => setPromptSettings({ ...promptSettings, uppercaseText: e.target.checked })}
+                    className="accent-primary w-4 h-4 rounded"
+                  />
+                  <span>Texto em Caixa Alta (MAIÚSCULAS)</span>
+                </label>
+
+                <label className="flex items-center gap-2.5 p-2 rounded-xl bg-surface border border-border cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={promptSettings.concreteExamples}
+                    onChange={(e) => setPromptSettings({ ...promptSettings, concreteExamples: e.target.checked })}
+                    className="accent-primary w-4 h-4 rounded"
+                  />
+                  <span>Exemplos da Vida Diária e Cotidiano</span>
+                </label>
+              </div>
+            </div>
+
+            {/* 3. Tema e Conteúdo */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-bold text-foreground block mb-1">Tema / Conteúdo Adaptado</label>
+                <input
+                  type="text"
+                  value={aeeTopic}
+                  onChange={(e) => setAeeTopic(e.target.value)}
+                  placeholder="Ex: Cidadania e Regras de Convivência"
+                  className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground focus:outline-none focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-foreground block mb-1">Prazo de Entrega</label>
+                <input
+                  type="date"
+                  value={aeeDeadline}
+                  onChange={(e) => setAeeDeadline(e.target.value)}
+                  className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground focus:outline-none focus:border-primary"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-foreground block mb-1">Material de Apoio / Instruções para a IA (Opcional)</label>
+              <textarea
+                value={aeeMaterial}
+                onChange={(e) => setAeeMaterial(e.target.value)}
+                rows={2}
+                placeholder="Insira conceitos centrais ou termos específicos da aula para orientar a adaptação..."
+                className="w-full bg-background border border-border rounded-xl p-3 text-xs text-foreground focus:outline-none focus:border-primary"
+              />
+            </div>
+
+            {/* 4. Gestor de Vínculo Opcional */}
+            <div className="p-4 bg-background rounded-2xl border border-border space-y-3">
+              <label className="text-xs font-bold text-foreground flex items-center gap-2">
+                <Link2 className="w-4 h-4 text-primary" />
+                <span>Gestão de Vínculo com Atividades Regulares da Turma:</span>
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label
+                  className={`p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-all ${
+                    bindingMode === 'standalone'
+                      ? 'bg-primary/10 border-primary text-foreground'
+                      : 'bg-surface border-border text-muted'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="bindingModeAee"
+                    checked={bindingMode === 'standalone'}
+                    onChange={() => setBindingMode('standalone')}
+                    className="accent-primary"
+                  />
+                  <div>
+                    <strong className="text-xs block">Atividade AEE Independente</strong>
+                    <span className="text-[10px] text-muted">Sem vínculo com provas regulares da turma.</span>
+                  </div>
+                </label>
+
+                <label
+                  className={`p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-all ${
+                    bindingMode === 'linked'
+                      ? 'bg-primary/10 border-primary text-foreground'
+                      : 'bg-surface border-border text-muted'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="bindingModeAee"
+                    checked={bindingMode === 'linked'}
+                    onChange={() => setBindingMode('linked')}
+                    className="accent-primary"
+                  />
+                  <div>
+                    <strong className="text-xs block">Vincular a uma Prova da Turma</strong>
+                    <span className="text-[10px] text-muted">Substitui formalmente a avaliação mãe para os PNEs.</span>
+                  </div>
+                </label>
+              </div>
+
+              {bindingMode === 'linked' && (
+                <div className="pt-2 animate-fadeIn">
+                  <select
+                    value={linkedParentId}
+                    onChange={(e) => setLinkedParentId(e.target.value)}
+                    className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:outline-none"
+                  >
+                    <option value="">-- Selecione a atividade formal da turma {selectedTurma} --</option>
+                    {regularActivitiesInTurma.map((act) => (
+                      <option key={act.id} value={act.id}>
+                        {act.title} (Prazo: {act.deadline})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Botão de Compilação */}
+            <button
+              type="button"
+              onClick={handleGenerateAeeActivity}
+              disabled={isGenerating}
+              className="w-full py-3.5 bg-gradient-to-r from-amber-500 via-primary to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 font-black text-sm rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              <Sparkles className="w-5 h-5 fill-current" />
+              <span>{isGenerating ? 'Compilando 6 Estágios Adaptados...' : 'Gerar 6 Fases AEE com IA ✨'}</span>
+            </button>
+          </div>
+
+          {/* Pré-Visualização e Confirmação da Publicação */}
+          {generatedGameData && (
+            <div className="p-6 bg-surface border-2 border-emerald-500/50 rounded-3xl shadow-xl space-y-4 animate-fadeIn">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                  <h3 className="text-base font-bold text-foreground">
+                    Atividade Adaptada Compilada ({generatedGameData.stages.length} Fases)
+                  </h3>
+                </div>
+                <span className="text-xs font-bold text-emerald-400">Pronta para Publicação</span>
+              </div>
+
+              <p className="text-xs text-muted leading-relaxed italic">
+                &ldquo;{generatedGameData.introText}&rdquo;
+              </p>
+
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                {generatedGameData.stages.map((stg, idx) => (
+                  <div key={idx} className="p-3 bg-background rounded-xl border border-border text-xs space-y-1">
+                    <strong className="text-foreground block">{stg.title}</strong>
+                    <p className="text-muted">{stg.scenario}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setGeneratedGameData(null)}
+                  className="px-4 py-2 bg-surface hover:bg-surface-hover text-muted rounded-xl text-xs font-bold"
+                >
+                  Descartar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePublishAdaptedActivity}
+                  className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Publicar para os Alunos PNE 🚀</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =========================================================================
+          ABA 3: BANCO DE ATIVIDADES ADAPTADAS ATIVAS
+      ========================================================================= */}
+      {activeMenuTab === 'bank' && (
+        <div className="space-y-6 animate-fadeIn">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base sm:text-lg font-black text-foreground">
+              Atividades Adaptadas da Turma {selectedTurma}
+            </h2>
+            <span className="text-xs text-muted">
+              Total: <strong>{adaptedActivitiesList.length}</strong> atividades inclusivas
+            </span>
+          </div>
+
+          {adaptedActivitiesList.length === 0 ? (
+            <div className="p-12 text-center rounded-3xl border border-dashed border-border bg-surface text-muted space-y-3">
+              <FolderOpen className="w-12 h-12 mx-auto text-muted/50" />
+              <p className="text-sm font-bold text-foreground">Nenhuma atividade adaptada criada para esta turma.</p>
+              <p className="text-xs text-muted max-w-md mx-auto">
+                Utilize a aba &ldquo;Construtor AEE&rdquo; para criar tarefas inclusivas alinhadas aos laudos dos estudantes.
+              </p>
+              <button
+                type="button"
+                onClick={() => setActiveMenuTab('builder')}
+                className="px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary-hover cursor-pointer"
+              >
+                Abrir Construtor AEE
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {adaptedActivitiesList.map((act) => {
+                const subsCount = act.submissions?.length || 0;
+                const totalTarget = pneStudentsInTurma.length || 1;
+
+                return (
+                  <div
+                    key={act.id}
+                    className="p-5 rounded-2xl bg-surface border border-border hover:border-amber-500/40 transition-all shadow-md flex flex-col justify-between gap-4 group"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                          {act.adaptationType === 'severe_playful' ? 'Lúdico / Visual' : 'Cognição Adaptada'}
+                        </span>
+
+                        <span className="text-[11px] font-bold text-muted">
+                          Turma {act.turma}
+                        </span>
+                      </div>
+
+                      <h3 className="text-sm sm:text-base font-extrabold text-foreground group-hover:text-amber-400 transition-colors line-clamp-2">
+                        {act.title}
+                      </h3>
+
+                      <p className="text-xs text-muted line-clamp-2 leading-relaxed">
+                        {act.description}
+                      </p>
+
+                      <div className="flex items-center gap-3 pt-2 text-[11px] text-muted border-t border-border">
+                        <span>PNEs Realizados: <strong className="text-emerald-400">{subsCount}/{totalTarget}</strong></span>
+                        {act.adaptedFromId && (
+                          <>
+                            <span>•</span>
+                            <span className="text-primary flex items-center gap-1">
+                              <Link2 className="w-3 h-3" /> Vinculada
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-3 border-t border-border">
+                      {onPlayGamePreview && (
+                        <button
+                          type="button"
+                          onClick={() => onPlayGamePreview(act)}
+                          className="flex-1 py-2 px-3 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-xs rounded-xl border border-amber-500/30 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>Testar AEE</span>
+                        </button>
+                      )}
+
+                      {onDeleteActivity && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`Deseja realmente excluir a atividade adaptada "${act.title}"?`)) {
+                              onDeleteActivity(act.id);
+                            }
+                          }}
+                          className="p-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-xl border border-rose-500/30 transition-all cursor-pointer"
+                          title="Excluir atividade adaptada"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+'use client';
+
+import React, { useState, useMemo, useEffect } from 'react';
+import {
+  Gamepad2,
+  Trophy,
+  Users,
+  Sparkles,
+  CheckCircle2,
+  XCircle,
+  Lightbulb,
+  ArrowRight,
+  RotateCcw,
+  Star,
+  Crown,
+  HeartHandshake,
+  Check,
+  Zap,
+  Volume2,
+  VolumeX,
+  X,
+  Shield,
+  Award
+} from 'lucide-react';
+import { Activity, StudentUser, GameStage, GameData, GameMode } from '@/lib/types';
+import { isStudentPNE, isSevereCondition } from '@/lib/studentUtils';
+
+interface KronoGamePlayerProps {
+  activity: Activity;
+  student: StudentUser;
+  allStudents?: StudentUser[];
+  onFinishGame: (finalScore: number, groupMembersStr?: string) => void;
+  onClose: () => void;
+}
+
+// Web Audio API Synthesizer para efeitos sonoros imediatos e sem arquivos externos
+function playSound(type: 'correct' | 'wrong' | 'win' | 'click') {
+  if (typeof window === 'undefined') return;
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+
+    if (type === 'click') {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440, ctx.currentTime);
+      gain.gain.setValueAtTime(0.05, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.08);
+    } else if (type === 'correct') {
+      const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+      notes.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.07);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime + idx * 0.07);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.07 + 0.18);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + idx * 0.07);
+        osc.stop(ctx.currentTime + idx * 0.07 + 0.18);
+      });
+    } else if (type === 'wrong') {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(220, ctx.currentTime);
+      osc.frequency.linearRampToValueAtTime(140, ctx.currentTime + 0.25);
+      gain.gain.setValueAtTime(0.07, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.25);
+    } else if (type === 'win') {
+      const arpeggio = [523.25, 659.25, 783.99, 1046.5, 1318.51];
+      arpeggio.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.1);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime + idx * 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.1 + 0.4);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + idx * 0.1);
+        osc.stop(ctx.currentTime + idx * 0.1 + 0.4);
+      });
+    }
+  } catch (e) {
+    // Ignore audio errors if browser blocks autoplay
+  }
+}
+
+export const KronoGamePlayer: React.FC<KronoGamePlayerProps> = ({
+  activity,
+  student,
+  allStudents = [],
+  onFinishGame,
+  onClose,
+}) => {
+  const gameData: GameData = activity.gameData || {
+    introText: 'Partida pedagógica KronoGames iniciada.',
+    stages: [],
+  };
+
+  const stages = gameData.stages || [];
+  const maxGrade = activity.maxGrade || 10;
+  const isClassroomGroup = activity.executionContext === 'classroom_group' || activity.allowGroupWork;
+
+  // Sound toggle
+  const [soundEnabled, setSoundEnabled] = useState(true);
+
+  // Group members selection (if classroom_group)
+  const [selectedGroupMembers, setSelectedGroupMembers] = useState<StudentUser[]>([]);
+  const [customMembersText, setCustomMembersText] = useState('');
+  const [isSetupDone, setIsSetupDone] = useState(false);
+
+  // Filter students from the same turma
+  const classmates = useMemo(() => {
+    return allStudents.filter(
+      (s) => s.id !== student.id && s.turma === student.turma && !s.isArchived
+    );
+  }, [allStudents, student.id, student.turma]);
+
+  // Check if team has PNE members
+  const teamHasPne = useMemo(() => {
+    if (isStudentPNE(student)) return true;
+    return selectedGroupMembers.some((m) => isStudentPNE(m));
+  }, [student, selectedGroupMembers]);
+
+  // Check if team has severe conditions
+  const teamHasSeverePne = useMemo(() => {
+    const checkConds = (s: StudentUser) => {
+      const conds = s.pneConditions || [];
+      return conds.some((c) => isSevereCondition(c));
+    };
+    if (checkConds(student)) return true;
+    return selectedGroupMembers.some((m) => checkConds(m));
+  }, [student, selectedGroupMembers]);
+
+  // Game execution state
+  const [currentStageIndex, setCurrentStageIndex] = useState(0);
+  const [selectedOptionIndex, setSelectedOptionIndex] = useState<number | null>(null);
+  const [selectedSevereCardIndex, setSelectedSevereCardIndex] = useState<number | null>(null);
+  const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
+  const [stageResults, setStageResults] = useState<boolean[]>([]);
+  const [showClue, setShowClue] = useState(false);
+  const [isGameFinished, setIsGameFinished] = useState(false);
+
+  // Manual toggle for team to play the Inclusive PNE variation of the stage
+  const [viewPneMode, setViewPneMode] = useState<boolean>(() => {
+    return teamHasPne;
+  });
+
+  // When game starts or stage changes, reset stage choices
+  const currentStage: GameStage | undefined = stages[currentStageIndex];
+
+  const handleToggleMember = (st: StudentUser) => {
+    if (selectedGroupMembers.some((m) => m.id === st.id)) {
+      setSelectedGroupMembers((prev) => prev.filter((m) => m.id !== st.id));
+    } else {
+      setSelectedGroupMembers((prev) => [...prev, st]);
+    }
+  };
+
+  const handleStartGame = () => {
+    if (soundEnabled) playSound('click');
+    setIsSetupDone(true);
+  };
+
+  const handleSelectStandardOption = (idx: number) => {
+    if (isAnswerRevealed) return;
+    if (soundEnabled) playSound('click');
+    setSelectedOptionIndex(idx);
+  };
+
+  const handleSelectSevereCard = (idx: number) => {
+    if (isAnswerRevealed) return;
+    if (soundEnabled) playSound('click');
+    setSelectedSevereCardIndex(idx);
+  };
+
+  const handleConfirmAnswer = () => {
+    if (!currentStage || isAnswerRevealed) return;
+
+    let isCorrect = false;
+
+    if (viewPneMode && teamHasSeverePne && currentStage.pneSevereStage) {
+      if (selectedSevereCardIndex === null) return;
+      const card = currentStage.pneSevereStage.visualCards[selectedSevereCardIndex];
+      isCorrect = Boolean(card?.isCorrect);
+    } else if (viewPneMode && currentStage.pneMildStage) {
+      if (selectedOptionIndex === null) return;
+      const opt = currentStage.pneMildStage.options[selectedOptionIndex];
+      isCorrect = Boolean(opt?.isCorrect);
+    } else {
+      if (selectedOptionIndex === null) return;
+      const opt = currentStage.options[selectedOptionIndex];
+      isCorrect = Boolean(opt?.isCorrect);
+    }
+
+    setIsAnswerRevealed(true);
+    setStageResults((prev) => [...prev, isCorrect]);
+
+    if (soundEnabled) {
+      if (isCorrect) playSound('correct');
+      else playSound('wrong');
+    }
+  };
+
+  const handleNextStage = () => {
+    if (soundEnabled) playSound('click');
+    setIsAnswerRevealed(false);
+    setSelectedOptionIndex(null);
+    setSelectedSevereCardIndex(null);
+    setShowClue(false);
+
+    if (currentStageIndex + 1 < stages.length) {
+      setCurrentStageIndex((prev) => prev + 1);
+    } else {
+      // Finished all stages
+      if (soundEnabled) playSound('win');
+      setIsGameFinished(true);
+    }
+  };
+
+  // Final score calculation (0 to maxGrade)
+  const correctCount = stageResults.filter(Boolean).length;
+  const finalScore = useMemo(() => {
+    if (stages.length === 0) return maxGrade;
+    const calc = (correctCount / stages.length) * maxGrade;
+    return Number(calc.toFixed(1));
+  }, [correctCount, stages.length, maxGrade]);
+
+  const groupMembersString = useMemo(() => {
+    const list = [student.fullName];
+    selectedGroupMembers.forEach((m) => {
+      if (!list.includes(m.fullName)) list.push(m.fullName);
+    });
+    if (customMembersText.trim()) {
+      customMembersText.split(',').forEach((n) => {
+        const clean = n.trim();
+        if (clean && !list.includes(clean)) list.push(clean);
+      });
+    }
+    return list.join(', ');
+  }, [student.fullName, selectedGroupMembers, customMembersText]);
+
+  const handleSubmitFinal = () => {
+    onFinishGame(finalScore, groupMembersString);
+  };
+
+  // Mode Header Details
+  const modeInfo: Record<GameMode, { label: string; icon: any; color: string }> = {
+    millionaire: { label: 'Arena do Milhão', icon: Trophy, color: 'text-amber-500' },
+    dialectic_tribunal: { label: 'Tribunal Dialético', icon: Shield, color: 'text-indigo-500' },
+    structural_detective: { label: 'Detetive Estrutural', icon: Sparkles, color: 'text-purple-500' },
+    rpg_campaign: { label: 'Crônicas da Pólis (RPG)', icon: Crown, color: 'text-emerald-500' },
+    real_life_lab: { label: 'Laboratório da Vida Real', icon: Zap, color: 'text-cyan-500' },
+  };
+
+  const currentMode = activity.gameMode || 'millionaire';
+  const info = modeInfo[currentMode] || modeInfo.millionaire;
+  const ModeIcon = info.icon;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-2.5 sm:p-4 md:p-6 overflow-y-auto">
+      <div className="w-full max-w-3xl bg-background rounded-3xl border border-border shadow-2xl overflow-hidden flex flex-col max-h-[94vh] animate-fadeIn">
+        
+        {/* Top Bar Header */}
+        <div className="bg-surface/80 border-b border-border px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`p-2.5 rounded-2xl bg-primary/10 border border-primary/20 ${info.color} shrink-0`}>
+              <ModeIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-primary">
+                  KronoGames • {info.label}
+                </span>
+                {activity.executionContext === 'classroom_group' && (
+                  <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full border border-indigo-500/20">
+                    <Users className="w-3 h-3" /> Em Grupo
+                  </span>
+                )}
+              </div>
+              <h2 className="text-sm sm:text-base font-bold text-foreground truncate">
+                {activity.title}
+              </h2>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setSoundEnabled((prev) => !prev)}
+              className="p-2 rounded-xl text-muted hover:text-foreground hover:bg-surface-hover transition-colors"
+              title={soundEnabled ? 'Silenciar Áudio' : 'Ativar Áudio'}
+            >
+              {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5 text-rose-400" />}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-xl text-muted hover:text-foreground hover:bg-surface-hover transition-colors"
+              title="Fechar Jogo"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Content Body */}
+        <div className="p-4 sm:p-6 md:p-8 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+          
+          {/* SCREEN 1: Setup & Formation of Group */}
+          {!isSetupDone && (
+            <div className="space-y-6 animate-fadeIn">
+              <div className="p-4 sm:p-5 rounded-2xl bg-surface border border-border space-y-2">
+                <div className="flex items-center gap-2 text-primary font-bold text-sm">
+                  <Sparkles className="w-4 h-4" />
+                  <span>Apresentação da Partida</span>
+                </div>
+                <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed">
+                  {gameData.introText}
+                </p>
+                <div className="pt-2 flex flex-wrap gap-3 text-xs text-muted">
+                  <span>🎯 <strong>6 Rodadas</strong> do Conhecimento</span>
+                  <span>⭐ Vale até <strong>{maxGrade.toFixed(1)} Pontos</strong></span>
+                  <span>⚡ Correção 100% Automática</span>
+                </div>
+              </div>
+
+              {/* Group Formation if classroom_group */}
+              {isClassroomGroup && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-2">
+                      <Users className="w-4 h-4 text-primary" />
+                      Quem está jogando nesta equipe?
+                    </label>
+                    <span className="text-[11px] text-muted">
+                      {selectedGroupMembers.length + 1} integrante(s)
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-muted">
+                    Marque os colegas que estão jogando com você. Ao concluir o jogo, a nota será atribuída instantaneamente para todos no sistema!
+                  </p>
+
+                  {/* Student Chip List */}
+                  <div className="max-h-44 overflow-y-auto custom-scrollbar border border-border rounded-2xl p-2 bg-surface/50 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {/* Logged in student */}
+                    <div className="p-2.5 rounded-xl bg-primary/15 border border-primary/30 flex items-center gap-2 text-xs font-bold text-primary">
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                      <span className="truncate">{student.fullName} (Você)</span>
+                    </div>
+
+                    {classmates.map((st) => {
+                      const isSelected = selectedGroupMembers.some((m) => m.id === st.id);
+                      const isPne = isStudentPNE(st);
+                      return (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => handleToggleMember(st)}
+                          className={`p-2.5 rounded-xl border text-left flex items-center justify-between text-xs transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-primary/10 border-primary text-foreground font-semibold shadow-sm'
+                              : 'bg-surface border-border text-foreground hover:bg-surface-hover'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-primary border-primary text-white' : 'border-muted'}`}>
+                              {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                            </div>
+                            <span className="truncate">{st.fullName}</span>
+                          </div>
+                          {isPne && (
+                            <span className="text-[10px] font-bold bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded border border-amber-500/20 shrink-0">
+                              AEE
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* PNE Team Awareness Banner */}
+                  {teamHasPne && (
+                    <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-3 text-xs text-amber-500 animate-fadeIn">
+                      <HeartHandshake className="w-5 h-5 shrink-0 text-amber-400" />
+                      <span>
+                        <strong>Inclusão Automática Ativada:</strong> Há colegas PNE na sua equipe! O jogo preparou rodadas adaptadas e cartões visuais para inclusão plena de todos.
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Start Button */}
+              <button
+                type="button"
+                onClick={handleStartGame}
+                className="w-full py-4 rounded-2xl bg-primary hover:bg-primary-hover text-white font-extrabold text-sm sm:text-base shadow-xl shadow-primary/25 flex items-center justify-center gap-2 transition-transform hover:scale-[1.01] cursor-pointer"
+              >
+                <Gamepad2 className="w-5 h-5" />
+                <span>Começar Partida do KronoGames</span>
+                <ArrowRight className="w-5 h-5" />
+              </button>
+            </div>
+          )}
+
+          {/* SCREEN 2: Active Gameplay (Stages 1 to 6) */}
+          {isSetupDone && !isGameFinished && currentStage && (
+            <div className="space-y-6 animate-fadeIn">
+              
+              {/* Progress & Stage Info */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-muted">
+                  <span className="flex items-center gap-1.5 text-primary">
+                    <Sparkles className="w-4 h-4" />
+                    Rodada {currentStageIndex + 1} de {stages.length}
+                  </span>
+                  <span>
+                    Acertos: {correctCount} / {stages.length}
+                  </span>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="w-full h-2.5 bg-surface border border-border rounded-full overflow-hidden flex">
+                  {stages.map((_, idx) => {
+                    const isDone = idx < currentStageIndex;
+                    const isCurrent = idx === currentStageIndex;
+                    const result = stageResults[idx];
+                    let barColor = 'bg-surface';
+                    if (isDone) {
+                      barColor = result ? 'bg-emerald-500' : 'bg-rose-500';
+                    } else if (isCurrent) {
+                      barColor = 'bg-primary animate-pulse';
+                    }
+                    return (
+                      <div
+                        key={idx}
+                        className={`flex-1 border-r border-background last:border-0 ${barColor}`}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Inclusion Switcher (se houver aluno PNE na equipe) */}
+              {teamHasPne && (
+                <div className="flex items-center justify-between p-2.5 bg-surface rounded-2xl border border-border text-xs">
+                  <div className="flex items-center gap-2 text-foreground font-semibold">
+                    <HeartHandshake className="w-4 h-4 text-amber-500" />
+                    <span>Modo Inclusivo AEE (Vez do Colega PNE):</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isAnswerRevealed) {
+                        setViewPneMode((prev) => !prev);
+                        setSelectedOptionIndex(null);
+                        setSelectedSevereCardIndex(null);
+                      }
+                    }}
+                    disabled={isAnswerRevealed}
+                    className={`px-3 py-1.5 rounded-xl font-bold transition-colors cursor-pointer ${
+                      viewPneMode
+                        ? 'bg-amber-500 text-black shadow-sm'
+                        : 'bg-surface-hover text-muted hover:text-foreground'
+                    }`}
+                  >
+                    {viewPneMode ? 'Ativado ✨' : 'Alternar para PNE'}
+                  </button>
+                </div>
+              )}
+
+              {/* Stage Card */}
+              <div className="p-5 sm:p-6 rounded-3xl bg-surface border border-border space-y-4 shadow-sm">
+                <div className="flex items-center justify-between gap-2 border-b border-border pb-3">
+                  <h3 className="text-sm sm:text-base font-extrabold text-foreground">
+                    {currentStage.title}
+                  </h3>
+                  {currentStage.clue && !isAnswerRevealed && (
+                    <button
+                      type="button"
+                      onClick={() => setShowClue((prev) => !prev)}
+                      className="text-xs font-bold text-amber-500 hover:text-amber-400 flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/10 border border-amber-500/20 transition-colors cursor-pointer"
+                    >
+                      <Lightbulb className="w-3.5 h-3.5" />
+                      <span>{showClue ? 'Ocultar Pista' : 'Ver Pista'}</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Clue Box */}
+                {showClue && currentStage.clue && (
+                  <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-500 flex items-start gap-2.5 animate-fadeIn">
+                    <Lightbulb className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <span className="leading-relaxed">{currentStage.clue}</span>
+                  </div>
+                )}
+
+                {/* Scenario Statement */}
+                <p className="text-xs sm:text-sm md:text-base text-foreground font-medium leading-relaxed">
+                  {viewPneMode && teamHasSeverePne && currentStage.pneSevereStage
+                    ? currentStage.pneSevereStage.playfulPrompt
+                    : viewPneMode && currentStage.pneMildStage
+                    ? currentStage.pneMildStage.scenario
+                    : currentStage.scenario}
+                </p>
+
+                {/* OPTIONS: Severe Playful Cards Mode */}
+                {viewPneMode && teamHasSeverePne && currentStage.pneSevereStage ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                    {currentStage.pneSevereStage.visualCards.map((card, cIdx) => {
+                      const isSelected = selectedSevereCardIndex === cIdx;
+                      let cardStyle = 'bg-surface hover:bg-surface-hover border-border text-foreground';
+
+                      if (isAnswerRevealed) {
+                        if (card.isCorrect) {
+                          cardStyle = 'bg-emerald-500/15 border-emerald-500 text-emerald-400 ring-2 ring-emerald-500/30';
+                        } else if (isSelected && !card.isCorrect) {
+                          cardStyle = 'bg-rose-500/15 border-rose-500 text-rose-400';
+                        } else {
+                          cardStyle = 'opacity-40 border-border text-muted';
+                        }
+                      } else if (isSelected) {
+                        cardStyle = 'bg-primary/15 border-primary text-primary ring-2 ring-primary/40';
+                      }
+
+                      return (
+                        <button
+                          key={cIdx}
+                          type="button"
+                          disabled={isAnswerRevealed}
+                          onClick={() => handleSelectSevereCard(cIdx)}
+                          className={`p-4 rounded-2xl border text-center flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${cardStyle}`}
+                        >
+                          <span className="text-4xl sm:text-5xl drop-shadow-sm">{card.iconEmoji}</span>
+                          <span className="text-xs sm:text-sm font-extrabold">{card.label}</span>
+                          {isAnswerRevealed && isSelected && (
+                            <span className="text-[11px] font-medium mt-1">
+                              {card.feedback}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : viewPneMode && currentStage.pneMildStage ? (
+                  /* OPTIONS: Mild Stage Mode (2 Options) */
+                  <div className="space-y-2.5 pt-2">
+                    {currentStage.pneMildStage.options.map((opt, oIdx) => {
+                      const isSelected = selectedOptionIndex === oIdx;
+                      let optStyle = 'bg-surface hover:bg-surface-hover border-border text-foreground';
+
+                      if (isAnswerRevealed) {
+                        if (opt.isCorrect) {
+                          optStyle = 'bg-emerald-500/15 border-emerald-500 text-emerald-400 font-semibold';
+                        } else if (isSelected && !opt.isCorrect) {
+                          optStyle = 'bg-rose-500/15 border-rose-500 text-rose-400 font-semibold';
+                        } else {
+                          optStyle = 'opacity-40 border-border text-muted';
+                        }
+                      } else if (isSelected) {
+                        optStyle = 'bg-primary/15 border-primary text-primary font-semibold ring-2 ring-primary/30';
+                      }
+
+                      return (
+                        <button
+                          key={oIdx}
+                          type="button"
+                          disabled={isAnswerRevealed}
+                          onClick={() => handleSelectStandardOption(oIdx)}
+                          className={`w-full p-4 rounded-2xl border text-left flex items-start gap-3 transition-all cursor-pointer ${optStyle}`}
+                        >
+                          <div className="w-6 h-6 rounded-full border flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold">
+                            {oIdx === 0 ? 'A' : 'B'}
+                          </div>
+                          <div className="flex-1">
+                            <span className="text-xs sm:text-sm block">{opt.text}</span>
+                            {isAnswerRevealed && isSelected && (
+                              <span className="text-xs text-muted block mt-1 font-normal">
+                                {opt.feedback}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  /* OPTIONS: Standard Mode (4 Options) */
+                  <div className="space-y-2.5 pt-2">
+                    {currentStage.options.map((opt, oIdx) => {
+                      const isSelected = selectedOptionIndex === oIdx;
+                      const letters = ['A', 'B', 'C', 'D'];
+                      let optStyle = 'bg-surface hover:bg-surface-hover border-border text-foreground';
+
+                      if (isAnswerRevealed) {
+                        if (opt.isCorrect) {
+                          optStyle = 'bg-emerald-500/15 border-emerald-500 text-emerald-400 font-semibold';
+                        } else if (isSelected && !opt.isCorrect) {
+                          optStyle = 'bg-rose-500/15 border-rose-500 text-rose-400 font-semibold';
+                        } else {
+                          optStyle = 'opacity-40 border-border text-muted';
+                        }
+                      } else if (isSelected) {
+                        optStyle = 'bg-primary/15 border-primary text-primary font-semibold ring-2 ring-primary/30';
+                      }
+
+                      return (
+                        <button
+                          key={oIdx}
+                          type="button"
+                          disabled={isAnswerRevealed}
+                          onClick={() => handleSelectStandardOption(oIdx)}
+                          className={`w-full p-3.5 sm:p-4 rounded-2xl border text-left flex items-start gap-3 transition-all cursor-pointer ${optStyle}`}
+                        >
+                          <div className="w-6 h-6 rounded-full border border-current flex items-center justify-center shrink-0 mt-0.5 text-xs font-extrabold">
+                            {letters[oIdx]}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="text-xs sm:text-sm block">{opt.text}</span>
+                            {isAnswerRevealed && (isSelected || opt.isCorrect) && (
+                              <span className="text-xs text-muted block mt-1 font-normal">
+                                {opt.feedback}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2">
+                {!isAnswerRevealed ? (
+                  <button
+                    type="button"
+                    onClick={handleConfirmAnswer}
+                    disabled={
+                      viewPneMode && teamHasSeverePne
+                        ? selectedSevereCardIndex === null
+                        : selectedOptionIndex === null
+                    }
+                    className="w-full py-4 rounded-2xl bg-primary hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-sm sm:text-base shadow-xl shadow-primary/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <span>Confirmar Resposta da Equipe</span>
+                    <Check className="w-5 h-5 stroke-[2.5]" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleNextStage}
+                    className="w-full py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-black font-extrabold text-sm sm:text-base shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer animate-fadeIn"
+                  >
+                    <span>{currentStageIndex + 1 < stages.length ? 'Avançar para Próxima Rodada' : 'Ver Resultado Final'}</span>
+                    <ArrowRight className="w-5 h-5 stroke-[2.5]" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* SCREEN 3: Victory / Final Screen */}
+          {isGameFinished && (
+            <div className="space-y-6 text-center py-4 animate-fadeIn">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 mx-auto rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 shadow-xl">
+                <Trophy className="w-10 h-10 sm:w-12 sm:h-12" />
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-xl sm:text-2xl font-black text-foreground">
+                  Partida Concluída com Sucesso!
+                </h3>
+                <p className="text-xs sm:text-sm text-muted max-w-md mx-auto">
+                  Parabéns a toda a equipe pela dedicação e cooperação nos 6 desafios pedagógicos de {activity.title}.
+                </p>
+              </div>
+
+              {/* Score Box */}
+              <div className="p-6 rounded-3xl bg-surface border border-border max-w-sm mx-auto space-y-2 shadow-inner">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted">
+                  Nota Conquistada
+                </span>
+                <div className="text-4xl sm:text-5xl font-black text-primary">
+                  {finalScore.toFixed(1)} <span className="text-lg text-muted">/ {maxGrade.toFixed(1)}</span>
+                </div>
+                <p className="text-xs text-muted">
+                  {correctCount} de {stages.length} rodadas resolvidas corretamente
+                </p>
+              </div>
+
+              {/* Members receiving score */}
+              <div className="p-4 rounded-2xl bg-surface/50 border border-border max-w-md mx-auto text-left space-y-1.5 text-xs">
+                <span className="font-bold text-foreground flex items-center gap-1.5">
+                  <Award className="w-4 h-4 text-emerald-500" />
+                  Alunos com nota lançada no sistema:
+                </span>
+                <p className="text-muted leading-relaxed">
+                  {groupMembersString}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSubmitFinal}
+                className="w-full max-w-md mx-auto py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-black font-extrabold text-sm sm:text-base shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-2 cursor-pointer transition-transform hover:scale-[1.01]"
+              >
+                <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
+                <span>Gravar Nota e Enviar ao Professor</span>
+              </button>
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  );
+};

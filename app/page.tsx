@@ -1608,6 +1608,79 @@ export default function Home() {
     setSupervisingStudent(student);
   };
 
+  const handleMarkPhysicalDelivery = async (activityId: string, targetStudent: StudentUser) => {
+    const targetAct = activities.find((a) => a.id === activityId);
+    if (!targetAct) return;
+
+    const existingSubIndex = targetAct.submissions.findIndex(
+      (s) => s.studentId === targetStudent.id || (Boolean(targetStudent.matricula) && s.matricula === targetStudent.matricula)
+    );
+
+    const physicalSub = {
+      studentId: targetStudent.id,
+      studentName: targetStudent.fullName,
+      matricula: targetStudent.matricula,
+      tag: targetStudent.tag,
+      avatarUrl: targetStudent.avatarUrl,
+      submittedAt: new Date().toLocaleDateString('pt-BR'),
+      objectiveScore: 0,
+      maxObjectiveScore: 0,
+      maxEssayScore: targetAct.maxGrade || 10,
+      status: 'pending' as const,
+      isPhysicalDelivery: true,
+      essayAnswer:
+        '📄 ENTREGUE FISICAMENTE (NO PAPEL): Recebido em mãos pelo professor. Pronto para lançamento de nota na aba Correções.',
+      teacherFeedback: '',
+    };
+
+    const updatedSubmissions = [...targetAct.submissions];
+    if (existingSubIndex >= 0) {
+      updatedSubmissions[existingSubIndex] = {
+        ...updatedSubmissions[existingSubIndex],
+        ...physicalSub,
+      };
+    } else {
+      updatedSubmissions.push(physicalSub);
+    }
+
+    const updatedAct: Activity = {
+      ...targetAct,
+      totalSubmissions: updatedSubmissions.length,
+      pendingCorrection: updatedSubmissions.filter((s) => s.status === 'pending').length,
+      submissions: updatedSubmissions,
+    };
+
+    await handleSaveActivity(updatedAct);
+    showGlobalStatus(
+      'success',
+      `📄 Atividade "${targetAct.title}" marcada como entregue no papel por ${targetStudent.fullName} e enviada para Correções!`
+    );
+  };
+
+  const handleToggleRecoveryAuthorization = async (recoveryActivityId: string, targetStudent: StudentUser) => {
+    const targetAct = activities.find((a) => a.id === recoveryActivityId);
+    if (!targetAct) return;
+
+    const currentList = targetAct.authorizedRecoveryStudentIds || [];
+    const isAlreadyAuthorized = currentList.includes(targetStudent.id);
+    const updatedList = isAlreadyAuthorized
+      ? currentList.filter((id) => id !== targetStudent.id && id !== targetStudent.matricula)
+      : [...currentList, targetStudent.id];
+
+    const updatedAct: Activity = {
+      ...targetAct,
+      authorizedRecoveryStudentIds: updatedList,
+    };
+
+    await handleSaveActivity(updatedAct);
+    showGlobalStatus(
+      'success',
+      isAlreadyAuthorized
+        ? `🔒 Recuperação Paralela ocultada novamente para ${targetStudent.fullName}.`
+        : `🔓 Recuperação Paralela liberada para ${targetStudent.fullName}!`
+    );
+  };
+
   const handleGenerateDossier = (act: Activity) => {
     alert(`Dossiê em PDF/Planilha gerado com sucesso para a atividade: ${act.title}`);
   };
@@ -2217,11 +2290,7 @@ export default function Home() {
             <StudentsView
               students={visibleStudentsForRole}
               isReadOnly={role === 'second_teacher'}
-              isAdmin={Boolean(teacher.is_admin || teacher.isAdmin)}
-              onSimulateStudent={(st) => {
-                handleLoginStudent(st);
-                showGlobalStatus('success', `Simulando ambiente do aluno ${st.fullName} (Admin Supremo)`);
-              }}
+              isAdmin={false}
               onOpenNewStudentModal={() => setIsNewStudentModalOpen(true)}
               onEditStudent={(s) => setEditingStudent(s)}
               onDeleteStudent={handleDeleteStudent}
@@ -2701,6 +2770,33 @@ export default function Home() {
         onSaveStudent={handleSaveStudent}
       />
 
+      <StudentSupervisionModal
+        isOpen={Boolean(supervisingStudent)}
+        student={supervisingStudent}
+        activities={activeActivities}
+        onClose={() => setSupervisingStudent(null)}
+        onSaveNotes={handleSavePedagogicalNotes}
+        onMarkPhysicalDelivery={handleMarkPhysicalDelivery}
+        onToggleRecoveryAuthorization={handleToggleRecoveryAuthorization}
+        onSimulateStudent={
+          role === 'second_teacher'
+            ? undefined
+            : (st) => {
+                setSupervisingStudent(null);
+                handleLoginStudent(st);
+                showGlobalStatus('success', `Simulando ambiente do aluno ${st.fullName}`);
+              }
+        }
+        onSendMessage={
+          role === 'second_teacher'
+            ? undefined
+            : () => {
+                setSupervisingStudent(null);
+                setCurrentTab('mensagens');
+              }
+        }
+      />
+      
       <StudentSupervisionModal
         isOpen={Boolean(supervisingStudent)}
         student={supervisingStudent}

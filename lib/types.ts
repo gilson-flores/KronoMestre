@@ -10,9 +10,9 @@ export interface TeacherUser {
   school?: string;
   driveFolderUrl?: string;
   matriculaFuncional?: string;
-  tenantCode?: string; // NOVO: Código único de acesso do aluno (Ex: A1B2)
-  contractStartDate?: string; // YYYY-MM-DD
-  contractEndDate?: string; // YYYY-MM-DD
+  tenantCode?: string;
+  contractStartDate?: string;
+  contractEndDate?: string;
   contractType?: 'ACT / Contratado' | 'Efetivo' | 'Substituto' | string;
   contractStatus?: 'ativo' | 'encerrado' | 'afastado' | string;
   mustChangePassword?: boolean;
@@ -31,8 +31,8 @@ export interface StudentUser {
   turma: string;
   matricula: string;
   tag?: 'REGULAR' | 'PNE' | 'RAD';
-  pneConditions?: string[]; // Doenças, deficiências ou necessidades específicas
-  passwordHash: string; // SEGURANÇA: Senha real cadastrada (NUNCA reintroduzir senha padrão fixa aqui)
+  pneConditions?: string[];
+  passwordHash: string;
   avatarUrl: string;
   pedagogicalNotes?: string;
   secondTeacherId?: string;
@@ -40,13 +40,14 @@ export interface StudentUser {
   isArchived?: boolean;
   archivedAt?: string;
   archivedReason?: string;
-  archivedVinculoId?: string; // Código/numeração única do vínculo (ex: VINC-092026)
-  archivedSchool?: string; // Escola de vinculação
+  archivedVinculoId?: string;
+  archivedSchool?: string;
   mustChangePassword?: boolean;
   ownerTeacherId?: string;
   owner_teacher_id?: string;
   isOnline?: boolean;
   lastActiveAt?: string;
+  authorizedRecoveryActivityIds?: string[];
 }
 
 export const PNE_CONDITIONS_LIST = [
@@ -79,18 +80,19 @@ export interface ActivitySubmission {
   tag?: 'REGULAR' | 'PNE' | 'RAD';
   avatarUrl: string;
   submittedAt?: string;
-  objectiveScore: number; // e.g. 5.0 (sai na hora)
-  maxObjectiveScore: number; // e.g. 5.0
-  essayScore?: number; // e.g. 4.0 (preenchido após o professor mandar/corrigir)
-  maxEssayScore: number; // e.g. 5.0
-  extraPoints?: number; // Ponto extra por desempenho
+  objectiveScore: number;
+  maxObjectiveScore: number;
+  essayScore?: number;
+  maxEssayScore: number;
+  extraPoints?: number;
   status: 'pending' | 'draft' | 'graded' | 'returned';
   essayAnswer?: string;
   selectedObjectiveAnswers?: { [questionId: string]: number };
   teacherFeedback?: string;
-  registeredInStateSystem?: boolean; // Atividade já registrada no sistema do estado (RCO/SED)
-  groupMembers?: string; // Nomes dos alunos do grupo
-  returnCount?: number; // Contador de devoluções pelo professor (1x, 2x, 3x; 4ª bloqueada)
+  registeredInStateSystem?: boolean;
+  groupMembers?: string;
+  returnCount?: number;
+  isPhysicalDelivery?: boolean;
 }
 
 export interface MultipleChoiceQuestion {
@@ -104,7 +106,7 @@ export interface EssayQuestion {
   id: string;
   statement: string;
   minCharacters: number;
-  keywords?: string; // Palavras-chave de atenção para a IA e aluno
+  keywords?: string;
 }
 
 export type ActivityQuestion = 
@@ -180,43 +182,40 @@ export interface Activity {
   dueDate?: string;
   maxGrade?: number;
   allowGroupWork?: boolean;
-  securityFocusLock?: boolean; // Trava 1: Trava de foco (Aviso ao sair da tela, limite de 4 avisos -> auto entrega)
-  securityBlockCopyStatement?: boolean; // Trava 2: Trava de cópia dos enunciados
-  securityBlockPasteEssay?: boolean; // Trava 3: Trava de copia e cola nas respostas dissertativas
+  securityFocusLock?: boolean;
+  securityBlockCopyStatement?: boolean;
+  securityBlockPasteEssay?: boolean;
   
-  // Três domínios estruturais de avaliação
   activityDomain?: ActivityDomain;
   isInteractive?: boolean;
-  isStandaloneAdaptation?: boolean; // Quando true, a atividade adaptada existe por conta própria sem precisar de adaptedFromId
-  linkedActivityId?: string; // Vínculo OPCIONAL a uma atividade formal ou interativa
+  isStandaloneAdaptation?: boolean;
+  linkedActivityId?: string;
 
-  // Educação Inclusiva & AEE
-  isAdapted?: boolean; // Indica se esta atividade foi adaptada para alunos PNE
-  adaptationType?: 'mild_moderate' | 'severe_playful'; // Tipo de adaptação pedagógica
+  isAdapted?: boolean;
+  adaptationType?: 'mild_moderate' | 'severe_playful';
   adaptationReason?: string;
   aeeMechanic?: AeeMechanic;
   aeePromptSettings?: AeePromptSettings;
-  playfulGameHtml?: string; // Código HTML do jogo interativo lúdico para síndromes severas
-  playfulGameScoreMax?: number; // Pontuação máxima do jogo lúdico
-  adaptedFromId?: string; // ID da atividade original vinculada
-  originalActivityId?: string; // ID da atividade de origem quando aplicável
+  playfulGameHtml?: string;
+  playfulGameScoreMax?: number;
+  adaptedFromId?: string;
+  originalActivityId?: string;
 
-  // KronoGames & Gamificação
   isGameActivity?: boolean;
   gameMode?: GameMode;
   executionContext?: GameExecutionContext;
   gameData?: GameData;
 
-  // Suporte futuro para Liga & Desafios
   isChallenge?: boolean;
   challengeWeek?: number;
   challengePoints?: number;
 
-  isRecovery?: boolean; // Indica se esta atividade é uma Recuperação Paralela vinculada
-  recoveryFromId?: string; // ID da atividade raiz da qual esta é a recuperação paralela
-  recoveryManualParentName?: string; // Nome da atividade mãe digitado manualmente na exceção (ex: atividades em papel)
-  recoveryApproach?: string; // Abordagem pedagógica diferenciada aplicada na recuperação
-  includedPneStudentIds?: string[]; // IDs dos alunos PNE selecionados por proficiência para fazer a atividade normal
+  isRecovery?: boolean;
+  recoveryFromId?: string;
+  recoveryManualParentName?: string;
+  recoveryApproach?: string;
+  authorizedRecoveryStudentIds?: string[];
+  includedPneStudentIds?: string[];
   questions?: ActivityQuestion[];
   objectiveQuestions?: any[];
   essayQuestions?: any[];
@@ -228,18 +227,18 @@ export interface Activity {
   isArchived?: boolean;
   archivedAt?: string;
   archivedReason?: string;
-  archivedVinculoId?: string; // Código/numeração única do vínculo (ex: VINC-092026)
-  archivedSchool?: string; // Escola de vinculação
+  archivedVinculoId?: string;
+  archivedSchool?: string;
   submissions: ActivitySubmission[];
 }
 
 export interface ArchivedVinculo {
-  id: string; // Identificador único do vínculo (ex: VINC-092026-...)
-  vinculoCode: string; // Numeração formatada do vínculo (ex: "Vínculo 09/2026")
-  school: string; // Escola associada
-  monthYear: string; // Mês e ano de encerramento (ex: "09/2026")
-  closedAt: string; // Data ISO de encerramento
-  reason: string; // Motivo do arquivamento
+  id: string;
+  vinculoCode: string;
+  school: string;
+  monthYear: string;
+  closedAt: string;
+  reason: string;
   students: StudentUser[];
   activities: Activity[];
   turmas: string[];
@@ -268,7 +267,7 @@ export interface LibraryFile {
 
 export interface ChatMessage {
   id: string;
-  threadId: string; // ID da conversa (ex: studentId)
+  threadId: string;
   senderId: string;
   senderName: string;
   senderRole: 'teacher' | 'student' | 'second_teacher';
@@ -277,15 +276,15 @@ export interface ChatMessage {
   recipientName: string;
   recipientRole?: 'teacher' | 'student' | 'second_teacher';
   content: string;
-  createdAt: string; // ISO string ou HH:mm
+  createdAt: string;
   timestamp?: string;
   read?: boolean;
-  activityId?: string; // Opcional: vinculado a uma atividade
+  activityId?: string;
   activityTitle?: string;
 }
 
 export interface ChatThread {
-  id: string; // id do aluno
+  id: string;
   studentId: string;
   studentName: string;
   studentTurma: string;
@@ -309,10 +308,10 @@ export interface InclusionRecord {
   studentId: string;
   studentName: string;
   turma?: string;
-  diagnosisNotes: string; // Diagnóstico/Laudo e Necessidades Específicas
-  peiGoals: string; // Objetivos do PEI
-  adaptedResources: string; // Recursos Adaptados & Metodologia Assistiva
-  evaluationsHistory: InclusionEvaluation[]; // Histórico de pareceres de acompanhamento
+  diagnosisNotes: string;
+  peiGoals: string;
+  adaptedResources: string;
+  evaluationsHistory: InclusionEvaluation[];
   secondTeacherId?: string;
   secondTeacherName?: string;
   updatedAt?: string;
@@ -323,12 +322,12 @@ export interface AtestadoRadRecord {
   studentId: string;
   studentName: string;
   studentTurma?: string;
-  dataFalta: string; // Data da falta justificada (YYYY-MM-DD)
-  dataAtestado: string; // Data do atestado (YYYY-MM-DD)
-  diasAtestado: number; // Dias de atestado
-  dataFinal: string; // Data final calculada automaticamente (YYYY-MM-DD)
-  motivo?: string; // Motivo para justificar (opcional)
-  tipo: 'Atestado' | 'RAD'; // RAD se diasAtestado >= 15 ou Atestado
+  dataFalta: string;
+  dataAtestado: string;
+  diasAtestado: number;
+  dataFinal: string;
+  motivo?: string;
+  tipo: 'Atestado' | 'RAD';
   createdAt: string;
 }
 
@@ -357,6 +356,3 @@ export interface RcoEmissionRecord {
 }
 
 export type { AdaptationRecommendation } from './studentUtils';
-
-
-

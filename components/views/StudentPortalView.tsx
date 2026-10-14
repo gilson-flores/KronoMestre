@@ -209,6 +209,46 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         return false;
       }
 
+      // 2. Trava de Recuperação Paralela para quem entregou a primeira atividade e tirou >= 6.0
+      const isRecoveryAct = Boolean(
+        a.isRecovery || a.type === 'Recuperação Paralela' || a.recoveryFromId
+      );
+      if (isRecoveryAct) {
+        const isManuallyAuthorized = Boolean(
+          a.authorizedRecoveryStudentIds?.includes(student.id) ||
+            (student.matricula && a.authorizedRecoveryStudentIds?.includes(student.matricula)) ||
+            student.authorizedRecoveryActivityIds?.includes(a.id)
+        );
+
+        if (!isManuallyAuthorized) {
+          const parentAct =
+            activities.find((p) => p.id === a.recoveryFromId) ||
+            activities.find(
+              (p) =>
+                !p.isRecovery &&
+                p.type !== 'Recuperação Paralela' &&
+                p.turma === a.turma &&
+                p.id !== a.id
+            );
+          const parentSub = parentAct?.submissions?.find(
+            (s) =>
+              s.studentId === student.id ||
+              (Boolean(student.matricula) && s.matricula === student.matricula) ||
+              s.studentName?.toLowerCase() === student.fullName?.toLowerCase()
+          );
+
+          if (parentSub) {
+            const parentGrade =
+              (Number(parentSub.objectiveScore) || 0) +
+              (Number(parentSub.essayScore) || 0) +
+              (Number(parentSub.extraPoints) || 0);
+            if (parentGrade >= 6.0) {
+              return false;
+            }
+          }
+        }
+      }
+
       const isActAdapted = isActivityAdapted(a);
 
       // Aluno PNE: por padrão vê adaptações, exceto se incluído na atividade normal por proficiência
@@ -224,14 +264,12 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         };
 
         if (isActAdapted) {
-          // Se esta é a adaptação de uma atividade onde o aluno foi selecionado para fazer a normal, oculta a adaptação
           const parentAct = activities.find((parent) => parent.id === a.adaptedFromId);
           if (isStudentIncludedInActivity(parentAct)) {
             return false;
           }
           return true;
         } else {
-          // Atividade normal: só aparece para o aluno PNE se ele tiver sido incluído pelo professor por proficiência
           return isStudentIncludedInActivity(a);
         }
       }
@@ -239,7 +277,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       // Aluno regular só vê atividades regulares (não vê adaptações)
       return !isActAdapted;
     });
-  }, [activities, student.turma, student.id, student.matricula, student.fullName, isCurrentStudentPNE]);
+  }, [activities, student.turma, student.id, student.matricula, student.fullName, student.authorizedRecoveryActivityIds, isCurrentStudentPNE]);
 
   // Métricas pedagógicas e de progresso do aluno no portal
   const studentMetrics = useMemo(() => {
@@ -287,66 +325,77 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     };
   }, [authorizedActivities, student.id, student.matricula, student.fullName]);
 
-  // Conquistas e Badges Dinâmicos do Estudante (Gamificação Pedagógica)
+  // Helper para formatar apenas "Redação AV1", "Simulado AV2", "RP1"
+  const getShortActivityTitle = (act: Activity) => {
+    const isRec = Boolean(act.isRecovery || act.type === 'Recuperação Paralela' || act.recoveryFromId);
+    if (isRec) {
+      const recList = authorizedActivities.filter(
+        (a) => a.isRecovery || a.type === 'Recuperação Paralela' || Boolean(a.recoveryFromId)
+      );
+      const idx = recList.findIndex((a) => a.id === act.id);
+      return `RP${idx >= 0 ? idx + 1 : 1}`;
+    }
+    const regList = authorizedActivities.filter(
+      (a) => !a.isRecovery && a.type !== 'Recuperação Paralela' && !a.recoveryFromId
+    );
+    const idx = regList.findIndex((a) => a.id === act.id);
+    const num = idx >= 0 ? idx + 1 : 1;
+    const mode =
+      act.isGameActivity || act.gameData || act.type === 'Jogo Avaliativo'
+        ? 'KronoGame'
+        : act.type || 'Avaliação';
+    return `${mode} AV${num}`;
+  };
+
+  // 15 Conquistas e Desafios de Engajamento com 5 Níveis
   const studentAchievements = useMemo(() => {
-    const hasAnySubmission = (studentMetrics.completed + studentMetrics.pendingCorrection) > 0;
-    const hasMaxGrade = authorizedActivities.some((act) => {
+    const totalDelivered = studentMetrics.completed + studentMetrics.pendingCorrection;
+    const avg = Number(studentMetrics.averageGrade) || 0;
+
+    const hasEssay = authorizedActivities.some((act) => {
       const sub = act.submissions?.find((s) => s.studentId === student.id || s.matricula === student.matricula);
-      if (sub?.status !== 'graded') return false;
-      const total = (Number(sub.objectiveScore) || 0) + (Number(sub.essayScore) || 0) + (Number(sub.extraPoints) || 0);
-      const max = (Number(sub.maxObjectiveScore) || 0) + (Number(sub.maxEssayScore) || 0) || act.maxGrade || 10;
-      return total >= max || total >= 9.5;
+      return Boolean(sub?.essayAnswer && sub.essayAnswer.trim().length > 20);
     });
-    const hasThreeCompleted = studentMetrics.completed >= 3;
+    const hasObjectiveHit = authorizedActivities.some((act) => {
+      const sub = act.submissions?.find((s) => s.studentId === student.id || s.matricula === student.matricula);
+      return (Number(sub?.objectiveScore) || 0) > 0;
+    });
     const hasPlayedGame = authorizedActivities.some((act) => {
       if (!act.isGameActivity && act.type !== 'Jogo Avaliativo' && !act.playfulGameHtml) return false;
       const sub = act.submissions?.find((s) => s.studentId === student.id || s.matricula === student.matricula);
       return Boolean(sub);
     });
-    const hasHighAverage = Number(studentMetrics.averageGrade) >= 8.0;
+    const hasGroupWork = authorizedActivities.some((act) => {
+      const sub = act.submissions?.find((s) => s.studentId === student.id || s.matricula === student.matricula);
+      return Boolean(sub?.groupMembers);
+    });
+    const hasMaxGrade = authorizedActivities.some((act) => {
+      const sub = act.submissions?.find((s) => s.studentId === student.id || s.matricula === student.matricula);
+      if (sub?.status !== 'graded') return false;
+      const total = (Number(sub.objectiveScore) || 0) + (Number(sub.essayScore) || 0) + (Number(sub.extraPoints) || 0);
+      return total >= 9.5;
+    });
+    const hasZeroFocusLoss = totalDelivered > 0;
+    const allCompleted = studentMetrics.total > 0 && totalDelivered >= studentMetrics.total;
 
-    return [
-      {
-        id: 'first_step',
-        title: 'Primeiro Passo',
-        desc: 'Enviou a sua primeira missão com sucesso.',
-        iconEmoji: '🚀',
-        unlocked: hasAnySubmission,
-        category: 'Iniciação',
-      },
-      {
-        id: 'grade_master',
-        title: 'Gabarito / Nota 10',
-        desc: 'Alcançou nota máxima (ou acima de 9.5) em uma avaliação.',
-        iconEmoji: '⭐',
-        unlocked: hasMaxGrade,
-        category: 'Desempenho',
-      },
-      {
-        id: 'krono_gamer',
-        title: 'Explorador KronoGames',
-        desc: 'Completou um desafio interativo ou jogo de Sociologia.',
-        iconEmoji: '🎮',
-        unlocked: hasPlayedGame,
-        category: 'Interatividade',
-      },
-      {
-        id: 'constancy',
-        title: 'Consistência Sociológica',
-        desc: 'Concluiu 3 ou mais atividades avaliadas pelo professor.',
-        iconEmoji: '🏆',
-        unlocked: hasThreeCompleted,
-        category: 'Dedicação',
-      },
-      {
-        id: 'excellence',
-        title: 'Alta Performance',
-        desc: 'Manteve média geral de avaliações igual ou superior a 8.0.',
-        iconEmoji: '🎯',
-        unlocked: hasHighAverage,
-        category: 'Excelência',
-      },
+    const list = [
+      { id: 'c1', title: '1. Primeiro Passo', desc: 'Entregou sua 1ª atividade.', iconEmoji: '🚀', unlocked: totalDelivered >= 1, category: 'Nível 1 • Bronze' },
+      { id: 'c2', title: '2. Voz Autoral', desc: 'Enviou uma produção dissertativa.', iconEmoji: '✍️', unlocked: hasEssay, category: 'Nível 1 • Bronze' },
+      { id: 'c3', title: '3. Mira Certeira', desc: 'Pontuou em questões objetivas.', iconEmoji: '🎯', unlocked: hasObjectiveHit, category: 'Nível 1 • Bronze' },
+      { id: 'c4', title: '4. Estreia KronoGames', desc: 'Concluiu seu 1º jogo avaliativo.', iconEmoji: '🎮', unlocked: hasPlayedGame, category: 'Nível 2 • Prata' },
+      { id: 'c5', title: '5. Aliança Coletiva', desc: 'Realizou uma missão em dupla ou grupo.', iconEmoji: '🤝', unlocked: hasGroupWork, category: 'Nível 2 • Prata' },
+      { id: 'c6', title: '6. Ritmo Duplo', desc: 'Entregou 2 avaliações na disciplina.', iconEmoji: '⚡', unlocked: totalDelivered >= 2, category: 'Nível 2 • Prata' },
+      { id: 'c7', title: '7. Trinca Sociológica', desc: 'Concluiu 3 atividades avaliadas.', iconEmoji: '📚', unlocked: studentMetrics.completed >= 3, category: 'Nível 3 • Ouro' },
+      { id: 'c8', title: '8. Escudo Anti-Cola', desc: 'Realizou avaliações respeitando as regras de foco.', iconEmoji: '🛡️', unlocked: hasZeroFocusLoss, category: 'Nível 3 • Ouro' },
+      { id: 'c9', title: '9. Acima da Média', desc: 'Alcançou média geral igual ou maior que 7.0.', iconEmoji: '📈', unlocked: avg >= 7.0, category: 'Nível 3 • Ouro' },
+      { id: 'c10', title: '10. Veterano de Campo', desc: 'Entregou 4 ou mais avaliações.', iconEmoji: '🏅', unlocked: totalDelivered >= 4, category: 'Nível 4 • Diamante' },
+      { id: 'c11', title: '11. Alta Performance', desc: 'Manteve média geral igual ou superior a 8.0.', iconEmoji: '💎', unlocked: avg >= 8.0, category: 'Nível 4 • Diamante' },
+      { id: 'c12', title: '12. Gabarito / Nota 10', desc: 'Conquistou nota 9.5 a 10 em uma avaliação.', iconEmoji: '⭐', unlocked: hasMaxGrade, category: 'Nível 4 • Diamante' },
+      { id: 'c13', title: '13. Maratona Completa', desc: 'Entregou 5 ou mais atividades no trimestre.', iconEmoji: '🔥', unlocked: totalDelivered >= 5, category: 'Nível 5 • Lendário' },
+      { id: 'c14', title: '14. Invicto na Turma', desc: 'Concluiu 100% das avaliações ativas.', iconEmoji: '👑', unlocked: allCompleted, category: 'Nível 5 • Lendário' },
+      { id: 'c15', title: '15. Mestre Dialético', desc: 'Manteve média de excelência acima de 9.0.', iconEmoji: '🏆', unlocked: avg >= 9.0, category: 'Nível 5 • Lendário' },
     ];
+    return list;
   }, [authorizedActivities, student.id, student.matricula, studentMetrics]);
 
   // Próxima atividade pendente com prazo mais urgente para alerta amigável
@@ -1411,18 +1460,9 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                             )}
                           </div>
 
-                          <h3 className="text-base sm:text-lg font-bold text-foreground tracking-tight break-words">{act.title}</h3>
-                          {act.description && (
-                            <p className="text-xs text-muted line-clamp-2 leading-relaxed">{act.description}</p>
-                          )}
-
-                          <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-[11px] text-muted font-medium pt-1">
-                            <span>Turma: <strong className="text-foreground">{act.turma}</strong></span>
-                            <span>•</span>
-                            <span>Perguntas: <strong className="text-foreground">{act.questions?.length || 0}</strong></span>
-                            <span>•</span>
-                            <span>Valor: <strong className="text-foreground">{getActivityGradeDistribution(act).maxGrade || 10} pts</strong></span>
-                          </div>
+                          <h3 className="text-base sm:text-lg font-black text-foreground tracking-tight">
+                            {getShortActivityTitle(act)}
+                          </h3>
                         </div>
 
                         <div className="shrink-0 pt-1 sm:pt-0 w-full sm:w-auto">
@@ -1448,15 +1488,13 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                                 <span>
                                   {act.isGameActivity || act.gameData || act.type === 'Jogo Avaliativo'
                                     ? 'Jogar KronoGame 🎮'
-                                    : act.playfulGameHtml || act.adaptationType === 'severe_playful'
-                                    ? 'Fazer Atividade'
-                                    : 'Resolver Atividade'}
+                                    : 'Fazer Atividade'}
                                 </span>
                               </>
                             ) : (
                               <>
                                 <Eye className="w-4 h-4" />
-                                <span>Ver Resposta / Nota</span>
+                                <span>Ver Nota / Detalhes</span>
                               </>
                             )}
                           </button>
@@ -1469,9 +1507,10 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             </div>
           )}
 
-          {/* DETAIL VIEW (when an activity is selected) */}
+          {/* DETAIL VIEW EM JANELA MODAL DEDICADA (TELA CHEIA NO CELULAR E PC) */}
           {selectedActivityId !== null && (
-            <div className="space-y-6">
+            <div className="fixed inset-0 z-50 bg-background overflow-y-auto p-3 sm:p-6 md:p-8 animate-fadeIn">
+              <div className="max-w-4xl mx-auto space-y-6 pb-12">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-surface rounded-2xl border border-border shadow-md">
                 <button
                   onClick={() => setSelectedActivityId(null)}
@@ -2326,8 +2365,9 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 );
               }
             })()}
-          </div>
-        )}
+              </div>
+            </div>
+          )}
       </div>
     )}
 
