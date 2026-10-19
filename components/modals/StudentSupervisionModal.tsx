@@ -70,10 +70,11 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
 }) => {
   const [notes, setNotes] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
-  const [selectedPhysicalActivityId, setSelectedPhysicalActivityId] = useState<string>('');
+  
+  // Estados para lançamento manual dentro de Detalhes
+  const [expandedActivityId, setExpandedActivityId] = useState<string | null>(null);
   const [physicalGrade, setPhysicalGrade] = useState<string>('');
   const [physicalFeedback, setPhysicalFeedback] = useState<string>('');
-  const [expandedActivityId, setExpandedActivityId] = useState<string | null>(null);
 
   const studentActivities = useMemo(() => {
     if (!student) return [];
@@ -91,20 +92,9 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
     if (student) {
       setNotes(student.pedagogicalNotes || '');
       setSavedSuccess(false);
-      setPhysicalGrade('');
-      setPhysicalFeedback('');
-      const firstPending = studentActivities.find((act) => {
-        const sub = act.submissions?.find(
-          (s) =>
-            s.studentId === student.id ||
-            (Boolean(student.matricula) && s.matricula === student.matricula) ||
-            s.studentName?.toLowerCase() === student.fullName?.toLowerCase()
-        );
-        return !sub || sub.status === 'returned';
-      });
-      setSelectedPhysicalActivityId(firstPending?.id || studentActivities[0]?.id || '');
+      setExpandedActivityId(null);
     }
-  }, [student, studentActivities]);
+  }, [student]);
 
   const performanceStats = useMemo(() => {
     if (!student) {
@@ -144,24 +134,36 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
     setTimeout(() => setSavedSuccess(false), 3000);
   };
 
-  const handleConfirmPhysicalSelect = () => {
-    if (!selectedPhysicalActivityId || !onMarkPhysicalDelivery) return;
+  const handleConfirmPhysicalSelect = (actId: string) => {
+    if (!onMarkPhysicalDelivery) return;
     const parsedGrade = parseFloat(physicalGrade.replace(',', '.'));
     
     if (isNaN(parsedGrade) || parsedGrade < 0 || parsedGrade > 10) {
-      alert('Por favor, insira uma nota válida entre 0 e 10 para lançar a atividade analógica.');
+      alert('Por favor, insira uma nota válida entre 0 e 10.');
       return;
     }
 
-    onMarkPhysicalDelivery(selectedPhysicalActivityId, student, parsedGrade, physicalFeedback);
+    onMarkPhysicalDelivery(actId, student, parsedGrade, physicalFeedback);
     setPhysicalGrade('');
     setPhysicalFeedback('');
+    setExpandedActivityId(null); // Recolhe após lançar
+  };
+
+  const toggleExpand = (actId: string) => {
+    if (expandedActivityId === actId) {
+      setExpandedActivityId(null);
+    } else {
+      setExpandedActivityId(actId);
+      setPhysicalGrade('');
+      setPhysicalFeedback('');
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2.5 sm:p-4 animate-fadeIn">
       <div className="bg-surface border border-border rounded-3xl w-full max-w-4xl max-h-[94vh] flex flex-col shadow-2xl overflow-hidden">
         
+        {/* TOP HEADER */}
         <div className="p-4 sm:p-6 border-b border-border bg-background/70 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-3.5 min-w-0">
             <img src={student.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'} alt={student.fullName} className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover border-2 border-primary shrink-0 shadow-md" />
@@ -193,6 +195,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
           </div>
         </div>
 
+        {/* CORPO DO DASHBOARD */}
         <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
           
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3.5">
@@ -217,49 +220,6 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
               <span className="text-[10px] text-muted block">{performanceStats.returnedCount > 0 ? `${performanceStats.returnedCount} devolvida(s)` : 'Não realizadas'}</span>
             </div>
           </div>
-
-          {/* Lançamento de Atividade Analógica */}
-          {onMarkPhysicalDelivery && studentActivities.length > 0 && (
-            <div className="p-5 rounded-2xl bg-cyan-950/20 border border-cyan-500/30 space-y-4 shadow-inner">
-              <div className="flex items-center gap-2">
-                <FileCheck className="w-5 h-5 text-cyan-400 shrink-0" />
-                <div>
-                  <h3 className="text-sm font-black text-foreground">Registro Analógico Direto (Aluno Offline)</h3>
-                  <p className="text-[11px] text-muted">Use este painel para registrar e pontuar uma avaliação recebida fisicamente.</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                <div className="sm:col-span-4">
-                  <label className="text-[10px] font-bold text-muted uppercase tracking-wider mb-1 block">Avaliação Alvo</label>
-                  <select value={selectedPhysicalActivityId} onChange={(e) => setSelectedPhysicalActivityId(e.target.value)} className="w-full bg-background border border-border rounded-xl px-3 py-2.5 text-xs text-foreground font-semibold focus:outline-none focus:border-cyan-400">
-                    {studentActivities.map((act) => {
-                      const shortName = formatShortActivityName(act, studentActivities);
-                      const sub = act.submissions?.find((s) => s.studentId === student.id || s.matricula === student.matricula);
-                      const statusLabel = !sub ? 'Não Entregue' : sub.status === 'graded' ? 'Já Corrigida' : 'Na Fila';
-                      return <option key={act.id} value={act.id}>{shortName} — {act.title} ({statusLabel})</option>;
-                    })}
-                  </select>
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="text-[10px] font-bold text-muted uppercase tracking-wider mb-1 block">Nota (0 a 10)</label>
-                  <input type="number" step="0.1" min="0" max="10" placeholder="Ex: 8.5" value={physicalGrade} onChange={(e) => setPhysicalGrade(e.target.value)} className="w-full bg-background border border-border rounded-xl px-3 py-2.5 text-xs text-foreground font-semibold focus:outline-none focus:border-cyan-400" />
-                </div>
-
-                <div className="sm:col-span-4">
-                  <label className="text-[10px] font-bold text-muted uppercase tracking-wider mb-1 block">Parecer / Feedback Rápido</label>
-                  <input type="text" placeholder="Observações (opcional)..." value={physicalFeedback} onChange={(e) => setPhysicalFeedback(e.target.value)} className="w-full bg-background border border-border rounded-xl px-3 py-2.5 text-xs text-foreground focus:outline-none focus:border-cyan-400" />
-                </div>
-
-                <div className="sm:col-span-2">
-                  <button type="button" onClick={handleConfirmPhysicalSelect} className="w-full h-[40px] rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md">
-                    <CheckCircle2 className="w-4 h-4" /><span>Lançar</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           <div className="space-y-3">
             <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-foreground flex items-center gap-2">
@@ -295,7 +255,9 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                       <div className="flex items-center gap-2 flex-wrap min-w-0">
                         <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${isRecovery ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-primary/20 text-primary border-primary/40'}`}>{shortName}</span>
+                        
                         {sub?.isPhysicalDelivery && <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">📄 Analógica</span>}
+                        
                         {!sub ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-400 border border-rose-500/30">Pendente</span> : sub.status === 'pending' ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/40">⏳ A Corrigir</span> : sub.status === 'graded' ? <span className="text-[11px] font-extrabold px-2.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">Nota: {totalScore?.toFixed(1)} / {act.maxGrade || 10}</span> : <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-orange-500/20 text-orange-300 border border-orange-500/40">↩️ Devolvida</span>}
                       </div>
 
@@ -305,21 +267,55 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
                             {isManuallyAuthorized ? <><Unlock className="w-3.5 h-3.5" /><span>RP Liberada (Bloquear)</span></> : <><Lock className="w-3.5 h-3.5" /><span>🔓 Autorizar RP (Nota ≥ 6)</span></>}
                           </button>
                         )}
-                        <button type="button" onClick={() => setExpandedActivityId(isExpanded ? null : act.id)} className="px-2.5 py-1.5 rounded-xl bg-surface hover:bg-surface-hover text-muted hover:text-foreground border border-border text-[11px] font-bold flex items-center gap-1 cursor-pointer">
+                        <button type="button" onClick={() => toggleExpand(act.id)} className="px-3 py-1.5 rounded-xl bg-surface hover:bg-surface-hover text-muted hover:text-foreground border border-border text-[11px] font-bold flex items-center gap-1 cursor-pointer">
                           <span>Detalhes</span>{isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                         </button>
                       </div>
                     </div>
 
+                    {/* CONTEÚDO EXPANDIDO */}
                     {isExpanded && (
-                      <div className="p-3 rounded-xl bg-surface border border-border text-xs space-y-1.5 animate-fadeIn">
-                        <p className="font-bold text-foreground">Título Original: {act.title}</p>
-                        <p className="text-muted">Prazo: {act.deadline || 'Sem data'}</p>
-                        {sub && (
-                          <div className="pt-1 border-t border-border space-y-1">
+                      <div className="p-4 rounded-xl bg-surface border border-border text-xs space-y-4 animate-fadeIn">
+                        <div className="space-y-1">
+                          <p className="font-bold text-foreground">Título Original: {act.title}</p>
+                          <p className="text-muted">Prazo: {act.deadline || 'Sem data'}</p>
+                        </div>
+                        
+                        {/* Se já foi corrigida, exibe as notas */}
+                        {sub && sub.status === 'graded' && (
+                          <div className="pt-3 border-t border-border space-y-1.5">
+                            <p className="text-emerald-400 font-bold">Atividade Concluída e Avaliada.</p>
                             <p className="text-muted">Objetiva: <strong>{sub.objectiveScore?.toFixed(1) || 0}</strong> | Dissertativa: <strong>{sub.essayScore?.toFixed(1) || 0}</strong></p>
                             {sub.essayAnswer && <p className="text-foreground italic bg-background p-2 rounded-lg border border-border">&ldquo;{sub.essayAnswer}&rdquo;</p>}
-                            {sub.teacherFeedback && <p className="text-primary"><strong>Parecer:</strong> {sub.teacherFeedback}</p>}
+                            {sub.teacherFeedback && <p className="text-primary mt-2"><strong>Parecer:</strong> {sub.teacherFeedback}</p>}
+                          </div>
+                        )}
+
+                        {/* Se estiver pendente ou devolvida, mostra formulário manual */}
+                        {(!sub || sub.status === 'returned' || sub.status === 'pending') && (
+                          <div className="pt-3 border-t border-border space-y-3">
+                            <div className="flex items-center gap-2">
+                              <FileCheck className="w-4 h-4 text-cyan-400 shrink-0" />
+                              <h4 className="font-bold text-cyan-400">Lançamento de Atividade Analógica / Feita Manualmente</h4>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                              <div className="sm:col-span-3">
+                                <label className="text-[10px] font-bold text-muted uppercase tracking-wider mb-1 block">Nota (0 a 10)</label>
+                                <input type="number" step="0.1" min="0" max="10" placeholder="Ex: 8.5" value={physicalGrade} onChange={(e) => setPhysicalGrade(e.target.value)} className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs text-foreground font-semibold focus:outline-none focus:border-cyan-400" />
+                              </div>
+
+                              <div className="sm:col-span-6">
+                                <label className="text-[10px] font-bold text-muted uppercase tracking-wider mb-1 block">Parecer do Professor (Opcional)</label>
+                                <input type="text" placeholder="Excelente trabalho, entregue em papel." value={physicalFeedback} onChange={(e) => setPhysicalFeedback(e.target.value)} className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:outline-none focus:border-cyan-400" />
+                              </div>
+
+                              <div className="sm:col-span-3">
+                                <button type="button" onClick={() => handleConfirmPhysicalSelect(act.id)} className="w-full h-[36px] rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md">
+                                  <CheckCircle2 className="w-4 h-4" /><span>Lançar</span>
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
