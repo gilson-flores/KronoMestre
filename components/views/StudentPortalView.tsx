@@ -8,9 +8,6 @@ import { scrollToTop } from '@/lib/utils';
 import { MessagesView } from './MessagesView';
 import { KronoGamePlayer } from '@/components/views/KronoGamePlayer';
 import { KRONO_AVATARS, AVATAR_CATEGORIES, AvatarItem } from '@/lib/avatarRegistry';
-import { RuledEssaySheet } from '@/components/ui/RuledEssaySheet';
-import { SchoolExamHeader } from '@/components/ui/SchoolExamHeader';
-import { ObjectiveQuestionsExamSheet } from '@/components/ui/ObjectiveQuestionsExamSheet';
 import {
   LogOut,
   CheckCircle2,
@@ -1602,27 +1599,74 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       </div>
                     )}
 
-                    {/* CABEÇALHO ESCOLAR OFICIAL DE PROVA OU BARRA DE JOGOS */}
-                    {!(act.isGameActivity || act.gameData || act.type === 'Jogo Avaliativo' || act.playfulGameHtml || act.adaptationType === 'severe_playful') ? (
-                      <SchoolExamHeader
-                        activity={act}
-                        student={student}
-                        teacher={teacher}
-                        submission={sub}
-                        maxGrade={distribution.maxGrade}
-                      />
-                    ) : (
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2">
-                            <span className="text-[10px] sm:text-[11px] font-extrabold bg-primary/20 text-primary px-2.5 sm:px-3 py-1 rounded-full border border-primary/30 uppercase tracking-wide">
-                              🎮 KronoGames • Jogo Avaliativo
+                    {/* Activity Top Bar */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2">
+                          <span className="text-[10px] sm:text-[11px] font-extrabold bg-primary/20 text-primary px-2.5 sm:px-3 py-1 rounded-full border border-primary/30 uppercase tracking-wide">
+                            {act.type === 'Simulado'
+                              ? 'Treinamento Tático (Simulado)'
+                              : act.type === 'Redação'
+                              ? 'Pergaminho de Redação'
+                              : act.type === 'Dinâmica'
+                              ? 'Treino em Equipe (Dinâmica)'
+                              : act.type === 'Trabalho em grupo'
+                              ? 'Trabalho em Grupo'
+                              : act.type === 'Projeto de pesquisa'
+                              ? 'Projeto de Pesquisa'
+                              : 'Exame (Avaliação)'}
+                          </span>
+
+                          {/* Subtle Highlighted Deadline Badge */}
+                          <span className="text-[10px] sm:text-[11px] font-bold text-amber-600 flex items-center gap-1.5 bg-surface px-2.5 sm:px-3.5 py-1 rounded-full border border-amber-500/30 shadow-sm">
+                            <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <span>Prazo Limite: {act.deadline || 'Sem data'}</span>
+                          </span>
+
+                          {/* Subtle Status Badge */}
+                          {sub && sub.status === 'returned' ? (
+                            <span
+                              className={`text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full border ${
+                                sub.returnCount === 3
+                                  ? 'bg-rose-100 text-rose-600 border-rose-200'
+                                  : sub.returnCount === 2
+                                  ? 'bg-orange-600/20 text-orange-200 border-orange-500/40'
+                                  : 'bg-orange-500/20 text-orange-300 border-orange-500/30'
+                              }`}
+                            >
+                              {sub.returnCount
+                                ? `↩️ Devolvida ${sub.returnCount}x`
+                                : '↩️ Devolvida 1x'}
                             </span>
-                          </div>
-                          <h3 className="text-xl sm:text-2xl font-black text-foreground break-words">{act.title}</h3>
+                          ) : (
+                            <span className="text-[10px] sm:text-[11px] font-bold text-amber-600 bg-amber-500/15 px-2.5 sm:px-3 py-1 rounded-full border border-amber-500/30">
+                              📜 Pendente (A Fazer)
+                            </span>
+                          )}
+
+                          <span className="text-[10px] sm:text-[11px] font-bold text-foreground bg-[#171f33] px-2.5 sm:px-3 py-1 rounded-full border border-border">
+                            Nota Máxima: {distribution.maxGrade.toFixed(1)} pts
+                          </span>
+
+                          {objectiveQuestions.length > 0 && (
+                            <span className={`text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full border ${
+                              Object.keys(objectiveInputs[act.id] || {}).length === objectiveQuestions.length
+                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                : 'bg-primary/20 text-primary border-primary/30'
+                            }`}>
+                              📝 {Object.keys(objectiveInputs[act.id] || {}).length} de {objectiveQuestions.length} respondidas
+                            </span>
+                          )}
+
+                          {act.isAdapted && (
+                            <span className="text-[10px] sm:text-[11px] font-bold text-amber-600 bg-amber-100 px-2.5 sm:px-3 py-1 rounded-full border border-amber-500/30">
+                              ✨ Adaptada PNE
+                            </span>
+                          )}
                         </div>
+                        <h3 className="text-xl sm:text-2xl font-black text-foreground break-words">{act.title}</h3>
                       </div>
-                    )}
+                    </div>
 
                     {/* Cortina Preta Instantânea quando o aluno tenta tirar Print da Tela */}
                     {isScreenshotShieldActive && (
@@ -1909,18 +1953,67 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       </div>
                     )}
 
-                    {/* PARTE 1: QUESTÕES OBJETIVAS NO ESTILO CADERNO DE PROVA & CARTÃO-RESPOSTA */}
+                    {/* PARTE 1: QUESTÕES OBJETIVAS */}
                     {objectiveQuestions.length > 0 && !(act.playfulGameHtml || act.adaptationType === 'severe_playful') && (
-                      <div className="pt-2 border-t border-border">
-                        <ObjectiveQuestionsExamSheet
-                          questions={objectiveQuestions}
-                          selectedAnswers={objectiveInputs[act.id] || {}}
-                          onSelectAnswer={(qId, optIdx) => handleSelectOption(act.id, qId, optIdx)}
-                          maxObjectiveGrade={distribution.maxObjectiveGrade}
-                          securityBlockCopy={Boolean(act.securityBlockCopyStatement)}
-                          onSecurityAlert={showSecurityToast}
-                          isReadOnly={sub?.status === 'graded'}
-                        />
+                      <div className="space-y-4 pt-2 border-t border-border">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h4 className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-2">
+                            <HelpCircle className="w-4 h-4 text-primary shrink-0" />
+                            <span>Parte 1: Questões Objetivas (Múltipla Escolha)</span>
+                          </h4>
+                          <span className="text-[11px] sm:text-xs font-bold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full border border-primary/20 shrink-0">
+                            Vale {distribution.maxObjectiveGrade.toFixed(1)} pts
+                          </span>
+                        </div>
+
+                        <div className="space-y-4 sm:space-y-6">
+                          {objectiveQuestions.map((q, qIndex) => {
+                            const studentChoices = objectiveInputs[act.id] || {};
+                            const currentChoice = studentChoices[q.id];
+
+                            return (
+                              <div
+                                key={q.id || qIndex}
+                                className="bg-surface p-4 sm:p-5 rounded-2xl border border-border space-y-3"
+                              >
+                                <p className="text-xs font-bold text-foreground leading-relaxed break-words">
+                                  Questão {qIndex + 1}: <span className="font-normal text-foreground">{q.statement}</span>
+                                </p>
+
+                                <div className="space-y-2 pt-1">
+                                  {q.options.map((optText, optIdx) => {
+                                    const letters = ['A', 'B', 'C', 'D'];
+                                    const isSelected = currentChoice === optIdx;
+
+                                    return (
+                                      <button
+                                        key={optIdx}
+                                        type="button"
+                                        onClick={() => handleSelectOption(act.id, q.id, optIdx)}
+                                        className={`w-full text-left p-3 sm:p-3.5 min-h-[44px] min-w-[44px] rounded-xl text-xs transition-all flex items-start gap-2.5 sm:gap-3 border cursor-pointer active:scale-[0.99] ${
+                                          isSelected
+                                            ? 'bg-primary/20 border-primary text-foreground font-bold'
+                                            : 'bg-[#171f33] border-border text-muted hover:bg-surface-hover hover:text-foreground'
+                                        }`}
+                                      >
+                                        <span
+                                          className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold mt-0.5 ${
+                                            isSelected
+                                              ? 'bg-primary text-white'
+                                              : 'bg-surface-hover text-foreground'
+                                          }`}
+                                        >
+                                          {letters[optIdx]}
+                                        </span>
+                                        <span className="leading-relaxed break-words flex-1">{optText}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
 
@@ -1952,17 +2045,50 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                           </div>
                         ))}
 
-                        <RuledEssaySheet
-                          value={essayInputs[act.id] !== undefined ? essayInputs[act.id] : (sub?.essayAnswer || '')}
-                          onChange={(val) => handleEssayChange(act.id, val)}
-                          maxEssayScore={distribution.maxEssayGrade}
-                          securityBlockPaste={Boolean(act.securityBlockPasteEssay)}
-                          onSecurityAlert={showSecurityToast}
-                          isReadOnly={false}
-                          minCharacters={essayQuestions[0]?.minCharacters || 100}
-                          keywords={essayQuestions[0]?.keywords}
-                          statement={essayQuestions[0]?.statement}
-                        />
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <label className="block text-xs font-bold text-foreground">
+                              Sua Resposta Dissertativa:
+                            </label>
+                            {act.securityBlockPasteEssay && (
+                              <span className="text-[10px] text-purple-600 font-bold bg-purple-500/10 px-2 sm:px-2.5 py-0.5 rounded-full border border-purple-500/20 flex items-center gap-1 shrink-0">
+                                <ClipboardX className="w-3 h-3 text-purple-400 shrink-0" />
+                                <span>Cola (Ctrl+V) Bloqueada</span>
+                              </span>
+                            )}
+                          </div>
+                          <textarea
+                            rows={5}
+                            value={essayInputs[act.id] !== undefined ? essayInputs[act.id] : (sub?.essayAnswer || '')}
+                            onChange={(e) => handleEssayChange(act.id, e.target.value)}
+                            onPaste={(e) => {
+                              if (act.securityBlockPasteEssay) {
+                                e.preventDefault();
+                                showSecurityToast('❌ Ação de colar (Ctrl+V) bloqueada para respostas dissertativas.');
+                              }
+                            }}
+                            onDrop={(e) => {
+                              if (act.securityBlockPasteEssay) {
+                                e.preventDefault();
+                                showSecurityToast('❌ Arrastar textos bloqueado para respostas dissertativas.');
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (act.securityBlockPasteEssay) {
+                                if ((e.ctrlKey || e.metaKey) && ['v', 'V'].includes(e.key)) {
+                                  e.preventDefault();
+                                  showSecurityToast('❌ Atalho de colar (Ctrl+V) bloqueado para respostas dissertativas.');
+                                }
+                              }
+                            }}
+                            placeholder={
+                              act.securityBlockPasteEssay
+                                ? "Escreva aqui sua resposta (digitação manual obrigatória; colar texto desabilitado pelo professor)..."
+                                : "Escreva aqui sua resposta com argumentação fundamentada nos conceitos da disciplina..."
+                            }
+                            className="w-full bg-surface border border-border rounded-2xl p-3.5 sm:p-4 text-xs text-foreground placeholder-[#869486] focus:outline-none focus:border-primary leading-relaxed break-words"
+                          />
+                        </div>
                       </div>
                     )}
 
@@ -2209,16 +2335,13 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
                     {/* Student Essay Response display */}
                     {sub.essayAnswer && (
-                      <div className="space-y-2">
+                      <div className="bg-[#171f33] p-4 rounded-2xl border border-border space-y-1">
                         <span className="text-xs font-bold text-muted block">
-                          Sua Folha de Resposta Enviada:
+                          Sua Resposta Enviada:
                         </span>
-                        <RuledEssaySheet
-                          value={sub.essayAnswer}
-                          onChange={() => {}}
-                          maxEssayScore={sub.maxEssayScore || distribution.maxEssayGrade}
-                          isReadOnly={true}
-                        />
+                        <p className="text-xs text-foreground italic leading-relaxed whitespace-pre-wrap">
+                          &ldquo;{sub.essayAnswer}&rdquo;
+                        </p>
                       </div>
                     )}
 
