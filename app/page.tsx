@@ -337,18 +337,10 @@ export default function Home() {
             setCurrentStudent(null);
           }
         } else {
-          // Em caso de falha de conexão com o servidor, só restaura se houver sessão legítima de aluno/2º professor
-          if (parsedLocalSession?.role === 'second_teacher' && parsedLocalSession?.teacherData) {
-            setTeacher(parsedLocalSession.teacherData);
-            setRole('second_teacher');
-            setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
-          } else if (parsedLocalSession?.role === 'student' && parsedLocalSession?.studentData) {
-            setCurrentStudent(parsedLocalSession.studentData);
-            setRole('student');
-            setMustChangePassword(Boolean(parsedLocalSession.mustChangePassword));
-          } else {
-            setRole(null);
-          }
+          // SEGURANÇA: Falha de conexão ou token inválido limpa os caches. Zero confiança no cliente.
+          purgeAllAuthAndTenantCaches();
+          setRole(null);
+          setCurrentStudent(null);
         }
 
         const savedDriveUrl = localStorage.getItem('teacher_drive_folder_url');

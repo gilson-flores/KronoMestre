@@ -1896,7 +1896,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                             title={`Jogo Lúdico - ${act.title}`}
                             className="w-full h-full border-0 block"
                             allow="autoplay; fullscreen"
-                            sandbox="allow-scripts allow-same-origin allow-modals"
+                            sandbox="allow-scripts allow-modals"
                           />
                         </div>
 
@@ -1945,7 +1945,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                                 title={`Jogo Lúdico Fullscreen - ${act.title}`}
                                 className="w-full h-full border-0 block"
                                 allow="autoplay; fullscreen"
-                                sandbox="allow-scripts allow-same-origin allow-modals"
+                                sandbox="allow-scripts allow-modals"
                               />
                             </div>
                           </div>
@@ -2561,7 +2561,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 title={`Jogo Lúdico Fullscreen - ${act.title}`}
                 className="w-full h-full border-0 block"
                 allow="autoplay; fullscreen"
-                sandbox="allow-scripts allow-same-origin allow-modals"
+                sandbox="allow-scripts allow-modals"
               />
             </div>
           </div>
