@@ -6,20 +6,17 @@ import { serverCache } from '@/lib/server-cache';
 
 export const dynamic = 'force-dynamic';
 
-// Helper de Autorização Universal (Reconhece o Professor Titular, 2º Professor e Aluno)
 async function getAuthorizedOwnerId(req: NextRequest, isMutation = false): Promise<string | null> {
-  // 1. Tenta validar o Titular pelo cookie seguro do Firebase Admin
   try {
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('session')?.value;
     if (sessionCookie) {
       const auth = getAdminAuth();
       const decoded = await auth.verifySessionCookie(sessionCookie, true);
-      if (decoded && decoded.uid) return decoded.uid; // É o Professor Titular
+      if (decoded && decoded.uid) return decoded.uid;
     }
   } catch (e) {}
   
-  // 2. Tenta validar o Professor Titular, 2º Professor ou Aluno pelo JWT
   try {
     const jwtSession = await getSessionFromRequest(req);
     if (jwtSession && (jwtSession.ownerTeacherId || jwtSession.sub)) {
@@ -27,39 +24,14 @@ async function getAuthorizedOwnerId(req: NextRequest, isMutation = false): Promi
     }
   } catch (e) {}
 
-  // 3. Permite tenantId explícito no cabeçalho ou query param se vier de contexto seguro
   const headerTenant = req.headers.get('x-tenant-id') || req.nextUrl.searchParams.get('teacherId');
   if (headerTenant && headerTenant.trim()) {
     return headerTenant.trim();
   }
 
-  // 4. Fallback Seguro para Preview / Instância Ativa
   return '5IdpwffjnhewdZ5dONRB9QoIRBZ2';
 }
 
-export async function GET(req: NextRequest) {
-  try {
-    const ownerTeacherId = await getAuthorizedOwnerId(req);
-    if (!ownerTeacherId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-
-    const cacheKey = `activities_${ownerTeacherId}`;
-
-    const activities = await serverCache.getOrSet(cacheKey, 600, async () => {
-      const db = getAdminDb();
-      const activitiesRef = db.collection('tenants').doc(ownerTeacherId).collection('activities');
-      const snapshot = await activitiesRef.get();
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    });
-
-    return NextResponse.json({ activities });
-  } catch (error: any) {
-    console.warn('Aviso /api/activities GET (possível cota excedida):', error.message);
-    const fallbackActivities = serverCache.getLastKnown<any[]>(`activities_${await getAuthorizedOwnerId(req)}`) || [];
-    return NextResponse.json({ activities: fallbackActivities, warning: error.message }, { status: 200 });
-  }
-}
-
-// Função defensiva para remover recursivamente valores undefined que o Firebase Firestore rejeita
 function cleanForFirestore(obj: any): any {
   if (obj === undefined) return null;
   if (obj === null) return null;
@@ -80,6 +52,28 @@ function cleanForFirestore(obj: any): any {
   return obj;
 }
 
+export async function GET(req: NextRequest) {
+  try {
+    const ownerTeacherId = await getAuthorizedOwnerId(req);
+    if (!ownerTeacherId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+
+    const cacheKey = `activities_${ownerTeacherId}`;
+
+    const activities = await serverCache.getOrSet(cacheKey, 180, async () => {
+      const db = getAdminDb();
+      const activitiesRef = db.collection('tenants').doc(ownerTeacherId).collection('activities');
+      const snapshot = await activitiesRef.get();
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    });
+
+    return NextResponse.json({ activities });
+  } catch (error: any) {
+    console.warn('Aviso /api/activities GET:', error.message);
+    const fallbackActivities = serverCache.getLastKnown<any[]>(`activities_${await getAuthorizedOwnerId(req)}`) || [];
+    return NextResponse.json({ activities: fallbackActivities, warning: error.message }, { status: 200 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const ownerTeacherId = await getAuthorizedOwnerId(req, true);
@@ -93,7 +87,6 @@ export async function POST(req: NextRequest) {
     }
 
     const activityRef = db.collection('tenants').doc(ownerTeacherId).collection('activities').doc(body.id);
-    
     const cleanData = cleanForFirestore({ ...body, ownerTeacherId });
 
     await activityRef.set(cleanData, { merge: true });
@@ -119,13 +112,46 @@ export async function PUT(req: NextRequest) {
     }
 
     const activityRef = db.collection('tenants').doc(ownerTeacherId).collection('activities').doc(body.id);
-    
     const cleanData = cleanForFirestore(body);
 
-    await activityRef.set(cleanData, { merge: true });
+    // TRANSAÇÃO ATÔMICA: Garante ZERO PERDA DE DADOS por Race Condition de alunos entregando simultaneamente
+    await db.runTransaction(async (transaction) => {
+      const doc = await transaction.get(activityRef);
+      let mergedSubmissions = cleanData.submissions || [];
+      
+      if (doc.exists) {
+        const currentData = doc.data() || {};
+        const currentSubmissions: any[] = currentData.submissions || [];
+        const incomingSubmissions: any[] = cleanData.submissions || [];
+        
+        mergedSubmissions = [...currentSubmissions];
+        
+        incomingSubmissions.forEach((incomingSub: any) => {
+          const index = mergedSubmissions.findIndex((s: any) => s.studentId === incomingSub.studentId);
+          if (index >= 0) {
+             mergedSubmissions[index] = { ...mergedSubmissions[index], ...incomingSub };
+          } else {
+             mergedSubmissions.push(incomingSub);
+          }
+        });
+      }
+      
+      const pendingCorrection = mergedSubmissions.filter((s: any) => s.status === 'pending').length;
+      const totalSubmissions = mergedSubmissions.length;
+      
+      const mergedData = {
+        ...cleanData,
+        submissions: mergedSubmissions,
+        pendingCorrection,
+        totalSubmissions
+      };
+      
+      transaction.set(activityRef, mergedData, { merge: true });
+    });
+
     serverCache.delete(`activities_${ownerTeacherId}`);
 
-    return NextResponse.json({ success: true, activity: cleanData });
+    return NextResponse.json({ success: true, message: 'Dados salvos com integridade atômica.' });
   } catch (error: any) {
     console.error('Erro /api/activities PUT:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

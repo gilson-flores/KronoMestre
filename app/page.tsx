@@ -1608,7 +1608,7 @@ export default function Home() {
     setSupervisingStudent(student);
   };
 
-  const handleMarkPhysicalDelivery = async (activityId: string, targetStudent: StudentUser) => {
+  const handleMarkPhysicalDelivery = async (activityId: string, targetStudent: StudentUser, score: number, feedback: string) => {
     const targetAct = activities.find((a) => a.id === activityId);
     if (!targetAct) return;
 
@@ -1626,11 +1626,11 @@ export default function Home() {
       objectiveScore: 0,
       maxObjectiveScore: 0,
       maxEssayScore: targetAct.maxGrade || 10,
-      status: 'pending' as const,
+      essayScore: score,
+      status: 'graded' as const,
       isPhysicalDelivery: true,
-      essayAnswer:
-        '📄 ENTREGUE FISICAMENTE (NO PAPEL): Recebido em mãos pelo professor. Pronto para lançamento de nota na aba Correções.',
-      teacherFeedback: '',
+      essayAnswer: '📄 ATIVIDADE ANALÓGICA: Realizada sem uso do sistema digital. Lançamento direto efetuado pelo professor.',
+      teacherFeedback: feedback || 'Atividade avaliada fisicamente pelo professor.',
     };
 
     const updatedSubmissions = [...targetAct.submissions];
@@ -1653,7 +1653,7 @@ export default function Home() {
     await handleSaveActivity(updatedAct);
     showGlobalStatus(
       'success',
-      `📄 Atividade "${targetAct.title}" marcada como entregue no papel por ${targetStudent.fullName} e enviada para Correções!`
+      `📄 Registro analógico concluído! Nota ${score} atribuída para ${targetStudent.fullName} em "${targetAct.title}".`
     );
   };
 
