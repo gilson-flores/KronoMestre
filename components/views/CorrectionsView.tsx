@@ -1,42 +1,28 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
-  FileCheck2,
-  Users,
-  BookOpen,
-  Search,
-  Clock,
   CheckCircle2,
-  AlertCircle,
-  Sparkles,
-  ChevronRight,
-  ArrowLeft,
-  RotateCcw,
-  Star,
-  Award,
+  AlertTriangle,
+  MessageSquare,
+  RefreshCw,
+  Search,
   Filter,
-  CheckCheck,
-  GitFork,
-  Layers,
+  Users,
+  ChevronDown,
+  ChevronUp,
+  FileCheck,
+  FileText
 } from 'lucide-react';
-import { Activity, ActivitySubmission, StudentUser } from '@/lib/types';
-import {
-  getOriginalTurmas,
-  sortTurmas,
-  canStudentAccessActivity,
-  getChildRecoveryActivities,
-  getChildAdaptations,
-} from '@/lib/studentUtils';
-import { GradingView } from './GradingView';
-import { GradingLoadingSkeleton, StandardErrorState } from '@/components/LoadingState';
+import { Activity, StudentUser } from '@/lib/types';
+import { getOriginalTurmas, getTurmaLabel } from '@/lib/studentUtils';
 
 interface CorrectionsViewProps {
   activities: Activity[];
   students: StudentUser[];
-  isLoading?: boolean;
-  hasError?: boolean;
-  onRetry?: () => void;
+  isLoading: boolean;
+  hasError: boolean;
+  onRetry: () => void;
   onUpdateSubmission: (
     activityId: string,
     studentId: string,
@@ -49,459 +35,367 @@ interface CorrectionsViewProps {
   initialSelectedActivityId?: string | null;
 }
 
+export function formatShortActivityName(act: Activity, allList: Activity[]): string {
+  const isRec = Boolean(act.isRecovery || act.type === 'Recuperação Paralela' || act.recoveryFromId);
+  if (isRec) {
+    const recList = allList.filter((a) => a.isRecovery || a.type === 'Recuperação Paralela' || Boolean(a.recoveryFromId));
+    const idx = recList.findIndex((a) => a.id === act.id);
+    return `RP${idx >= 0 ? idx + 1 : 1}`;
+  }
+  const regList = allList.filter((a) => !a.isRecovery && a.type !== 'Recuperação Paralela' && !a.recoveryFromId);
+  const idx = regList.findIndex((a) => a.id === act.id);
+  const num = idx >= 0 ? idx + 1 : 1;
+  const modeLabel = act.isGameActivity || act.gameData || act.type === 'Jogo Avaliativo' ? 'KronoGame' : act.type || 'Avaliação';
+  return `${modeLabel} AV${num}`;
+}
+
 export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
-  activities = [],
-  students = [],
-  isLoading = false,
-  hasError = false,
+  activities,
+  students,
+  isLoading,
+  hasError,
   onRetry,
   onUpdateSubmission,
-  initialSelectedActivityId = null,
+  initialSelectedActivityId,
 }) => {
-  // Lista de Turmas Originais dos alunos ordenadas por ano (1ºs, depois 2ºs, depois 3ºs)
-  const originalTurmas = useMemo(() => {
-    return getOriginalTurmas(students);
-  }, [students]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTurma, setSelectedTurma] = useState<string>('Todas');
+  const [isFilterExpanded, setIsFilterExpanded] = useState(false);
+  const [expandedActId, setExpandedActId] = useState<string | null>(initialSelectedActivityId || null);
+  const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
 
-  const [selectedTurmaFilter, setSelectedTurmaFilter] = useState<string>('all');
-  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(initialSelectedActivityId);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'graded'>('all');
+  const [draftScores, setDraftScores] = useState<{ [key: string]: string }>({});
+  const [draftFeedbacks, setDraftFeedbacks] = useState<{ [key: string]: string }>({});
 
-  // Derived filter that adapts automatically if active turmas change (e.g. after archiving)
-  const effectiveTurmaFilter = (selectedTurmaFilter === 'all' || originalTurmas.includes(selectedTurmaFilter))
-    ? selectedTurmaFilter
-    : 'all';
+  const turmasDisponiveis = useMemo(() => getOriginalTurmas(students), [students]);
 
-  // Atividade atualmente aberta para correção
-  const activeGradingActivity = useMemo(() => {
-    if (!selectedActivityId) return null;
-    return activities.find((a) => a.id === selectedActivityId) || null;
-  }, [activities, selectedActivityId]);
+  useEffect(() => {
+    if (initialSelectedActivityId) {
+      setExpandedActId(initialSelectedActivityId);
+    }
+  }, [initialSelectedActivityId]);
 
-  // Contadores globais de correção
-  const { totalPendingCount, totalGradedCount, totalDeliveriesCount } = useMemo(() => {
-    let pending = 0;
-    let graded = 0;
-    let deliveries = 0;
-
-    activities.forEach((act) => {
-      const subs = act.submissions || [];
-      deliveries += subs.length;
-      subs.forEach((s) => {
-        if (s.status === 'pending' || s.status === 'draft') pending++;
-        else if (s.status === 'graded') graded++;
-      });
-    });
-
-    return {
-      totalPendingCount: pending,
-      totalGradedCount: graded,
-      totalDeliveriesCount: deliveries,
-    };
-  }, [activities]);
-
-  // Filtrar atividades pela turma selecionada e busca
-  const filteredActivities = useMemo(() => {
+  const activitiesWithPendencies = useMemo(() => {
     return activities.filter((act) => {
-      // Filtro de turma original
-      if (effectiveTurmaFilter !== 'all') {
-        const matchesTurma = canStudentAccessActivity(act.turma, effectiveTurmaFilter);
-        if (!matchesTurma) return false;
+      const hasPending = act.submissions?.some((s) => s.status === 'pending');
+      if (!hasPending) return false;
+
+      if (selectedTurma !== 'Todas' && act.turma !== selectedTurma && !act.turma.includes(selectedTurma)) {
+        return false;
       }
 
-      // Filtro de busca por título ou descrição
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchesTitle = act.title.toLowerCase().includes(q);
-        const matchesSubject = act.subject?.toLowerCase().includes(q);
-        if (!matchesTitle && !matchesSubject) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        return act.title.toLowerCase().includes(q) || act.turma.toLowerCase().includes(q);
       }
-
-      // Filtro de status de correção
-      const subs = act.submissions || [];
-      const pendingInAct = subs.filter((s) => s.status === 'pending' || s.status === 'draft').length;
-      const gradedInAct = subs.filter((s) => s.status === 'graded').length;
-
-      if (statusFilter === 'pending' && pendingInAct === 0) return false;
-      if (statusFilter === 'graded' && gradedInAct === 0) return false;
-
       return true;
     });
-  }, [activities, effectiveTurmaFilter, searchQuery, statusFilter]);
+  }, [activities, selectedTurma, searchQuery]);
 
-  // Se uma atividade foi selecionada, renderiza o GradingView integrado com navegação facilitada
-  if (activeGradingActivity) {
+  const totalPendingCorrections = useMemo(() => {
+    let count = 0;
+    activitiesWithPendencies.forEach(act => {
+      count += (act.submissions?.filter(s => s.status === 'pending').length || 0);
+    });
+    return count;
+  }, [activitiesWithPendencies]);
+
+  const handleScoreChange = (subKey: string, val: string) => {
+    setDraftScores((prev) => ({ ...prev, [subKey]: val }));
+  };
+
+  const handleFeedbackChange = (subKey: string, val: string) => {
+    setDraftFeedbacks((prev) => ({ ...prev, [subKey]: val }));
+  };
+
+  const handleSaveGrade = (act: Activity, studentId: string, action: 'graded' | 'returned') => {
+    const subKey = `${act.id}_${studentId}`;
+    const rawScore = draftScores[subKey];
+    let parsedScore = parseFloat(rawScore?.replace(',', '.') || '0');
+
+    if (action === 'graded' && (isNaN(parsedScore) || parsedScore < 0)) {
+      parsedScore = 0;
+    }
+
+    const feedback = draftFeedbacks[subKey] || '';
+    onUpdateSubmission(act.id, studentId, parsedScore, feedback, action);
+    
+    // Limpar rascunhos após salvar
+    setDraftScores(prev => { const next = {...prev}; delete next[subKey]; return next; });
+    setDraftFeedbacks(prev => { const next = {...prev}; delete next[subKey]; return next; });
+    setExpandedStudentId(null);
+  };
+
+  if (isLoading) {
     return (
-      <div className="space-y-6 animate-fadeIn pb-12">
-        {/* Barra superior de contexto da Correção */}
-        <div className="bg-surface p-4 sm:p-5 rounded-3xl border border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSelectedActivityId(null)}
-              className="p-2.5 min-h-[44px] min-w-[44px] bg-[#171f33] hover:bg-surface-hover text-foreground hover:text-foreground rounded-2xl border border-border transition-all cursor-pointer flex items-center gap-2 text-xs font-bold"
-              title="Voltar para a lista de correções"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Ver Todas as Atividades</span>
-            </button>
-
-            <div className="h-6 w-px bg-surface-hover hidden sm:block" />
-
-            <div>
-              <span className="text-[11px] font-bold text-primary uppercase tracking-wider block">
-                Painel de Correção & Atribuição de Notas
-              </span>
-              <h2 className="text-lg sm:text-xl font-black text-foreground truncate max-w-md sm:max-w-xl">
-                {activeGradingActivity.title}
-              </h2>
-            </div>
-          </div>
-
-          {/* Seletor rápido de atividade para alternar sem voltar */}
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <label className="text-xs font-bold text-muted whitespace-nowrap hidden md:inline">
-              Trocar Atividade:
-            </label>
-            <select
-              value={activeGradingActivity.id}
-              onChange={(e) => setSelectedActivityId(e.target.value)}
-              className="bg-background border border-white/15 rounded-2xl px-3 py-2 text-xs text-foreground font-bold focus:outline-none focus:border-primary cursor-pointer w-full sm:w-64"
-            >
-              {activities.map((a) => {
-                const pend = (a.submissions || []).filter((s) => s.status === 'pending' || s.status === 'draft').length;
-                return (
-                  <option key={a.id} value={a.id} className="bg-background text-foreground">
-                    {a.title} {pend > 0 ? `(⏳ ${pend} pendentes)` : ''}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-        </div>
-
-        {/* View Completa de Correção */}
-        <GradingView
-          activity={activeGradingActivity}
-          allActivities={activities}
-          students={students}
-          isLoading={isLoading}
-          hasError={hasError}
-          onRetry={onRetry}
-          onBack={() => setSelectedActivityId(null)}
-          onSelectActivity={(act) => setSelectedActivityId(act.id)}
-          onUpdateSubmission={onUpdateSubmission}
-        />
+      <div className="flex items-center justify-center p-12 text-muted">
+        <RefreshCw className="w-6 h-6 animate-spin mr-3" /> Carregando correções pendentes...
       </div>
     );
   }
 
-  // Lista/Seletor de Atividades para Correção
+  if (hasError) {
+    return (
+      <div className="p-8 text-center bg-rose-500/10 border border-rose-500/20 rounded-3xl">
+        <AlertTriangle className="w-10 h-10 text-rose-400 mx-auto mb-3" />
+        <p className="text-rose-400 font-bold mb-4">Falha ao carregar as pendências de correção.</p>
+        <button onClick={onRetry} className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-bold">
+          Tentar Novamente
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6 animate-fadeIn pb-12">
-      {isLoading ? (
-        <GradingLoadingSkeleton
-          title="Carregando atividades para correção..."
-          subtitle="Sincronizando entregas, pendências e turmas com o banco de dados..."
-        />
-      ) : hasError ? (
-        <StandardErrorState
-          title="Não conseguimos carregar as atividades para correção agora."
-          message="Verifique sua conexão com a internet e tente novamente."
-          onRetry={onRetry}
-          retryLabel="Tentar novamente"
-        />
-      ) : (
-        <>
-          {/* Header com Estatísticas de Correção */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface p-5 sm:p-6 rounded-3xl border border-border shadow-lg">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-            <FileCheck2 className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
-                Central de Correções
-              </h1>
-              {totalPendingCount > 0 && (
-                <span className="px-3 py-0.5 rounded-full text-xs font-black bg-amber-100 text-amber-600 border border-amber-200 animate-pulse">
-                  ⏳ {totalPendingCount} pendentes
-                </span>
-              )}
-            </div>
-            <p className="text-xs sm:text-sm text-muted font-medium mt-0.5">
-              Selecione uma atividade para corrigir redações, atribuir notas, gerar feedback e lançar avaliações.
-            </p>
-          </div>
-        </div>
-
-        {/* Resumo Rápido em Cartões Compactos */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="px-4 py-2.5 rounded-2xl bg-background border border-amber-500/30 text-left">
-            <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
-              A Corrigir
+    <div className="space-y-6 sm:space-y-8 animate-fadeIn pb-12">
+      {/* Header Central de Correções */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-border">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="p-2 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-400">
+              <FileCheck className="w-5 h-5" />
             </span>
-            <span className="text-lg font-black text-amber-600">{totalPendingCount}</span>
-          </div>
-
-          <div className="px-4 py-2.5 rounded-2xl bg-background border border-emerald-500/30 text-left">
-            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">
-              Corrigidas
+            <span className="text-xs font-black uppercase tracking-wider text-sky-400">
+              Mesa do Professor
             </span>
-            <span className="text-lg font-black text-emerald-600">{totalGradedCount}</span>
           </div>
-
-          <div className="px-4 py-2.5 rounded-2xl bg-background border border-border text-left">
-            <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">
-              Total Entregas
-            </span>
-            <span className="text-lg font-black text-foreground">{totalDeliveriesCount}</span>
-          </div>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-foreground tracking-tight flex items-center gap-3">
+            Central de Correções
+            {totalPendingCorrections > 0 && (
+              <span className="text-xs px-3 py-1 rounded-full bg-rose-500 text-white shadow-lg shadow-rose-500/30">
+                {totalPendingCorrections} pendentes
+              </span>
+            )}
+          </h1>
+          <p className="text-xs sm:text-sm text-muted mt-1 max-w-2xl leading-relaxed">
+            Avalie redações, julgue missões e atribua notas. Tudo em um fluxo rápido e limpo.
+          </p>
         </div>
       </div>
 
-      {/* Barra de Filtros: Turmas Originais e Busca */}
-      <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-border bg-surface space-y-4 shadow-md">
-        {/* Seletor de Turmas Originais em Abas/Pills */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-muted flex items-center gap-1.5 uppercase tracking-wider">
-            <Users className="w-3.5 h-3.5 text-primary" />
-            <span>Filtrar por Turma:</span>
-          </label>
-          <div className="flex flex-wrap items-center gap-2">
+      {/* Barra de Filtros Inteligente */}
+      <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-border bg-surface shadow-md space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex flex-1 items-center gap-2">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar missão pendente..."
+                className="w-full bg-background border border-border rounded-2xl pl-10 pr-4 py-2.5 text-xs text-foreground focus:outline-none focus:border-sky-400 transition-all"
+              />
+            </div>
+            
             <button
-              onClick={() => setSelectedTurmaFilter('all')}
-              className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all duration-200 cursor-pointer border active:scale-95 ${
-                effectiveTurmaFilter === 'all'
-                  ? 'bg-primary text-white border-primary shadow-md shadow-primary/20'
-                  : 'bg-background text-muted hover:text-foreground border-border hover:bg-surface-hover'
+              onClick={() => setIsFilterExpanded(!isFilterExpanded)}
+              className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 border cursor-pointer min-h-[44px] ${
+                isFilterExpanded || selectedTurma !== 'Todas'
+                  ? 'bg-sky-500/10 border-sky-500/50 text-sky-400'
+                  : 'bg-background hover:bg-surface-hover text-muted border-border'
+              }`}
+            >
+              <Filter className="w-4 h-4" />
+              <span className="hidden sm:inline">
+                {selectedTurma === 'Todas' ? 'Filtrar Turma' : `Turma ${selectedTurma}`}
+              </span>
+              {isFilterExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
+        </div>
+
+        {isFilterExpanded && (
+          <div className="pt-3 border-t border-border animate-fadeIn flex flex-wrap gap-2">
+            <button
+              onClick={() => { setSelectedTurma('Todas'); setIsFilterExpanded(false); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                selectedTurma === 'Todas' ? 'bg-sky-500 text-slate-900 border-sky-500' : 'bg-background text-muted border-border hover:border-sky-500/50'
               }`}
             >
               Todas as Turmas
             </button>
-
-            {originalTurmas.map((turmaCode) => {
-              const countStudents = students.filter((s) => s.turma === turmaCode).length;
-              return (
-                <button
-                  key={turmaCode}
-                  onClick={() => setSelectedTurmaFilter(turmaCode)}
-                  className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 border active:scale-95 ${
-                    effectiveTurmaFilter === turmaCode
-                      ? 'bg-primary text-white border-primary shadow-md shadow-primary/20'
-                      : 'bg-background text-muted hover:text-foreground border-border hover:bg-surface-hover'
-                  }`}
-                >
-                  <span>Turma {turmaCode}</span>
-                  <span className="text-[10px] opacity-75 font-mono">({countStudents})</span>
-                </button>
-              );
-            })}
+            {turmasDisponiveis.map((t) => (
+              <button
+                key={t}
+                onClick={() => { setSelectedTurma(t); setIsFilterExpanded(false); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
+                  selectedTurma === t ? 'bg-sky-500 text-slate-900 border-sky-500' : 'bg-background text-muted border-border hover:border-sky-500/50'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5 opacity-70" />
+                Turma {getTurmaLabel(t)}
+              </button>
+            ))}
           </div>
-        </div>
-
-        {/* Linha de Busca e Subfiltros */}
-        <div className="flex flex-col sm:flex-row items-center gap-3 pt-3 border-t border-border">
-          <div className="relative flex-1 w-full">
-            <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-[#869486]" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar atividade por título..."
-              className="w-full bg-background border border-border rounded-full pl-11 pr-4 py-2.5 text-xs sm:text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-primary"
-            />
-          </div>
-
-          <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto">
-            <button
-              onClick={() => setStatusFilter('all')}
-              className={`px-3 py-2 min-h-[44px] min-w-[44px] rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-                statusFilter === 'all'
-                  ? 'bg-[#1d273d] text-primary border border-primary/30'
-                  : 'bg-background text-muted hover:text-foreground border border-border'
-              }`}
-            >
-              Todas ({activities.length})
-            </button>
-            <button
-              onClick={() => setStatusFilter('pending')}
-              className={`px-3 py-2 min-h-[44px] min-w-[44px] rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
-                statusFilter === 'pending'
-                  ? 'bg-amber-100 text-amber-600 border border-amber-200'
-                  : 'bg-background text-muted hover:text-foreground border border-border'
-              }`}
-            >
-              <span>⏳ Pendentes</span>
-            </button>
-            <button
-              onClick={() => setStatusFilter('graded')}
-              className={`px-3 py-2 min-h-[44px] min-w-[44px] rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
-                statusFilter === 'graded'
-                  ? 'bg-emerald-100 text-emerald-600 border border-emerald-200'
-                  : 'bg-background text-muted hover:text-foreground border border-border'
-              }`}
-            >
-              <span>✅ Concluídas</span>
-            </button>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Lista de Atividades para Correção */}
-      <div className="space-y-3">
-        {filteredActivities.length === 0 ? (
-          <div className="glass-panel p-12 text-center rounded-3xl border border-border bg-surface text-muted space-y-2">
-            <CheckCircle2 className="w-12 h-12 text-primary mx-auto opacity-80" />
-            <p className="font-bold text-foreground text-base">
-              Nenhuma atividade encontrada com os filtros selecionados.
-            </p>
-            <p className="text-xs text-muted">
-              Selecione outra turma ou limpe o termo de busca para visualizar as atividades.
-            </p>
+      <div className="space-y-4">
+        {activitiesWithPendencies.length === 0 ? (
+          <div className="p-12 text-center rounded-3xl border border-dashed border-border bg-surface text-muted space-y-3 shadow-sm">
+            <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500/50" />
+            <p className="text-base font-bold text-foreground">Caixa de Entrada Limpa!</p>
+            <p className="text-xs">Não há nenhuma atividade pendente de correção neste filtro.</p>
           </div>
         ) : (
-          filteredActivities.map((act) => {
-            const subs = act.submissions || [];
-            const pendingCount = subs.filter((s) => s.status === 'pending' || s.status === 'draft').length;
-            const gradedCount = subs.filter((s) => s.status === 'graded').length;
-            const totalSubs = subs.length;
-
-            // Atividades filhas associadas (Adaptações PNE e Recuperações Paralelas)
-            const childRecs = getChildRecoveryActivities(act, activities);
-            const childAdaps = getChildAdaptations(act, activities);
-            const totalChildCount = childRecs.length + childAdaps.length;
-
-            // Total de pendências incluindo filhas
-            let totalPendingWithChildren = pendingCount;
-            childRecs.forEach((c) => {
-              totalPendingWithChildren += (c.submissions || []).filter((s) => s.status === 'pending' || s.status === 'draft').length;
-            });
-            childAdaps.forEach((c) => {
-              totalPendingWithChildren += (c.submissions || []).filter((s) => s.status === 'pending' || s.status === 'draft').length;
-            });
-
-            // Calcular média real das notas lançadas
-            const gradedSubs = subs.filter((s) => s.status === 'graded');
-            let avgScore = 0;
-            if (gradedSubs.length > 0) {
-              const sum = gradedSubs.reduce((acc, curr) => {
-                const total = (Number(curr.objectiveScore) || 0) + (Number(curr.essayScore) || 0) + (Number(curr.extraPoints) || 0);
-                return acc + total;
-              }, 0);
-              avgScore = Number((sum / gradedSubs.length).toFixed(1));
-            }
+          activitiesWithPendencies.map((act) => {
+            const pendingSubs = act.submissions?.filter((s) => s.status === 'pending') || [];
+            const isExpanded = expandedActId === act.id;
+            const shortName = formatShortActivityName(act, activities);
+            const isRec = Boolean(act.isRecovery || act.type === 'Recuperação Paralela' || act.recoveryFromId);
 
             return (
-              <div
-                key={act.id}
-                onClick={() => setSelectedActivityId(act.id)}
-                className="glass-panel p-4 sm:p-5 rounded-3xl border border-border bg-surface hover:border-primary/40 transition-all cursor-pointer shadow-md hover:shadow-xl hover:scale-[1.005] group"
-              >
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  {/* Informações da Atividade */}
-                  <div className="space-y-2 flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[11px] font-bold bg-[#171f33] text-muted px-3 py-0.5 rounded-full border border-border">
-                        Turma: <strong className="text-foreground">{act.turma}</strong>
-                      </span>
-                      <span className="text-[11px] font-bold bg-[#171f33] text-primary px-3 py-0.5 rounded-full border border-border">
-                        {act.type}
-                      </span>
-                      {act.isAdapted && (
-                        <span className="text-[10px] font-bold bg-amber-100 text-amber-600 px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1">
-                          <Sparkles className="w-3 h-3 text-amber-400" />
-                          <span>PNE Adaptada</span>
-                        </span>
-                      )}
-                      {totalChildCount > 0 && (
-                        <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-2.5 py-0.5 rounded-full border border-purple-300 flex items-center gap-1">
-                          <GitFork className="w-3 h-3 text-purple-600" />
-                          <span>{totalChildCount} Filha(s) Vinculada(s)</span>
-                        </span>
-                      )}
+              <div key={act.id} className="glass-panel rounded-3xl border border-border bg-surface shadow-md transition-all overflow-hidden">
+                {/* Card Minimalista da Atividade */}
+                <div className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-start gap-4 min-w-0 flex-1">
+                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border shadow-sm bg-sky-500/10 border-sky-500/30 text-sky-400">
+                      <FileCheck className="w-6 h-6" />
                     </div>
-
-                    <h3 className="text-base sm:text-lg font-black text-foreground group-hover:text-primary transition-colors leading-tight">
-                      {act.title}
-                    </h3>
-
-                    {act.description && (
-                      <p className="text-xs text-muted line-clamp-1">
-                        {act.description}
-                      </p>
-                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border ${
+                          isRec ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-sky-500/20 text-sky-400 border-sky-500/40'
+                        }`}>
+                          {shortName}
+                        </span>
+                        <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/20">
+                          {pendingSubs.length} avaliações na fila
+                        </span>
+                      </div>
+                      <h3 className="text-base sm:text-lg font-black text-foreground truncate">{act.title}</h3>
+                    </div>
                   </div>
 
-                  {/* Badges de Entregas, Pendências e Notas */}
-                  <div className="flex flex-wrap items-center gap-3 shrink-0">
-                    {/* Status da Fila de Correção */}
-                    {totalPendingWithChildren > 0 ? (
-                      <div className="px-3.5 py-2 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-600 flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-amber-400 shrink-0" />
-                        <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider block leading-none">
-                            Aguardando
-                          </span>
-                          <span className="text-sm font-black">
-                            {pendingCount} a corrigir
-                            {totalPendingWithChildren > pendingCount && (
-                              <span className="text-[10px] font-bold text-purple-600 ml-1">
-                                (+{totalPendingWithChildren - pendingCount} filhas)
-                              </span>
-                            )}
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="px-3.5 py-2 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 flex items-center gap-2">
-                        <CheckCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider block leading-none">
-                            Correções
-                          </span>
-                          <span className="text-sm font-black">Em dia</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Total de Entregas e Corrigidas */}
-                    <div className="px-3.5 py-2 rounded-2xl bg-background border border-border text-left">
-                      <span className="text-[10px] font-bold text-muted uppercase tracking-wider block leading-none">
-                        Entregas
-                      </span>
-                      <span className="text-sm font-black text-foreground">
-                        {gradedCount}/{totalSubs} <span className="text-xs text-[#869486]">corrigidas</span>
-                      </span>
-                    </div>
-
-                    {/* Média da Atividade (Notas) */}
-                    {gradedSubs.length > 0 && (
-                      <div className="px-3.5 py-2 rounded-2xl bg-sky-500/10 border border-sky-500/30 text-sky-300 text-left">
-                        <span className="text-[10px] font-bold uppercase tracking-wider block leading-none flex items-center gap-1">
-                          <Star className="w-3 h-3 text-sky-400" />
-                          <span>Média</span>
-                        </span>
-                        <span className="text-sm font-black">
-                          {avgScore.toFixed(1)} <span className="text-[10px] opacity-75">/ {act.maxGrade || 10}</span>
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Botão de Acesso */}
-                    <div className="p-3 rounded-2xl bg-primary text-white font-bold group-hover:bg-[#6bfb9a] transition-all flex items-center justify-center shadow-md">
-                      <ChevronRight className="w-5 h-5 stroke-[2.5]" />
-                    </div>
+                  <div className="shrink-0 border-t md:border-t-0 border-border pt-3 md:pt-0 mt-3 md:mt-0">
+                    <button
+                      onClick={() => setExpandedActId(isExpanded ? null : act.id)}
+                      className={`w-full md:w-auto py-2 px-6 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 border ${
+                        isExpanded ? 'bg-sky-500/20 border-sky-500/50 text-sky-400 shadow-inner' : 'bg-primary hover:bg-primary-hover text-white border-primary shadow-sm'
+                      }`}
+                    >
+                      {isExpanded ? (
+                        <><ChevronUp className="w-4 h-4" /> Recolher Fila</>
+                      ) : (
+                        <><FileText className="w-4 h-4" /> Corrigir Alunos</>
+                      )}
+                    </button>
                   </div>
                 </div>
+
+                {/* Gaveta de Alunos Pendentes */}
+                {isExpanded && (
+                  <div className="border-t border-border bg-background/50 divide-y divide-border">
+                    {pendingSubs.map((sub) => {
+                      const isStudentExpanded = expandedStudentId === sub.studentId;
+                      const subKey = `${act.id}_${sub.studentId}`;
+                      
+                      return (
+                        <div key={sub.studentId} className="animate-fadeIn">
+                          {/* Linha do Aluno */}
+                          <div 
+                            className={`p-4 flex items-center justify-between gap-4 cursor-pointer transition-colors ${isStudentExpanded ? 'bg-surface' : 'hover:bg-surface-hover'}`}
+                            onClick={() => setExpandedStudentId(isStudentExpanded ? null : sub.studentId)}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <img src={sub.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'} alt={sub.studentName} className="w-10 h-10 rounded-full border border-border shrink-0" />
+                              <div className="min-w-0">
+                                <h4 className="text-sm font-bold text-foreground truncate">{sub.studentName}</h4>
+                                <div className="flex items-center gap-2 text-[10px] text-muted mt-0.5">
+                                  {sub.isPhysicalDelivery ? (
+                                    <span className="bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded">📄 Físico</span>
+                                  ) : (
+                                    <span>Entregue: {sub.submittedAt || 'Recente'}</span>
+                                  )}
+                                  {sub.returnCount ? <span className="text-orange-400">↩️ Devolvida {sub.returnCount}x</span> : null}
+                                </div>
+                              </div>
+                            </div>
+                            {isStudentExpanded ? <ChevronUp className="w-4 h-4 text-muted" /> : <ChevronDown className="w-4 h-4 text-muted" />}
+                          </div>
+
+                          {/* Formulário de Correção do Aluno */}
+                          {isStudentExpanded && (
+                            <div className="p-4 bg-surface/50 border-t border-border space-y-4">
+                              
+                              {/* Respostas do Aluno */}
+                              <div className="space-y-3">
+                                {sub.isPhysicalDelivery ? (
+                                  <div className="bg-cyan-950/20 p-4 rounded-xl border border-cyan-500/30 text-xs text-cyan-200">
+                                    <strong>Atenção:</strong> Esta avaliação foi entregue fisicamente (em papel). Digite a nota final e o parecer abaixo.
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="flex items-center justify-between bg-[#171f33] p-3 rounded-xl border border-border">
+                                      <span className="text-xs font-bold text-muted">Nota Objetiva (Automática):</span>
+                                      <span className="text-sm font-black text-emerald-400">{sub.objectiveScore?.toFixed(1) || 0} / {sub.maxObjectiveScore?.toFixed(1) || 0} pts</span>
+                                    </div>
+                                    
+                                    <div className="bg-[#171f33] p-4 rounded-xl border border-border space-y-2">
+                                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted block">Resposta Dissertativa:</span>
+                                      <p className="text-xs text-foreground italic whitespace-pre-wrap leading-relaxed">
+                                        {sub.essayAnswer || <span className="text-muted">Nenhum texto dissertativo enviado.</span>}
+                                      </p>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+
+                              {/* Campos de Correção */}
+                              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end pt-2">
+                                <div className="sm:col-span-3">
+                                  <label className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-1">Nota Dissertativa</label>
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    min="0"
+                                    max={sub.maxEssayScore || act.maxGrade || 10}
+                                    placeholder={`Máx: ${sub.maxEssayScore || act.maxGrade || 10}`}
+                                    value={draftScores[subKey] !== undefined ? draftScores[subKey] : (sub.essayScore || '')}
+                                    onChange={(e) => handleScoreChange(subKey, e.target.value)}
+                                    className="w-full bg-background border border-border rounded-xl px-3 py-2.5 text-xs text-foreground font-bold focus:outline-none focus:border-sky-400"
+                                  />
+                                </div>
+                                <div className="sm:col-span-6">
+                                  <label className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-1">Parecer / Feedback (Opcional)</label>
+                                  <input
+                                    type="text"
+                                    placeholder="Deixe um comentário encorajador..."
+                                    value={draftFeedbacks[subKey] !== undefined ? draftFeedbacks[subKey] : (sub.teacherFeedback || '')}
+                                    onChange={(e) => handleFeedbackChange(subKey, e.target.value)}
+                                    className="w-full bg-background border border-border rounded-xl px-3 py-2.5 text-xs text-foreground focus:outline-none focus:border-sky-400"
+                                  />
+                                </div>
+                                <div className="sm:col-span-3 flex flex-col gap-2">
+                                  <button
+                                    onClick={() => handleSaveGrade(act, sub.studentId, 'graded')}
+                                    className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5"
+                                  >
+                                    <CheckCircle2 className="w-4 h-4" /> Aprovar Nota
+                                  </button>
+                                  <button
+                                    onClick={() => handleSaveGrade(act, sub.studentId, 'returned')}
+                                    className="w-full py-2 bg-background hover:bg-orange-500/10 text-orange-400 border border-border hover:border-orange-500/40 font-bold text-[10px] rounded-xl transition-all flex items-center justify-center gap-1.5"
+                                  >
+                                    <RefreshCw className="w-3.5 h-3.5" /> Devolver (Refazer)
+                                  </button>
+                                </div>
+                              </div>
+
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })
         )}
       </div>
-        </>
-      )}
     </div>
   );
 };
