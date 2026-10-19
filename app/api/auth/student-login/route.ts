@@ -171,34 +171,45 @@ export async function POST(request: Request) {
     const nowIso = new Date().toISOString();
     cleanStudent.lastActiveAt = nowIso;
     cleanStudent.isOnline = true;
-    try {
-      await db
-        .collection('tenants')
-        .doc(ownerTeacherId)
-        .collection('students')
-        .doc(matchedStudent.id)
-        .set(
-          {
-            lastActiveAt: nowIso,
-            isOnline: true,
-          },
-          { merge: true }
-        );
-      // Atualiza o cache de alunos para refletir o status online imediatamente
-      serverCache.delete(`students_${ownerTeacherId}`);
-    } catch (presenceErr: any) {
-      console.warn('[Student Login API] Aviso ao gravar presença real do aluno:', presenceErr?.message);
+
+    // 1. Registra presença em memória imediatamente
+    serverCache.recordPresence(ownerTeacherId, matchedStudent.id, true, { turma: matchedStudent.turma });
+
+    // 2. Gravação oportunista no Firestore apenas se a cota não estiver bloqueada
+    if (!serverCache.isQuotaBlocked()) {
+      try {
+        await db
+          .collection('tenants')
+          .doc(ownerTeacherId)
+          .collection('students')
+          .doc(matchedStudent.id)
+          .set(
+            {
+              lastActiveAt: nowIso,
+              isOnline: true,
+            },
+            { merge: true }
+          );
+      } catch (presenceErr: any) {
+        if (serverCache.checkIsQuotaError(presenceErr)) {
+          serverCache.triggerQuotaCooldown(10);
+        }
+        console.warn('[Student Login API] Aviso ao gravar presença real do aluno no Firestore (mantido em memória):', presenceErr?.message);
+      }
     }
 
+    // 3. Busca dados do tenant usando CACHE EM MEMÓRIA (evita 1 leitura no Firestore por login)
     let tenantInfo: any = {};
     try {
-      const tenantDoc = await db.collection('tenants').doc(ownerTeacherId).get();
-      if (tenantDoc.exists) {
-        tenantInfo = tenantDoc.data() || {};
-      }
+      tenantInfo = await serverCache.getOrSet(`tenant_${ownerTeacherId}`, 600, async () => {
+        const tenantDoc = await db.collection('tenants').doc(ownerTeacherId).get();
+        return tenantDoc.exists ? tenantDoc.data() || {} : {};
+      });
     } catch (tDocErr: any) {
-      console.warn('[Student Login API] Aviso ao buscar dados do tenant:', tDocErr?.message);
+      tenantInfo = serverCache.getLastKnown<any>(`tenant_${ownerTeacherId}`) || {};
+      console.warn('[Student Login API] Aviso ao buscar dados do tenant (usando cache):', tDocErr?.message);
     }
+
 
     const response = NextResponse.json(
       {

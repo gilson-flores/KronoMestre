@@ -73,7 +73,7 @@ export async function GET(request: Request) {
 
     const cacheKey = `messages_${session.tenantId}`;
 
-    const messages = await serverCache.getOrSet(cacheKey, 60, async () => {
+    const messages = await serverCache.getOrSet(cacheKey, 180, async () => {
       const db = getAdminDb();
       const snapshot = await db
         .collection('tenants')

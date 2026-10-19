@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
 
     const cacheKey = `activities_${ownerTeacherId}`;
 
-    const activities = await serverCache.getOrSet(cacheKey, 180, async () => {
+    const activities = await serverCache.getOrSet(cacheKey, 600, async () => {
       const db = getAdminDb();
       const activitiesRef = db.collection('tenants').doc(ownerTeacherId).collection('activities');
       const snapshot = await activitiesRef.get();

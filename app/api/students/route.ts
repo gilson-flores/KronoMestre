@@ -44,14 +44,22 @@ export async function GET(req: NextRequest) {
 
     const cacheKey = `students_${ownerTeacherId}`;
 
-    const students = await serverCache.getOrSet(cacheKey, 180, async () => {
+    const students = await serverCache.getOrSet(cacheKey, 600, async () => {
       const db = getAdminDb();
       const studentsRef = db.collection('tenants').doc(ownerTeacherId).collection('students');
       const snapshot = await studentsRef.get();
       return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     });
+
+    // Enriquece com status online em tempo real direto da memória (0 leituras adicionais no Firestore)
+    const presenceData = serverCache.getOnlinePresence(ownerTeacherId);
+    const onlineSet = new Set(presenceData.onlineStudentIds);
+    const enrichedStudents = (students || []).map((s: any) => ({
+      ...s,
+      isOnline: onlineSet.has(s.id) ? true : s.isOnline,
+    }));
     
-    return NextResponse.json({ students });
+    return NextResponse.json({ students: enrichedStudents });
   } catch (error: any) {
     console.warn('Aviso /api/students GET (possível cota excedida):', error.message);
     const fallbackStudents = serverCache.getLastKnown<any[]>(`students_${await getAuthorizedOwnerId(req)}`) || [];

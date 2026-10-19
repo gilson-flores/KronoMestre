@@ -1,13 +1,13 @@
 import { NextRequest } from 'next/server';
-import { getAdminDb } from '@/lib/firebase-admin';
+import { serverCache } from '@/lib/server-cache';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Endpoint de streaming SSE (Server-Sent Events) orientado a eventos do Firestore.
- * Conecta-se diretamente ao Firestore via Admin SDK e escuta mutações em tempo real
- * (onSnapshot), despachando a contagem de sessões ativas genuínas sem que o cliente
- * precise disparar polls repetidos no servidor.
+ * Endpoint de streaming SSE (Server-Sent Events) orientado a eventos em memória.
+ * Utiliza o gerenciador de presença em memória (ServerCache) para despachar sessões
+ * ativas genuínas em tempo real sem executar nenhuma leitura (0 reads) no Firestore,
+ * eliminando totalmente o esgotamento da cota diária do Firebase.
  */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -16,53 +16,37 @@ export async function GET(req: NextRequest) {
   const encoder = new TextEncoder();
   let unsubscribe: (() => void) | null = null;
   let keepAliveTimer: NodeJS.Timeout | null = null;
+  let presenceCheckTimer: NodeJS.Timeout | null = null;
 
   const stream = new ReadableStream({
     start(controller) {
       try {
-        const db = getAdminDb();
-        const studentsRef = db
-          .collection('tenants')
-          .doc(teacherId)
-          .collection('students');
-
-        // Escuta orientada a eventos no Firestore
-        unsubscribe = studentsRef.onSnapshot(
-          (snapshot) => {
-            const now = Date.now();
-            const fiveMinutesMs = 5 * 60 * 1000;
-            const activeIds: string[] = [];
-
-            snapshot.docs.forEach((doc) => {
-              const data = doc.data();
-              // Regra de Ouro: SOMENTE alunos com isOnline === true E lastActiveAt recente são contabilizados
-              // Elimina totalmente números estáticos ou fantasmas (como o antigo 37)
-              if (data.isOnline === true && data.lastActiveAt) {
-                const diff = now - new Date(data.lastActiveAt).getTime();
-                if (diff <= fiveMinutesMs) {
-                  activeIds.push(doc.id);
-                }
-              }
-            });
-
+        // Envia payload inicial imediatamente a partir da memória do servidor
+        const sendPayload = (data: { onlineCount: number; onlineStudentIds: string[] }) => {
+          try {
             const payload = JSON.stringify({
-              onlineCount: activeIds.length,
-              onlineStudentIds: activeIds,
+              onlineCount: data.onlineCount,
+              onlineStudentIds: data.onlineStudentIds,
               timestamp: new Date().toISOString(),
             });
-
             controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
-          },
-          (error) => {
-            console.warn('[Presence Stream] Aviso no listener Firestore:', error?.message);
-            // Em caso de indisponibilidade ou regras, transmite 0 seguro
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ onlineCount: 0, onlineStudentIds: [], warning: error?.message })}\n\n`
-              )
-            );
+          } catch {}
+        };
+
+        // Escuta mutações de presença em tempo real (registradas via heartbeat / login)
+        unsubscribe = serverCache.subscribePresence(teacherId, (data) => {
+          sendPayload(data);
+        });
+
+        // Verificação periódica a cada 30s para atualizar expirações de inatividade (> 5 min)
+        presenceCheckTimer = setInterval(() => {
+          try {
+            const data = serverCache.getOnlinePresence(teacherId);
+            sendPayload(data);
+          } catch {
+            if (presenceCheckTimer) clearInterval(presenceCheckTimer);
           }
-        );
+        }, 30000);
 
         // Keep-alive leve (comentário SSE) para evitar timeouts de proxies reversos
         keepAliveTimer = setInterval(() => {
@@ -73,7 +57,7 @@ export async function GET(req: NextRequest) {
           }
         }, 25000);
       } catch (err: any) {
-        console.warn('[Presence Stream] Falha ao iniciar stream:', err?.message);
+        console.warn('[Presence Stream] Falha ao iniciar stream em memória:', err?.message);
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify({ onlineCount: 0, onlineStudentIds: [] })}\n\n`)
         );
@@ -90,6 +74,10 @@ export async function GET(req: NextRequest) {
         clearInterval(keepAliveTimer);
         keepAliveTimer = null;
       }
+      if (presenceCheckTimer) {
+        clearInterval(presenceCheckTimer);
+        presenceCheckTimer = null;
+      }
     },
   });
 
@@ -102,3 +90,4 @@ export async function GET(req: NextRequest) {
     },
   });
 }
+
