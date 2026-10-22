@@ -51,7 +51,7 @@ import {
   removeTenantSessionItem,
   purgeAllAuthAndTenantCaches,
 } from '@/lib/cacheUtils';
-import { CheckCircle2, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Trophy } from 'lucide-react';
 
 // Helper de unificação e desduplicação atômica de mensagens de chat
 const mergeChatMessage = (
@@ -678,54 +678,16 @@ export default function Home() {
     return currentTab;
   }, [role, currentTab]);
 
-  // Estado de alunos online em tempo real (orientado a eventos via SSE / Firestore, sem polling)
+  // Estado de alunos online (Recurso desativado para estancar consumo de Cota do Firebase)
   const [liveOnlineCount, setLiveOnlineCount] = useState<number>(0);
 
-  // Efeito orientado a eventos para escutar sessões genuínas de alunos via SSE
+  // Efeito de SSE (Server-Sent Events) removido completamente. Evita N x N reads no Firestore.
   useEffect(() => {
     if (role === 'student' && currentStudent?.id) {
       setLiveOnlineCount(1);
-      return;
     }
-
-    if (typeof window === 'undefined') return;
-
-    let eventSource: EventSource | null = null;
-    let isMounted = true;
-
-    try {
-      const teacherId = teacher?.id || '5IdpwffjnhewdZ5dONRB9QoIRBZ2';
-      eventSource = new EventSource(`/api/students/presence/stream?teacherId=${encodeURIComponent(teacherId)}`);
-
-      eventSource.onmessage = (event) => {
-        if (!isMounted) return;
-        try {
-          const data = JSON.parse(event.data);
-          if (typeof data.onlineCount === 'number') {
-            setLiveOnlineCount(data.onlineCount);
-          }
-        } catch {
-          // Ignora mensagens malformadas ou comentários keepalive
-        }
-      };
-
-      eventSource.onerror = () => {
-        // EventSource reconecta automaticamente em segundo plano
-      };
-    } catch (err) {
-      console.warn('[Presence] Falha ao inicializar EventSource de presença:', err);
-    }
-
-    return () => {
-      isMounted = false;
-      if (eventSource) {
-        eventSource.close();
-      }
-    };
-  }, [role, currentStudent?.id, teacher?.id]);
-
-  // Assinatura de presença memoizada: só invalida quando o status real de atividade online muda,
-  // poupando ciclos de CPU e conversões repetitivas de Data nos renders da árvore de componentes
+    // Sem EventSource, sem consumo de cota!
+  }, [role, currentStudent?.id]);
   const presenceSignature = useMemo(() => {
     if (role === 'student') return 'student_self';
     if (liveOnlineCount > 0) return `live_${liveOnlineCount}`;
@@ -2605,6 +2567,34 @@ export default function Home() {
                 </div>
 
 <div className="pt-4 border-t border-border space-y-2">
+                  <h3 className="text-sm font-bold text-amber-500 flex items-center gap-2">
+                    <Trophy className="w-4 h-4" />
+                    <span>Modo Platina (Gamificação Trimestral)</span>
+                  </h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-amber-500/5 rounded-2xl border border-amber-500/20 gap-3">
+                    <div>
+                      <p className="text-xs font-bold text-amber-500">
+                        Ativar Modo Platina para os Alunos
+                      </p>
+                      <p className="text-[11px] text-amber-500/80 mt-0.5 max-w-md">
+                        Habilita as 15 missões com dificuldade balanceada (3 AVs e 3 RPs). Se o aluno concluir 75%, ganha +1.0 na pior nota. Concluindo 100%, recebe +1.0 na média geral.
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
+                      <input
+                        type="checkbox"
+                        checked={teacher.isPlatinumModeEnabled ?? true}
+                        onChange={(e) => {
+                          setTeacher({ ...teacher, isPlatinumModeEnabled: e.target.checked });
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-border space-y-2">
                   <h3 className="text-sm font-bold text-rose-500 flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4" />
                     <span>Zona de Perigo (Ações Irreversíveis)</span>
@@ -2650,6 +2640,7 @@ export default function Home() {
                             tenantCode: teacher.tenantCode || '',
                             escolas_vinculadas: teacher.escolas_vinculadas || [],
                             disciplinas: teacher.disciplinas || [],
+                            isPlatinumModeEnabled: teacher.isPlatinumModeEnabled ?? true,
                           },
                         }),
                       });

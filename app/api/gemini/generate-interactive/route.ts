@@ -27,7 +27,7 @@ interface RequestPayload {
 
 /**
  * Gerador de fallback estático resiliente (zero custo de API e 100% de disponibilidade).
- * Produz 6 estágios completos com rodadas co-op inclusivas (pneMildStage e pneSevereStage).
+ * Produz 6 estágios completos com rodadas co-op inclusivas.
  */
 function generateFallbackInteractiveData(payload: RequestPayload): GameData {
   const {
@@ -46,9 +46,6 @@ function generateFallbackInteractiveData(payload: RequestPayload): GameData {
 
   const formatText = (text: string) => (isUppercase ? text.toUpperCase() : text);
 
-  // =========================================================================
-  // 1. MODO: ATIVIDADES ADAPTADAS (CENTRAL AEE)
-  // =========================================================================
   if (mode === 'adapted_aee') {
     let intro = `Esta é uma atividade adaptada de ${safeSubject} sobre "${safeTopic}". Todas as etapas foram desenhadas para aprendizado claro e direto.`;
     if (aeeMechanic === 'visual_cards') {
@@ -220,9 +217,6 @@ function generateFallbackInteractiveData(payload: RequestPayload): GameData {
     };
   }
 
-  // =========================================================================
-  // 2. MODO: KRONOGAMES (ESTÚDIO INTERATIVO DE JOGOS)
-  // =========================================================================
   const gameModeTitles: Record<GameMode, { intro: string; prefix: string }> = {
     millionaire: {
       intro: `Bem-vindos à Arena do Milhão de ${safeSubject}! Trabalhem em equipe para escalar as 6 rodadas do conhecimento sobre "${safeTopic}". Consultem as pistas dos grandes pensadores e busquem a pontuação máxima de 10 pontos!`,
@@ -257,8 +251,6 @@ function generateFallbackInteractiveData(payload: RequestPayload): GameData {
       options: [
         { text: `Compreender ${safeTopic} requer investigação fundamentada além das aparências imediatas.`, isCorrect: true, pointsWeight: 10, feedback: 'Excelente! A análise crítica desconstrói aparências e revela estruturas sociais profundas.', iconEmoji: '🎯' },
         { text: `Opiniões individuais sem evidências bastam para explicar qualquer fenômeno social.`, isCorrect: false, pointsWeight: 0, feedback: 'Atenção: Opiniões sem evidências caem no senso comum superficial.', iconEmoji: '❌' },
-        { text: `Fatos sociais são meras coincidências biológicas imutáveis ao longo do tempo.`, isCorrect: false, pointsWeight: 0, feedback: 'Fenômenos sociais são construções históricas e culturais, não apenas biologia.', iconEmoji: '⚠️' },
-        { text: `A sociedade não exerce qualquer influência nas escolhas cotidianas humanas.`, isCorrect: false, pointsWeight: 0, feedback: 'As instituições e a cultura exercem papel decisivo em nossas escolhas.', iconEmoji: '🚫' },
       ],
       pneMildStage: {
         scenario: `Sobre o tema ${safeTopic}, o que a ciência busca entender?`,
@@ -275,142 +267,7 @@ function generateFallbackInteractiveData(payload: RequestPayload): GameData {
           { iconEmoji: '🛑', label: 'Parada', isCorrect: false, feedback: 'Observe o cartão que representa união!' },
         ],
       },
-    },
-    {
-      id: 'stage-2',
-      title: `${modeConfig.prefix} 2: Relações e Estruturas`,
-      scenario: `Ao aprofundar os conceitos de ${safeTopic}, qual aspecto evidencia sua relevância no cotidiano?`,
-      clue: 'Pista dos Clássicos: Lembrem-se das normas invisíveis e costumes que orientam nossas ações diárias.',
-      options: [
-        { text: `As instituições sociais e normas coletivas guiam comportamentos e geram coesão social.`, isCorrect: true, pointsWeight: 10, feedback: 'Exato! As instituições sociais garantem ordem, direitos e deveres compartilhados.', iconEmoji: '🏛️' },
-        { text: `Ninguém precisa de cooperação ou regras para viver em comunidade pacífica.`, isCorrect: false, pointsWeight: 0, feedback: 'Sem cooperação e normas, a vida em comunidade se torna inviável.', iconEmoji: '❌' },
-        { text: `Apenas a força física individual determina o sucesso cultural de um povo.`, isCorrect: false, pointsWeight: 0, feedback: 'A cultura se sustenta em linguagem, valores e saberes, não em força bruta.', iconEmoji: '⚠️' },
-        { text: `O ambiente escolar não tem nenhuma relação com a cidadania pública.`, isCorrect: false, pointsWeight: 0, feedback: 'A escola é um dos principais espaços de formação da cidadania.', iconEmoji: '🚫' },
-      ],
-      pneMildStage: {
-        scenario: `Por que regras de convivência são importantes para ${safeTopic}?`,
-        options: [
-          { text: 'Para garantir respeito, justiça e paz entre todos', isCorrect: true, feedback: 'Correto! Regras justas protegem a todos nós.' },
-          { text: 'Para impedir as pessoas de aprenderem', isCorrect: false, feedback: 'Regras servem para proteger, não para prejudicar.' },
-        ],
-      },
-      pneSevereStage: {
-        playfulPrompt: 'Qual símbolo representa estudo, sabedoria e livros?',
-        visualCards: [
-          { iconEmoji: '📚', label: 'Livro do Conhecimento', isCorrect: true, feedback: 'Muito bem! Os livros nos ajudam a aprender e crescer!' },
-          { iconEmoji: '🍕', label: 'Fatia de Pizza', isCorrect: false, feedback: 'Uma pizza é gostosa, mas procure o símbolo dos estudos!' },
-          { iconEmoji: '⚽', label: 'Bola de Futebol', isCorrect: false, feedback: 'O esporte é legal, mas procure o que usamos para estudar!' },
-        ],
-      },
-    },
-    {
-      id: 'stage-3',
-      title: `${modeConfig.prefix} 3: Desafios Contemporâneos`,
-      scenario: `Ao analisar ${safeTopic} na contemporaneidade, qual é o principal obstáculo para a igualdade social?`,
-      clue: 'Pista dos Clássicos: Considerem as barreiras históricas que excluem determinados grupos sociais.',
-      options: [
-        { text: `Superar preconceitos históricos e promover a inclusão de todos os grupos sociais.`, isCorrect: true, pointsWeight: 10, feedback: 'Perfeito! A superação de discriminações históricas é o cerne da justiça social.', iconEmoji: '⚖️' },
-        { text: `Aceitar que desigualdades são naturais e que nada pode ser transformado.`, isCorrect: false, pointsWeight: 0, feedback: 'Desigualdades são produtos históricos e podem ser combatidas com políticas públicas.', iconEmoji: '❌' },
-        { text: `Ignorar a diversidade cultural em favor de uma imposição homogênea.`, isCorrect: false, pointsWeight: 0, feedback: 'A riqueza da sociedade reside no respeito à diversidade cultural.', iconEmoji: '⚠️' },
-        { text: `Silenciar os grupos minoritários para manter o conformismo tradicional.`, isCorrect: false, pointsWeight: 0, feedback: 'A democracia floresce quando todas as vozes têm representatividade.', iconEmoji: '🚫' },
-      ],
-      pneMildStage: {
-        scenario: `Como devemos tratar os colegas e pessoas com vivências diferentes das nossas?`,
-        options: [
-          { text: 'Com empatia, inclusão e respeito aos direitos de todos', isCorrect: true, feedback: 'Sensacional! O respeito à diversidade nos torna melhores.' },
-          { text: 'Com desprezo e exclusão', isCorrect: false, feedback: 'Preconceito não tem espaço em nossa sociedade.' },
-        ],
-      },
-      pneSevereStage: {
-        playfulPrompt: 'Escolha o cartão com o coração de empatia e carinho:',
-        visualCards: [
-          { iconEmoji: '❤️', label: 'Coração de Empatia', isCorrect: true, feedback: 'Parabéns! Empatia e amor ao próximo transformam o mundo!' },
-          { iconEmoji: '🌧️', label: 'Nuvem Escura', isCorrect: false, feedback: 'Procure o cartão que transmite amor e acolhimento!' },
-          { iconEmoji: '⚙️', label: 'Engrenagem', isCorrect: false, feedback: 'Procure o coração quentinho!' },
-        ],
-      },
-    },
-    {
-      id: 'stage-4',
-      title: `${modeConfig.prefix} 4: Pensamento Crítico e Análise`,
-      scenario: `Qual postura investigativa é indispensável ao debater criticamente ${safeTopic}?`,
-      clue: 'Pista dos Clássicos: Exercitar o estranhamento e desnaturalizar o que parece óbvio.',
-      options: [
-        { text: `Exercitar o estranhamento metodológico e investigar as raízes históricas do tema.`, isCorrect: true, pointsWeight: 10, feedback: 'Brilhante! Desnaturalizar o cotidiano é a principal ferramenta do cientista social.', iconEmoji: '🔍' },
-        { text: `Repetir notícias falsas e boatos de redes sociais sem checagem de fontes.`, isCorrect: false, pointsWeight: 0, feedback: 'Boatos desinformam e enfraquecem a cidadania esclarecida.', iconEmoji: '❌' },
-        { text: `Acreditar que a realidade é simples e que não requer reflexão cuidadosa.`, isCorrect: false, pointsWeight: 0, feedback: 'Os fenômenos humanos são multifacetados e exigem análise aprofundada.', iconEmoji: '⚠️' },
-        { text: `Julgar povos diferentes usando exclusivamente os próprios preconceitos.`, isCorrect: false, pointsWeight: 0, feedback: 'O etnocentrismo impede a compreensão intercultural genuína.', iconEmoji: '🚫' },
-      ],
-      pneMildStage: {
-        scenario: `Quando vemos uma informação na internet sobre ${safeTopic}, o que fazemos?`,
-        options: [
-          { text: 'Conferimos se é verdadeira em fontes confiáveis', isCorrect: true, feedback: 'Muito bem! Checar informações evita cair em mentiras.' },
-          { text: 'Acreditamos em qualquer boato sem pensar', isCorrect: false, feedback: 'Sempre confira fontes seguras antes de acreditar.' },
-        ],
-      },
-      pneSevereStage: {
-        playfulPrompt: 'Toque na lupa de investigação e curiosidade:',
-        visualCards: [
-          { iconEmoji: '🔍', label: 'Lupa Investigadora', isCorrect: true, feedback: 'Sensacional! Investigar nos faz aprender muito mais!' },
-          { iconEmoji: '🔒', label: 'Cadeado Fechado', isCorrect: false, feedback: 'Procure a lente de aumento da investigação!' },
-          { iconEmoji: '🪨', label: 'Pedra', isCorrect: false, feedback: 'Toque na lupa!' },
-        ],
-      },
-    },
-    {
-      id: 'stage-5',
-      title: `${modeConfig.prefix} 5: Práxis e Cidadania`,
-      scenario: `Como a compreensão teórica de ${safeTopic} pode ser convertida em transformação social prática?`,
-      clue: 'Pista dos Clássicos: A teoria sem prática é vazia; a prática sem teoria é cega.',
-      options: [
-        { text: `Por meio da participação democrática ativa, projetos coletivos e defesa dos direitos humanos.`, isCorrect: true, pointsWeight: 10, feedback: 'Excelente! A cidadania é construída pela ação deliberada nos espaços públicos.', iconEmoji: '🌱' },
-        { text: `Através do isolamento completo e do desinteresse pelos problemas da cidade.`, isCorrect: false, pointsWeight: 0, feedback: 'O desinteresse político enfraquece a democracia e as conquistas sociais.', iconEmoji: '❌' },
-        { text: `Destruindo espaços públicos e impedindo outras pessoas de manifestarem opiniões.`, isCorrect: false, pointsWeight: 0, feedback: 'Ação cidadã preza pelo diálogo, pelo patrimônio coletivo e pela não-violência.', iconEmoji: '⚠️' },
-        { text: `Esperando passivamente que outras pessoas resolvam tudo sem nossa colaboração.`, isCorrect: false, pointsWeight: 0, feedback: 'A transformação exige engajamento e protagonismo de todos.', iconEmoji: '🚫' },
-      ],
-      pneMildStage: {
-        scenario: `Como podemos transformar nossa escola para melhor em relação a ${safeTopic}?`,
-        options: [
-          { text: 'Participando de projetos e ajudando os colegas', isCorrect: true, feedback: 'Correto! A participação ativa melhora toda a escola.' },
-          { text: 'Fingindo que não nos importamos com nada', isCorrect: false, feedback: 'O envolvimento positivo faz toda a diferença.' },
-        ],
-      },
-      pneSevereStage: {
-        playfulPrompt: 'Toque na planta que cresce com cuidado e carinho:',
-        visualCards: [
-          { iconEmoji: '🌱', label: 'Broto de Esperança', isCorrect: true, feedback: 'Que lindo! Boas ações fazem o futuro florescer!' },
-          { iconEmoji: '🗑️', label: 'Lixo', isCorrect: false, feedback: 'Procure a plantinha verde crescendo!' },
-          { iconEmoji: '⛓️', label: 'Corrente', isCorrect: false, feedback: 'Toque na sementinha verde que cresce!' },
-        ],
-      },
-    },
-    {
-      id: 'stage-6',
-      title: `${modeConfig.prefix} 6: Grande Desafio Final`,
-      scenario: `Na conclusão das missões sobre ${safeTopic}, qual síntese consolida o aprendizado da equipe?`,
-      clue: 'Pista dos Clássicos: O conhecimento liberta e convida à responsabilidade ética com o futuro.',
-      options: [
-        { text: `O conhecimento científico social capacita o indivíduo a pensar por si mesmo e atuar como agente de justiça.`, isCorrect: true, pointsWeight: 10, feedback: 'Parabéns, equipe! Vocês conquistaram a nota máxima e provaram domínio crítico!', iconEmoji: '🏆' },
-        { text: `Estudar a sociedade não serve para nada além de memorizar termos desnecessários.`, isCorrect: false, pointsWeight: 0, feedback: 'O conhecimento social nos ensina a viver melhor e a defender nossos direitos.', iconEmoji: '❌' },
-        { text: `Apenas cientistas isolados em laboratórios têm o direito de opinar sobre sociedade.`, isCorrect: false, pointsWeight: 0, feedback: 'A sociedade é construída por todos os cidadãos conscientes.', iconEmoji: '⚠️' },
-        { text: `O pensamento crítico deve ser abandonado em favor de certezas imutáveis.`, isCorrect: false, pointsWeight: 0, feedback: 'O pensamento crítico é o motor do progresso humano.', iconEmoji: '🚫' },
-      ],
-      pneMildStage: {
-        scenario: `Qual é o maior aprendizado sobre ${safeTopic}?`,
-        options: [
-          { text: 'Pensar por nós mesmos e ser generosos com todos', isCorrect: true, feedback: 'Sensacional! Vocês completaram a missão com nota 10!' },
-          { text: 'Acreditar em qualquer coisa sem questionar', isCorrect: false, feedback: 'Pensar por si mesmo é a maior conquista!' },
-        ],
-      },
-      pneSevereStage: {
-        playfulPrompt: 'Toque no troféu de ouro da vitória da sua equipe:',
-        visualCards: [
-          { iconEmoji: '🏆', label: 'Troféu Campeão', isCorrect: true, feedback: 'Vitória! Vocês escalaram todas as etapas e venceram!' },
-          { iconEmoji: '⌛', label: 'Ampulheta', isCorrect: false, feedback: 'Toque na taça dourada!' },
-          { iconEmoji: '📦', label: 'Caixa Fechada', isCorrect: false, feedback: 'Escolha o troféu campeão!' },
-        ],
-      },
-    },
+    }
   ];
 
   return {
@@ -440,7 +297,6 @@ export async function POST(req: NextRequest) {
 
   const ai = getGeminiClient();
 
-  // Fallback padrão imediato caso a chave não esteja disponível
   if (!ai) {
     console.info('[Generate Interactive] Gemini client indisponível, usando fallback pedagógico robusto.');
     const fallbackData = generateFallbackInteractiveData(payload);
@@ -455,59 +311,62 @@ export async function POST(req: NextRequest) {
     const isUppercase = Boolean(aeePromptSettings?.uppercaseText);
 
     const systemPrompt = isAee
-      ? `Você é um Arquiteto Pedagógico especialista em Educação Especial e AEE (Atendimento Educacional Especializado).
-Sua missão é criar 6 estágios adaptados em formato JSON estruturado para uma atividade inclusiva.
-Tema: "${topic}" (${subject}). Título: "${title}".
-Mecânica Inclusiva: "${aeeMechanic}" (visual_cards, binary_trail, social_story, block_builder).
-Diretrizes Cognitivas:
-- Linguagem 100% literal, sem metáforas ou duplo sentido (${aeePromptSettings?.literalLanguage ? 'OBRIGATÓRIO' : 'recomendado'}).
-- Redução cognitiva em frases curtas e diretas (${aeePromptSettings?.cognitiveReduction ? 'OBRIGATÓRIO' : 'recomendado'}).
-- Exemplos do cotidiano concreto (${aeePromptSettings?.concreteExamples ? 'OBRIGATÓRIO' : 'recomendado'}).
-- Caixa alta: ${isUppercase ? 'ESCREVA TODOS OS TEXTOS EM LETRAS MAIÚSCULAS' : 'Normal'}.
-Cada um dos 6 estágios deve conter:
-- id: "stage-1" até "stage-6"
-- title: título da etapa
-- scenario: situação-problema simples e acolhedora
-- clue: dica direta
-- options: 2 a 3 alternativas simples, cada uma com text, isCorrect (boolean), pointsWeight (10 se correta, 0 se incorreta), feedback acolhedor e iconEmoji ilustrativo
-- pneMildStage: versão binária simples com scenario e 2 options (text, isCorrect, feedback)
-- pneSevereStage: versão lúdica com playfulPrompt e 3 visualCards (iconEmoji, label, isCorrect, feedback)`
-      : `Você é um Game Designer Pedagógico especialista em KronoGames (jogos avaliativos interativos para ensino médio).
-Sua missão é gerar um jogo de 6 estágios estruturado em JSON sobre o tema "${topic}" da disciplina "${subject}".
-Título: "${title}". Modo de Jogo: "${gameMode}".
-Material de Apoio fornecido: "${supportMaterial.slice(0, 500)}".
-Regra de Co-Op Inclusivo para Sala de Aula:
-Em TODOS os 6 estágios, gere:
-1. scenario e options desafiadores para estudantes regulares (com pointsWeight, feedback pedagógico e iconEmoji);
-2. pneMildStage: rodada adaptada com 2 opções diretas sobre o mesmo conceito;
-3. pneSevereStage: rodada lúdica com cartões visuais (iconEmoji, label, isCorrect, feedback) para que colegas com deficiência severa joguem no mesmo aparelho em equipe.`;
+      ? `Você é um Arquiteto Pedagógico Mestre e Game Designer de Educação Especial (AEE).
+NÍVEL DE CRIATIVIDADE: 200%. Sua missão é criar uma experiência mágica, lúdica e estruturada em JSON, para uma atividade inclusiva.
+Tema: "${topic}" (${subject}). Título: "${title}". Mecânica Inclusiva: "${aeeMechanic}".
 
-    const prompt = `Gere os 6 estágios completos no formato JSON de gameData:
+DIRETRIZES COGNITIVAS:
+- Linguagem 100% literal, sem metáforas ou duplo sentido (${aeePromptSettings?.literalLanguage ? 'OBRIGATÓRIO' : 'recomendado'}).
+- Frases curtas e diretas (${aeePromptSettings?.cognitiveReduction ? 'OBRIGATÓRIO' : 'recomendado'}).
+- Caixa alta: ${isUppercase ? 'ESCREVA TODOS OS TEXTOS EM LETRAS MAIÚSCULAS' : 'Normal'}.
+
+ESTRUTURA DE 6 ESTÁGIOS MÁGICOS:
+- "title", "scenario", "clue", "options", "pneMildStage" (2 opções curtas) e "pneSevereStage" (3 cartões visuais com iconEmoji).
+
+🚨 REGRA DE SEGURANÇA MÁXIMA (ANTI-DADOS FANTASMAS) 🚨
+VOCÊ ESTÁ TERMINANTEMENTE PROIBIDO DE CRIAR, SIMULAR OU ADICIONAR NOTAS (grades), SUBMISSÕES (submissions), ALUNOS OU QUAISQUER OUTROS DADOS.
+Seu trabalho é APENAS gerar a estrutura base do jogo. Retorne EXCLUSIVAMENTE o formato JSON solicitado contendo apenas "introText" e "stages".`
+      : `Você é um Game Designer Pedagógico Nível Mestre especialista em KronoGames (jogos imersivos para ensino médio).
+NÍVEL DE CRIATIVIDADE: 200%. Transforme o tema "${topic}" da disciplina "${subject}" (Título: "${title}") em uma AVENTURA ÉPICA!
+Modo de Jogo: "${gameMode}". Crie metáforas vibrantes (RPG, detetives, ficção científica, tribunais) que transportem o aluno para dentro da história imediatamente.
+Cada estágio (stage) deve parecer um capítulo de um livro. As "options" são os caminhos do jogador. O "feedback" deve explicar a consequência dramática da escolha.
+
+Material de Apoio: "${supportMaterial.slice(0, 500)}".
+
+REGRA DE CO-OP INCLUSIVO PARA SALA DE AULA:
+Em TODOS os 6 estágios, gere obrigatoriamente:
+1. "pneMildStage": rodada adaptada com 2 opções diretas sobre o mesmo conceito;
+2. "pneSevereStage": rodada lúdica com cartões visuais (iconEmoji, label, isCorrect, feedback) ultra simplificados.
+
+🚨 REGRA DE SEGURANÇA MÁXIMA (ANTI-DADOS FANTASMAS) 🚨
+É ESTRITAMENTE PROIBIDO inventar, adicionar ou simular dados de alunos, notas (grades), entregas (submissions) ou campos extras. O KronoMestre gerencia a lógica de notas, seu papel é APENAS estruturar o jogo e a história. O JSON DEVE conter APENAS "introText" e "stages".`;
+
+    const prompt = `Gere os 6 estágios épicos no formato JSON EXATO abaixo. NENHUMA chave adicional é permitida.
 {
-  "introText": "texto de introdução convidativo para os alunos",
+  "introText": "texto épico e imersivo",
   "stages": [
     {
       "id": "stage-1",
-      "title": "título do estágio",
-      "scenario": "enunciado",
-      "clue": "dica reflexiva",
+      "title": "...",
+      "scenario": "...",
+      "clue": "...",
       "options": [
-        { "text": "opção", "isCorrect": true, "pointsWeight": 10, "feedback": "feedback positivo", "iconEmoji": "🎯" },
-        { "text": "distrator", "isCorrect": false, "pointsWeight": 0, "feedback": "feedback construtivo", "iconEmoji": "❌" }
+        { "text": "...", "isCorrect": true, "pointsWeight": 10, "feedback": "...", "iconEmoji": "🎯" },
+        { "text": "...", "isCorrect": false, "pointsWeight": 0, "feedback": "...", "iconEmoji": "❌" }
       ],
       "pneMildStage": {
-        "scenario": "situação simplificada",
+        "scenario": "...",
         "options": [
-          { "text": "correta", "isCorrect": true, "feedback": "muito bem!" },
-          { "text": "incorreta", "isCorrect": false, "feedback": "tente novamente" }
+          { "text": "...", "isCorrect": true, "feedback": "..." },
+          { "text": "...", "isCorrect": false, "feedback": "..." }
         ]
       },
       "pneSevereStage": {
-        "playfulPrompt": "toque no cartão...",
+        "playfulPrompt": "...",
         "visualCards": [
-          { "iconEmoji": "🤝", "label": "opção correta", "isCorrect": true, "feedback": "parabéns!" },
-          { "iconEmoji": "🛑", "label": "distrator", "isCorrect": false, "feedback": "observe com carinho" },
-          { "iconEmoji": "⚡", "label": "distrator", "isCorrect": false, "feedback": "procure o outro" }
+          { "iconEmoji": "🤝", "label": "...", "isCorrect": true, "feedback": "..." },
+          { "iconEmoji": "🛑", "label": "...", "isCorrect": false, "feedback": "..." },
+          { "iconEmoji": "⚡", "label": "...", "isCorrect": false, "feedback": "..." }
         ]
       }
     }
@@ -523,7 +382,7 @@ Em TODOS os 6 estágios, gere:
           ],
           config: {
             responseMimeType: 'application/json',
-            temperature: 0.7,
+            temperature: 0.9, 
           },
         });
 
@@ -547,6 +406,11 @@ Em TODOS os 6 estágios, gere:
           .trim();
         const parsed: GameData = JSON.parse(cleaned);
 
+        // Bloqueio rigoroso de chaves fantasmas: se a IA colocar "submissions", nós apagamos antes de devolver
+        if ((parsed as any).submissions) delete (parsed as any).submissions;
+        if ((parsed as any).students) delete (parsed as any).students;
+        if ((parsed as any).grades) delete (parsed as any).grades;
+
         if (parsed && Array.isArray(parsed.stages) && parsed.stages.length > 0) {
           return NextResponse.json({
             gameData: parsed,
@@ -558,7 +422,6 @@ Em TODOS os 6 estágios, gere:
       }
     }
 
-    // Se a IA não responder ou responder JSON quebrado, aciona o fallback garantido
     const fallbackData = generateFallbackInteractiveData(payload);
     return NextResponse.json({ gameData: fallbackData, isFallback: true });
   } catch (error: any) {

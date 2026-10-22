@@ -347,56 +347,89 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     return `${mode} AV${num}`;
   };
 
-  // 15 Conquistas e Desafios de Engajamento com 5 Níveis
+  /// MODO PLATINA: 15 Missões Trimestrais (Baseado em 3 AVs e 3 RPs reais)
   const studentAchievements = useMemo(() => {
-    const totalDelivered = studentMetrics.completed + studentMetrics.pendingCorrection;
-    const avg = Number(studentMetrics.averageGrade) || 0;
+    let avsDelivered = 0;
+    let rpsDelivered = 0;
+    let highestGrade = 0;
+    let highestEssay = 0;
+    let hasGroupWork = false;
+    let perfectObjective = false;
+    let essayOver100Chars = false;
+    let firstAvWithMoreThan6 = false;
 
-    const hasEssay = authorizedActivities.some((act) => {
-      const sub = act.submissions?.find((s) => s.studentId === student.id || s.matricula === student.matricula);
-      return Boolean(sub?.essayAnswer && sub.essayAnswer.trim().length > 20);
-    });
-    const hasObjectiveHit = authorizedActivities.some((act) => {
-      const sub = act.submissions?.find((s) => s.studentId === student.id || s.matricula === student.matricula);
-      return (Number(sub?.objectiveScore) || 0) > 0;
-    });
-    const hasPlayedGame = authorizedActivities.some((act) => {
-      if (!act.isGameActivity && act.type !== 'Jogo Avaliativo' && !act.playfulGameHtml) return false;
-      const sub = act.submissions?.find((s) => s.studentId === student.id || s.matricula === student.matricula);
-      return Boolean(sub);
-    });
-    const hasGroupWork = authorizedActivities.some((act) => {
-      const sub = act.submissions?.find((s) => s.studentId === student.id || s.matricula === student.matricula);
-      return Boolean(sub?.groupMembers);
-    });
-    const hasMaxGrade = authorizedActivities.some((act) => {
-      const sub = act.submissions?.find((s) => s.studentId === student.id || s.matricula === student.matricula);
-      if (sub?.status !== 'graded') return false;
-      const total = (Number(sub.objectiveScore) || 0) + (Number(sub.essayScore) || 0) + (Number(sub.extraPoints) || 0);
-      return total >= 9.5;
-    });
-    const hasZeroFocusLoss = totalDelivered > 0;
-    const allCompleted = studentMetrics.total > 0 && totalDelivered >= studentMetrics.total;
+    const totalActiveActs = authorizedActivities.length;
+    let deliveredActiveActs = 0;
+    let sumGrades = 0;
+    let gradedCount = 0;
+    let noReturned = true;
 
-    const list = [
-      { id: 'c1', title: '1. Primeiro Passo', desc: 'Entregou sua 1ª atividade.', iconEmoji: '🚀', unlocked: totalDelivered >= 1, category: 'Nível 1 • Bronze' },
-      { id: 'c2', title: '2. Voz Autoral', desc: 'Enviou uma produção dissertativa.', iconEmoji: '✍️', unlocked: hasEssay, category: 'Nível 1 • Bronze' },
-      { id: 'c3', title: '3. Mira Certeira', desc: 'Pontuou em questões objetivas.', iconEmoji: '🎯', unlocked: hasObjectiveHit, category: 'Nível 1 • Bronze' },
-      { id: 'c4', title: '4. Estreia KronoGames', desc: 'Concluiu seu 1º jogo avaliativo.', iconEmoji: '🎮', unlocked: hasPlayedGame, category: 'Nível 2 • Prata' },
-      { id: 'c5', title: '5. Aliança Coletiva', desc: 'Realizou uma missão em dupla ou grupo.', iconEmoji: '🤝', unlocked: hasGroupWork, category: 'Nível 2 • Prata' },
-      { id: 'c6', title: '6. Ritmo Duplo', desc: 'Entregou 2 avaliações na disciplina.', iconEmoji: '⚡', unlocked: totalDelivered >= 2, category: 'Nível 2 • Prata' },
-      { id: 'c7', title: '7. Trinca Sociológica', desc: 'Concluiu 3 atividades avaliadas.', iconEmoji: '📚', unlocked: studentMetrics.completed >= 3, category: 'Nível 3 • Ouro' },
-      { id: 'c8', title: '8. Escudo Anti-Cola', desc: 'Realizou avaliações respeitando as regras de foco.', iconEmoji: '🛡️', unlocked: hasZeroFocusLoss, category: 'Nível 3 • Ouro' },
-      { id: 'c9', title: '9. Acima da Média', desc: 'Alcançou média geral igual ou maior que 7.0.', iconEmoji: '📈', unlocked: avg >= 7.0, category: 'Nível 3 • Ouro' },
-      { id: 'c10', title: '10. Veterano de Campo', desc: 'Entregou 4 ou mais avaliações.', iconEmoji: '🏅', unlocked: totalDelivered >= 4, category: 'Nível 4 • Diamante' },
-      { id: 'c11', title: '11. Alta Performance', desc: 'Manteve média geral igual ou superior a 8.0.', iconEmoji: '💎', unlocked: avg >= 8.0, category: 'Nível 4 • Diamante' },
-      { id: 'c12', title: '12. Gabarito / Nota 10', desc: 'Conquistou nota 9.5 a 10 em uma avaliação.', iconEmoji: '⭐', unlocked: hasMaxGrade, category: 'Nível 4 • Diamante' },
-      { id: 'c13', title: '13. Maratona Completa', desc: 'Entregou 5 ou mais atividades no trimestre.', iconEmoji: '🔥', unlocked: totalDelivered >= 5, category: 'Nível 5 • Lendário' },
-      { id: 'c14', title: '14. Invicto na Turma', desc: 'Concluiu 100% das avaliações ativas.', iconEmoji: '👑', unlocked: allCompleted, category: 'Nível 5 • Lendário' },
-      { id: 'c15', title: '15. Mestre Dialético', desc: 'Manteve média de excelência acima de 9.0.', iconEmoji: '🏆', unlocked: avg >= 9.0, category: 'Nível 5 • Lendário' },
+    authorizedActivities.forEach(act => {
+      const isRp = Boolean(act.isRecovery || act.type === 'Recuperação Paralela' || act.recoveryFromId);
+      const sub = act.submissions?.find(s => s.studentId === student.id || s.matricula === student.matricula);
+
+      if (sub && sub.status === 'returned') noReturned = false;
+
+      if (sub && (sub.status === 'pending' || sub.status === 'graded')) {
+        deliveredActiveActs++;
+        if (isRp) rpsDelivered++;
+        else avsDelivered++;
+
+        if (sub.groupMembers || act.isGameActivity || act.playfulGameHtml) hasGroupWork = true;
+        if (sub.essayAnswer && sub.essayAnswer.length > 80) essayOver100Chars = true;
+        if (sub.maxObjectiveScore > 0 && sub.objectiveScore === sub.maxObjectiveScore) perfectObjective = true;
+
+        if (sub.status === 'graded') {
+          const total = (Number(sub.objectiveScore)||0) + (Number(sub.essayScore)||0) + (Number(sub.extraPoints)||0);
+          if (total > highestGrade) highestGrade = total;
+          if ((Number(sub.essayScore)||0) > highestEssay) highestEssay = Number(sub.essayScore)||0;
+
+          sumGrades += total;
+          gradedCount++;
+
+          if (!isRp && total >= 6.0) firstAvWithMoreThan6 = true;
+        }
+      }
+    });
+
+    const avg = gradedCount > 0 ? (sumGrades / gradedCount) : 0;
+    const allCompleted = totalActiveActs > 0 && deliveredActiveActs >= totalActiveActs;
+
+    // Lógica de Dificuldade Média (Justa, contando atividades enviadas e não totais no portal)
+    const m1 = deliveredActiveActs >= 1;
+    const m2 = deliveredActiveActs > 0 && noReturned; 
+    const m3 = firstAvWithMoreThan6; 
+    const m4 = rpsDelivered >= 1 || highestGrade >= 8.0; // Fez RP ou não precisou (nota boa)
+    const m5 = hasGroupWork; 
+    const m6 = avsDelivered >= 2;
+    const m7 = essayOver100Chars;
+    const m8 = perfectObjective;
+    const m9 = rpsDelivered >= 2 || (gradedCount >= 2 && avg >= 8.0);
+    const m10 = avsDelivered >= 3;
+    const m11 = highestEssay >= 8.0;
+    const m12 = allCompleted && totalActiveActs >= 3;
+    const m13 = highestGrade >= 9.5;
+    const m14 = avg >= 7.0 && gradedCount >= 3;
+    const m15 = m1 && m2 && m3 && m4 && m5 && m6 && m7 && m8 && m9 && m10 && m11 && m12 && m13 && m14;
+
+    return [
+      { id: 'p1', title: 'O Despertar', desc: 'Entregou a 1ª atividade do trimestre.', iconEmoji: '🚀', unlocked: m1, category: 'Bronze' },
+      { id: 'p2', title: 'Avanço Perfeito', desc: 'Atividades entregues sem nenhuma devolução pelo professor.', iconEmoji: '🛡️', unlocked: m2, category: 'Bronze' },
+      { id: 'p3', title: 'Primeiro Sangue', desc: 'Tirou nota igual ou maior que 6.0 em uma avaliação formal (AV).', iconEmoji: '⚔️', unlocked: m3, category: 'Bronze' },
+      { id: 'p4', title: 'Fênix ou Intocável', desc: 'Fez uma Recuperação (RP) ou tirou mais de 8.0 na AV e não precisou.', iconEmoji: '🦅', unlocked: m4, category: 'Prata' },
+      { id: 'p5', title: 'Aliança Coletiva', desc: 'Participou de um Trabalho em Grupo ou de um KronoGame.', iconEmoji: '🤝', unlocked: m5, category: 'Prata' },
+      { id: 'p6', title: 'Metade do Caminho', desc: 'Entregou pelo menos 2 avaliações formais (AVs).', iconEmoji: '⚡', unlocked: m6, category: 'Prata' },
+      { id: 'p7', title: 'Escriba Aprendiz', desc: 'Desenvolveu bem uma resposta dissertativa (mais de 80 caracteres).', iconEmoji: '✍️', unlocked: m7, category: 'Ouro' },
+      { id: 'p8', title: 'Mira Certeira', desc: 'Gabaritou 100% da parte objetiva de uma atividade.', iconEmoji: '🎯', unlocked: m8, category: 'Ouro' },
+      { id: 'p9', title: 'Redenção ou Domínio', desc: 'Entregou 2 RPs ou manteve Média Geral >= 8.0.', iconEmoji: '⚖️', unlocked: m9, category: 'Ouro' },
+      { id: 'p10', title: 'A Trinca', desc: 'Entregou 3 avaliações formais (AVs) do trimestre.', iconEmoji: '📚', unlocked: m10, category: 'Diamante' },
+      { id: 'p11', title: 'Escriba Mestre', desc: 'Tirou nota >= 8.0 na parte dissertativa de uma atividade.', iconEmoji: '📜', unlocked: m11, category: 'Diamante' },
+      { id: 'p12', title: 'Inabalável', desc: '100% de engajamento: Entregou TODAS as atividades ativas.', iconEmoji: '🛡️', unlocked: m12, category: 'Diamante' },
+      { id: 'p13', title: 'Mente Brilhante', desc: 'Alcançou nota quase máxima (>= 9.5) em qualquer atividade.', iconEmoji: '💡', unlocked: m13, category: 'Lendário' },
+      { id: 'p14', title: 'Consistência', desc: 'Média geral do portal >= 7.0 com pelo menos 3 atividades avaliadas.', iconEmoji: '📈', unlocked: m14, category: 'Lendário' },
+      { id: 'p15', title: 'Lenda Sociológica', desc: 'Completou todas as 14 missões anteriores. Você platinou o game!', iconEmoji: '👑', unlocked: m15, category: 'PLATINA' },
     ];
-    return list;
-  }, [authorizedActivities, student.id, student.matricula, studentMetrics]);
+  }, [authorizedActivities, student.id, student.matricula]);
 
   // Próxima atividade pendente com prazo mais urgente para alerta amigável
   const nextUrgentActivity = useMemo(() => {
@@ -889,52 +922,10 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     };
   }, [selectedActivityId, activities, activeTab, student.id, student.fullName]);
 
-  // Presença real do aluno em tempo real (ativação sem dados fantasmas)
+  // Presença desativada para poupar cota de gravação/leitura do Firestore
   useEffect(() => {
-    if (!student?.id || !student?.ownerTeacherId) return;
-
-    const sendPing = (action: 'ping' | 'offline' = 'ping') => {
-      try {
-        if (action === 'offline' && typeof navigator !== 'undefined' && navigator.sendBeacon) {
-          const blob = new Blob(
-            [JSON.stringify({ studentId: student.id, ownerTeacherId: student.ownerTeacherId, action: 'offline' })],
-            { type: 'application/json' }
-          );
-          navigator.sendBeacon('/api/students/heartbeat', blob);
-          return;
-        }
-
-        fetch('/api/students/heartbeat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            studentId: student.id,
-            ownerTeacherId: student.ownerTeacherId,
-            action,
-          }),
-        }).catch(() => {});
-      } catch (e) {}
-    };
-
-    sendPing('ping');
-
-    // Ping leve a cada 4 minutos para manter status ativo enquanto o aluno estiver no portal
-    const interval = setInterval(() => {
-      sendPing('ping');
-    }, 4 * 60 * 1000);
-
-    const handleBeforeUnload = () => {
-      sendPing('offline');
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      sendPing('offline');
-    };
-  }, [student?.id, student?.ownerTeacherId]);
+    // O heartbeat e o interval de 4 minutos foram desligados para evitar o Quota Exceeded.
+  }, []);
 
   return (
     <div className="min-h-screen bg-background text-foreground p-3 sm:p-8 max-w-5xl mx-auto space-y-6 sm:space-y-8 animate-fadeIn">
@@ -2017,23 +2008,23 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       </div>
                     )}
 
-                    {/* PARTE 2: QUESTÃO DISSERTATIVA */}
+                    {/* PARTE 2: QUESTÃO DISSERTATIVA (ESTILO CADERNO UNIVERSITÁRIO COM ESPIRAL) */}
                     {(essayQuestions.length > 0 || distribution.hasEssay) && (
-                      <div className="space-y-4 pt-2 border-t border-border">
+                      <div className="space-y-5 pt-6 mt-4 border-t-2 border-dashed border-border">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h4 className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-2">
-                            <FileText className="w-4 h-4 text-primary shrink-0" />
-                            <span>Parte 2: Produção Textual / Resposta Dissertativa</span>
+                          <h4 className="text-sm sm:text-base font-black text-foreground flex items-center gap-2">
+                            <FileText className="w-5 h-5 text-amber-500 shrink-0" />
+                            <span>Folha de Redação Oficial</span>
                           </h4>
-                          <span className="text-[11px] sm:text-xs font-bold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full border border-primary/20 shrink-0">
-                            Vale {distribution.maxEssayGrade.toFixed(1)} pts
+                          <span className="text-[11px] sm:text-xs font-black text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20 shrink-0 shadow-sm">
+                            Valor: {distribution.maxEssayGrade.toFixed(1)} pts
                           </span>
                         </div>
 
                         {essayQuestions.map((eq, eqIdx) => (
                           <div
                             key={eq.id || eqIdx}
-                            className={`bg-surface p-3.5 sm:p-4 rounded-2xl border border-border space-y-2 ${act.securityBlockCopyStatement ? 'select-none' : ''}`}
+                            className={`bg-surface p-4 sm:p-5 rounded-xl border-l-4 border-l-amber-500 shadow-md ${act.securityBlockCopyStatement ? 'select-none' : ''}`}
                             onCopy={(e) => {
                               if (act.securityBlockCopyStatement) {
                                 e.preventDefault();
@@ -2041,53 +2032,74 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                               }
                             }}
                           >
-                            <p className="text-xs font-semibold text-foreground leading-relaxed break-words">{eq.statement}</p>
+                            <p className="text-sm font-semibold text-foreground leading-relaxed break-words font-serif">
+                              {eq.statement}
+                            </p>
                           </div>
                         ))}
 
-                        <div className="space-y-2">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <label className="block text-xs font-bold text-foreground">
-                              Sua Resposta Dissertativa:
-                            </label>
-                            {act.securityBlockPasteEssay && (
-                              <span className="text-[10px] text-purple-600 font-bold bg-purple-500/10 px-2 sm:px-2.5 py-0.5 rounded-full border border-purple-500/20 flex items-center gap-1 shrink-0">
-                                <ClipboardX className="w-3 h-3 text-purple-400 shrink-0" />
-                                <span>Cola (Ctrl+V) Bloqueada</span>
-                              </span>
-                            )}
+                        {/* CADERNO UNIVERSITÁRIO (100% CSS PURO - SEM ALTERAR DADOS DO REACT) */}
+                        <div className="relative mt-4 shadow-2xl rounded-r-2xl rounded-l-lg overflow-hidden bg-[#fdfbf7] border border-slate-300">
+                          {/* Coluna do Espiral com Furos Realistas */}
+                          <div className="absolute left-0 top-0 bottom-0 w-10 sm:w-14 border-r-2 border-rose-400/60 bg-[#fdfbf7] flex flex-col justify-evenly items-center py-4 z-10 pointer-events-none shadow-[inset_-2px_0_4px_rgba(0,0,0,0.05)]">
+                            {Array.from({ length: 12 }).map((_, i) => (
+                              <div key={i} className="w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-[#0b0f19] shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] opacity-90 relative">
+                                <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-0.5 bg-slate-400/30 rounded-full" />
+                              </div>
+                            ))}
                           </div>
-                          <textarea
-                            rows={5}
-                            value={essayInputs[act.id] !== undefined ? essayInputs[act.id] : (sub?.essayAnswer || '')}
-                            onChange={(e) => handleEssayChange(act.id, e.target.value)}
-                            onPaste={(e) => {
-                              if (act.securityBlockPasteEssay) {
-                                e.preventDefault();
-                                showSecurityToast('❌ Ação de colar (Ctrl+V) bloqueada para respostas dissertativas.');
-                              }
-                            }}
-                            onDrop={(e) => {
-                              if (act.securityBlockPasteEssay) {
-                                e.preventDefault();
-                                showSecurityToast('❌ Arrastar textos bloqueado para respostas dissertativas.');
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (act.securityBlockPasteEssay) {
-                                if ((e.ctrlKey || e.metaKey) && ['v', 'V'].includes(e.key)) {
+
+                          <div className="pl-12 sm:pl-16 pr-3 sm:pr-6 py-1 relative z-0">
+                            <div className="flex flex-wrap items-center justify-between gap-2 mb-2 pt-2">
+                              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                Sua Resposta na Folha:
+                              </label>
+                              {act.securityBlockPasteEssay && (
+                                <span className="text-[10px] text-purple-600 font-bold bg-purple-100 px-2.5 py-0.5 rounded-full border border-purple-300 flex items-center gap-1 shrink-0">
+                                  <ClipboardX className="w-3 h-3" />
+                                  <span>Cola (Ctrl+V) Bloqueada</span>
+                                </span>
+                              )}
+                            </div>
+
+                            <textarea
+                              rows={14}
+                              value={essayInputs[act.id] !== undefined ? essayInputs[act.id] : (sub?.essayAnswer || '')}
+                              onChange={(e) => handleEssayChange(act.id, e.target.value)}
+                              onPaste={(e) => {
+                                if (act.securityBlockPasteEssay) {
                                   e.preventDefault();
-                                  showSecurityToast('❌ Atalho de colar (Ctrl+V) bloqueado para respostas dissertativas.');
+                                  showSecurityToast('❌ Ação de colar (Ctrl+V) bloqueada para respostas dissertativas.');
                                 }
+                              }}
+                              onDrop={(e) => {
+                                if (act.securityBlockPasteEssay) {
+                                  e.preventDefault();
+                                  showSecurityToast('❌ Arrastar textos bloqueado para respostas dissertativas.');
+                                }
+                              }}
+                              onKeyDown={(e) => {
+                                if (act.securityBlockPasteEssay) {
+                                  if ((e.ctrlKey || e.metaKey) && ['v', 'V'].includes(e.key)) {
+                                    e.preventDefault();
+                                    showSecurityToast('❌ Atalho de colar (Ctrl+V) bloqueado para respostas dissertativas.');
+                                  }
+                                }
+                              }}
+                              placeholder={
+                                act.securityBlockPasteEssay
+                                  ? "Escreva à mão aqui (colar texto desabilitado pelo professor)..."
+                                  : "Comece a escrever sua redação com as próprias palavras..."
                               }
-                            }}
-                            placeholder={
-                              act.securityBlockPasteEssay
-                                ? "Escreva aqui sua resposta (digitação manual obrigatória; colar texto desabilitado pelo professor)..."
-                                : "Escreva aqui sua resposta com argumentação fundamentada nos conceitos da disciplina..."
-                            }
-                            className="w-full bg-surface border border-border rounded-2xl p-3.5 sm:p-4 text-xs text-foreground placeholder-[#869486] focus:outline-none focus:border-primary leading-relaxed break-words"
-                          />
+                              className="w-full h-full min-h-[350px] bg-transparent text-slate-900 text-[15px] sm:text-[16px] focus:outline-none resize-y py-[2px] font-medium"
+                              style={{
+                                backgroundImage: 'linear-gradient(transparent 31px, #94a3b8 31px)',
+                                backgroundSize: '100% 32px',
+                                lineHeight: '32px',
+                                textDecoration: 'none'
+                              }}
+                            />
+                          </div>
                         </div>
                       </div>
                     )}
@@ -2778,108 +2790,111 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         />
       )}
 
-      {/* Modal de Conquistas e Badges Pedagógicas do Estudante */}
-      {isAchievementsModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
-          <div className="bg-surface border border-border rounded-3xl p-5 sm:p-7 max-w-2xl w-full shadow-2xl space-y-5 relative max-h-[92vh] flex flex-col">
-            <button
-              onClick={() => setIsAchievementsModalOpen(false)}
-              className="absolute top-4 right-4 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted hover:text-foreground bg-surface hover:bg-rose-500/20 rounded-full transition-colors cursor-pointer border border-border"
-              aria-label="Fechar"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  Gamificação Pedagógica
+      {/* Modal do MODO PLATINA (Substitui Galeria Antiga) */}
+      {isAchievementsModalOpen && teacher?.isPlatinumModeEnabled !== false && (
+        <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
+          <div className="bg-[#0b0f19] border border-[#1e293b] rounded-3xl p-0 max-w-2xl w-full shadow-2xl relative max-h-[92vh] flex flex-col overflow-hidden">
+            {/* Header Platina */}
+            <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 p-6 border-b border-[#1e293b] relative">
+              <button
+                onClick={() => setIsAchievementsModalOpen(false)}
+                className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white bg-black/20 hover:bg-rose-500/50 rounded-full transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              
+              <div className="flex items-center gap-2 flex-wrap mb-2">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-gradient-to-r from-slate-400 to-slate-200 text-slate-900 shadow-sm">
+                  Modo Platina Ativado
                 </span>
-                <span className="text-xs text-muted">Sociologia • Conquistas e Medalhas</span>
+                <span className="text-xs text-slate-400">Trimestre Atual</span>
               </div>
-              <h2 className="text-xl sm:text-2xl font-black text-foreground flex items-center gap-2 mt-1">
-                <Trophy className="w-6 h-6 text-amber-400" />
-                Galeria de Conquistas
+              <h2 className="text-2xl font-black text-white flex items-center gap-2">
+                <Trophy className="w-6 h-6 text-slate-300" />
+                Jornada de Missões
               </h2>
-              <p className="text-xs sm:text-sm text-muted mt-0.5">
-                Desbloqueie medalhas cumprindo missões, entregando avaliações e mantendo consistência nos estudos!
+              <p className="text-sm text-slate-400 mt-1">
+                Complete as 15 missões principais (AVs e RPs) para platinar a disciplina e ganhar recompensas na média!
               </p>
             </div>
 
-            {/* Painel Resumo de Progresso de Medalhas */}
-            <div className="bg-[#171f33] p-4 rounded-2xl border border-border flex items-center justify-between gap-4">
-              <div>
-                <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Medalhas Desbloqueadas</span>
-                <span className="text-lg sm:text-xl font-black text-foreground">
-                  {studentAchievements.filter((a) => a.unlocked).length} <span className="text-xs font-normal text-muted">de {studentAchievements.length} medalhas</span>
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-28 sm:w-40 h-2.5 bg-background rounded-full overflow-hidden border border-border">
-                  <div
-                    className="h-full bg-gradient-to-r from-amber-400 to-emerald-400 rounded-full transition-all duration-500"
-                    style={{
-                      width: `${studentAchievements.length > 0 ? Math.round((studentAchievements.filter((a) => a.unlocked).length / studentAchievements.length) * 100) : 0}%`,
-                    }}
-                  />
-                </div>
-                <span className="text-xs font-mono font-bold text-amber-400">
-                  {studentAchievements.length > 0 ? Math.round((studentAchievements.filter((a) => a.unlocked).length / studentAchievements.length) * 100) : 0}%
-                </span>
-              </div>
+            {/* Painel de Recompensas de Nível */}
+            <div className="p-5 bg-slate-900/50 border-b border-[#1e293b] flex flex-col gap-4">
+              {(() => {
+                const unlocked = studentAchievements.filter(a => a.unlocked).length;
+                const percent = Math.round((unlocked / 15) * 100);
+                return (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-3 bg-black rounded-full overflow-hidden border border-[#1e293b] shadow-inner">
+                        <div
+                          className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all duration-1000 relative overflow-hidden"
+                          style={{ width: `${percent}%` }}
+                        >
+                          <div className="absolute inset-0 bg-white/20 w-full animate-pulse" />
+                        </div>
+                      </div>
+                      <span className="text-sm font-black text-cyan-400">{unlocked}/15</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className={`p-3 rounded-xl border flex flex-col justify-center items-center text-center transition-all ${unlocked >= 11 ? 'bg-amber-500/20 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.2)]' : 'bg-black/40 border-[#1e293b] opacity-60'}`}>
+                        <span className={`text-[10px] font-black uppercase tracking-wider ${unlocked >= 11 ? 'text-amber-400' : 'text-slate-500'}`}>Desbloqueio Nível Ouro (75%)</span>
+                        <span className={`text-sm font-bold mt-1 ${unlocked >= 11 ? 'text-white' : 'text-slate-400'}`}>+1.0 na Pior Nota</span>
+                        {unlocked >= 11 && <span className="text-[10px] bg-amber-500 text-black px-2 py-0.5 rounded-full font-bold mt-2">Disponível!</span>}
+                      </div>
+                      <div className={`p-3 rounded-xl border flex flex-col justify-center items-center text-center transition-all ${unlocked === 15 ? 'bg-cyan-500/20 border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.3)]' : 'bg-black/40 border-[#1e293b] opacity-60'}`}>
+                        <span className={`text-[10px] font-black uppercase tracking-wider ${unlocked === 15 ? 'text-cyan-400' : 'text-slate-500'}`}>Desbloqueio Platina (100%)</span>
+                        <span className={`text-sm font-bold mt-1 ${unlocked === 15 ? 'text-white' : 'text-slate-400'}`}>+1.0 na Média Geral</span>
+                        {unlocked === 15 && <span className="text-[10px] bg-cyan-500 text-black px-2 py-0.5 rounded-full font-bold mt-2">Conquistado!</span>}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
-            {/* Lista das Conquistas */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-1">
+            {/* Lista das Missões / Conquistas */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-3 bg-[#0b0f19]">
               {studentAchievements.map((ach) => (
                 <div
                   key={ach.id}
                   className={`p-4 rounded-2xl border transition-all flex items-start gap-3.5 sm:gap-4 ${
                     ach.unlocked
-                      ? 'bg-amber-500/10 border-amber-500/30 shadow-md shadow-amber-500/5'
-                      : 'bg-surface/60 border-border opacity-70'
+                      ? 'bg-slate-800/80 border-slate-600 shadow-md'
+                      : 'bg-black/20 border-[#1e293b]'
                   }`}
                 >
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shrink-0 border ${
                     ach.unlocked
-                      ? 'bg-amber-500/20 border-amber-400/40 text-amber-300 shadow-sm'
-                      : 'bg-background/80 border-border text-muted grayscale'
+                      ? 'bg-gradient-to-br from-slate-700 to-slate-800 border-slate-500 shadow-sm'
+                      : 'bg-black border-[#1e293b] grayscale opacity-50'
                   }`}>
                     {ach.iconEmoji}
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted">
+                      <span className={`text-[10px] font-black uppercase tracking-wider ${ach.unlocked ? 'text-cyan-400' : 'text-slate-500'}`}>
                         {ach.category}
                       </span>
                       {ach.unlocked ? (
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
                           <Check className="w-3 h-3 stroke-[3]" />
-                          <span>Desbloqueada</span>
+                          <span>Concluída</span>
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#171f33] text-muted border border-border flex items-center gap-1">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black text-slate-500 border border-[#1e293b] flex items-center gap-1">
                           <Lock className="w-3 h-3" />
-                          <span>Em Progresso</span>
+                          <span>Bloqueada</span>
                         </span>
                       )}
                     </div>
-                    <h4 className="text-sm font-extrabold text-foreground mt-0.5">{ach.title}</h4>
-                    <p className="text-xs text-muted leading-relaxed mt-0.5">{ach.desc}</p>
+                    <h4 className={`text-sm font-extrabold mt-0.5 ${ach.unlocked ? 'text-white' : 'text-slate-400'}`}>{ach.title}</h4>
+                    <p className={`text-xs leading-relaxed mt-0.5 ${ach.unlocked ? 'text-slate-300' : 'text-slate-500'}`}>{ach.desc}</p>
                   </div>
                 </div>
               ))}
-            </div>
-
-            <div className="pt-2 border-t border-border flex justify-end">
-              <button
-                type="button"
-                onClick={() => setIsAchievementsModalOpen(false)}
-                className="py-2.5 px-6 min-h-[44px] bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition cursor-pointer"
-              >
-                Fechar Galeria
-              </button>
             </div>
           </div>
         </div>

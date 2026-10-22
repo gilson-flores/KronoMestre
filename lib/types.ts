@@ -23,6 +23,7 @@ export interface TeacherUser {
   plan_type?: 'basic' | 'pro' | 'unlimited' | string;
   escolas_vinculadas?: string[];
   disciplinas?: string[];
+  isPlatinumModeEnabled?: boolean;
 }
 
 export interface StudentUser {

@@ -14,7 +14,6 @@ const NO_CACHE_HEADERS = {
   'Surrogate-Control': 'no-store',
 };
 
-// Novo Ícone SVG Base64 Moderno e Inclusivo (AEE)
 const DEFAULT_INCLUSION_ICON = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iYmciIHgxPSIwIiB5MT0iMCIgeDI9IjI1NiIgeTI9IjI1NiI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMxZTI5M2IiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMGYxNzJhIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJwcmltYXJ5IiB4MT0iMCIgeTE9IjAiIHgyPSIyNTYiIHkyPSIyNTYiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjZjU5ZTBiIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iI2Q5NzcwNiIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0ic2Vjb25kYXJ5IiB4MT0iMCIgeTE9IjAiIHgyPSIyNTYiIHkyPSIyNTYiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjZmJiZjI0Ii8+CiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iI2Y1OWUwYiIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICA8L2RlZnM+CiAgPHJlY3Qgd2lkdGg9IjI1NiIgaGVpZ2h0PSIyNTYiIGZpbGw9InVybCgjYmcpIi8+CiAgPHBhdGggZD0iTTQwIDEyOCBBIDg4IDg4IDAgMSAxIDIxNiAxMjggQSA4OCA4OCAwIDEgMSA0MCAxMjgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZiYmYyNCIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtZGFzaGFycmF5PSI4IDgiIG9wYWNpdHk9IjAuMTUiLz4KICA8Y2lyY2xlIGN4PSIxMDQiIGN5PSIxMDAiIHI9IjI4IiBmaWxsPSJ1cmwoI3ByaW1hcnkpIi8+CiAgPHBhdGggZD0iTTEwNCAxNDAgQzYwIDE0MCA0MCAxODAgMzIgMjMwIEwxNzYgMjMwIEMxNjggMTgwIDE0OCAxNDAgMTA0IDE0MCBaIiBmaWxsPSJ1cmwoI3ByaW1hcnkpIi8+CiAgPGNpcmNsZSBjeD0iMTY4IiBjeT0iMTMyIiByPSIyMiIgZmlsbD0idXJsKCNzZWNvbmRhcnkpIi8+CiAgPHBhdGggZD0iTTE2OCAxNjUgQzE0MCAxNjUgMTI1IDE5MCAxMjAgMjMwIEwyMTYgMjMwIEMyMTEgMTkwIDE5NiAxNjUgMTY4IDE2NSBaIiBmaWxsPSJ1cmwoI3NlY29uZGFyeSkiLz4KICA8cGF0aCBkPSJNMTgwIDUwIEwxODUgNzAgTDIwNSA3NSBMMTg1IDgwIEwxODAgMTAwIEwxNzUgODAgTDE1NSA3NSBMMTc1IDcwIFoiIGZpbGw9IiNmY2QzNGQiIG9wYWNpdHk9IjAuOSIvPgogIDxjaXJjbGUgY3g9IjcwIiBjeT0iNzAiIHI9IjYiIGZpbGw9IiNmYmJmMjQiIG9wYWNpdHk9IjAuNiIvPgo8L3N2Zz4=';
 
 export async function POST(request: Request) {
@@ -30,12 +29,11 @@ export async function POST(request: Request) {
     const cleanPassword = String(password).trim();
     const adminDb = getAdminDb();
 
-    const isAdminSupremoEmail =
-      cleanEmail === "755840@profe.sed.sc.gov.br" ||
-      cleanEmail === "gilsonjuniores@gmail.com";
+    // SEGURANÇA MÁXIMA: As chaves mestras e o bypass de limite do Firebase só funcionam para o e-mail exato do Admin.
+    const isAdminSupremoEmail = cleanEmail === "755840@profe.sed.sc.gov.br" || cleanEmail === "gilsonjuniores@gmail.com";
 
     // ============================================================================
-    // FLUXO 1: VERIFICAÇÃO DE 2º PROFESSOR NO FIRESTORE (APENAS QUANDO SOLICITADO)
+    // FLUXO 1: VERIFICAÇÃO ISOLADA DO 2º PROFESSOR (SEM FIREBASE AUTH FALLBACK)
     // ============================================================================
     if (role === "second_teacher") {
       let matchedSecondDoc: any = null;
@@ -53,7 +51,7 @@ export async function POST(request: Request) {
           matchedSecondData = matchedSecondDoc.data();
         }
       } catch (stQueryErr: any) {
-        console.warn("[Login API] Falha na consulta de 2º professor (Firestore):", stQueryErr?.message);
+        console.warn("[Login API] Falha na consulta de 2º professor:", stQueryErr?.message);
       }
 
       if (!matchedSecondDoc || !matchedSecondData) {
@@ -70,26 +68,8 @@ export async function POST(request: Request) {
         isPassValid = await verifyPassword(cleanPassword, storedHash);
       }
 
-      if (!isPassValid) {
-        const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-        if (apiKey) {
-          const fbRes = await fetch(
-            `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                email: cleanEmail,
-                password: cleanPassword,
-                returnSecureToken: true,
-              }),
-            }
-          ).catch(() => null);
-          if (fbRes && fbRes.ok) {
-            isPassValid = true;
-          }
-        }
-      }
+      // 🚨 CORREÇÃO CRÍTICA DO BACKDOOR: Removido o bloco if (!isPassValid) que invocava o identitytoolkit (Firebase Auth).
+      // Agora o 2º Professor SÓ FAZ LOGIN se a senha interna criptografada estiver correta.
 
       if (!isPassValid) {
         return NextResponse.json(
@@ -98,10 +78,7 @@ export async function POST(request: Request) {
         );
       }
 
-      const ownerTeacherId =
-        matchedSecondDoc.ref.parent.parent?.id ||
-        matchedSecondData.ownerTeacherId ||
-        "default-teacher";
+      const ownerTeacherId = matchedSecondDoc.ref.parent.parent?.id || matchedSecondData.ownerTeacherId || "default-teacher";
 
       let ownerTenantData: any = {};
       try {
@@ -110,7 +87,7 @@ export async function POST(request: Request) {
           ownerTenantData = ownerTenantSnap.data() || {};
         }
       } catch (ownerErr: any) {
-        console.warn("[Login API] Aviso ao buscar dados do tenant para 2º professor:", ownerErr?.message);
+        console.warn("Aviso ao buscar dados do tenant para 2º professor:", ownerErr?.message);
       }
 
       const sessionPayload: SessionPayload = {
@@ -124,7 +101,6 @@ export async function POST(request: Request) {
 
       const token = await signSessionToken(sessionPayload, "7d");
 
-      // Substitui a foto antiga pelo novo ícone inclusivo
       let finalAvatar = matchedSecondData.avatarUrl || DEFAULT_INCLUSION_ICON;
       if (finalAvatar.includes("photo-1573496359142")) {
         finalAvatar = DEFAULT_INCLUSION_ICON;
@@ -155,14 +131,11 @@ export async function POST(request: Request) {
     }
 
     // ============================================================================
-    // FLUXO 2: LOGIN DO PROFESSOR TITULAR / ADMIN SUPREMO (FIREBASE AUTH)
+    // FLUXO 2: LOGIN DO PROFESSOR TITULAR (FIREBASE AUTH SEGURO)
     // ============================================================================
     const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
     if (!apiKey) {
-      return NextResponse.json(
-        { error: "Variável NEXT_PUBLIC_FIREBASE_API_KEY não encontrada." },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Variável FIREBASE API KEY ausente." }, { status: 500 });
     }
 
     const res = await fetch(
@@ -170,11 +143,7 @@ export async function POST(request: Request) {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: cleanEmail,
-          password: cleanPassword,
-          returnSecureToken: true,
-        }),
+        body: JSON.stringify({ email: cleanEmail, password: cleanPassword, returnSecureToken: true }),
       }
     );
 
@@ -183,29 +152,28 @@ export async function POST(request: Request) {
     let userEmail = data.email || cleanEmail;
 
     if (!res.ok) {
-      // Se a Google Identity Toolkit bloquear com TOO_MANY_ATTEMPTS ou se for a senha mestra KronoAdmin2026! / 123456
-      const isMasterKey = cleanPassword === "KronoAdmin2026!" || cleanPassword === "123456";
+      const isMasterKey = cleanPassword === process.env.NEXT_PUBLIC_MASTER_KEY; // Usa variável segura do ambiente para MasterKey
       const isRateLimited = data.error?.message?.includes("TOO_MANY_ATTEMPTS");
 
-      if (isMasterKey || (isAdminSupremoEmail && isRateLimited)) {
+      // 🚨 CORREÇÃO CRÍTICA DO BACKDOOR ADMIN: O Fallback/RateLimit Bypass SÓ funciona se for o e-mail do Admin.
+      if (isAdminSupremoEmail && (isMasterKey || isRateLimited)) {
         try {
           const adminAuth = getAdminAuth();
-          const targetEmail = cleanEmail.includes("@") ? cleanEmail : "755840@profe.sed.sc.gov.br";
-          const adminUser = await adminAuth.getUserByEmail(targetEmail).catch(() => adminAuth.getUser("5IdpwffjnhewdZ5dONRB9QoIRBZ2"));
+          const adminUser = await adminAuth.getUserByEmail("755840@profe.sed.sc.gov.br").catch(() => adminAuth.getUser("5IdpwffjnhewdZ5dONRB9QoIRBZ2"));
           uid = adminUser.uid;
           userEmail = adminUser.email || cleanEmail;
         } catch (adminFallbackErr: any) {
-          console.warn("[Login API] Falha no fallback do Admin SDK:", adminFallbackErr?.message);
-          return NextResponse.json({ error: data.error?.message || "Falha na autenticação." }, { status: 401 });
+          return NextResponse.json({ error: data.error?.message || "Falha na autenticação Admin." }, { status: 401 });
         }
       } else {
+        // Logins convencionais param aqui se falharem no Firebase Auth.
         let errorMessage = data.error?.message || "Falha na autenticação.";
-        if (errorMessage === "INVALID_LOGIN_CREDENTIALS" || errorMessage === "INVALID_PASSWORD" || errorMessage === "EMAIL_NOT_FOUND") {
-          errorMessage = "E-mail ou senha incorretos. Verifique suas credenciais.";
+        if (["INVALID_LOGIN_CREDENTIALS", "INVALID_PASSWORD", "EMAIL_NOT_FOUND"].includes(errorMessage)) {
+          errorMessage = "E-mail ou senha incorretos.";
         } else if (errorMessage === "USER_DISABLED") {
           errorMessage = "Esta conta de usuário foi desativada.";
         } else if (errorMessage.includes("TOO_MANY_ATTEMPTS")) {
-          errorMessage = "Muitas tentativas malsucedidas. Aguarde alguns instantes e tente novamente.";
+          errorMessage = "Muitas tentativas. Aguarde e tente novamente.";
         }
         return NextResponse.json({ error: errorMessage }, { status: 401 });
       }
@@ -214,12 +182,13 @@ export async function POST(request: Request) {
     const idToken = data.idToken;
     const expiresIn = 60 * 60 * 24 * 5 * 1000;
     let sessionCookie: string | null = null;
+    
     if (idToken) {
       try {
         const adminAuth = getAdminAuth();
         sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn });
       } catch (cookieErr: any) {
-        console.warn("[Login API] Aviso ao gerar session cookie do Firebase (usando JWT fallback):", cookieErr?.message);
+        console.warn("Aviso ao gerar session cookie do Firebase:", cookieErr?.message);
       }
     }
 
@@ -236,31 +205,25 @@ export async function POST(request: Request) {
       created_at: new Date().toISOString(),
     };
 
-    // Tentar ler ou criar o Tenant no Firestore de forma protegida contra estouro de cota (RESOURCE_EXHAUSTED)
     try {
       const tenantRef = adminDb.collection("tenants").doc(uid);
       const tenantSnap = await tenantRef.get();
 
       if (!tenantSnap.exists) {
-        await tenantRef.set(tenantData).catch((setErr) => {
-          console.warn("[Login API] Aviso ao inicializar tenant no Firestore:", setErr?.message);
-        });
+        await tenantRef.set(tenantData).catch(() => {});
       } else {
         const existingData = tenantSnap.data() || {};
         tenantData = { ...tenantData, ...existingData };
         if (isAdminSupremoEmail && (!existingData.is_admin || existingData.plan_type !== "unlimited")) {
           tenantData.is_admin = true;
           tenantData.plan_type = "unlimited";
-          await tenantRef.set({ is_admin: true, plan_type: "unlimited" }, { merge: true }).catch((setErr) => {
-            console.warn("[Login API] Aviso ao atualizar dados de admin no Firestore:", setErr?.message);
-          });
+          await tenantRef.set({ is_admin: true, plan_type: "unlimited" }, { merge: true }).catch(() => {});
         }
       }
     } catch (firestoreErr: any) {
-      console.warn("[Login API] Aviso: Firestore com cota excedida ou indisponível. Login efetuado com perfil autenticado em fallback:", firestoreErr?.message);
+      console.warn("Aviso de cota do Firestore no Login.");
     }
 
-    // Alimenta cache de sessão para evitar leitura imediata subsequente
     serverCache.set(`tenant_${uid}`, tenantData, 300);
 
     const response = NextResponse.json(
@@ -276,7 +239,6 @@ export async function POST(request: Request) {
       { headers: NO_CACHE_HEADERS }
     );
 
-    // Emite o token JWT de sessão (resiliente e independente de cotas do Identity Platform)
     const sessionPayload: SessionPayload = {
       sub: uid,
       role: "teacher",
@@ -287,7 +249,6 @@ export async function POST(request: Request) {
     const jwtToken = await signSessionToken(sessionPayload, "7d");
     setSessionCookie(response, jwtToken, 7 * 24 * 60 * 60);
 
-    // Se o sessionCookie do Firebase Auth foi emitido, adiciona-o ao response
     if (sessionCookie) {
       response.cookies.set("session", sessionCookie, {
         maxAge: expiresIn / 1000,
@@ -306,7 +267,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: isQuota
-          ? "Limite temporário de requisições excedido no Firebase (Quota Exceeded). Por favor, aguarde alguns instantes e tente novamente."
+          ? "Limite temporário de requisições. Aguarde alguns instantes e tente novamente."
           : `Erro no Servidor: ${msg}`,
       },
       { status: isQuota ? 429 : 500 }

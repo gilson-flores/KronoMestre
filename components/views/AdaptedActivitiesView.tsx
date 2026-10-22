@@ -1,35 +1,22 @@
 'use client';
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Sparkles,
   Users,
-  Gamepad2,
-  FileText,
-  Plus,
-  CheckCircle2,
-  AlertCircle,
-  BookOpen,
-  Send,
-  Layers,
-  Link2,
-  Eye,
-  Trash2,
-  Clock,
-  ShieldCheck,
-  ChevronRight,
-  Loader2,
-  Award,
-  ChevronDown,
-  Filter,
-  Check,
-  HeartHandshake,
-  Heart,
-  Dna,
   Wrench,
   FolderOpen,
-  HelpCircle,
-  Play
+  CheckCircle2,
+  Link2,
+  ChevronDown,
+  ChevronUp,
+  Filter,
+  Search,
+  Check,
+  Play,
+  Trash2,
+  Eye,
+  Settings
 } from 'lucide-react';
 import {
   Activity,
@@ -42,19 +29,16 @@ import {
 import {
   isStudentPNE,
   isActivityAdapted,
-  getRecommendedAdaptationForClass,
   isSevereCondition,
   getOriginalTurmas,
   getTurmaLabel
 } from '@/lib/studentUtils';
-import { KronoIcon } from '@/components/ui/KronoIcon';
 
 interface AdaptedActivitiesViewProps {
   activities: Activity[];
   students: StudentUser[];
   teacher: TeacherUser;
   onOpenNewActivityModal?: () => void;
-  onOpenAdaptActivityModal?: (activity: Activity) => void;
   onDeleteActivity?: (activityId: string) => void;
   onSaveCreatedActivity: (activity: Activity) => Promise<void> | void;
   onPlayGamePreview?: (activity: Activity) => void;
@@ -66,48 +50,55 @@ const getDefaultAeeDeadlineString = () => {
   return d.toISOString().split('T')[0];
 };
 
+export function formatShortActivityName(act: Activity, allList: Activity[]): string {
+  const adpList = allList.filter((a) => isActivityAdapted(a) || a.activityDomain === 'adapted_aee');
+  const idx = adpList.findIndex((a) => a.id === act.id);
+  const num = idx >= 0 ? idx + 1 : 1;
+  return `(AEE) AV${num}`;
+}
+
 export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
   activities,
   students,
   teacher,
-  onOpenAdaptActivityModal,
   onDeleteActivity,
   onSaveCreatedActivity,
   onPlayGamePreview,
 }) => {
-  // Menu Superior Exclusivo da Central AEE:
-  // 1. Radar Neuro-Pedagógico da Turma (Anti-Fragmentação)
-  // 2. Construtor AEE (Estrutura de Pedidos Adaptados)
-  // 3. Banco de Atividades Adaptadas Ativas
-  const [activeMenuTab, setActiveMenuTab] = useState<'radar' | 'builder' | 'bank'>('radar');
+  const [activeMenuTab, setActiveMenuTab] = useState<'builder' | 'bank'>('builder');
 
-  // Turmas da escola
   const turmasList = useMemo(() => getOriginalTurmas(students), [students]);
-  const [selectedTurma, setSelectedTurma] = useState<string>(turmasList[0] || '101');
+  const [selectedTurma, setSelectedTurma] = useState<string>('Todas');
+  const [isFilterExpanded, setIsFilterExpanded] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedActId, setExpandedActId] = useState<string | null>(null);
 
-  // Alunos PNE da turma selecionada
+  // Alunos PNE filtrados pela turma selecionada
   const pneStudentsInTurma = useMemo(() => {
-    return students.filter((s) => s.turma === selectedTurma && isStudentPNE(s));
+    return students.filter((s) => {
+      if (!isStudentPNE(s)) return false;
+      if (selectedTurma === 'Todas') return true;
+      return s.turma === selectedTurma || s.turma?.includes(selectedTurma);
+    });
   }, [students, selectedTurma]);
-
-  // Diagnóstico / Radar Neuro-Pedagógico Anti-Fragmentação
-  const classRecommendation = useMemo(() => {
-    return getRecommendedAdaptationForClass(selectedTurma, students);
-  }, [selectedTurma, students]);
 
   // Atividades Adaptadas existentes no banco
   const adaptedActivitiesList = useMemo(() => {
     return activities.filter((act) => {
       const adapted = isActivityAdapted(act) || act.activityDomain === 'adapted_aee';
       if (!adapted) return false;
-      if (selectedTurma === 'todas') return true;
-      return act.turma === selectedTurma || act.turma?.includes(selectedTurma);
+      if (selectedTurma !== 'Todas' && act.turma !== selectedTurma && !act.turma?.includes(selectedTurma)) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        return act.title.toLowerCase().includes(q) || act.description.toLowerCase().includes(q);
+      }
+      return true;
     });
-  }, [activities, selectedTurma]);
+  }, [activities, selectedTurma, searchQuery]);
 
   // Atividades Regulares da turma para vínculo opcional
   const regularActivitiesInTurma = useMemo(() => {
-    return activities.filter((act) => !isActivityAdapted(act) && act.activityDomain !== 'adapted_aee' && act.turma === selectedTurma);
+    return activities.filter((act) => !isActivityAdapted(act) && act.activityDomain !== 'adapted_aee' && (selectedTurma === 'Todas' || act.turma === selectedTurma));
   }, [activities, selectedTurma]);
 
   // ==========================================
@@ -117,40 +108,56 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
   const [aeeMaterial, setAeeMaterial] = useState('');
   const [aeeDeadline, setAeeDeadline] = useState(getDefaultAeeDeadlineString);
   const [selectedMechanic, setSelectedMechanic] = useState<AeeMechanic>('visual_cards');
+  const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>([]);
   
-  // Painel de Diretrizes Sensoriais e Cognitivas
   const [promptSettings, setPromptSettings] = useState<AeePromptSettings>({
     literalLanguage: true,
     cognitiveReduction: true,
-    uppercaseText: false,
+    uppercaseText: true,
     concreteExamples: true,
   });
 
-  // Gestor de Vínculo Opcional
   const [bindingMode, setBindingMode] = useState<'standalone' | 'linked'>('standalone');
   const [linkedParentId, setLinkedParentId] = useState<string>('');
 
-  // Estados de IA e Pré-Publicação
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedGameData, setGeneratedGameData] = useState<GameData | null>(null);
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
-  // Iniciar criação direta a partir da recomendação do radar
-  const handleApplyRecommendationToBuilder = () => {
-    if (classRecommendation.recommendedType === 'severe_playful') {
-      setSelectedMechanic('visual_cards');
-      setPromptSettings((prev) => ({ ...prev, uppercaseText: true, literalLanguage: true }));
+  // EFEITO INTELIGENTE: Pré-seleção de alunos com base na mecânica escolhida
+  useEffect(() => {
+    const autoSelectedIds = pneStudentsInTurma.filter((st) => {
+      const hasSevere = st.pneConditions?.some(isSevereCondition);
+      if (selectedMechanic === 'visual_cards' || selectedMechanic === 'social_story') {
+        return hasSevere; // Mecânicas severas selecionam laudos severos
+      } else {
+        return !hasSevere; // Mecânicas leves/moderadas selecionam TDAH, Dislexia, etc.
+      }
+    }).map((st) => st.id);
+
+    setSelectedTargetIds(autoSelectedIds);
+
+    // Ajuste automático das diretrizes
+    if (selectedMechanic === 'visual_cards') {
+      setPromptSettings({ literalLanguage: true, cognitiveReduction: true, uppercaseText: true, concreteExamples: true });
     } else {
-      setSelectedMechanic('binary_trail');
-      setPromptSettings((prev) => ({ ...prev, cognitiveReduction: true, literalLanguage: true }));
+      setPromptSettings((prev) => ({ ...prev, uppercaseText: false }));
     }
-    setActiveMenuTab('builder');
+  }, [selectedMechanic, pneStudentsInTurma]);
+
+  const handleToggleStudentTarget = (studentId: string) => {
+    setSelectedTargetIds((prev) => 
+      prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]
+    );
   };
 
-  // Gerar Atividade Adaptada com IA
   const handleGenerateAeeActivity = async () => {
     if (!aeeTopic.trim()) {
       alert('Informe o tema ou objetivo de aprendizagem para gerar a atividade adaptada.');
+      return;
+    }
+    if (selectedTargetIds.length === 0) {
+      alert('Selecione pelo menos um aluno PNE alvo para esta atividade.');
       return;
     }
 
@@ -167,7 +174,7 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
           supportMaterial: aeeMaterial.trim(),
           aeeMechanic: selectedMechanic,
           aeePromptSettings: promptSettings,
-          adaptationRecommendation: classRecommendation,
+          adaptationRecommendation: { recommendedType: selectedMechanic === 'visual_cards' ? 'severe_playful' : 'mild_moderate', summaryText: 'Adaptação dirigida manual' },
         }),
       });
 
@@ -185,7 +192,6 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
     }
   };
 
-  // Publicar Atividade Adaptada na Central
   const handlePublishAdaptedActivity = async () => {
     if (!generatedGameData) return;
 
@@ -193,32 +199,33 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
       id: `aee_${Date.now()}`,
       title: `[AEE Inclusiva] ${aeeTopic.trim() || 'Atividade Adaptada'}`,
       subject: teacher.subject || 'Educação Especial',
-      turma: selectedTurma,
+      turma: selectedTurma === 'Todas' ? pneStudentsInTurma[0]?.turma || 'Geral' : selectedTurma,
       deadline: aeeDeadline,
-      description: generatedGameData.introText || `Atividade adaptada de inclusão para os alunos PNE da turma ${selectedTurma}.`,
+      description: generatedGameData.introText || `Atividade adaptada de inclusão para os alunos PNE selecionados.`,
       supportMaterial: aeeMaterial || '',
       type: 'Jogo Avaliativo',
       status: 'Ativo',
       maxGrade: 10,
-      allowGroupWork: false, // Atividades adaptadas são individuais e focadas na autonomia
+      allowGroupWork: false,
       isAdapted: true,
       activityDomain: 'adapted_aee',
       isStandaloneAdaptation: bindingMode === 'standalone',
       adaptedFromId: bindingMode === 'linked' ? linkedParentId : undefined,
-      adaptationType: classRecommendation.recommendedType === 'severe_playful' ? 'severe_playful' : 'mild_moderate',
-      adaptationReason: classRecommendation.summaryText,
+      adaptationType: (selectedMechanic === 'visual_cards' || selectedMechanic === 'social_story') ? 'severe_playful' : 'mild_moderate',
+      adaptationReason: `Adaptado via Construtor para ${selectedTargetIds.length} aluno(s)`,
       aeeMechanic: selectedMechanic,
       aeePromptSettings: promptSettings,
       isGameActivity: true,
       gameData: generatedGameData,
       submissions: [],
       totalSubmissions: 0,
-      totalStudents: pneStudentsInTurma.length,
+      totalStudents: selectedTargetIds.length,
       pendingCorrection: 0,
+      includedPneStudentIds: selectedTargetIds, // Usando este campo para salvar os ALVOS exatos da adaptação
     };
 
     await onSaveCreatedActivity(newActivity);
-    setSuccessBanner(`✨ Atividade Inclusiva publicada com sucesso para os ${pneStudentsInTurma.length} alunos PNE da Turma ${selectedTurma}!`);
+    setSuccessBanner(`✨ Atividade Inclusiva publicada com sucesso para ${selectedTargetIds.length} aluno(s) PNE!`);
     setGeneratedGameData(null);
     setAeeTopic('');
     setAeeMaterial('');
@@ -243,221 +250,128 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
             Central de Atividades Adaptadas
           </h1>
           <p className="text-xs sm:text-sm text-muted mt-1 max-w-2xl leading-relaxed">
-            Área exclusiva para adaptação neuro-pedagógica com motor anti-fragmentação de laudos. Alunos regulares nunca têm acesso e a 2ª Professora acompanha tudo em tempo real.
+            Área exclusiva para adaptação neuro-pedagógica de estudantes PNE. Direcione metodologias inclusivas de forma cirúrgica para cada laudo.
           </p>
         </div>
       </div>
 
-      {/* Seletor de Turma em Abas/Pills (Padrão Unificado) */}
-      {turmasList.length > 0 && (
-        <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-border bg-surface space-y-2 shadow-md">
-          <label className="text-xs font-bold text-muted flex items-center gap-1.5 uppercase tracking-wider">
-            <Users className="w-3.5 h-3.5 text-primary" />
-            <span>Filtrar por Turma:</span>
-          </label>
-          <div className="flex flex-wrap items-center gap-2">
-            {turmasList.map((turmaCode) => {
-              const countStudents = students.filter((s) => s.turma === turmaCode).length;
-              const isSelected = selectedTurma === turmaCode;
-              return (
-                <button
-                  key={turmaCode}
-                  type="button"
-                  onClick={() => setSelectedTurma(turmaCode)}
-                  className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 border active:scale-95 ${
-                    isSelected
-                      ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 font-extrabold'
-                      : 'bg-background text-muted hover:text-foreground border-border hover:bg-surface-hover'
-                  }`}
-                >
-                  <span>Turma {getTurmaLabel(turmaCode)}</span>
-                  <span className="text-[10px] opacity-75 font-mono">({countStudents})</span>
-                </button>
-              );
-            })}
+      {/* Barra de Filtros Inteligente */}
+      <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-border bg-surface shadow-md space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex flex-1 items-center gap-2">
+            {activeMenuTab === 'bank' && (
+              <div className="relative flex-1 max-w-sm">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Buscar atividade adaptada..."
+                  className="w-full bg-background border border-border rounded-2xl pl-10 pr-4 py-2.5 text-xs text-foreground focus:outline-none focus:border-amber-400 transition-all"
+                />
+              </div>
+            )}
+            
+            <button
+              onClick={() => setIsFilterExpanded(!isFilterExpanded)}
+              className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 border cursor-pointer min-h-[44px] ${
+                isFilterExpanded || selectedTurma !== 'Todas'
+                  ? 'bg-amber-500/10 border-amber-500/50 text-amber-400'
+                  : 'bg-background hover:bg-surface-hover text-muted border-border'
+              }`}
+            >
+              <Filter className="w-4 h-4" />
+              <span className="hidden sm:inline">
+                {selectedTurma === 'Todas' ? 'Filtrar Turma' : `Turma ${selectedTurma}`}
+              </span>
+              {isFilterExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
+
+          {/* Menu Superior Exclusivo da Central AEE */}
+          <div className="flex items-center gap-1.5 p-1 bg-background rounded-2xl border border-border">
+            <button
+              type="button"
+              onClick={() => setActiveMenuTab('builder')}
+              className={`px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-2 cursor-pointer ${
+                activeMenuTab === 'builder'
+                  ? 'bg-amber-500 text-slate-900 shadow-sm'
+                  : 'text-muted hover:text-foreground hover:bg-surface-hover'
+              }`}
+            >
+              <Wrench className="w-4 h-4" />
+              <span className="hidden sm:inline">Criar Atividade</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveMenuTab('bank')}
+              className={`px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center gap-2 cursor-pointer ${
+                activeMenuTab === 'bank'
+                  ? 'bg-amber-500 text-slate-900 shadow-sm'
+                  : 'text-muted hover:text-foreground hover:bg-surface-hover'
+              }`}
+            >
+              <FolderOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">Atividades Criadas</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-black/20 text-current font-mono font-bold">
+                {adaptedActivitiesList.length}
+              </span>
+            </button>
           </div>
         </div>
-      )}
 
-      {/* Menu Superior Exclusivo da Central AEE */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
-        <button
-          type="button"
-          onClick={() => setActiveMenuTab('radar')}
-          className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer border ${
-            activeMenuTab === 'radar'
-              ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md ring-1 ring-amber-400/30'
-              : 'bg-surface hover:bg-surface-hover text-muted border-border'
-          }`}
-        >
-          <Dna className="w-4 h-4 text-amber-400" />
-          <span>🧬 Radar Neuro-Pedagógico (Anti-Fragmentação)</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveMenuTab('builder')}
-          className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer border ${
-            activeMenuTab === 'builder'
-              ? 'bg-primary/20 text-primary border-primary/50 shadow-md ring-1 ring-primary/30'
-              : 'bg-surface hover:bg-surface-hover text-muted border-border'
-          }`}
-        >
-          <Wrench className="w-4 h-4 text-primary" />
-          <span>🛠️ Construtor AEE (Pedidos Adaptados)</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveMenuTab('bank')}
-          className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer border ${
-            activeMenuTab === 'bank'
-              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-md ring-1 ring-emerald-400/30'
-              : 'bg-surface hover:bg-surface-hover text-muted border-border'
-          }`}
-        >
-          <FolderOpen className="w-4 h-4 text-emerald-400" />
-          <span>📂 Banco de Atividades Adaptadas</span>
-          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-surface-hover font-mono font-bold">
-            {adaptedActivitiesList.length}
-          </span>
-        </button>
+        {isFilterExpanded && (
+          <div className="pt-3 border-t border-border animate-fadeIn flex flex-wrap gap-2">
+            <button
+              onClick={() => { setSelectedTurma('Todas'); setIsFilterExpanded(false); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                selectedTurma === 'Todas' ? 'bg-amber-500 text-slate-900 border-amber-500' : 'bg-background text-muted border-border hover:border-amber-500/50'
+              }`}
+            >
+              Todas as Turmas
+            </button>
+            {turmasList.map((t) => (
+              <button
+                key={t}
+                onClick={() => { setSelectedTurma(t); setIsFilterExpanded(false); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
+                  selectedTurma === t ? 'bg-amber-500 text-slate-900 border-amber-500' : 'bg-background text-muted border-border hover:border-amber-500/50'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5 opacity-70" />
+                Turma {getTurmaLabel(t)}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Banner de Sucesso */}
       {successBanner && (
-        <div className="p-4 bg-emerald-500/15 border border-emerald-400/50 text-emerald-300 rounded-2xl text-xs sm:text-sm flex items-center gap-3 animate-fadeIn">
+        <div className="p-4 bg-emerald-500/15 border border-emerald-400/50 text-emerald-300 rounded-2xl text-xs sm:text-sm flex items-center gap-3 animate-fadeIn shadow-md">
           <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" />
           <span className="font-bold">{successBanner}</span>
         </div>
       )}
 
       {/* =========================================================================
-          ABA 1: RADAR NEURO-PEDAGÓGICO DA TURMA (ANTI-FRAGMENTAÇÃO DE LAUDOS)
-      ========================================================================= */}
-      {activeMenuTab === 'radar' && (
-        <div className="space-y-6 animate-fadeIn">
-          <div className="glass-panel p-6 rounded-3xl border border-amber-500/30 space-y-5 bg-gradient-to-br from-amber-500/5 via-surface to-background shadow-xl">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-border">
-              <div className="flex items-center gap-3">
-                <span className="p-3 rounded-2xl bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                  <Dna className="w-6 h-6" />
-                </span>
-                <div>
-                  <h2 className="text-lg sm:text-xl font-black text-foreground">
-                    Diagnóstico Neuro-Pedagógico da Turma {selectedTurma}
-                  </h2>
-                  <p className="text-xs text-muted">
-                    Motor Anti-Fragmentação: Agrupa todos os laudos da turma e recomenda uma única estratégia inclusiva integrada.
-                  </p>
-                </div>
-              </div>
-
-              <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-500/15 text-amber-300 border border-amber-500/30 w-fit">
-                {pneStudentsInTurma.length} Aluno(s) PNE na Turma
-              </span>
-            </div>
-
-            {/* Resumo da Recomendação Anti-Fragmentação */}
-            <div className="p-4 bg-surface rounded-2xl border border-border space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
-                  Diretriz Pedagógica Consolidada:
-                </span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-bold">
-                  {classRecommendation.recommendedType === 'severe_playful'
-                    ? 'Adaptação Lúdica / Visual (Laudos Severos Presentes)'
-                    : 'Adaptação Curricular Leve/Moderada (Cognição Preservada)'}
-                </span>
-              </div>
-              <p className="text-xs sm:text-sm text-foreground leading-relaxed font-medium">
-                {classRecommendation.summaryText}
-              </p>
-            </div>
-
-            {/* Lista de Alunos e Laudos Agrupados */}
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold text-muted uppercase tracking-wider">
-                Alunos com Laudo PNE / AEE nesta Turma:
-              </h3>
-
-              {pneStudentsInTurma.length === 0 ? (
-                <div className="p-6 text-center text-xs text-muted border border-dashed border-border rounded-2xl">
-                  Nenhum aluno com laudo PNE cadastrado na Turma {selectedTurma}.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                  {pneStudentsInTurma.map((st) => (
-                    <div
-                      key={st.id}
-                      className="p-3.5 rounded-2xl bg-surface border border-border flex items-start gap-3 shadow-sm"
-                    >
-                      <img
-                        src={st.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'}
-                        alt={st.fullName}
-                        className="w-10 h-10 rounded-full object-cover border border-amber-500/40 shrink-0"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <strong className="text-xs font-bold text-foreground block truncate">
-                          {st.fullName}
-                        </strong>
-                        <span className="text-[10px] text-muted block">Matrícula: {st.matricula}</span>
-                        <div className="flex flex-wrap gap-1 mt-1.5">
-                          {(st.pneConditions && st.pneConditions.length > 0
-                            ? st.pneConditions
-                            : ['Laudo PNE Geral']
-                          ).map((c, idx) => (
-                            <span
-                              key={idx}
-                              className={`text-[9px] px-1.5 py-0.2 rounded-md font-bold ${
-                                isSevereCondition(c)
-                                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                              }`}
-                            >
-                              {c}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Ação Rápida: Transição Direta para o Construtor */}
-            <div className="pt-2 flex justify-end">
-              <button
-                type="button"
-                onClick={handleApplyRecommendationToBuilder}
-                className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer"
-              >
-                <span>Aplicar Diretriz no Construtor AEE</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* =========================================================================
-          ABA 2: CONSTRUTOR AEE (ESTRUTURA DE PEDIDOS ADAPTADOS COM IA)
+          ABA 1: CONSTRUTOR AEE (ESTRUTURA DE PEDIDOS ADAPTADOS COM IA E ALUNOS)
       ========================================================================= */}
       {activeMenuTab === 'builder' && (
         <div className="space-y-6 max-w-4xl mx-auto animate-fadeIn">
-          <div className="glass-panel p-6 rounded-3xl border border-primary/30 space-y-6 shadow-xl bg-surface">
+          <div className="glass-panel p-6 rounded-3xl border border-amber-500/30 space-y-6 shadow-xl bg-surface">
+            
             <div className="border-b border-border pb-4">
               <div className="flex items-center gap-3">
-                <span className="p-2.5 rounded-2xl bg-primary/10 text-primary border border-primary/20">
+                <span className="p-2.5 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
                   <Wrench className="w-6 h-6" />
                 </span>
                 <div>
                   <h2 className="text-xl font-black text-foreground">
-                    Construtor de Atividades Adaptadas (Central AEE)
+                    Construtor de Atividades Adaptadas
                   </h2>
                   <p className="text-xs text-muted">
-                    Configure a mecânica inclusiva, ajuste as diretrizes cognitivas e compile a atividade com apoio pedagógico.
+                    Selecione a mecânica, os alunos alvo e gere o conteúdo acessível.
                   </p>
                 </div>
               </div>
@@ -465,8 +379,8 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
 
             {/* 1. Escolha da Mecânica Inclusiva */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-foreground block">
-                1. Escolha a Mecânica Pedagógica Inclusiva:
+              <label className="text-xs font-bold text-foreground block uppercase tracking-wider">
+                1. Selecione a Mecânica Pedagógica Inclusiva:
               </label>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -484,7 +398,7 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
                     <span className="text-[10px] px-2 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-extrabold">Laudos Severos</span>
                   </div>
                   <p className="text-[11px] text-muted leading-snug">
-                    Cartões ilustrados com emojis gigantes e resposta por toque visual direto.
+                    Cartões ilustrados gigantes. Seleciona alunos severos automaticamente.
                   </p>
                 </button>
 
@@ -498,200 +412,135 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
                   }`}
                 >
                   <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-primary">
-                    <span>⚡ Trilha Guiada de 2 Escolhas</span>
+                    <span>⚡ Trilha de 2 Escolhas</span>
                     <span className="text-[10px] px-2 py-0.2 rounded-full bg-primary/20 text-primary font-extrabold">Leve / Moderado</span>
                   </div>
                   <p className="text-[11px] text-muted leading-snug">
-                    Apenas 2 alternativas contrastantes, eliminando sobrecarga cognitiva.
-                  </p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedMechanic('social_story')}
-                  className={`p-3.5 rounded-2xl border text-left space-y-1 transition-all cursor-pointer ${
-                    selectedMechanic === 'social_story'
-                      ? 'bg-purple-500/20 border-purple-400 ring-2 ring-purple-400/30'
-                      : 'bg-background hover:bg-surface-hover border-border'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-purple-400">
-                    <span>📖 História Social Cotidiana</span>
-                    <span className="text-[10px] px-2 py-0.2 rounded-full bg-purple-500/20 text-purple-300 font-extrabold">Foco TEA</span>
-                  </div>
-                  <p className="text-[11px] text-muted leading-snug">
-                    Narrativa linear passo a passo com situações concretas do dia a dia.
-                  </p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedMechanic('block_builder')}
-                  className={`p-3.5 rounded-2xl border text-left space-y-1 transition-all cursor-pointer ${
-                    selectedMechanic === 'block_builder'
-                      ? 'bg-emerald-500/20 border-emerald-400 ring-2 ring-emerald-400/30'
-                      : 'bg-background hover:bg-surface-hover border-border'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-emerald-400">
-                    <span>🧱 Oficina de Blocos de Ideias</span>
-                    <span className="text-[10px] px-2 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-extrabold">Sem Digitação</span>
-                  </div>
-                  <p className="text-[11px] text-muted leading-snug">
-                    Montagem estruturada de ideias por blocos conceituais guiados.
+                    Apenas 2 alternativas. Seleciona alunos leves/TDAH automaticamente.
                   </p>
                 </button>
               </div>
             </div>
 
-            {/* 2. Painel de Diretrizes Sensoriais e Cognitivas */}
+            {/* 2. Seleção Inteligente de Alunos Alvo */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-foreground uppercase tracking-wider">
+                  2. Alunos PNE Alvo da Atividade:
+                </label>
+                <span className="text-[10px] font-bold text-amber-400">
+                  {selectedTargetIds.length} selecionado(s)
+                </span>
+              </div>
+
+              {pneStudentsInTurma.length === 0 ? (
+                <div className="p-4 text-center text-xs text-muted border border-dashed border-border rounded-2xl bg-background">
+                  Nenhum aluno PNE encontrado para o filtro atual. Se precisar, altere o filtro de Turmas no topo.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+                  {pneStudentsInTurma.map((st) => {
+                    const isSelected = selectedTargetIds.includes(st.id);
+                    const isSevere = st.pneConditions?.some(isSevereCondition);
+
+                    return (
+                      <button
+                        key={st.id}
+                        type="button"
+                        onClick={() => handleToggleStudentTarget(st.id)}
+                        className={`p-2.5 rounded-xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-amber-500/10 border-amber-500/40 shadow-sm'
+                            : 'bg-background border-border hover:bg-surface-hover'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${isSelected ? 'bg-amber-500 border-amber-500 text-slate-900' : 'border-muted'}`}>
+                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className={`text-xs font-bold truncate block ${isSelected ? 'text-foreground' : 'text-muted'}`}>
+                            {st.fullName}
+                          </span>
+                          <span className={`text-[10px] truncate block ${isSevere ? 'text-rose-400' : 'text-primary'}`}>
+                            {st.pneConditions?.join(', ') || 'Laudo PNE'}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 3. Diretrizes Cognitivas */}
             <div className="p-4 bg-background rounded-2xl border border-border space-y-3">
               <label className="text-xs font-bold text-foreground block">
-                2. Diretrizes Sensoriais e Cognitivas (AEE):
+                3. Diretrizes Sensoriais e Cognitivas (AEE):
               </label>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <label className="flex items-center gap-2.5 p-2 rounded-xl bg-surface border border-border cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={promptSettings.literalLanguage}
-                    onChange={(e) => setPromptSettings({ ...promptSettings, literalLanguage: e.target.checked })}
-                    className="accent-primary w-4 h-4 rounded"
-                  />
+                  <input type="checkbox" checked={promptSettings.literalLanguage} onChange={(e) => setPromptSettings({ ...promptSettings, literalLanguage: e.target.checked })} className="accent-amber-500 w-4 h-4 rounded" />
                   <span>Linguagem 100% Literal (Sem Metáforas)</span>
                 </label>
-
                 <label className="flex items-center gap-2.5 p-2 rounded-xl bg-surface border border-border cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={promptSettings.cognitiveReduction}
-                    onChange={(e) => setPromptSettings({ ...promptSettings, cognitiveReduction: e.target.checked })}
-                    className="accent-primary w-4 h-4 rounded"
-                  />
+                  <input type="checkbox" checked={promptSettings.cognitiveReduction} onChange={(e) => setPromptSettings({ ...promptSettings, cognitiveReduction: e.target.checked })} className="accent-amber-500 w-4 h-4 rounded" />
                   <span>Enunciados Curtos (Redução Cognitiva)</span>
                 </label>
-
                 <label className="flex items-center gap-2.5 p-2 rounded-xl bg-surface border border-border cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={promptSettings.uppercaseText}
-                    onChange={(e) => setPromptSettings({ ...promptSettings, uppercaseText: e.target.checked })}
-                    className="accent-primary w-4 h-4 rounded"
-                  />
+                  <input type="checkbox" checked={promptSettings.uppercaseText} onChange={(e) => setPromptSettings({ ...promptSettings, uppercaseText: e.target.checked })} className="accent-amber-500 w-4 h-4 rounded" />
                   <span>Texto em Caixa Alta (MAIÚSCULAS)</span>
                 </label>
-
                 <label className="flex items-center gap-2.5 p-2 rounded-xl bg-surface border border-border cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={promptSettings.concreteExamples}
-                    onChange={(e) => setPromptSettings({ ...promptSettings, concreteExamples: e.target.checked })}
-                    className="accent-primary w-4 h-4 rounded"
-                  />
+                  <input type="checkbox" checked={promptSettings.concreteExamples} onChange={(e) => setPromptSettings({ ...promptSettings, concreteExamples: e.target.checked })} className="accent-amber-500 w-4 h-4 rounded" />
                   <span>Exemplos da Vida Diária e Cotidiano</span>
                 </label>
               </div>
             </div>
 
-            {/* 3. Tema e Conteúdo */}
+            {/* 4. Tema e Conteúdo */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-bold text-foreground block mb-1">Tema / Conteúdo Adaptado</label>
-                <input
-                  type="text"
-                  value={aeeTopic}
-                  onChange={(e) => setAeeTopic(e.target.value)}
-                  placeholder="Ex: Cidadania e Regras de Convivência"
-                  className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground focus:outline-none focus:border-primary"
-                />
+                <label className="text-xs font-bold text-foreground block mb-1">Tema / Conteúdo</label>
+                <input type="text" value={aeeTopic} onChange={(e) => setAeeTopic(e.target.value)} placeholder="Ex: Cidadania e Regras..." className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground focus:outline-none focus:border-amber-400" />
               </div>
-
               <div>
                 <label className="text-xs font-bold text-foreground block mb-1">Prazo de Entrega</label>
-                <input
-                  type="date"
-                  value={aeeDeadline}
-                  onChange={(e) => setAeeDeadline(e.target.value)}
-                  className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground focus:outline-none focus:border-primary"
-                />
+                <input type="date" value={aeeDeadline} onChange={(e) => setAeeDeadline(e.target.value)} className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground focus:outline-none focus:border-amber-400" />
               </div>
             </div>
 
-            <div>
-              <label className="text-xs font-bold text-foreground block mb-1">Material de Apoio / Instruções para a IA (Opcional)</label>
-              <textarea
-                value={aeeMaterial}
-                onChange={(e) => setAeeMaterial(e.target.value)}
-                rows={2}
-                placeholder="Insira conceitos centrais ou termos específicos da aula para orientar a adaptação..."
-                className="w-full bg-background border border-border rounded-xl p-3 text-xs text-foreground focus:outline-none focus:border-primary"
-              />
-            </div>
-
-            {/* 4. Gestor de Vínculo Opcional */}
+            {/* 5. Vínculo (Opcional) */}
             <div className="p-4 bg-background rounded-2xl border border-border space-y-3">
               <label className="text-xs font-bold text-foreground flex items-center gap-2">
-                <Link2 className="w-4 h-4 text-primary" />
-                <span>Gestão de Vínculo com Atividades Regulares da Turma:</span>
+                <Link2 className="w-4 h-4 text-amber-500" />
+                <span>Vínculo com Atividade Regular (Opcional):</span>
               </label>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label
-                  className={`p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-all ${
-                    bindingMode === 'standalone'
-                      ? 'bg-primary/10 border-primary text-foreground'
-                      : 'bg-surface border-border text-muted'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="bindingModeAee"
-                    checked={bindingMode === 'standalone'}
-                    onChange={() => setBindingMode('standalone')}
-                    className="accent-primary"
-                  />
+                <label className={`p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-all ${bindingMode === 'standalone' ? 'bg-amber-500/10 border-amber-500 text-foreground' : 'bg-surface border-border text-muted'}`}>
+                  <input type="radio" checked={bindingMode === 'standalone'} onChange={() => setBindingMode('standalone')} className="accent-amber-500" />
                   <div>
-                    <strong className="text-xs block">Atividade AEE Independente</strong>
-                    <span className="text-[10px] text-muted">Sem vínculo com provas regulares da turma.</span>
+                    <strong className="text-xs block">Atividade Independente</strong>
+                    <span className="text-[10px] text-muted">Apenas para os PNEs selecionados.</span>
                   </div>
                 </label>
-
-                <label
-                  className={`p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-all ${
-                    bindingMode === 'linked'
-                      ? 'bg-primary/10 border-primary text-foreground'
-                      : 'bg-surface border-border text-muted'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="bindingModeAee"
-                    checked={bindingMode === 'linked'}
-                    onChange={() => setBindingMode('linked')}
-                    className="accent-primary"
-                  />
+                <label className={`p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-all ${bindingMode === 'linked' ? 'bg-amber-500/10 border-amber-500 text-foreground' : 'bg-surface border-border text-muted'}`}>
+                  <input type="radio" checked={bindingMode === 'linked'} onChange={() => setBindingMode('linked')} className="accent-amber-500" />
                   <div>
-                    <strong className="text-xs block">Vincular a uma Prova da Turma</strong>
-                    <span className="text-[10px] text-muted">Substitui formalmente a avaliação mãe para os PNEs.</span>
+                    <strong className="text-xs block">Substituir Prova Regular</strong>
+                    <span className="text-[10px] text-muted">Isenta o PNE da prova formal da turma.</span>
                   </div>
                 </label>
               </div>
 
               {bindingMode === 'linked' && (
-                <div className="pt-2 animate-fadeIn">
-                  <select
-                    value={linkedParentId}
-                    onChange={(e) => setLinkedParentId(e.target.value)}
-                    className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:outline-none"
-                  >
-                    <option value="">-- Selecione a atividade formal da turma {selectedTurma} --</option>
-                    {regularActivitiesInTurma.map((act) => (
-                      <option key={act.id} value={act.id}>
-                        {act.title} (Prazo: {act.deadline})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <select value={linkedParentId} onChange={(e) => setLinkedParentId(e.target.value)} className="w-full bg-surface border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:outline-none">
+                  <option value="">-- Selecione a avaliação formal --</option>
+                  {regularActivitiesInTurma.map((act) => (
+                    <option key={act.id} value={act.id}>{act.title} (Turma {act.turma})</option>
+                  ))}
+                </select>
               )}
             </div>
 
@@ -700,10 +549,10 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
               type="button"
               onClick={handleGenerateAeeActivity}
               disabled={isGenerating}
-              className="w-full py-3.5 bg-gradient-to-r from-amber-500 via-primary to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 font-black text-sm rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className="w-full py-3.5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-sm rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
               <Sparkles className="w-5 h-5 fill-current" />
-              <span>{isGenerating ? 'Compilando 6 Estágios Adaptados...' : 'Gerar 6 Fases AEE com IA ✨'}</span>
+              <span>{isGenerating ? 'Compilando Adaptação...' : 'Gerar Fases AEE com IA ✨'}</span>
             </button>
           </div>
 
@@ -714,42 +563,14 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                   <h3 className="text-base font-bold text-foreground">
-                    Atividade Adaptada Compilada ({generatedGameData.stages.length} Fases)
+                    Atividade Compilada ({generatedGameData.stages.length} Fases)
                   </h3>
                 </div>
                 <span className="text-xs font-bold text-emerald-400">Pronta para Publicação</span>
               </div>
-
-              <p className="text-xs text-muted leading-relaxed italic">
-                &ldquo;{generatedGameData.introText}&rdquo;
-              </p>
-
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                {generatedGameData.stages.map((stg, idx) => (
-                  <div key={idx} className="p-3 bg-background rounded-xl border border-border text-xs space-y-1">
-                    <strong className="text-foreground block">{stg.title}</strong>
-                    <p className="text-muted">{stg.scenario}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
-                <button
-                  type="button"
-                  onClick={() => setGeneratedGameData(null)}
-                  className="px-4 py-2 bg-surface hover:bg-surface-hover text-muted rounded-xl text-xs font-bold"
-                >
-                  Descartar
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handlePublishAdaptedActivity}
-                  className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>Publicar para os Alunos PNE 🚀</span>
-                </button>
+              <div className="flex items-center justify-end gap-3 pt-3">
+                <button type="button" onClick={() => setGeneratedGameData(null)} className="px-4 py-2 bg-background hover:bg-surface-hover text-muted rounded-xl text-xs font-bold border border-border">Descartar</button>
+                <button type="button" onClick={handlePublishAdaptedActivity} className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl shadow-md flex items-center gap-2 cursor-pointer"><Check className="w-4 h-4" />Publicar aos {selectedTargetIds.length} Aluno(s)</button>
               </div>
             </div>
           )}
@@ -757,104 +578,81 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
       )}
 
       {/* =========================================================================
-          ABA 3: BANCO DE ATIVIDADES ADAPTADAS ATIVAS
+          ABA 2: BANCO DE ATIVIDADES ADAPTADAS ATIVAS (MINIMALISTA)
       ========================================================================= */}
       {activeMenuTab === 'bank' && (
-        <div className="space-y-6 animate-fadeIn">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base sm:text-lg font-black text-foreground">
-              Atividades Adaptadas da Turma {selectedTurma}
-            </h2>
-            <span className="text-xs text-muted">
-              Total: <strong>{adaptedActivitiesList.length}</strong> atividades inclusivas
-            </span>
-          </div>
-
+        <div className="space-y-4 animate-fadeIn">
           {adaptedActivitiesList.length === 0 ? (
-            <div className="p-12 text-center rounded-3xl border border-dashed border-border bg-surface text-muted space-y-3">
-              <FolderOpen className="w-12 h-12 mx-auto text-muted/50" />
-              <p className="text-sm font-bold text-foreground">Nenhuma atividade adaptada criada para esta turma.</p>
+            <div className="p-12 text-center rounded-3xl border border-dashed border-border bg-surface text-muted space-y-3 shadow-sm">
+              <FolderOpen className="w-12 h-12 mx-auto opacity-50" />
+              <p className="text-base font-bold text-foreground">Nenhuma atividade adaptada encontrada.</p>
               <p className="text-xs text-muted max-w-md mx-auto">
-                Utilize a aba &ldquo;Construtor AEE&rdquo; para criar tarefas inclusivas alinhadas aos laudos dos estudantes.
+                Utilize a aba "Criar Atividade" para gerar tarefas inclusivas focadas em laudos específicos.
               </p>
-              <button
-                type="button"
-                onClick={() => setActiveMenuTab('builder')}
-                className="px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary-hover cursor-pointer"
-              >
-                Abrir Construtor AEE
-              </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="space-y-4">
               {adaptedActivitiesList.map((act) => {
+                const isExpanded = expandedActId === act.id;
                 const subsCount = act.submissions?.length || 0;
-                const totalTarget = pneStudentsInTurma.length || 1;
+                const totalTarget = act.includedPneStudentIds?.length || 1;
+                const shortName = formatShortActivityName(act, adaptedActivitiesList);
+                const progress = totalTarget > 0 ? Math.round((subsCount / totalTarget) * 100) : 0;
 
                 return (
-                  <div
-                    key={act.id}
-                    className="p-5 rounded-2xl bg-surface border border-border hover:border-amber-500/40 transition-all shadow-md flex flex-col justify-between gap-4 group"
-                  >
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                          {act.adaptationType === 'severe_playful' ? 'Lúdico / Visual' : 'Cognição Adaptada'}
-                        </span>
-
-                        <span className="text-[11px] font-bold text-muted">
-                          Turma {act.turma}
-                        </span>
-                      </div>
-
-                      <h3 className="text-sm sm:text-base font-extrabold text-foreground group-hover:text-amber-400 transition-colors line-clamp-2">
-                        {act.title}
-                      </h3>
-
-                      <p className="text-xs text-muted line-clamp-2 leading-relaxed">
-                        {act.description}
-                      </p>
-
-                      <div className="flex items-center gap-3 pt-2 text-[11px] text-muted border-t border-border">
-                        <span>PNEs Realizados: <strong className="text-emerald-400">{subsCount}/{totalTarget}</strong></span>
-                        {act.adaptedFromId && (
-                          <>
-                            <span>•</span>
-                            <span className="text-primary flex items-center gap-1">
-                              <Link2 className="w-3 h-3" /> Vinculada
+                  <div key={act.id} className="glass-panel rounded-3xl border border-border bg-surface shadow-md transition-all overflow-hidden">
+                    <div className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="flex items-start gap-4 min-w-0 flex-1">
+                        <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border shadow-sm bg-amber-500/10 border-amber-500/30 text-amber-500">
+                          <Sparkles className="w-6 h-6" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                              {shortName}
                             </span>
-                          </>
+                            <span className="text-[10px] font-bold text-muted border border-border px-2 py-0.5 rounded-md">
+                              {act.adaptationType === 'severe_playful' ? 'Lúdico Visual' : 'Cognição Adaptada'}
+                            </span>
+                          </div>
+                          <h3 className="text-base sm:text-lg font-black text-foreground truncate">{act.title}</h3>
+                          
+                          <div className="flex items-center gap-3 mt-2 max-w-sm">
+                            <div className="flex-1 h-1.5 bg-background rounded-full overflow-hidden border border-border">
+                              <div className="h-full rounded-full bg-amber-400" style={{ width: `${progress}%` }} />
+                            </div>
+                            <span className="text-[10px] font-bold text-muted whitespace-nowrap">
+                              {subsCount}/{totalTarget} entregas
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 border-t md:border-t-0 border-border pt-3 md:pt-0 mt-3 md:mt-0">
+                        {onPlayGamePreview && (
+                          <button onClick={() => onPlayGamePreview(act)} className="flex-1 md:flex-none py-2 px-4 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2">
+                            <Play className="w-4 h-4" /> <span>Testar</span>
+                          </button>
                         )}
+                        <button onClick={() => setExpandedActId(isExpanded ? null : act.id)} className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center ${isExpanded ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-background border-border text-muted hover:text-foreground hover:bg-surface-hover'}`} title="Detalhes">
+                          {isExpanded ? <ChevronUp className="w-5 h-5" /> : <Settings className="w-5 h-5" />}
+                        </button>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between gap-2 pt-3 border-t border-border">
-                      {onPlayGamePreview && (
-                        <button
-                          type="button"
-                          onClick={() => onPlayGamePreview(act)}
-                          className="flex-1 py-2 px-3 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-xs rounded-xl border border-amber-500/30 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                        >
-                          <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>Testar AEE</span>
-                        </button>
-                      )}
-
-                      {onDeleteActivity && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (confirm(`Deseja realmente excluir a atividade adaptada "${act.title}"?`)) {
-                              onDeleteActivity(act.id);
-                            }
-                          }}
-                          className="p-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-xl border border-rose-500/30 transition-all cursor-pointer"
-                          title="Excluir atividade adaptada"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
+                    {isExpanded && (
+                      <div className="p-4 sm:p-5 border-t border-border bg-background/50 animate-fadeIn space-y-4">
+                        <div className="text-xs space-y-1">
+                          <p className="text-muted"><strong>Alunos Alvo (PNE):</strong> {act.includedPneStudentIds?.length || 0} vinculados.</p>
+                          <p className="text-muted"><strong>Descrição:</strong> {act.description}</p>
+                        </div>
+                        <div className="pt-3 border-t border-border flex justify-end">
+                          <button onClick={() => { if(confirm(`Deseja excluir a atividade adaptada "${act.title}"?`)) onDeleteActivity?.(act.id); }} className="px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer">
+                            <Trash2 className="w-3.5 h-3.5" /> Excluir
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
