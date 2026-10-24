@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Sparkles,
   Users,
@@ -15,7 +15,6 @@ import {
   Check,
   Play,
   Trash2,
-  Eye,
   Settings
 } from 'lucide-react';
 import {
@@ -73,7 +72,6 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedActId, setExpandedActId] = useState<string | null>(null);
 
-  // Alunos PNE filtrados pela turma selecionada
   const pneStudentsInTurma = useMemo(() => {
     return students.filter((s) => {
       if (!isStudentPNE(s)) return false;
@@ -82,7 +80,6 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
     });
   }, [students, selectedTurma]);
 
-  // Atividades Adaptadas existentes no banco
   const adaptedActivitiesList = useMemo(() => {
     return activities.filter((act) => {
       const adapted = isActivityAdapted(act) || act.activityDomain === 'adapted_aee';
@@ -96,14 +93,10 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
     });
   }, [activities, selectedTurma, searchQuery]);
 
-  // Atividades Regulares da turma para vínculo opcional
   const regularActivitiesInTurma = useMemo(() => {
     return activities.filter((act) => !isActivityAdapted(act) && act.activityDomain !== 'adapted_aee' && (selectedTurma === 'Todas' || act.turma === selectedTurma));
   }, [activities, selectedTurma]);
 
-  // ==========================================
-  // ESTADOS DO CONSTRUTOR AEE
-  // ==========================================
   const [aeeTopic, setAeeTopic] = useState('');
   const [aeeMaterial, setAeeMaterial] = useState('');
   const [aeeDeadline, setAeeDeadline] = useState(getDefaultAeeDeadlineString);
@@ -124,20 +117,18 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
   const [generatedGameData, setGeneratedGameData] = useState<GameData | null>(null);
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
-  // EFEITO INTELIGENTE: Pré-seleção de alunos com base na mecânica escolhida
   useEffect(() => {
     const autoSelectedIds = pneStudentsInTurma.filter((st) => {
       const hasSevere = st.pneConditions?.some(isSevereCondition);
       if (selectedMechanic === 'visual_cards' || selectedMechanic === 'social_story') {
-        return hasSevere; // Mecânicas severas selecionam laudos severos
+        return hasSevere;
       } else {
-        return !hasSevere; // Mecânicas leves/moderadas selecionam TDAH, Dislexia, etc.
+        return !hasSevere;
       }
     }).map((st) => st.id);
 
     setSelectedTargetIds(autoSelectedIds);
 
-    // Ajuste automático das diretrizes
     if (selectedMechanic === 'visual_cards') {
       setPromptSettings({ literalLanguage: true, cognitiveReduction: true, uppercaseText: true, concreteExamples: true });
     } else {
@@ -221,7 +212,7 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
       totalSubmissions: 0,
       totalStudents: selectedTargetIds.length,
       pendingCorrection: 0,
-      includedPneStudentIds: selectedTargetIds, // Usando este campo para salvar os ALVOS exatos da adaptação
+      includedPneStudentIds: selectedTargetIds,
     };
 
     await onSaveCreatedActivity(newActivity);
@@ -235,7 +226,6 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
 
   return (
     <div className="space-y-6 sm:space-y-8 animate-fadeIn pb-12">
-      {/* Header Central AEE */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-border">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -255,7 +245,6 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
         </div>
       </div>
 
-      {/* Barra de Filtros Inteligente */}
       <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-border bg-surface shadow-md space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex flex-1 items-center gap-2">
@@ -288,7 +277,6 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
             </button>
           </div>
 
-          {/* Menu Superior Exclusivo da Central AEE */}
           <div className="flex items-center gap-1.5 p-1 bg-background rounded-2xl border border-border">
             <button
               type="button"
@@ -354,9 +342,6 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
         </div>
       )}
 
-      {/* =========================================================================
-          ABA 1: CONSTRUTOR AEE (ESTRUTURA DE PEDIDOS ADAPTADOS COM IA E ALUNOS)
-      ========================================================================= */}
       {activeMenuTab === 'builder' && (
         <div className="space-y-6 max-w-4xl mx-auto animate-fadeIn">
           <div className="glass-panel p-6 rounded-3xl border border-amber-500/30 space-y-6 shadow-xl bg-surface">
@@ -377,7 +362,6 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
               </div>
             </div>
 
-            {/* 1. Escolha da Mecânica Inclusiva */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-foreground block uppercase tracking-wider">
                 1. Selecione a Mecânica Pedagógica Inclusiva:
@@ -422,7 +406,6 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
               </div>
             </div>
 
-            {/* 2. Seleção Inteligente de Alunos Alvo */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-foreground uppercase tracking-wider">
@@ -472,7 +455,6 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
               )}
             </div>
 
-            {/* 3. Diretrizes Cognitivas */}
             <div className="p-4 bg-background rounded-2xl border border-border space-y-3">
               <label className="text-xs font-bold text-foreground block">
                 3. Diretrizes Sensoriais e Cognitivas (AEE):
@@ -498,7 +480,6 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
               </div>
             </div>
 
-            {/* 4. Tema e Conteúdo */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-bold text-foreground block mb-1">Tema / Conteúdo</label>
@@ -510,7 +491,6 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
               </div>
             </div>
 
-            {/* 5. Vínculo (Opcional) */}
             <div className="p-4 bg-background rounded-2xl border border-border space-y-3">
               <label className="text-xs font-bold text-foreground flex items-center gap-2">
                 <Link2 className="w-4 h-4 text-amber-500" />
@@ -544,7 +524,6 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
               )}
             </div>
 
-            {/* Botão de Compilação */}
             <button
               type="button"
               onClick={handleGenerateAeeActivity}
@@ -556,7 +535,6 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
             </button>
           </div>
 
-          {/* Pré-Visualização e Confirmação da Publicação */}
           {generatedGameData && (
             <div className="p-6 bg-surface border-2 border-emerald-500/50 rounded-3xl shadow-xl space-y-4 animate-fadeIn">
               <div className="flex items-center justify-between border-b border-border pb-3">
@@ -577,9 +555,6 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
         </div>
       )}
 
-      {/* =========================================================================
-          ABA 2: BANCO DE ATIVIDADES ADAPTADAS ATIVAS (MINIMALISTA)
-      ========================================================================= */}
       {activeMenuTab === 'bank' && (
         <div className="space-y-4 animate-fadeIn">
           {adaptedActivitiesList.length === 0 ? (
