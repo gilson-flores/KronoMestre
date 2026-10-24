@@ -15,7 +15,12 @@ import {
   Check,
   Play,
   Trash2,
-  Settings
+  Settings,
+  Eye,
+  X,
+  ArrowLeft,
+  ArrowRight,
+  RotateCcw
 } from 'lucide-react';
 import {
   Activity,
@@ -116,6 +121,31 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedGameData, setGeneratedGameData] = useState<GameData | null>(null);
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
+
+  // ==========================================
+  // ESTADOS DO SIMULADOR INTERATIVO AEE
+  // ==========================================
+  const [simulatedActivity, setSimulatedActivity] = useState<{
+    title: string;
+    mechanic: AeeMechanic;
+    gameData: GameData;
+  } | null>(null);
+  const [simStageIndex, setSimStageIndex] = useState(0);
+  const [simSelectedOption, setSimSelectedOption] = useState<number | null>(null);
+  const [simFeedback, setSimFeedback] = useState<{ text: string; isCorrect: boolean } | null>(null);
+  const [simViewMode, setSimViewMode] = useState<'severe' | 'mild'>('severe');
+
+  const openSimulation = (title: string, mechanic: AeeMechanic, gameData?: GameData) => {
+    if (!gameData || !gameData.stages || gameData.stages.length === 0) {
+      alert('Esta atividade não possui fases interativas estruturadas para simulação.');
+      return;
+    }
+    setSimulatedActivity({ title, mechanic, gameData });
+    setSimStageIndex(0);
+    setSimSelectedOption(null);
+    setSimFeedback(null);
+    setSimViewMode(mechanic === 'visual_cards' || mechanic === 'social_story' ? 'severe' : 'mild');
+  };
 
   useEffect(() => {
     const autoSelectedIds = pneStudentsInTurma.filter((st) => {
@@ -537,18 +567,52 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
 
           {generatedGameData && (
             <div className="p-6 bg-surface border-2 border-emerald-500/50 rounded-3xl shadow-xl space-y-4 animate-fadeIn">
-              <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-3 gap-2">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                   <h3 className="text-base font-bold text-foreground">
                     Atividade Compilada ({generatedGameData.stages.length} Fases)
                   </h3>
                 </div>
-                <span className="text-xs font-bold text-emerald-400">Pronta para Publicação</span>
+                <span className="text-xs font-bold text-emerald-400">Pronta para Simulação e Publicação</span>
               </div>
-              <div className="flex items-center justify-end gap-3 pt-3">
-                <button type="button" onClick={() => setGeneratedGameData(null)} className="px-4 py-2 bg-background hover:bg-surface-hover text-muted rounded-xl text-xs font-bold border border-border">Descartar</button>
-                <button type="button" onClick={handlePublishAdaptedActivity} className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl shadow-md flex items-center gap-2 cursor-pointer"><Check className="w-4 h-4" />Publicar aos {selectedTargetIds.length} Aluno(s)</button>
+
+              <p className="text-xs text-muted leading-relaxed">
+                {generatedGameData.introText}
+              </p>
+
+              <div className="flex flex-wrap items-center justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setGeneratedGameData(null)}
+                  className="px-4 py-2.5 bg-background hover:bg-surface-hover text-muted rounded-xl text-xs font-bold border border-border cursor-pointer"
+                >
+                  Descartar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    openSimulation(
+                      `[AEE Inclusiva] ${aeeTopic.trim() || 'Atividade Adaptada'}`,
+                      selectedMechanic,
+                      generatedGameData
+                    )
+                  }
+                  className="px-5 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-black text-xs rounded-xl flex items-center gap-2 cursor-pointer transition-all"
+                >
+                  <Eye className="w-4 h-4" />
+                  <span>Simular Visão do Aluno</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePublishAdaptedActivity}
+                  className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl shadow-md flex items-center gap-2 cursor-pointer transition-all"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Publicar aos {selectedTargetIds.length} Aluno(s)</span>
+                </button>
               </div>
             </div>
           )}
@@ -604,12 +668,29 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0 border-t md:border-t-0 border-border pt-3 md:pt-0 mt-3 md:mt-0">
-                        {onPlayGamePreview && (
-                          <button onClick={() => onPlayGamePreview(act)} className="flex-1 md:flex-none py-2 px-4 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2">
-                            <Play className="w-4 h-4" /> <span>Testar</span>
-                          </button>
-                        )}
-                        <button onClick={() => setExpandedActId(isExpanded ? null : act.id)} className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center ${isExpanded ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-background border-border text-muted hover:text-foreground hover:bg-surface-hover'}`} title="Detalhes">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (act.gameData) {
+                              openSimulation(act.title, act.aeeMechanic || 'visual_cards', act.gameData);
+                            } else if (onPlayGamePreview) {
+                              onPlayGamePreview(act);
+                            }
+                          }}
+                          className="flex-1 md:flex-none py-2 px-4 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          <Play className="w-4 h-4" />
+                          <span>Simular</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setExpandedActId(isExpanded ? null : act.id)}
+                          className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center ${
+                            isExpanded ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-background border-border text-muted hover:text-foreground hover:bg-surface-hover'
+                          }`}
+                          title="Detalhes"
+                        >
                           {isExpanded ? <ChevronUp className="w-5 h-5" /> : <Settings className="w-5 h-5" />}
                         </button>
                       </div>
@@ -622,7 +703,11 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
                           <p className="text-muted"><strong>Descrição:</strong> {act.description}</p>
                         </div>
                         <div className="pt-3 border-t border-border flex justify-end">
-                          <button onClick={() => { if(confirm(`Deseja excluir a atividade adaptada "${act.title}"?`)) onDeleteActivity?.(act.id); }} className="px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer">
+                          <button
+                            type="button"
+                            onClick={() => { if(confirm(`Deseja excluir a atividade adaptada "${act.title}"?`)) onDeleteActivity?.(act.id); }}
+                            className="px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                          >
                             <Trash2 className="w-3.5 h-3.5" /> Excluir
                           </button>
                         </div>
@@ -635,6 +720,234 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
           )}
         </div>
       )}
+
+      {/* =========================================================================
+          MODAL SIMULADOR INTERATIVO DE ATIVIDADE ADAPTADA (VISÃO DO ALUNO PNE)
+      ========================================================================= */}
+      {simulatedActivity && (() => {
+        const stages = simulatedActivity.gameData.stages || [];
+        const currentStage = stages[simStageIndex];
+        if (!currentStage) return null;
+
+        const visualCards = currentStage.pneSevereStage?.visualCards || [];
+        const mildOptions = currentStage.pneMildStage?.options || currentStage.options || [];
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fadeIn">
+            <div className="bg-surface border-2 border-amber-500/40 rounded-3xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+              
+              {/* Top Header do Simulador */}
+              <div className="p-4 sm:p-5 bg-background border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-500 text-slate-950">
+                      Modo Simulação AEE
+                    </span>
+                    <span className="text-xs font-bold text-muted">
+                      Fase {simStageIndex + 1} de {stages.length}
+                    </span>
+                  </div>
+                  <h3 className="text-base sm:text-lg font-black text-foreground truncate mt-1">
+                    {simulatedActivity.title}
+                  </h3>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Alternador de Visão (Severo vs Leve/Moderado) */}
+                  <div className="flex items-center bg-surface p-1 rounded-xl border border-border text-[11px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSimViewMode('severe');
+                        setSimSelectedOption(null);
+                        setSimFeedback(null);
+                      }}
+                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                        simViewMode === 'severe' ? 'bg-amber-500 text-slate-950 font-black' : 'text-muted hover:text-foreground'
+                      }`}
+                    >
+                      🃏 Cartões (Severo)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSimViewMode('mild');
+                        setSimSelectedOption(null);
+                        setSimFeedback(null);
+                      }}
+                      className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                        simViewMode === 'mild' ? 'bg-primary text-white font-black' : 'text-muted hover:text-foreground'
+                      }`}
+                    >
+                      ⚡ 2 Escolhas (Leve)
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setSimulatedActivity(null)}
+                    className="p-2 rounded-full bg-surface hover:bg-rose-500/20 text-muted hover:text-rose-400 border border-border cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Corpo Interativo da Fase */}
+              <div className="p-5 sm:p-8 overflow-y-auto flex-1 space-y-6">
+                <div className="space-y-2 text-center">
+                  <span className="text-xs font-black uppercase tracking-wider text-amber-400">
+                    {currentStage.title}
+                  </span>
+                  <h4 className="text-lg sm:text-xl font-black text-foreground leading-relaxed">
+                    {simViewMode === 'severe'
+                      ? currentStage.pneSevereStage?.playfulPrompt || currentStage.scenario
+                      : currentStage.pneMildStage?.scenario || currentStage.scenario}
+                  </h4>
+                  {currentStage.clue && (
+                    <p className="text-xs text-amber-300/90 bg-amber-500/10 border border-amber-500/20 py-1.5 px-3 rounded-full inline-block">
+                      💡 {currentStage.clue}
+                    </p>
+                  )}
+                </div>
+
+                {/* MODO 1: CARTÕES VISUAIS LÚDICOS (LAUDOS SEVEROS) */}
+                {simViewMode === 'severe' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                    {visualCards.map((card, idx) => {
+                      const isSelected = simSelectedOption === idx;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setSimSelectedOption(idx);
+                            setSimFeedback({ text: card.feedback, isCorrect: card.isCorrect });
+                          }}
+                          className={`p-6 rounded-3xl border-2 flex flex-col items-center justify-center gap-3 text-center transition-all cursor-pointer active:scale-95 ${
+                            isSelected
+                              ? card.isCorrect
+                                ? 'bg-emerald-500/20 border-emerald-400 shadow-lg shadow-emerald-500/10'
+                                : 'bg-rose-500/20 border-rose-400'
+                              : 'bg-background hover:bg-surface-hover border-border hover:border-amber-400/50'
+                          }`}
+                        >
+                          <span className="text-5xl sm:text-6xl select-none">{card.iconEmoji}</span>
+                          <span className="text-sm sm:text-base font-black text-foreground">{card.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* MODO 2: TRILHA GUIADA DE 2 ESCOLHAS (LEVE / MODERADO) */}
+                {simViewMode === 'mild' && (
+                  <div className="space-y-3 max-w-xl mx-auto pt-2">
+                    {mildOptions.map((opt, idx) => {
+                      const isSelected = simSelectedOption === idx;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setSimSelectedOption(idx);
+                            setSimFeedback({ text: opt.feedback, isCorrect: opt.isCorrect });
+                          }}
+                          className={`w-full p-4 sm:p-5 rounded-2xl border-2 text-left flex items-center gap-4 transition-all cursor-pointer active:scale-[0.99] ${
+                            isSelected
+                              ? opt.isCorrect
+                                ? 'bg-emerald-500/20 border-emerald-400'
+                                : 'bg-rose-500/20 border-rose-400'
+                              : 'bg-background hover:bg-surface-hover border-border hover:border-primary/50'
+                          }`}
+                        >
+                          <span className="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center font-black text-xs shrink-0">
+                            {idx + 1}
+                          </span>
+                          <span className="text-sm sm:text-base font-bold text-foreground leading-snug">
+                            {opt.text}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Feedback Imediato da Escolha */}
+                {simFeedback && (
+                  <div
+                    className={`p-4 rounded-2xl border text-center space-y-1 animate-fadeIn ${
+                      simFeedback.isCorrect
+                        ? 'bg-emerald-500/15 border-emerald-400/50 text-emerald-300'
+                        : 'bg-amber-500/15 border-amber-400/50 text-amber-300'
+                    }`}
+                  >
+                    <p className="text-sm font-black">
+                      {simFeedback.isCorrect ? '🎉 Resposta Correta!' : '💡 Tente observar novamente:'}
+                    </p>
+                    <p className="text-xs font-semibold">{simFeedback.text}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Rodapé de Navegação entre Fases */}
+              <div className="p-4 bg-background border-t border-border flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  disabled={simStageIndex === 0}
+                  onClick={() => {
+                    setSimStageIndex((i) => Math.max(0, i - 1));
+                    setSimSelectedOption(null);
+                    setSimFeedback(null);
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-surface hover:bg-surface-hover disabled:opacity-40 text-foreground border border-border text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Fase Anterior</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSimStageIndex(0);
+                    setSimSelectedOption(null);
+                    setSimFeedback(null);
+                  }}
+                  className="px-3 py-2 rounded-xl text-muted hover:text-foreground text-xs font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Reiniciar</span>
+                </button>
+
+                {simStageIndex < stages.length - 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSimStageIndex((i) => Math.min(stages.length - 1, i + 1));
+                      setSimSelectedOption(null);
+                      setSimFeedback(null);
+                    }}
+                    className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
+                  >
+                    <span>Próxima Fase</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setSimulatedActivity(null)}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Concluir Simulação</span>
+                  </button>
+                )}
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
