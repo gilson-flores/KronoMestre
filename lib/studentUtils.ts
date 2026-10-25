@@ -134,7 +134,7 @@ export const DEFAULT_TURMAS = [
   "201", "202", "203", "204",
   "301", "302"
 ];
-\n
+
 export const getCanonicalActivities = (activities: Activity[]): Activity[] => {
   if (!activities || !Array.isArray(activities)) return [];
   return activities.filter((act) => {
