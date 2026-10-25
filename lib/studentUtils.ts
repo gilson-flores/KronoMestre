@@ -143,7 +143,7 @@ export const getCanonicalActivities = (activities: Activity[]): Activity[] => {
     return !isRecovery && (!isAdapted || act.isStandaloneAdaptation);
   });
 };
-\n
+
 export const getUnifiedActivityMetrics = (activities: Activity[]) => {
   if (!activities || !Array.isArray(activities)) return { totalActivities: 0, totalSubmissions: 0, pendingCorrection: 0, gradedCount: 0, averageGrade: 0 };
   let totalSubmissions = 0;
@@ -153,7 +153,7 @@ export const getUnifiedActivityMetrics = (activities: Activity[]) => {
   
   activities.forEach(act => {
     (act.submissions || []).forEach(sub => {
-      if (sub.status !== "draft" && sub.status !== "not_submitted") {
+      if (sub.status !== "draft") {
         totalSubmissions++;
         if (sub.status === "pending") pendingCorrection++;
         if (sub.status === "graded") {
@@ -172,7 +172,7 @@ export const getUnifiedActivityMetrics = (activities: Activity[]) => {
     averageGrade: gradedCount > 0 ? (sumGrades / gradedCount) : 0
   };
 };
-\n
+
 export const doesTurmaHavePNEStudent = (turma: string, students: StudentUser[]): boolean => {
   if (!turma || !students) return false;
   const cleanTurma = turma.trim().toLowerCase();
