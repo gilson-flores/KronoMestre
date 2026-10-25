@@ -172,3 +172,25 @@ export const getUnifiedActivityMetrics = (activities: Activity[]) => {
     averageGrade: gradedCount > 0 ? (sumGrades / gradedCount) : 0
   };
 };
+\n
+export const doesTurmaHavePNEStudent = (turma: string, students: StudentUser[]): boolean => {
+  if (!turma || !students) return false;
+  const cleanTurma = turma.trim().toLowerCase();
+  return students.some(s =>
+    (s.turma?.trim().toLowerCase() === cleanTurma || cleanTurma === "todas" || cleanTurma === "geral") && isStudentPNE(s)
+  );
+};
+
+export const getRecommendedAdaptationForClass = (turma: string, students: StudentUser[]): AdaptationRecommendation => {
+  if (!turma || !students) return { recommendedType: "mild_moderate", summaryText: "Nenhum PNE detectado nesta turma." };
+  const pneStudentsInTurma = students.filter(s =>
+    (s.turma?.trim().toLowerCase() === turma.trim().toLowerCase() || turma.trim().toLowerCase() === "todas" || turma.trim().toLowerCase() === "geral") && isStudentPNE(s)
+  );
+  if (pneStudentsInTurma.length === 0) return { recommendedType: "mild_moderate", summaryText: "Nenhum PNE detectado nesta turma." };
+
+  const hasSevere = pneStudentsInTurma.some(s => s.pneConditions && s.pneConditions.some(isSevereCondition));
+  if (hasSevere) {
+    return { recommendedType: "severe_playful", summaryText: "A turma possui laudos severos. Recomendado Mapa Visual Lúdico." };
+  }
+  return { recommendedType: "mild_moderate", summaryText: "A turma possui laudos leves/moderados. Recomendada redução textual." };
+};
