@@ -2780,21 +2780,7 @@ export default function Home() {
         }
       />
       
-      <StudentSupervisionModal
-        isOpen={Boolean(supervisingStudent)}
-        student={supervisingStudent}
-        activities={activeActivities}
-        onClose={() => setSupervisingStudent(null)}
-        onSaveNotes={handleSavePedagogicalNotes}
-        onSendMessage={
-          role === 'second_teacher'
-            ? undefined
-            : () => {
-                setSupervisingStudent(null);
-                setCurrentTab('mensagens');
-              }
-        }
-      />
+
 
       {/* Modal Obrigatório de Troca de Senha no Primeiro Acesso */}
       {mustChangePassword && role && role !== 'teacher' && (
