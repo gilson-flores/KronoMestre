@@ -131,7 +131,7 @@ export const getChildAdaptations = (parentAct: Activity, allActivities: Activity
 };
 \n
 export const DEFAULT_TURMAS = [
-  "101", "102", "104", 
-  "201", "202", "2001", 
-  "301", "302", "3001"
+  "101", "102", "103", "104", "105", "106",
+  "201", "202", "203", "204",
+  "301", "302"
 ];
