@@ -202,16 +202,16 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   // "Mostre as atividades adaptadas somente para alunos PNE."
   // Filter activities authorized for this student
   // "Aluno PNE não vê atividade de aluno regular, só adaptações, 2 professor também só vê PNE."
-  const authorizedActivities = useMemo(() => {
+    const authorizedActivities = useMemo(() => {
     return activities.filter((a) => {
       // 1. Turma permission check
       if (!canStudentAccessActivity(a.turma, student.turma)) {
         return false;
       }
 
-      // 2. Trava de Recuperação Paralela para quem entregou a primeira atividade e tirou >= 6.0
+      // 2. Trava de Recuperação Paralela
       const isRecoveryAct = Boolean(
-        a.isRecovery || a.type === 'Recuperação Paralela' || a.recoveryFromId
+        a.isRecovery || a.type === "Recuperação Paralela" || a.recoveryFromId
       );
       if (isRecoveryAct) {
         const isManuallyAuthorized = Boolean(
@@ -226,7 +226,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             activities.find(
               (p) =>
                 !p.isRecovery &&
-                p.type !== 'Recuperação Paralela' &&
+                p.type !== "Recuperação Paralela" &&
                 p.turma === a.turma &&
                 p.id !== a.id
             );
@@ -251,9 +251,9 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
       const isActAdapted = isActivityAdapted(a);
 
-      // Aluno PNE: por padrão vê adaptações, exceto se incluído na atividade normal por proficiência
+      // 3. Roteamento PNE
       if (isCurrentStudentPNE) {
-        const isStudentIncludedInActivity = (actToCheck?: Activity) => {
+        const isStudentIncludedInActivity = (actToCheck) => {
           if (!actToCheck || !actToCheck.includedPneStudentIds || actToCheck.includedPneStudentIds.length === 0) return false;
           const ids = actToCheck.includedPneStudentIds;
           return (
@@ -264,17 +264,28 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         };
 
         if (isActAdapted) {
-          const parentAct = activities.find((parent) => parent.id === a.adaptedFromId);
-          if (isStudentIncludedInActivity(parentAct)) {
+          // Se for adaptada, o aluno so ve se estiver na lista de alvos do Construtor
+          return isStudentIncludedInActivity(a);
+        } else {
+          // Se for a prova regular, um aluno PNE (ex: TDAH) ve normalmente. 
+          // A EXCECAO eh se houver uma prova adaptada exclusiva amarrada a essa substituindo a dele.
+          const hasExclusiveAdaptation = activities.some((otherAct) => {
+            return (
+              isActivityAdapted(otherAct) &&
+              (otherAct.adaptedFromId === a.id || otherAct.linkedActivityId === a.id) &&
+              otherAct.isStandaloneAdaptation === false &&
+              (otherAct.includedPneStudentIds?.includes(student.id) || otherAct.includedPneStudentIds?.includes(student.matricula) || otherAct.includedPneStudentIds?.includes(student.fullName))
+            );
+          });
+
+          if (hasExclusiveAdaptation) {
             return false;
           }
           return true;
-        } else {
-          return isStudentIncludedInActivity(a);
         }
       }
 
-      // Aluno regular só vê atividades regulares (não vê adaptações)
+      // 4. Aluno regular jamais ve adaptacoes
       return !isActAdapted;
     });
   }, [activities, student.turma, student.id, student.matricula, student.fullName, student.authorizedRecoveryActivityIds, isCurrentStudentPNE]);
