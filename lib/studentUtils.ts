@@ -113,7 +113,6 @@ export const getAdaptationRecommendation = (pneConditions?: string[]): Adaptatio
   };
 };
 
-
 export const isActivityRecovery = (activity: Activity): boolean => {
   return Boolean(activity.isRecovery || activity.type === "Recuperação Paralela" || activity.recoveryFromId);
 };
@@ -129,7 +128,7 @@ export const getChildAdaptations = (parentAct: Activity, allActivities: Activity
     a.isStandaloneAdaptation === false
   );
 };
-\n
+
 export const DEFAULT_TURMAS = [
   "101", "102", "103", "104", "105", "106",
   "201", "202", "203", "204",
