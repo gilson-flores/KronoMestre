@@ -129,3 +129,9 @@ export const getChildAdaptations = (parentAct: Activity, allActivities: Activity
     a.isStandaloneAdaptation === false
   );
 };
+\n
+export const DEFAULT_TURMAS = [
+  "101", "102", "104", 
+  "201", "202", "2001", 
+  "301", "302", "3001"
+];
