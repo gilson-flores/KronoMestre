@@ -134,3 +134,12 @@ export const DEFAULT_TURMAS = [
   "201", "202", "203", "204",
   "301", "302"
 ];
+\n
+export const getCanonicalActivities = (activities: Activity[]): Activity[] => {
+  if (!activities || !Array.isArray(activities)) return [];
+  return activities.filter((act) => {
+    const isRecovery = Boolean(act.isRecovery || act.type === "Recuperação Paralela" || act.recoveryFromId);
+    const isAdapted = Boolean(act.isAdapted || act.activityDomain === "adapted_aee" || act.adaptationType || act.aeeMechanic);
+    return !isRecovery && (!isAdapted || act.isStandaloneAdaptation);
+  });
+};
