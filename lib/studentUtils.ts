@@ -143,3 +143,32 @@ export const getCanonicalActivities = (activities: Activity[]): Activity[] => {
     return !isRecovery && (!isAdapted || act.isStandaloneAdaptation);
   });
 };
+\n
+export const getUnifiedActivityMetrics = (activities: Activity[]) => {
+  if (!activities || !Array.isArray(activities)) return { totalActivities: 0, totalSubmissions: 0, pendingCorrection: 0, gradedCount: 0, averageGrade: 0 };
+  let totalSubmissions = 0;
+  let pendingCorrection = 0;
+  let gradedCount = 0;
+  let sumGrades = 0;
+  
+  activities.forEach(act => {
+    (act.submissions || []).forEach(sub => {
+      if (sub.status !== "draft" && sub.status !== "not_submitted") {
+        totalSubmissions++;
+        if (sub.status === "pending") pendingCorrection++;
+        if (sub.status === "graded") {
+          gradedCount++;
+          sumGrades += (Number(sub.objectiveScore) || 0) + (Number(sub.essayScore) || 0) + (Number(sub.extraPoints) || 0);
+        }
+      }
+    });
+  });
+  
+  return {
+    totalActivities: activities.length,
+    totalSubmissions,
+    pendingCorrection,
+    gradedCount,
+    averageGrade: gradedCount > 0 ? (sumGrades / gradedCount) : 0
+  };
+};
