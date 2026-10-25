@@ -1032,46 +1032,64 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           </div>
         </div>
 
-        {/* Barra de Progresso Geral da Turma & Conquistas */}
+        {/* Barra de Progresso do Modo Platina & Conquistas */}
         <div className="space-y-2.5">
-          {studentMetrics.total > 0 && (
-            <div className="bg-surface/80 p-3 sm:px-4 sm:py-2.5 rounded-2xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-              <div className="flex items-center justify-between sm:justify-start gap-2 text-muted font-medium">
-                <div className="flex items-center gap-1.5">
-                  <Trophy className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>Missões:</span>
-                  <strong className="text-foreground">{studentMetrics.completed + studentMetrics.pendingCorrection} de {studentMetrics.total} entregues</strong>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsAchievementsModalOpen(true)}
-                  className="sm:hidden px-2.5 py-1 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/30 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition active:scale-95"
-                >
-                  <span>🏆 Conquistas ({studentAchievements.filter((a) => a.unlocked).length}/{studentAchievements.length})</span>
-                </button>
-              </div>
+          {(() => {
+            const unlockedCount = studentAchievements.filter((a) => a.unlocked).length;
+            const totalAchievements = studentAchievements.length || 15;
+            const achievementsPercent = Math.round((unlockedCount / totalAchievements) * 100);
 
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 flex-1 sm:w-48">
-                  <div className="flex-1 h-2 bg-background rounded-full overflow-hidden border border-border">
-                    <div
-                      className="h-full bg-gradient-to-r from-primary to-emerald-400 transition-all duration-500 rounded-full"
-                      style={{ width: `${studentMetrics.progressPercent}%` }}
-                    />
+            return (
+              <div className="bg-surface/80 p-3 sm:px-4 sm:py-3 rounded-2xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-center justify-between sm:justify-start gap-2 text-muted font-medium">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Trophy className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span className="truncate">Progresso Platina:</span>
+                    <strong className="text-foreground shrink-0">
+                      {unlockedCount} de {totalAchievements} ({achievementsPercent}%)
+                    </strong>
+                    <span className="hidden md:inline text-[11px] text-muted">
+                      • Entregas: {studentMetrics.completed + studentMetrics.pendingCorrection}/{studentMetrics.total}
+                    </span>
                   </div>
-                  <span className="font-mono font-bold text-xs text-primary shrink-0">{studentMetrics.progressPercent}%</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsAchievementsModalOpen(true)}
+                    className="sm:hidden px-2.5 py-1 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/30 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition active:scale-95 shrink-0"
+                  >
+                    <span>🏆 Conquistas ({unlockedCount}/{totalAchievements})</span>
+                  </button>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setIsAchievementsModalOpen(true)}
-                  className="hidden sm:flex px-3 py-1 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/30 text-xs font-bold items-center gap-1.5 cursor-pointer transition active:scale-95 shrink-0"
-                >
-                  <span>🏆 Conquistas ({studentAchievements.filter((a) => a.unlocked).length}/{studentAchievements.length})</span>
-                </button>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 flex-1 sm:w-52">
+                    <div className="flex-1 h-2.5 bg-background rounded-full overflow-hidden border border-border relative">
+                      <div
+                        className="absolute top-0 bottom-0 w-[2px] bg-amber-400/70 z-10"
+                        style={{ left: "75%" }}
+                        title="Meta 75%: +1.0 na Pior Nota"
+                      />
+                      <div
+                        className="h-full bg-gradient-to-r from-amber-500 via-primary to-emerald-400 transition-all duration-500 rounded-full"
+                        style={{ width: `${achievementsPercent}%` }}
+                      />
+                    </div>
+                    <span className="font-mono font-bold text-xs text-amber-400 shrink-0">
+                      {achievementsPercent}%
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsAchievementsModalOpen(true)}
+                    className="hidden sm:flex px-3 py-1 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/30 text-xs font-bold items-center gap-1.5 cursor-pointer transition active:scale-95 shrink-0"
+                  >
+                    <span>🏆 Conquistas ({unlockedCount}/{totalAchievements})</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Alerta Amigável da Próxima Missão Prioritária */}
           {nextUrgentActivity && (
