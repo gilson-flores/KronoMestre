@@ -112,3 +112,20 @@ export const getAdaptationRecommendation = (pneConditions?: string[]): Adaptatio
     summaryText: 'Recomendado Trilha Guiada de 2 Escolhas e redução de carga textual.',
   };
 };
+
+
+export const isActivityRecovery = (activity: Activity): boolean => {
+  return Boolean(activity.isRecovery || activity.type === "Recuperação Paralela" || activity.recoveryFromId);
+};
+
+export const getChildRecoveryActivities = (parentAct: Activity, allActivities: Activity[]): Activity[] => {
+  return allActivities.filter(a => a.recoveryFromId === parentAct.id);
+};
+
+export const getChildAdaptations = (parentAct: Activity, allActivities: Activity[]): Activity[] => {
+  return allActivities.filter(a => 
+    isActivityAdapted(a) && 
+    (a.adaptedFromId === parentAct.id || a.linkedActivityId === parentAct.id) && 
+    a.isStandaloneAdaptation === false
+  );
+};
