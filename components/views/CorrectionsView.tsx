@@ -15,7 +15,7 @@ import {
   Clock
 } from 'lucide-react';
 import { Activity, StudentUser } from '@/lib/types';
-import { getOriginalTurmas, getTurmaLabel, isActivityAdapted } from '@/lib/studentUtils';
+import {  getOriginalTurmas, getTurmaLabel, isActivityAdapted , getActivityStudentAndSubmissionCounts } from "@/lib/studentUtils";
 
 interface CorrectionsViewProps {
   activities: Activity[];
@@ -90,7 +90,9 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
   // Filtra as atividades que possuem envios baseados no filtro atual (Pendentes, Corrigidas ou Todas com entregas)
   const filteredActivities = useMemo(() => {
     return activities.filter((act) => {
-      const subs = act.submissions || [];
+      const targetStudents = selectedTurma === "Todas" ? students : students.filter(s => s.turma && s.turma.includes(selectedTurma));
+      const metrics = getActivityStudentAndSubmissionCounts(act, activities, targetStudents);
+      const subs = metrics.submissionsList || [];
       if (subs.length === 0) return false; // Esconde atividades que ninguém entregou ainda
 
       if (selectedTurma !== 'Todas' && act.turma !== selectedTurma && !act.turma.includes(selectedTurma)) {
@@ -295,7 +297,10 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
             <p className="text-xs">Não há nenhuma entrega de aluno correspondente a este filtro.</p>
           </div>
         ) : (
-          filteredActivities.map((act) => {
+          filteredActivities.map((originalAct) => {
+            const targetStudents = selectedTurma === "Todas" ? students : students.filter(s => s.turma && s.turma.includes(selectedTurma));
+            const metrics = getActivityStudentAndSubmissionCounts(originalAct, activities, targetStudents);
+            const act = { ...originalAct, submissions: metrics.submissionsList, totalStudents: metrics.expectedStudentsCount };
             const subs = act.submissions || [];
             const pendingSubs = subs.filter((s) => s.status === 'pending');
             const gradedSubs = subs.filter((s) => s.status === 'graded');
