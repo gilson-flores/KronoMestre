@@ -98,18 +98,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         return false;
       }
       if (searchQuery) {
-    const query = searchQuery.toLowerCase();
-    const matchesStudent = act.submissions && act.submissions.some(sub => {
-      const st = students.find(s => s.id === sub.studentId || (s.matricula && s.matricula === sub.matricula));
-      return st && st.fullName && st.fullName.toLowerCase().includes(query);
-    });
-    return (
-      (act.title && act.title.toLowerCase().includes(query)) ||
-      (act.type && act.type.toLowerCase().includes(query)) ||
-      (act.turma && act.turma.toLowerCase().includes(query)) ||
-      matchesStudent
-    );
-  }
+        const query = searchQuery.toLowerCase();
+        return (
+          (act.title && act.title.toLowerCase().includes(query)) ||
+          (act.type && act.type.toLowerCase().includes(query)) ||
+          (act.turma && act.turma.toLowerCase().includes(query))
+        );
+      }
       return true;
     });
   }, [activities, statusFilter, selectedTurma, searchQuery]);
