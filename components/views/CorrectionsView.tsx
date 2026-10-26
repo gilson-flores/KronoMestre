@@ -100,14 +100,15 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
       }
 
       if (searchQuery) {
-    const q = searchQuery.toLowerCase();
-    const matchesStudent = subs.some(sub => {
-      const st = students.find(s => s.id === sub.studentId || (s.matricula && s.matricula === sub.matricula));
-      return st && st.fullName && st.fullName.toLowerCase().includes(q);
-    });
-    const matchesTitle = act.title && act.title.toLowerCase().includes(q);
-    if (!matchesTitle && !matchesStudent) return false;
-  }
+      const q = searchQuery.toLowerCase();
+      const matchesTitle = act.title && act.title.toLowerCase().includes(q);
+      const matchesStudent = subs.some(sub => {
+        const st = students.find(s => s.id === sub.studentId || (s.matricula && s.matricula === sub.matricula));
+        const nameToMatch = (st ? (st.fullName || st.name) : sub.studentName) || "";
+        return nameToMatch.toLowerCase().includes(q);
+      });
+      if (!matchesTitle && !matchesStudent) return false;
+    }
       
       
       return true; // 'todas'
@@ -300,9 +301,19 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
             const metrics = getActivityStudentAndSubmissionCounts(originalAct, activities, targetStudents);
             const act = { ...originalAct, submissions: metrics.submissionsList, totalStudents: metrics.expectedStudentsCount };
             const subs = act.submissions || [];
-            const pendingSubs = subs.filter((s) => s.status === 'pending');
-            const gradedSubs = subs.filter((s) => s.status === 'graded');
-            const returnedSubs = subs.filter((s) => s.status === 'returned');
+            let displaySubs = subs;
+          if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            displaySubs = subs.filter(sub => {
+              const st = students.find(s => s.id === sub.studentId || (s.matricula && s.matricula === sub.matricula));
+              const nameToMatch = (st ? (st.fullName || st.name) : sub.studentName) || "";
+              return nameToMatch.toLowerCase().includes(q) || (act.title && act.title.toLowerCase().includes(q));
+            });
+            if (displaySubs.length === 0) return null; // Oculta tudo se não for o aluno pesquisado
+          }
+          const pendingSubs = displaySubs.filter((s) => s.status === 'pending');
+          const gradedSubs = displaySubs.filter((s) => s.status === 'graded');
+          const returnedSubs = displaySubs.filter((s) => s.status === 'returned');
             
             const isExpanded = expandedActId === act.id;
             const shortName = formatShortActivityName(act, activities);
