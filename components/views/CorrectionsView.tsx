@@ -441,10 +441,12 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                                   </div>
                                 ) : (
                                   <>
-                                    <div className="flex flex-wrap items-center justify-between bg-[#171f33] p-3 rounded-xl border border-border gap-2">
+                                    {Number(sub.maxObjectiveScore) > 0 && (
+<div className="flex flex-wrap items-center justify-between bg-[#171f33] p-3 rounded-xl border border-border gap-2">
                                       <span className="text-xs font-bold text-muted">Nota Objetiva (Automática):</span>
                                       <span className="text-sm font-black text-emerald-400">{sub.objectiveScore?.toFixed(1) || 0} / {sub.maxObjectiveScore?.toFixed(1) || 0} pts</span>
                                     </div>
+)}
                                     
                                     <div className="bg-[#171f33] p-4 rounded-xl border border-border space-y-2">
                                       <span className="text-[10px] font-bold uppercase tracking-wider text-muted block">Resposta Dissertativa:</span>

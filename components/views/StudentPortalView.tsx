@@ -2324,7 +2324,8 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                           {/* Objective Score (Saiu na Hora) */}
                           {showObjectiveSection && (
                             <div className="bg-surface p-4 rounded-2xl border border-border space-y-1">
-                              <div className="flex items-center justify-between">
+                              {Number(sub.maxObjectiveScore) > 0 && (
+<div className="flex items-center justify-between">
                                 <span className="text-xs font-bold text-primary flex items-center gap-1.5">
                                   <CheckCircle2 className="w-4 h-4" />
                                   <span>Parte Objetiva (Automática):</span>
@@ -2333,6 +2334,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                                   {sub.objectiveScore.toFixed(1)} / {sub.maxObjectiveScore.toFixed(1)} pts
                                 </span>
                               </div>
+)}
                               <p className="text-[11px] text-muted">
                                 ⚡ Nota calculada instantaneamente no momento do envio.
                               </p>
