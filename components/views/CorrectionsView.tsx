@@ -100,17 +100,15 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
       }
 
       if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        if (!act.title.toLowerCase().includes(q) && !act.turma.toLowerCase().includes(q)) {
-          return false;
-        }
-      }
-
-      if (correctionFilter === 'pendentes') {
-        return subs.some((s) => s.status === 'pending');
-      } else if (correctionFilter === 'corrigidas') {
-        return subs.some((s) => s.status === 'graded');
-      }
+    const q = searchQuery.toLowerCase();
+    const matchesStudent = subs.some(sub => {
+      const st = students.find(s => s.id === sub.studentId || (s.matricula && s.matricula === sub.matricula));
+      return st && st.fullName && st.fullName.toLowerCase().includes(q);
+    });
+    const matchesTitle = act.title && act.title.toLowerCase().includes(q);
+    if (!matchesTitle && !matchesStudent) return false;
+  }
+      
       
       return true; // 'todas'
     });
