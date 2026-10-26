@@ -125,7 +125,7 @@ export default function Home() {
     if (snapRaw) {
       try {
         const snap = JSON.parse(snapRaw);
-        const tenantVals = Object.keys(localStorage).filter(k => k.includes("tenant")).map(k => ({k, v: localStorage.getItem(k)}));
+        const tenantVals = Object.keys(localStorage).filter(k => k.includes("tenant") || k === "teacher_snapshot").map(k => ({k, v: localStorage.getItem(k)}));
         
         localStorage.clear();
         sessionStorage.clear();
@@ -842,7 +842,7 @@ export default function Home() {
 
   const handleLoginStudent = (loggedStudent: StudentUser) => {
     if (typeof window !== "undefined") {
-      const keysToKeep = Object.keys(localStorage).filter(k => k.includes("tenant"));
+      const keysToKeep = Object.keys(localStorage).filter(k => k.includes("tenant") || k === "teacher_snapshot");
       const tenantVals = keysToKeep.map(k => ({k, v: localStorage.getItem(k)}));
       localStorage.clear();
       sessionStorage.clear();
