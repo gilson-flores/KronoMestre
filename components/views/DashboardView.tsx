@@ -22,7 +22,7 @@ import {
   Gamepad2
 } from 'lucide-react';
 import { Activity, StudentUser } from '@/lib/types';
-import { getActivityGradeDistribution, getOriginalTurmas, getTurmaLabel } , getActivityStudentAndSubmissionCounts } from "@/lib/studentUtils";
+import { getActivityGradeDistribution, getOriginalTurmas, getTurmaLabel , getActivityStudentAndSubmissionCounts } from "@/lib/studentUtils";
 
 interface DashboardViewProps {
   activities: Activity[];
