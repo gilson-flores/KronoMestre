@@ -205,7 +205,36 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   // Filter activities authorized for this student
   // "Aluno PNE não vê atividade de aluno regular, só adaptações, 2 professor também só vê PNE."
     const authorizedActivities = useMemo(() => {
+    const isExpired = (deadlineStr?: string): boolean => {
+      if (!deadlineStr || typeof deadlineStr !== "string") return false;
+      const clean = deadlineStr.trim();
+      if (!clean || clean.toLowerCase() === "sem prazo") return false;
+      const timeMatch = clean.match(/(\d{1,2}):(\d{2})/);
+      const hours = timeMatch ? parseInt(timeMatch[1], 10) : 23;
+      const minutes = timeMatch ? parseInt(timeMatch[2], 10) : 59;
+      const brMatch = clean.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+      if (brMatch) {
+        const exp = new Date(parseInt(brMatch[3], 10), parseInt(brMatch[2], 10) - 1, parseInt(brMatch[1], 10), hours, minutes, 59, 999);
+        return Date.now() > exp.getTime();
+      }
+      const isoMatch = clean.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (isoMatch) {
+        const exp = new Date(parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10) - 1, parseInt(isoMatch[3], 10), hours, minutes, 59, 999);
+        return Date.now() > exp.getTime();
+      }
+      return false;
+    };
+
     return activities.filter((a) => {
+      const hasStudentSub = a.submissions?.some(
+        (sub) =>
+          sub.studentId === student.id ||
+          (Boolean(student.matricula) && sub.matricula === student.matricula) ||
+          sub.studentName?.toLowerCase() === student.fullName?.toLowerCase()
+      );
+      if ((a.status === "Inativo" || isExpired(a.deadline)) && !hasStudentSub) {
+        return false;
+      }
       // 1. Turma permission check
       if (!canStudentAccessActivity(a.turma, student.turma)) {
         return false;

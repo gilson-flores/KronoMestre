@@ -314,8 +314,12 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
           const pendingSubs = displaySubs.filter((s) => s.status === 'pending');
           const gradedSubs = displaySubs.filter((s) => s.status === 'graded');
           const returnedSubs = displaySubs.filter((s) => s.status === 'returned');
-            
-            const isExpanded = expandedActId === act.id;
+          if (searchQuery.trim()) {
+            if (correctionFilter === 'pendentes' && pendingSubs.length === 0 && returnedSubs.length === 0) return null;
+            if (correctionFilter === 'corrigidas' && gradedSubs.length === 0) return null;
+          }
+
+          const isExpanded = expandedActId === act.id || Boolean(searchQuery.trim());
             const shortName = formatShortActivityName(act, activities);
             const isRec = Boolean(act.isRecovery || act.type === 'Recuperação Paralela' || act.recoveryFromId);
 
@@ -387,7 +391,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                 {isExpanded && (
                   <div className="border-t border-border bg-background/50 divide-y divide-border">
                     {/* Filtra as submissões dentro da gaveta com base no filtro global, e ordena pendentes primeiro */}
-                    {subs
+                    {displaySubs
                       .filter(sub => {
                         if (correctionFilter === 'pendentes') return sub.status === 'pending' || sub.status === 'returned';
                         if (correctionFilter === 'corrigidas') return sub.status === 'graded';

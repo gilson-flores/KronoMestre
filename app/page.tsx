@@ -408,7 +408,31 @@ export default function Home() {
 
   // Active datasets
   const activeStudents = useMemo(() => students.filter((s) => !s.isArchived), [students]);
-  const activeActivities = useMemo(() => activities.filter((a) => !a.isArchived), [activities]);
+  const activeActivities = useMemo(() => {
+    const isExpiredByDeadline = (deadlineStr?: string): boolean => {
+      if (!deadlineStr || typeof deadlineStr !== "string") return false;
+      const clean = deadlineStr.trim();
+      if (!clean || clean.toLowerCase() === "sem prazo") return false;
+      const timeMatch = clean.match(/(\d{1,2}):(\d{2})/);
+      const hours = timeMatch ? parseInt(timeMatch[1], 10) : 23;
+      const minutes = timeMatch ? parseInt(timeMatch[2], 10) : 59;
+      const brMatch = clean.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+      if (brMatch) {
+        const exp = new Date(parseInt(brMatch[3], 10), parseInt(brMatch[2], 10) - 1, parseInt(brMatch[1], 10), hours, minutes, 59, 999);
+        return Date.now() > exp.getTime();
+      }
+      const isoMatch = clean.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (isoMatch) {
+        const exp = new Date(parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10) - 1, parseInt(isoMatch[3], 10), hours, minutes, 59, 999);
+        return Date.now() > exp.getTime();
+      }
+      return false;
+    };
+
+    return activities
+      .filter((a) => !a.isArchived)
+      .map((a) => (isExpiredByDeadline(a.deadline) ? { ...a, status: "Inativo" as const } : a));
+  }, [activities]);
 
   // Extração estável dos identificadores do professor para evitar recálculo desnecessário de visibleStudentsForRole
   const teacherId = teacher?.id?.toString().trim().toLowerCase() || '';
