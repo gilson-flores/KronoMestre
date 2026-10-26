@@ -463,112 +463,58 @@ export function getActivityStudentAndSubmissionCounts(
   const isAdaptedAct = isActivityAdapted(act);
   const isRecoveryAct = isActivityRecovery(act);
 
-  // Aplicação da Trava Multitenant no filtro de alunos elegíveis
+  // 1. Filtra rigorosamente os alunos elegíveis para as turmas da atividade
   const enrolledStudents = students.filter((st) => canStudentAccessActivity(act, st));
 
-  const parentAct = isAdaptedAct
-    ? allActivities.find((a) => a.id === act.adaptedFromId)
-    : isRecoveryAct
-    ? allActivities.find((a) => a.id === act.recoveryFromId) ||
-      allActivities.find(
-        (a) =>
-          !isActivityRecovery(a) &&
-          !isActivityAdapted(a) &&
-          canStudentAccessActivity(a.turma, act.turma) &&
-          a.title &&
-          act.title &&
-          (a.title.toLowerCase().includes(act.title.toLowerCase().replace(/^\[.*?\]\s*/i, '').slice(0, 10)) ||
-            act.title.toLowerCase().includes(a.title.toLowerCase().replace(/^\[.*?\]\s*/i, '').slice(0, 10)))
-      )
-    : null;
-
+  // 2. Separa os PNEs proficientes (que fazem a regular) dos que fazem AEE
+  const parentAct = isAdaptedAct ? allActivities.find((a) => a.id === act.adaptedFromId) : null;
   const includedProficientPneIds = new Set(
     isAdaptedAct ? (parentAct?.includedPneStudentIds || []) : (act.includedPneStudentIds || [])
   );
 
   const isProficientPne = (st: StudentUser) => {
-    return (
-      includedProficientPneIds.has(st.id) ||
-      (Boolean(st.matricula) && includedProficientPneIds.has(st.matricula)) ||
-      (Boolean(st.fullName) && includedProficientPneIds.has(st.fullName))
-    );
+    return includedProficientPneIds.has(st.id) || (Boolean(st.matricula) && includedProficientPneIds.has(st.matricula)) || (Boolean(st.fullName) && includedProficientPneIds.has(st.fullName));
   };
 
   const pneEnrolledTakingAdaptation = enrolledStudents.filter((st) => isStudentPNE(st) && !isProficientPne(st));
   const studentsTakingNormal = enrolledStudents.filter((st) => !isStudentPNE(st) || isProficientPne(st));
 
   const hasAdaptationChild = !isAdaptedAct && !isRecoveryAct && allActivities.some(
-    (a) =>
-      a.id !== act.id &&
-      (a.adaptedFromId === act.id ||
-        (isActivityAdapted(a) &&
-          canStudentAccessActivity(a.turma, act.turma) &&
-          a.title &&
-          act.title &&
-          a.title.toLowerCase().startsWith(act.title.toLowerCase().slice(0, 15))))
+    (a) => a.id !== act.id && (a.adaptedFromId === act.id || (isActivityAdapted(a) && canStudentAccessActivity(a.turma, act.turma) && a.title && act.title && a.title.toLowerCase().startsWith(act.title.toLowerCase().slice(0, 15))))
   );
 
   let expectedStudentsCount = 0;
   let submissionsList: ActivitySubmission[] = [];
 
   if (isAdaptedAct) {
+    // AEE: Apenas PNEs que não são proficientes na normal
     expectedStudentsCount = students && students.length > 0 ? pneEnrolledTakingAdaptation.length : 1;
-    if (act.submissions && act.submissions.length > 0) {
-      submissionsList = act.submissions.filter((s) => {
-        if (students && students.length > 0) {
-          const st = enrolledStudents.find((x) => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
-          if (!st) return false;
-          return isStudentPNE(st) && !isProficientPne(st);
-        }
-        return s.tag === 'PNE';
-      });
-    }
-  } else if (isRecoveryAct) {
-    if (act.submissions && act.submissions.length > 0) {
-      submissionsList = act.submissions.filter((s) => {
-        if (students && students.length > 0) {
-          const st = enrolledStudents.find((x) => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
-          return Boolean(st);
-        }
-        return true;
-      });
-    }
-
-    expectedStudentsCount = students && students.length > 0 ? enrolledStudents.length : (act.totalStudents || 35);
+    submissionsList = (act.submissions || []).filter(s => {
+      const st = enrolledStudents.find(x => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
+      return st && isStudentPNE(st) && !isProficientPne(st);
+    });
   } else if (hasAdaptationChild) {
-    expectedStudentsCount = students && students.length > 0
-      ? studentsTakingNormal.length
-      : Math.max(1, (act.totalStudents || 35) - pneEnrolledTakingAdaptation.length);
-
-    if (act.submissions && act.submissions.length > 0) {
-      submissionsList = act.submissions.filter((s) => {
-        if (students && students.length > 0) {
-          const st = enrolledStudents.find((x) => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
-          if (!st) return false;
-          return !isStudentPNE(st) || isProficientPne(st);
-        }
-        return s.tag !== 'PNE';
-      });
-    }
+    // NORMAL COM FILHA AEE: Conta todos menos os PNEs que foram pra adaptada
+    expectedStudentsCount = students && students.length > 0 ? studentsTakingNormal.length : (act.totalStudents || 35);
+    submissionsList = (act.submissions || []).filter(s => {
+      const st = enrolledStudents.find(x => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
+      return st && (!isStudentPNE(st) || isProficientPne(st));
+    });
   } else {
+    // RECUPERAÇÃO E ATIVIDADES NORMAIS: 100% da turma (Direito Universal SC e cálculo exato de turmas múltiplas)
     expectedStudentsCount = students && students.length > 0 ? enrolledStudents.length : (act.totalStudents || 35);
-    if (act.submissions && act.submissions.length > 0) {
-      submissionsList = act.submissions.filter((s) => {
-        if (students && students.length > 0) {
-          const st = enrolledStudents.find((x) => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
-          return Boolean(st);
-        }
-        return true;
-      });
-    }
+    submissionsList = (act.submissions || []).filter(s => {
+      const st = enrolledStudents.find(x => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
+      return Boolean(st);
+    });
   }
 
   const subCount = submissionsList.length;
-  const gradedCount = submissionsList.filter((s) => s.status === 'graded').length;
-  const pendingCount = submissionsList.filter((s) => s.status === 'pending' || s.status === 'draft').length;
-  const ret1x = submissionsList.filter((s) => s.status === 'returned' && (s.returnCount === 1 || !s.returnCount)).length;
-  const ret2x = submissionsList.filter((s) => s.status === 'returned' && s.returnCount === 2).length;
-  const ret3x = submissionsList.filter((s) => s.status === 'returned' && s.returnCount === 3).length;
+  const gradedCount = submissionsList.filter((s) => s.status === "graded").length;
+  const pendingCount = submissionsList.filter((s) => s.status === "pending" || s.status === "draft").length;
+  const ret1x = submissionsList.filter((s) => s.status === "returned" && (s.returnCount === 1 || !s.returnCount)).length;
+  const ret2x = submissionsList.filter((s) => s.status === "returned" && s.returnCount === 2).length;
+  const ret3x = submissionsList.filter((s) => s.status === "returned" && s.returnCount === 3).length;
 
   return { expectedStudentsCount, subCount, gradedCount, pendingCount, ret1x, ret2x, ret3x, submissionsList };
 }
