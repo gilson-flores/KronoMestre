@@ -54,7 +54,7 @@ import {
   ChevronUp,
   Lock,
   AlertTriangle,
-} , ArrowLeftFromLine } from "lucide-react";
+, ArrowLeftFromLine } from "lucide-react";
 
 interface StudentPortalViewProps {
   onReturnToSupervision?: () => void;
