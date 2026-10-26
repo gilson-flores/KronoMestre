@@ -534,15 +534,7 @@ export function getActivityStudentAndSubmissionCounts(
       });
     }
 
-    const parentSubmittedIds = new Set((parentAct?.submissions || []).map((s) => s.studentId || s.matricula));
-    const studentsNotSubmittedParent = enrolledStudents.filter(
-      (st) => !parentSubmittedIds.has(st.id) && (!st.matricula || !parentSubmittedIds.has(st.matricula))
-    );
-
-    expectedStudentsCount = Math.max(submissionsList.length, students && students.length > 0 ? studentsNotSubmittedParent.length : 0);
-    if (expectedStudentsCount === 0 && submissionsList.length === 0) {
-      expectedStudentsCount = 0;
-    }
+    expectedStudentsCount = students && students.length > 0 ? enrolledStudents.length : (act.totalStudents || 35);
   } else if (hasAdaptationChild) {
     expectedStudentsCount = students && students.length > 0
       ? studentsTakingNormal.length
