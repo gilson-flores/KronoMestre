@@ -85,45 +85,62 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
     totalExpected,
     pendingCorrections,
     activitiesWithPendingCorrections,
+    fragmentedAdhesion,
   } = useMemo(() => {
     let subs = 0;
     let exp = 0;
     let pend = 0;
-    const pendingList: Array<{
-      activity: Activity;
-      pendingCount: number;
-      subCount: number;
-      expectedCount: number;
-    }> = [];
+    const pendingList: Array<{ activity: Activity; pendingCount: number; subCount: number; expectedCount: number; }> = [];
+    const adhesionList: Array<{ title: string; type: string; subCount: number; expectedCount: number; rate: number; isRecovery: boolean; isGame: boolean; }> = [];
 
-    canonicalActivities.forEach((a) => {
-      const { subCount, expectedStudentsCount, pendingCount } = getUnifiedActivityMetrics(
-        a,
-        activities,
-        students
-      );
-      subs += subCount;
-      exp += expectedStudentsCount;
-      pend += pendingCount;
+    const allRelevantActivities = [...canonicalActivities, ...activities.filter(a => isActivityRecovery(a) || isActivityAdapted(a))];
 
-      if (pendingCount > 0) {
-        pendingList.push({
-          activity: a,
-          pendingCount,
-          subCount,
+    allRelevantActivities.forEach((a) => {
+      const { subCount, expectedStudentsCount, pendingCount } = getUnifiedActivityMetrics(a, activities, students);
+      const uniqueSubCount = a.submissions ? a.submissions.length : 0;
+      const metricsSub = Math.max(subCount, uniqueSubCount);
+      
+      if (!isActivityRecovery(a) && !isActivityAdapted(a)) {
+        subs += metricsSub;
+        exp += expectedStudentsCount;
+        pend += pendingCount;
+        if (pendingCount > 0) {
+          pendingList.push({ activity: a, pendingCount, subCount: metricsSub, expectedCount: expectedStudentsCount });
+        }
+      }
+
+      if (expectedStudentsCount > 0) {
+        const rate = Math.min(100, Math.round((metricsSub / expectedStudentsCount) * 100));
+        let shortTitle = a.title || "Sem Título";
+        let typeIcon = "Avaliação";
+        const isRec = isActivityRecovery(a);
+        const isGame = Boolean(a.isGameActivity || a.type === "Jogo Avaliativo");
+        
+        if (isRec) typeIcon = "RP";
+        else if (isGame) typeIcon = "Jogo";
+        else if (isActivityAdapted(a)) typeIcon = "AEE";
+
+        adhesionList.push({
+          title: shortTitle.length > 25 ? shortTitle.substring(0, 25) + "..." : shortTitle,
+          type: typeIcon,
+          subCount: metricsSub,
           expectedCount: expectedStudentsCount,
+          rate,
+          isRecovery: isRec,
+          isGame: isGame
         });
       }
     });
 
-    // Ordenar atividades com mais pendências primeiro
     pendingList.sort((x, y) => y.pendingCount - x.pendingCount);
+    adhesionList.sort((x, y) => y.rate - x.rate);
 
     return {
       totalSubmissions: subs,
       totalExpected: exp,
       pendingCorrections: pend,
       activitiesWithPendingCorrections: pendingList,
+      fragmentedAdhesion: adhesionList.slice(0, 4)
     };
   }, [canonicalActivities, activities, students]);
 
@@ -433,7 +450,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
             </button>
           </div>
 
-          {/* CARD 2: ENTREGAS */}
+          {/* CARD 2: ENTREGAS E ADESÃO FRAGMENTADA */}
           <div className="p-5 rounded-2xl border border-border bg-surface flex flex-col justify-between shadow-sm hover:border-primary/40 transition-colors">
             <div>
               <div className="flex items-center justify-between mb-3">
@@ -444,20 +461,35 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                   Adesão
                 </span>
               </div>
-              <div className="text-3xl font-black text-foreground">{totalSubmissions}</div>
-              <div className="text-base font-bold text-foreground mt-1">Entregas Realizadas</div>
-              <p className="text-xs text-text-muted mt-1 leading-relaxed">
-                {totalExpected > 0
-                  ? `${completionRate}% de adesão geral (${totalSubmissions} de ${totalExpected} esperadas).`
-                  : 'Nenhuma entrega esperada no momento.'}
-              </p>
+              
+              <div className="space-y-2 mt-3">
+                {fragmentedAdhesion && fragmentedAdhesion.length > 0 ? (
+                  fragmentedAdhesion.map((item, idx) => (
+                    <div key={idx} className="flex flex-col gap-1 pb-2 border-b border-border last:border-0 last:pb-0">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-foreground truncate max-w-[140px]" title={item.title}>
+                          {item.type === "RP" && "📜 "}{item.type === "Jogo" && "🎮 "}{item.type === "AEE" && "🤝 "}{item.type === "Avaliação" && "📝 "}
+                          {item.title}
+                        </span>
+                        <span className="font-bold text-primary">{item.rate}%</span>
+                      </div>
+                      <div className="flex justify-between items-center text-[10px] text-text-muted">
+                        <span>{item.type}</span>
+                        <span>{item.subCount} / {item.expectedCount} entregas</span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-text-muted mt-1 leading-relaxed">Nenhuma entrega esperada no momento.</p>
+                )}
+              </div>
             </div>
             <button
               id="btn-pendencia-entregas"
-              onClick={() => onNavigateToTab('atividades')}
+              onClick={() => onNavigateToTab("atividades")}
               className="mt-5 w-full min-h-[44px] min-w-[44px] py-2.5 px-4 bg-primary/10 hover:bg-primary/20 text-primary font-bold rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
             >
-              <span>Ver Entregas</span>
+              <span>Gestão Detalhada</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
