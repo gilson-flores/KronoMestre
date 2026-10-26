@@ -119,6 +119,33 @@ const mergeChatMessage = (
 
 export default function Home() {
 
+  const handleReturnToSupervision = () => {
+    if (typeof window === "undefined") return;
+    const snapRaw = localStorage.getItem("teacher_snapshot");
+    if (snapRaw) {
+      try {
+        const snap = JSON.parse(snapRaw);
+        const tenantVals = Object.keys(localStorage).filter(k => k.includes("tenant")).map(k => ({k, v: localStorage.getItem(k)}));
+        
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        tenantVals.forEach(tv => localStorage.setItem(tv.k, tv.v));
+        
+        localStorage.setItem("role", snap.role);
+        if (snap.teacherId) localStorage.setItem("teacherId", snap.teacherId);
+        if (snap.teacherName) localStorage.setItem("teacherName", snap.teacherName);
+        if (snap.secondTeacherId) localStorage.setItem("secondTeacherId", snap.secondTeacherId);
+        
+        window.location.reload();
+      } catch(e) {
+        console.error(e);
+      }
+    }
+  };
+
+
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
