@@ -46,8 +46,6 @@ export const NavbarTop: React.FC<NavbarTopProps> = ({
 
       {/* Right Controls: Online Students Counter + User Profile (Presença Real sem dados fantasmas) */}
       <div className="flex items-center gap-2.5 sm:gap-4 shrink-0">
-        
-        )}
       </div>
     </header>
   );
