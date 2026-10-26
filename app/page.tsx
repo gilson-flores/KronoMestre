@@ -118,6 +118,25 @@ const mergeChatMessage = (
 };
 
 export default function Home() {
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const keys = Object.keys(localStorage);
+        const isStudent = keys.some(k => k.includes("role") && localStorage.getItem(k) === "student");
+        if (isStudent) {
+          keys.forEach(key => {
+            const kLower = key.toLowerCase();
+            if (kLower.includes("activities") || kLower.includes("students") || kLower.includes("submissions") || kLower.includes("library")) {
+              localStorage.removeItem(key);
+            }
+          });
+        }
+      } catch(e) {}
+    }
+  }, []);
+
+
   // Mounting state to prevent SSR/hydration mismatch
   const [isMounted, setIsMounted] = useState(false);
 
@@ -831,6 +850,14 @@ export default function Home() {
   };
 
   const handleLoginStudent = (loggedStudent: StudentUser) => {
+    if (typeof window !== "undefined") {
+      const keysToKeep = Object.keys(localStorage).filter(k => k.includes("tenant"));
+      const tenantVals = keysToKeep.map(k => ({k, v: localStorage.getItem(k)}));
+      localStorage.clear();
+      sessionStorage.clear();
+      tenantVals.forEach(tv => localStorage.setItem(tv.k, tv.v));
+    }
+
     setIsDataLoading(true);
     setCurrentStudent(loggedStudent);
     setRole('student');
