@@ -724,19 +724,15 @@ export default function Home() {
     return currentTab;
   }, [role, currentTab]);
 
-  // Estado de alunos online (Recurso desativado para estancar consumo de Cota do Firebase)
-  const [liveOnlineCount, setLiveOnlineCount] = useState<number>(0);
-
   // Efeito de SSE (Server-Sent Events) removido completamente. Evita N x N reads no Firestore.
   useEffect(() => {
     if (role === 'student' && currentStudent?.id) {
-      setLiveOnlineCount(1);
     }
     // Sem EventSource, sem consumo de cota!
   }, [role, currentStudent?.id]);
   const presenceSignature = useMemo(() => {
     if (role === 'student') return 'student_self';
-    if (liveOnlineCount > 0) return `live_${liveOnlineCount}`;
+    if (false) return `live_${liveOnlineCount}`;
 
     const targetStudents = role === 'second_teacher' ? visibleStudentsForRole : activeStudents;
     if (!Array.isArray(targetStudents) || targetStudents.length === 0) return 'empty';
@@ -745,42 +741,10 @@ export default function Home() {
       .filter((s) => s.isOnline === true && s.lastActiveAt)
       .map((s) => `${s.id}:${s.lastActiveAt}`)
       .join('|');
-  }, [role, liveOnlineCount, role === 'second_teacher' ? visibleStudentsForRole : activeStudents]);
+  }, [role, role === 'second_teacher' ? visibleStudentsForRole : activeStudents]);
 
   // Contador de presença real de alunos (zero dados fantasmas e sem número 37 estático),
   // protegido por memoização com verificação leve de janela temporal de 5 minutos
-  const onlineStudentsCount = useMemo(() => {
-    if (role === 'student' && currentStudent?.id) {
-      return 1;
-    }
-
-    // Se temos a contagem do stream em tempo real do Firestore, respeitamos diretamente
-    if (liveOnlineCount > 0) {
-      return liveOnlineCount;
-    }
-
-    const targetStudents = role === 'second_teacher' ? visibleStudentsForRole : activeStudents;
-    if (!Array.isArray(targetStudents) || targetStudents.length === 0) {
-      return 0;
-    }
-
-    // Validação estrita sobre a lista local de estudantes:
-    // NUNCA marca online se lastActiveAt não existir ou se for mais antigo que 5 minutos
-    const now = Date.now();
-    const fiveMinutesMs = 5 * 60 * 1000;
-    let count = 0;
-
-    for (const st of targetStudents) {
-      if (st.isOnline === true && st.lastActiveAt) {
-        const activeTime = new Date(st.lastActiveAt).getTime();
-        if (!isNaN(activeTime) && now - activeTime <= fiveMinutesMs) {
-          count++;
-        }
-      }
-    }
-
-    return count;
-  }, [role, currentStudent?.id, liveOnlineCount, presenceSignature, role === 'second_teacher' ? visibleStudentsForRole : activeStudents]);
 
   // Carregamento sob demanda da Biblioteca do Firestore
   useEffect(() => {
@@ -2147,7 +2111,6 @@ export default function Home() {
           user={teacher}
           onOpenSettings={() => handleTeacherTabChange('configuracoes')}
           onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          onlineStudentsCount={onlineStudentsCount}
         />
 
         {globalDbStatus && (
