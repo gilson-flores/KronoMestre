@@ -54,9 +54,10 @@ import {
   ChevronUp,
   Lock,
   AlertTriangle,
-} from 'lucide-react';
+} , ArrowLeftFromLine } from "lucide-react";
 
 interface StudentPortalViewProps {
+  onReturnToSupervision?: () => void;
   student: StudentUser;
   teacher?: TeacherUser;
   activities: Activity[];
@@ -91,6 +92,7 @@ interface StudentPortalViewProps {
 }
 
 export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
+  onReturnToSupervision,
   student,
   teacher = {
     id: 'teacher-1',

@@ -2066,6 +2066,7 @@ export default function Home() {
   if (role === 'student' && currentStudent) {
     return (
       <StudentPortalView
+              onReturnToSupervision={handleReturnToSupervision}
         student={currentStudent}
         teacher={teacher}
         activities={activities}
@@ -2793,6 +2794,12 @@ export default function Home() {
             ? undefined
             : (st) => {
                 setSupervisingStudent(null);
+                localStorage.setItem("teacher_snapshot", JSON.stringify({
+                  role: localStorage.getItem("role"),
+                  teacherId: localStorage.getItem("teacherId"),
+                  teacherName: localStorage.getItem("teacherName") || "",
+                  secondTeacherId: localStorage.getItem("secondTeacherId") || ""
+                }));
                 handleLoginStudent(st);
                 showGlobalStatus('success', `Simulando ambiente do aluno ${st.fullName}`);
               }
