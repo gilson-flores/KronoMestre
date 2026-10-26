@@ -22,7 +22,7 @@ import {
   Gamepad2
 } from 'lucide-react';
 import { Activity, StudentUser } from '@/lib/types';
-import { getActivityGradeDistribution, getOriginalTurmas, getTurmaLabel } from '@/lib/studentUtils';
+import { getActivityGradeDistribution, getOriginalTurmas, getTurmaLabel } , getActivityStudentAndSubmissionCounts } from "@/lib/studentUtils";
 
 interface DashboardViewProps {
   activities: Activity[];
@@ -233,9 +233,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           filteredActivities.map((act) => {
             const shortName = getShortActivityTitle(act);
             const isExpanded = expandedActId === act.id;
-            const subCount = act.submissions?.length || 0;
-            const pendingCount = act.pendingCorrection || 0;
-            const totalCount = act.totalStudents || 1;
+            const targetStudents = selectedTurma === "Todas" ? students : students.filter(s => s.turma && s.turma.includes(selectedTurma));
+            const metrics = getActivityStudentAndSubmissionCounts(act, activities, targetStudents);
+            const subCount = metrics.subCount;
+            const pendingCount = metrics.pendingCount;
+            const totalCount = metrics.expectedStudentsCount > 0 ? metrics.expectedStudentsCount : 1;
             const progress = totalCount > 0 ? Math.round((subCount / totalCount) * 100) : 0;
             const isRec = Boolean(act.isRecovery || act.type === 'Recuperação Paralela' || act.recoveryFromId);
 
