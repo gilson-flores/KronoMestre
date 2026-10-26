@@ -266,9 +266,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
         turmaStudents.map((s) => s.fullName?.trim().toLowerCase()).filter(Boolean)
       );
 
-      const turmaActs = canonicalActivities.filter((a) =>
-        canStudentAccessActivity(a.turma, turma)
-      );
+      const turmaActs = canonicalActivities.filter((a) => canStudentAccessActivity(a.turma, turma) && !a.isRcoPosted);
       if (turmaActs.length === 0) return;
 
       let submissionsCount = 0;

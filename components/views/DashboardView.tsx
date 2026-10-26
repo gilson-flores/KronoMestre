@@ -268,6 +268,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         ) : (
                           <span className="text-[10px] font-bold text-rose-400">● Encerrada</span>
                         )}
+{act.isRcoPosted && <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">✅ RCO Lançado</span>}
                       </div>
                       
                       <h3 className="text-base sm:text-lg font-black text-foreground truncate" title={act.title}>
@@ -343,6 +344,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <button onClick={() => onEditActivity(act)} className="px-3 py-2 bg-surface hover:bg-surface-hover text-foreground border border-border rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer">
                         <Edit className="w-3.5 h-3.5" /> Editar
                       </button>
+
+    <button onClick={() => onSaveActivity({ ...act, isRcoPosted: !act.isRcoPosted })} className={`px-3 py-2 border rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${act.isRcoPosted ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30" : "bg-surface hover:bg-surface-hover text-foreground border-border"}`}>
+      <FileText className="w-3.5 h-3.5" /> {act.isRcoPosted ? "Desmarcar RCO" : "Marcar Lançado (RCO)"}
+    </button>
 
                       {onOpenParallelRecoveryModal && !isRec && (
                         <button onClick={() => onOpenParallelRecoveryModal(act)} className="px-3 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer">
