@@ -73,7 +73,7 @@ export async function GET(request: Request) {
 
     const cacheKey = `messages_${session.tenantId}`;
 
-    const messages = await serverCache.getOrSet(cacheKey, 180, async () => {
+    const messages = await serverCache.getOrSet(cacheKey, 900, async () => {
       const db = getAdminDb();
       const snapshot = await db
         .collection('tenants')
@@ -166,7 +166,9 @@ export async function POST(request: Request) {
       .doc(msgId)
       .set(msgDoc, { merge: true });
 
-    serverCache.delete(`messages_${session.tenantId}`);
+    if (!serverCache.upsertListItem(`messages_${session.tenantId}`, 900, msgDoc, { append: true })) {
+      serverCache.delete(`messages_${session.tenantId}`);
+    }
 
     return NextResponse.json({ success: true, message: msgDoc });
   } catch (error: any) {
@@ -193,24 +195,37 @@ export async function PUT(request: Request) {
 
     const db = getAdminDb();
     const messagesRef = db.collection('tenants').doc(session.tenantId).collection('messages');
-    const snapshot = await messagesRef.where('read', '==', false).get();
+    const cacheKey = `messages_${session.tenantId}`;
+    const belongsToThreadFn = (m: any) =>
+      (m.threadId === threadId || m.recipientId === threadId || m.senderId === threadId) &&
+      m.senderRole !== currentRole;
 
-    const batch = db.batch();
+    let idsToUpdate: string[] = [];
+    const cachedAll = serverCache.get<any[]>(cacheKey);
+
+    if (Array.isArray(cachedAll)) {
+      idsToUpdate = cachedAll
+        .filter((m) => m && m.read === false && belongsToThreadFn(m))
+        .map((m) => String(m.id));
+    } else {
+      const snapshot = await messagesRef.where('read', '==', false).get();
+      idsToUpdate = snapshot.docs.filter((d) => belongsToThreadFn(d.data())).map((d) => d.id);
+    }
+
     let updatedCount = 0;
-
-    snapshot.docs.forEach((doc) => {
-      const m = doc.data();
-      const belongsToThread =
-        m.threadId === threadId || m.recipientId === threadId || m.senderId === threadId;
-      if (belongsToThread && m.senderRole !== currentRole) {
-        batch.update(doc.ref, { read: true });
-        updatedCount++;
+    if (idsToUpdate.length > 0) {
+      for (let i = 0; i < idsToUpdate.length; i += 400) {
+        const batch = db.batch();
+        idsToUpdate.slice(i, i + 400).forEach((id) => batch.update(messagesRef.doc(id), { read: true }));
+        await batch.commit();
       }
-    });
+      updatedCount = idsToUpdate.length;
 
-    if (updatedCount > 0) {
-      await batch.commit();
-      serverCache.delete(`messages_${session.tenantId}`);
+      const updatedSet = new Set(idsToUpdate);
+      const patched = serverCache.patchListItems(cacheKey, 900, (m) =>
+        m && updatedSet.has(String(m.id)) ? { ...m, read: true } : m
+      );
+      if (!patched) serverCache.delete(cacheKey);
     }
 
     return NextResponse.json({ success: true, updatedCount });

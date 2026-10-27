@@ -32,7 +32,6 @@ import {
   createAdaptedMildModerateActivity,
   createAdaptedSeverePlayfulActivity,
 } from '@/lib/adaptationUtils';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 interface NewActivityModalProps {
   isOpen: boolean;
@@ -368,12 +367,16 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
       }
 
       // Validar senha contra Supabase Auth se configurado
-      if (isSupabaseConfigured && supabase && emailToValidate) {
-        const { error: authErr } = await supabase.auth.signInWithPassword({
-          email: emailToValidate.trim().toLowerCase(),
-          password: userPassword,
-        });
-        if (authErr) {
+      {
+        const verifyRes = await fetch('/api/auth/verify-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: userPassword }),
+        }).catch(() => null);
+        if (!verifyRes) {
+          throw new Error('Não foi possível validar a senha agora. Verifique a conexão e tente novamente.');
+        }
+        if (!verifyRes.ok) {
           throw new Error('Senha de usuário incorreta. Verifique sua senha e tente novamente.');
         }
       }

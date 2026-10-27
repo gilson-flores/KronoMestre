@@ -20,7 +20,6 @@ import {
 import { TeacherUser, StudentUser, Activity, AtestadoRadRecord } from '@/lib/types';
 import { formatAvatarUrl } from '@/lib/utils';
 import { getTurmaLabel, isStudentPNE, isActivityAdapted } from '@/lib/studentUtils';
-import { supabase } from '@/lib/supabase';
 import { getScopedLocalStorageItem, setScopedLocalStorageItem } from '@/lib/cacheUtils';
 
 interface SecondTeacherDashboardViewProps {

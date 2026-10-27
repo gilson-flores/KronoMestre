@@ -1,14 +1,13 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { cookies } from 'next/headers';
-import { getAdminAuth } from '@/lib/firebase-admin';
+import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { getSessionFromRequest } from '@/lib/auth-server';
+import { fromRcoDoc } from '@/lib/rco-doc';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  // Verificação estrita de autenticação de Professor ou Administrador
-  let isAuthorized = false;
+  let ownerId: string | null = null;
 
   try {
     const cookieStore = await cookies();
@@ -16,65 +15,74 @@ export async function GET(req: NextRequest) {
     if (sessionCookie) {
       const auth = getAdminAuth();
       const decoded = await auth.verifySessionCookie(sessionCookie, true);
-      if (decoded && decoded.uid) {
-        isAuthorized = true;
-      }
+      if (decoded && decoded.uid) ownerId = decoded.uid;
     }
   } catch {}
 
-  if (!isAuthorized) {
+  if (!ownerId) {
     try {
       const jwtSession = await getSessionFromRequest(req);
       if (jwtSession && ((jwtSession.role as string) === 'teacher' || (jwtSession.role as string) === 'admin')) {
-        isAuthorized = true;
+        ownerId = jwtSession.ownerTeacherId || jwtSession.sub;
       }
     } catch {}
   }
 
-  if (!isAuthorized) {
+  if (!ownerId) {
     return NextResponse.json(
       { error: 'Acesso negado. Apenas o Professor Titular ou Administrador autenticado pode exportar backups.' },
       { status: 401 }
     );
   }
 
-  const supabase = getSupabaseAdmin();
-  if (!supabase) {
-    return NextResponse.json({ error: 'Supabase admin client not configured' }, { status: 500 });
-  }
-
   try {
+    const db = getAdminDb();
+    const tenantRef = db.collection('tenants').doc(ownerId);
+
+    const readCol = async (name: string) => {
+      const snap = await tenantRef.collection(name).get();
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    };
+
     const [
-      { data: students },
-      { data: activities },
-      { data: submissions },
-      { data: atestados_rad },
-      { data: teachers },
-      { data: second_teachers },
-      { data: study_files },
-      { data: chat_messages }
+      tenantSnap,
+      students,
+      activities,
+      atestados_rad,
+      second_teachers,
+      study_files,
+      chat_messages,
+      rcoRaw,
     ] = await Promise.all([
-      supabase.from('students').select('*').limit(10000),
-      supabase.from('activities').select('*').limit(10000),
-      supabase.from('submissions').select('*').limit(10000),
-      supabase.from('atestados_rad').select('*').limit(10000),
-      supabase.from('teachers').select('*').limit(10000),
-      supabase.from('second_teachers').select('*').limit(10000),
-      supabase.from('study_files').select('*').limit(10000),
-      supabase.from('chat_messages').select('*').limit(10000)
+      tenantRef.get(),
+      readCol('students'),
+      readCol('activities'),
+      readCol('atestados_rad'),
+      readCol('second_teachers'),
+      readCol('library_files'),
+      readCol('messages'),
+      readCol('rco_emissions'),
     ]);
+
+    const rco_emissions = rcoRaw.map((d: any) => fromRcoDoc(d));
+    const teachers = tenantSnap.exists ? [{ id: tenantSnap.id, ...tenantSnap.data() }] : [];
+
+    const submissions = (activities as any[]).flatMap((a) =>
+      (Array.isArray(a.submissions) ? a.submissions : []).map((s: any) => ({ activityId: a.id, ...s }))
+    );
 
     const backupData = {
       timestamp: new Date().toISOString(),
       metadata: {
-        students_count: students?.length || 0,
-        activities_count: activities?.length || 0,
-        submissions_count: submissions?.length || 0,
-        atestados_rad_count: atestados_rad?.length || 0,
-        teachers_count: teachers?.length || 0,
-        second_teachers_count: second_teachers?.length || 0,
-        study_files_count: study_files?.length || 0,
-        chat_messages_count: chat_messages?.length || 0,
+        students_count: students.length,
+        activities_count: activities.length,
+        submissions_count: submissions.length,
+        atestados_rad_count: atestados_rad.length,
+        teachers_count: teachers.length,
+        second_teachers_count: second_teachers.length,
+        study_files_count: study_files.length,
+        chat_messages_count: chat_messages.length,
+        rco_emissions_count: rco_emissions.length,
       },
       data: {
         students,
@@ -84,18 +92,18 @@ export async function GET(req: NextRequest) {
         teachers,
         second_teachers,
         study_files,
-        chat_messages
-      }
+        chat_messages,
+        rco_emissions,
+      },
     };
 
     return new NextResponse(JSON.stringify(backupData, null, 2), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Content-Disposition': `attachment; filename="backup_sociologia_online_${new Date().toISOString().split('T')[0]}.json"`
-      }
+        'Content-Disposition': `attachment; filename="backup_sociologia_online_${new Date().toISOString().split('T')[0]}.json"`,
+      },
     });
-
   } catch (err: any) {
     return NextResponse.json({ error: 'Erro ao gerar backup', details: err.message }, { status: 500 });
   }

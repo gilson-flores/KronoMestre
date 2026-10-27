@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     serverCache.recordPresence(ownerTeacherId, String(studentId), !isOffline, { turma });
 
     // Oportunisticamente grava no Firestore apenas se não houver bloqueio de cota
-    if (!serverCache.isQuotaBlocked()) {
+    if (!serverCache.isQuotaBlocked() && (isOffline || serverCache.shouldPersistPresence(ownerTeacherId, String(studentId)))) {
       try {
         const db = getAdminDb();
         const studentRef = db

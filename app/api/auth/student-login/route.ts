@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     let studentList: any[] = [];
 
     try {
-      studentList = await serverCache.getOrSet(studentsCacheKey, 180, async () => {
+      studentList = await serverCache.getOrSet(studentsCacheKey, 1800, async () => {
         const studentsRef = db.collection('tenants').doc(ownerTeacherId!).collection('students');
         const snapshot = await studentsRef.get();
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -176,7 +176,7 @@ export async function POST(request: Request) {
     serverCache.recordPresence(ownerTeacherId, matchedStudent.id, true, { turma: matchedStudent.turma });
 
     // 2. Gravação oportunista no Firestore apenas se a cota não estiver bloqueada
-    if (!serverCache.isQuotaBlocked()) {
+    if (!serverCache.isQuotaBlocked() && serverCache.shouldPersistPresence(ownerTeacherId, String(matchedStudent.id), 60 * 1000)) {
       try {
         await db
           .collection('tenants')

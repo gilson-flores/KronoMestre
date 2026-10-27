@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { createClient } from '@supabase/supabase-js';
+import { serverCache } from '@/lib/server-cache';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,6 +81,8 @@ export async function GET(request: Request) {
     }
 
     await batch.commit();
+    serverCache.delete(`students_${uid}`);
+    serverCache.delete(`activities_${uid}`);
 
     return NextResponse.json({ 
         success: true, 

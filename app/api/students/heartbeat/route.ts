@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     serverCache.recordPresence(ownerTeacherId, String(studentId), !isOffline, { turma });
 
     // 2. Persistência oportunista no Firestore (apenas se a cota do Firebase não estiver bloqueada)
-    if (!serverCache.isQuotaBlocked()) {
+    if (!serverCache.isQuotaBlocked() && (isOffline || serverCache.shouldPersistPresence(ownerTeacherId, String(studentId)))) {
       try {
         const db = getAdminDb();
         const studentRef = db

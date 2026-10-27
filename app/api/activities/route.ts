@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
 
     const cacheKey = `activities_${ownerTeacherId}`;
 
-    const activities = await serverCache.getOrSet(cacheKey, 180, async () => {
+    const activities = await serverCache.getOrSet(cacheKey, 900, async () => {
       const db = getAdminDb();
       const activitiesRef = db.collection('tenants').doc(ownerTeacherId).collection('activities');
       const snapshot = await activitiesRef.get();
@@ -90,7 +90,9 @@ export async function POST(req: NextRequest) {
     const cleanData = cleanForFirestore({ ...body, ownerTeacherId });
 
     await activityRef.set(cleanData, { merge: true });
-    serverCache.delete(`activities_${ownerTeacherId}`);
+    if (!serverCache.upsertListItem(`activities_${ownerTeacherId}`, 900, cleanData)) {
+      serverCache.delete(`activities_${ownerTeacherId}`);
+    }
 
     return NextResponse.json({ success: true, activity: cleanData });
   } catch (error: any) {
@@ -115,6 +117,7 @@ export async function PUT(req: NextRequest) {
     const cleanData = cleanForFirestore(body);
 
     // TRANSAÇÃO ATÔMICA: Garante ZERO PERDA DE DADOS por Race Condition de alunos entregando simultaneamente
+    let savedActivity: any = null;
     await db.runTransaction(async (transaction) => {
       const doc = await transaction.get(activityRef);
       let mergedSubmissions = cleanData.submissions || [];
@@ -146,10 +149,13 @@ export async function PUT(req: NextRequest) {
         totalSubmissions
       };
       
+      savedActivity = mergedData;
       transaction.set(activityRef, mergedData, { merge: true });
     });
 
-    serverCache.delete(`activities_${ownerTeacherId}`);
+    if (!savedActivity || !serverCache.upsertListItem(`activities_${ownerTeacherId}`, 900, { ...savedActivity, id: body.id })) {
+      serverCache.delete(`activities_${ownerTeacherId}`);
+    }
 
     return NextResponse.json({ success: true, message: 'Dados salvos com integridade atômica.' });
   } catch (error: any) {
@@ -173,7 +179,9 @@ export async function DELETE(req: NextRequest) {
     const db = getAdminDb();
     const activityRef = db.collection('tenants').doc(ownerTeacherId).collection('activities').doc(id);
     await activityRef.delete();
-    serverCache.delete(`activities_${ownerTeacherId}`);
+    if (!serverCache.removeListItem(`activities_${ownerTeacherId}`, 900, id)) {
+      serverCache.delete(`activities_${ownerTeacherId}`);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

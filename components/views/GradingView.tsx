@@ -43,7 +43,6 @@ import {
 import { GradeConsolidationModal } from '@/components/modals/GradeConsolidationModal';
 import { Layers, GitFork, CheckCheck, HelpCircle } from 'lucide-react';
 import { GradingLoadingSkeleton, StandardErrorState } from '@/components/LoadingState';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 interface GradingViewProps {
   activity: Activity;
@@ -365,63 +364,21 @@ export const GradingView: React.FC<GradingViewProps> = ({
     setIsRefreshing(true);
     setRefreshError(false);
     try {
-      if (isSupabaseConfigured && supabase) {
-        const { data: dbSubmissions, error: subError } = await supabase
-          .from('submissions')
-          .select('*')
-          .eq('activity_id', activity.id);
-
-        if (subError) {
-          console.error('Erro ao buscar entregas no Supabase:', subError);
-          setRefreshError(true);
-          return;
-        }
-
-        if (dbSubmissions && dbSubmissions.length > 0) {
-          const distribution = getActivityGradeDistribution({
-            maxGrade: activity.maxGrade || 10,
-            type: activity.type,
-            questions: activity.questions || [],
-          });
-
-          const mapped: ActivitySubmission[] = dbSubmissions.map((sub: any) => ({
-            studentId: sub.student_id,
-            studentName: sub.student_name,
-            matricula: sub.matricula,
-            tag: sub.tag,
-            avatarUrl: sub.avatar_url,
-            objectiveScore: Number(sub.objective_score || 0),
-            maxObjectiveScore:
-              sub.max_objective_score !== undefined && sub.max_objective_score !== null
-                ? Number(sub.max_objective_score)
-                : distribution.maxObjectiveGrade,
-            essayScore:
-              sub.essay_score !== null && sub.essay_score !== undefined
-                ? Number(sub.essay_score)
-                : undefined,
-            maxEssayScore:
-              sub.max_essay_score !== undefined && sub.max_essay_score !== null
-                ? Number(sub.max_essay_score)
-                : distribution.maxEssayGrade,
-            status: sub.status,
-            essayAnswer: sub.essay_answer,
-            teacherFeedback: sub.teacher_feedback,
-            extraPoints: Number(sub.extra_points || 0),
-            registeredInStateSystem: Boolean(sub.registered_in_state_system),
-            groupMembers: sub.group_members,
-            returnCount: Number(sub.return_count || 0),
-          }));
-          setSubmissions(mapped);
-        } else {
-          setSubmissions(activity.submissions || []);
-        }
-      } else {
-        setSubmissions(activity.submissions || []);
+      const res = await fetch('/api/activities', { cache: 'no-store' });
+      if (!res.ok) {
+        console.error('Erro ao buscar entregas no Firestore:', res.statusText);
+        setRefreshError(true);
+        return;
       }
+      const payload = await res.json();
+      const fresh = Array.isArray(payload.activities)
+        ? payload.activities.find((a: any) => a.id === activity.id)
+        : null;
+      setSubmissions(fresh?.submissions || activity.submissions || []);
       setRefreshToast(true);
       setTimeout(() => setRefreshToast(false), 3000);
     } catch (err) {
-      console.error('Erro ao atualizar entregas do Supabase:', err);
+      console.error('Erro ao atualizar entregas:', err);
       setRefreshError(true);
     } finally {
       setIsRefreshing(false);

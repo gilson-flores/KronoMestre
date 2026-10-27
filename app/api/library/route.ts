@@ -34,7 +34,7 @@ export async function GET(request: Request) {
     if (!teacherId) return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
 
     const cacheKey = `library_${teacherId}`;
-    const files = await serverCache.getOrSet(cacheKey, 300, async () => {
+    const files = await serverCache.getOrSet(cacheKey, 1800, async () => {
       const db = getAdminDb();
       const snapshot = await db.collection('tenants').doc(teacherId).collection('library_files').get();
       return snapshot.docs.map(doc => doc.data());

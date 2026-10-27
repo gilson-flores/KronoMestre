@@ -1,17 +1,17 @@
 import type {NextConfig} from 'next';
 
+const BUILD_ID = process.env.NEXT_PUBLIC_BUILD_ID || process.env.BUILD_ID || String(Date.now());
+
 const nextConfig: NextConfig = {
-  // Bloqueio completo: Firebase Admin e seus sub-módulos de criptografia
+  env: { NEXT_PUBLIC_BUILD_ID: BUILD_ID },
   serverExternalPackages: ["firebase-admin", "jose", "jwks-rsa"],
-  
   reactStrictMode: true,
   typescript: {
-    ignoreBuildErrors: true, // Ignorar temporariamente erros de TypeScript para evitar bloqueio no build
+    ignoreBuildErrors: true,
   },
   eslint: {
-    ignoreDuringBuilds: true, // Ignorar ESLint no build
+    ignoreDuringBuilds: true,
   },
-  // Allow access to remote image placeholder.
   images: {
     remotePatterns: [
       {

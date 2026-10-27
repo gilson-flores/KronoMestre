@@ -522,7 +522,7 @@ export const BackupView: React.FC<BackupViewProps> = ({
                   <h2 className="text-lg font-bold text-foreground">Importar Dados do Supabase para o Firestore</h2>
                 </div>
                 <p className="text-xs text-text-muted mt-2 leading-relaxed">
-                  Importa com segurança alunos, turmas, atividades e perfil do professor registrados no banco Supabase legado diretamente para a coleção deste tenant no Firestore (<code className="text-emerald-400">tenants/{'{uid}'}</code>). Nenhum dado do Supabase é excluído.
+                  Importa com segurança alunos, turmas, atividades, atestados/RAD, emissões de RCO e perfil do professor registrados no banco Supabase legado diretamente para a coleção deste tenant no Firestore (<code className="text-emerald-400">tenants/{'{uid}'}</code>). Nenhum dado do Supabase é excluído.
                 </p>
               </div>
             </div>
@@ -544,7 +544,7 @@ export const BackupView: React.FC<BackupViewProps> = ({
                     if (!res.ok) throw new Error(data.error || 'Falha na migração');
                     setFeedbackMessage({
                       type: 'success',
-                      text: `Migração concluída com sucesso! Alunos importados: ${data.stats?.importedStudents || 0}, Atividades: ${data.stats?.importedActivities || 0}.`,
+                      text: `Migração concluída com sucesso! Alunos: ${data.stats?.importedStudents || 0}, Atividades: ${data.stats?.importedActivities || 0}, Atestados/RAD: ${data.stats?.importedAtestados || 0}, Emissões RCO: ${data.stats?.importedRcoEmissions || 0}.`,
                     });
                   } catch (err: any) {
                     setFeedbackMessage({ type: 'error', text: `Erro na migração: ${err.message || String(err)}` });

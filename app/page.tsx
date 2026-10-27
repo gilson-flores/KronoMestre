@@ -10,8 +10,10 @@ import {
   initialChatMessages,
 } from '@/lib/initialData';
 import { UserRole, TeacherUser, StudentUser, Activity, ChatMessage, LibraryFile } from '@/lib/types';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { AuthView } from '@/components/AuthView';
+import { fetchWithRetry } from '@/lib/fetchRetry';
+import { useFreshness } from '@/lib/useFreshness';
+import { UpdateBanner } from '@/components/UpdateBanner';
 import { Sidebar } from '@/components/Sidebar';
 import { NavbarTop } from '@/components/NavbarTop';
 import { DashboardView } from '@/components/views/DashboardView';
@@ -569,24 +571,7 @@ export default function Home() {
       console.warn('Aviso ao sincronizar link do Drive no Firestore:', err);
     }
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const cleanEmail = (teacher.email || '').trim().toLowerCase();
-        const payload: any = {
-          email: cleanEmail,
-          name: teacher.name,
-          subject: teacher.subject,
-          avatar_url: teacher.avatarUrl,
-          phone: teacher.phone || null,
-          school: teacher.school || null,
-          drive_folder_url: cleanUrl,
-        };
-
-        await supabase.from('teachers').upsert(payload, { onConflict: 'email' });
-      } catch (err) {
-        console.warn('Aviso secundário no Supabase:', err);
-      }
-    }
+    
 
     showGlobalStatus('success', 'Link do repositório do Google Drive salvo e gravado com sucesso!');
   };
@@ -657,10 +642,11 @@ export default function Home() {
 
       setIsDataLoading(true);
       setDataLoadError(false);
+      let loadFailed = false;
       try {
-        // 1. Carregar Alunos do Firestore (com cache no backend e cliente)
-        const stuRes = await fetch('/api/students');
-        if (stuRes.ok) {
+        const stuRes = await fetchWithRetry('/api/students');
+        if (!stuRes?.ok) loadFailed = true;
+        if (stuRes?.ok) {
           const stuData = await stuRes.json();
           if (Array.isArray(stuData.students) && stuData.students.length > 0) {
             setStudents(stuData.students);
@@ -670,9 +656,9 @@ export default function Home() {
           }
         }
 
-        // 2. Carregar Atividades do Firestore (com sincronização segura)
-        const actRes = await fetch('/api/activities');
-        if (actRes.ok) {
+        const actRes = await fetchWithRetry('/api/activities');
+        if (!actRes?.ok) loadFailed = true;
+        if (actRes?.ok) {
           const actData = await actRes.json();
           if (Array.isArray(actData.activities)) {
             setActivities(actData.activities);
@@ -682,9 +668,9 @@ export default function Home() {
           }
         }
 
-        // 3. Carregar Mensagens de Chat do Firestore (com cache local resiliente)
-        const msgRes = await fetch('/api/messages');
-        if (msgRes.ok) {
+        const msgRes = await fetchWithRetry('/api/messages');
+        if (!msgRes?.ok) loadFailed = true;
+        if (msgRes?.ok) {
           const msgData = await msgRes.json();
           if (Array.isArray(msgData.messages)) {
             setChatMessages(msgData.messages);
@@ -694,15 +680,16 @@ export default function Home() {
           }
         }
 
-        // 4. Carregar Biblioteca de Arquivos do Firestore COM CACHE (Economia de Leituras)
         const cacheKey = `library_cache_${teacher?.id || 'default'}`;
-        const cachedLibrary = sessionStorage.getItem(cacheKey);
+        const cachedAt = Number(sessionStorage.getItem(`${cacheKey}_ts`) || 0);
+        const cachedLibrary = Date.now() - cachedAt < 10 * 60 * 1000 ? sessionStorage.getItem(cacheKey) : null;
 
         if (cachedLibrary) {
           setLibrary(JSON.parse(cachedLibrary));
         } else {
-          const libRes = await fetch('/api/library');
-          if (libRes.ok) {
+          const libRes = await fetchWithRetry('/api/library');
+          if (!libRes?.ok) loadFailed = true;
+          if (libRes?.ok) {
             const libData = await libRes.json();
             if (Array.isArray(libData.files) && libData.files.length > 0) {
               const mappedLibrary: LibraryFile[] = libData.files.map((item: any) => ({
@@ -715,11 +702,12 @@ export default function Home() {
                 driveUrl: item.driveUrl || item.drive_url || item.file_url || '',
               }));
               setLibrary(mappedLibrary);
-              // Guarda o resultado mapeado no cache do navegador
               sessionStorage.setItem(cacheKey, JSON.stringify(mappedLibrary));
+              sessionStorage.setItem(`${cacheKey}_ts`, String(Date.now()));
             }
           }
         }
+        if (loadFailed) setDataLoadError(true);
       } catch (err: any) {
         console.error('Erro ao carregar dados do Firestore:', err);
         setDataLoadError(true);
@@ -736,6 +724,86 @@ export default function Home() {
       });
     }
   }, [loadDataTrigger, role, teacher.id]);
+
+  const silentRefreshState = useRef<{ running: boolean; queued: Set<string> }>({ running: false, queued: new Set() });
+  const silentRefresh = useCallback(
+    async (changed: string[]) => {
+      const st = silentRefreshState.current;
+      changed.forEach((col) => st.queued.add(col));
+      if (st.running) return;
+      st.running = true;
+      try {
+        while (st.queued.size > 0) {
+          const batch = Array.from(st.queued);
+          st.queued.clear();
+
+          if (batch.includes('students')) {
+            const r = await fetchWithRetry('/api/students');
+            if (r?.ok) {
+              const d = await r.json();
+              if (Array.isArray(d.students) && d.students.length > 0) {
+                setStudents(d.students);
+                setScopedLocalStorageItem('local_students_data', JSON.stringify(d.students), teacher.id);
+              }
+            }
+          }
+          if (batch.includes('activities')) {
+            const r = await fetchWithRetry('/api/activities');
+            if (r?.ok) {
+              const d = await r.json();
+              if (Array.isArray(d.activities)) {
+                setActivities(d.activities);
+                setScopedLocalStorageItem('local_activities_data', JSON.stringify(d.activities), teacher.id);
+              }
+            }
+          }
+          if (batch.includes('messages')) {
+            const r = await fetchWithRetry('/api/messages');
+            if (r?.ok) {
+              const d = await r.json();
+              if (Array.isArray(d.messages)) {
+                setChatMessages(d.messages);
+                setScopedLocalStorageItem('local_messages_data', JSON.stringify(d.messages), teacher.id);
+              }
+            }
+          }
+          if (batch.includes('library')) {
+            const cacheKey = `library_cache_${teacher?.id || 'default'}`;
+            sessionStorage.removeItem(cacheKey);
+            sessionStorage.removeItem(`${cacheKey}_ts`);
+            const r = await fetchWithRetry('/api/library');
+            if (r?.ok) {
+              const d = await r.json();
+              if (Array.isArray(d.files)) {
+                const mapped: LibraryFile[] = d.files.map((item: any) => ({
+                  id: item.id,
+                  title: item.title,
+                  category: item.category || 'Geral',
+                  turma: item.turma || 'Todas',
+                  fileSize: item.fileSize || item.file_size || '1 MB',
+                  updatedAt: item.updatedAt || item.updated_at || new Date().toLocaleDateString('pt-BR'),
+                  driveUrl: item.driveUrl || item.drive_url || item.file_url || '',
+                }));
+                setLibrary(mapped);
+                sessionStorage.setItem(cacheKey, JSON.stringify(mapped));
+                sessionStorage.setItem(`${cacheKey}_ts`, String(Date.now()));
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Falha na atualização em segundo plano:', err);
+      } finally {
+        st.running = false;
+      }
+    },
+    [teacher.id]
+  );
+
+  const { updateAvailable } = useFreshness({
+    enabled: role === 'teacher' || role === 'second_teacher' || role === 'student',
+    onChanged: silentRefresh,
+  });
 
   // Tab efetiva para 2º Professor
   const activeTeacherTab = useMemo(() => {
@@ -940,9 +1008,7 @@ export default function Home() {
       console.warn('Falha ao invalidar cookie no servidor', e);
     }
 
-    if (isSupabaseConfigured && supabase) {
-      supabase?.auth.signOut().catch(() => {});
-    }
+    
 
     setRole(null);
     setCurrentStudent(null);
@@ -2116,6 +2182,7 @@ export default function Home() {
   // 4. Teacher Dashboard Layout
   return (
     <div className="flex min-h-screen bg-background text-foreground overflow-x-hidden">
+      <UpdateBanner visible={updateAvailable} />
       <Sidebar
         currentTab={activeTeacherTab}
         setCurrentTab={handleTeacherTabChange}
@@ -2692,27 +2759,7 @@ export default function Home() {
                         throw new Error(errData.error || 'Falha ao salvar no Firestore');
                       }
 
-                      if (isSupabaseConfigured && supabase) {
-                        try {
-                          const updateFields: any = {
-                            email: teacher.email,
-                            name: teacher.name,
-                            subject: teacher.subject,
-                            avatar_url: teacher.avatarUrl,
-                            phone: teacher.phone || null,
-                            school: teacher.school || null,
-                            drive_folder_url: teacher.driveFolderUrl || '',
-                            matricula_funcional: teacher.matriculaFuncional || null,
-                            contract_start_date: teacher.contractStartDate || null,
-                            contract_end_date: teacher.contractEndDate || null,
-                            contract_type: teacher.contractType || 'ACT / Contratado',
-                            contract_status: teacher.contractStatus || 'ativo',
-                          };
-                          await supabase.from('teachers').upsert(updateFields, { onConflict: 'email' });
-                        } catch (supaErr) {
-                          console.warn('Aviso de sincronização secundária no Supabase:', supaErr);
-                        }
-                      }
+                      
 
                       setTeacherSaveStatus({
                         type: 'success',

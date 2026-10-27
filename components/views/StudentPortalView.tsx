@@ -284,7 +284,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
       // 3. Roteamento PNE
       if (isCurrentStudentPNE) {
-        const isStudentIncludedInActivity = (actToCheck) => {
+        const isStudentIncludedInActivity = (actToCheck: any) => {
           if (!actToCheck || !actToCheck.includedPneStudentIds || actToCheck.includedPneStudentIds.length === 0) return false;
           const ids = actToCheck.includedPneStudentIds;
           return (

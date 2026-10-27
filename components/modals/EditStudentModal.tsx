@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Pencil, AlertTriangle, HeartHandshake, RefreshCw } from 'lucide-react';
 import { StudentUser, TeacherUser } from '@/lib/types';
 import { PneConditionsSelect } from '@/components/PneConditionsSelect';
-import { supabase } from '@/lib/supabase';
 import {
   normalizeStudentName,
   validateStudentName,

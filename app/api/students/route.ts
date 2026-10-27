@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
 
     const cacheKey = `students_${ownerTeacherId}`;
 
-    const students = await serverCache.getOrSet(cacheKey, 600, async () => {
+    const students = await serverCache.getOrSet(cacheKey, 1800, async () => {
       const db = getAdminDb();
       const studentsRef = db.collection('tenants').doc(ownerTeacherId).collection('students');
       const snapshot = await studentsRef.get();
@@ -110,8 +110,13 @@ export async function POST(req: NextRequest) {
       await batch.commit();
     }
 
-    // Invalida cache após salvar novos alunos
-    serverCache.delete(`students_${ownerTeacherId}`);
+    {
+      let allPatched = true;
+      for (const sv of savedStudents) {
+        if (!serverCache.upsertListItem(`students_${ownerTeacherId}`, 1800, sv, { append: true })) { allPatched = false; break; }
+      }
+      if (!allPatched) serverCache.delete(`students_${ownerTeacherId}`);
+    }
 
     return NextResponse.json({ success: true, students: savedStudents });
   } catch (error: any) {
@@ -138,8 +143,9 @@ export async function PUT(req: NextRequest) {
 
     await studentRef.set(cleanData, { merge: true });
 
-    // Invalida cache após atualização do aluno
-    serverCache.delete(`students_${ownerTeacherId}`);
+    if (!serverCache.upsertListItem(`students_${ownerTeacherId}`, 1800, { ...cleanData, id: body.id }, { append: true })) {
+      serverCache.delete(`students_${ownerTeacherId}`);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
@@ -181,7 +187,9 @@ export async function DELETE(req: NextRequest) {
 
     // ====== EXCLUSÃO INDIVIDUAL ======
     await studentsRef.doc(id).delete();
-    serverCache.delete(`students_${ownerTeacherId}`);
+    if (!serverCache.removeListItem(`students_${ownerTeacherId}`, 1800, id)) {
+      serverCache.delete(`students_${ownerTeacherId}`);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

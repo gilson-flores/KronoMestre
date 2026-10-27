@@ -1,6 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/auth-server';
-import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { serverCache } from '@/lib/server-cache';
+
+export const dynamic = 'force-dynamic';
+
+const TTL = 900;
+const cacheKeyFor = (owner: string) => `atestados_rad_${owner}`;
+
+function atestadosCol(owner: string) {
+  return getAdminDb().collection('tenants').doc(owner).collection('atestados_rad');
+}
+
+async function loadAll(owner: string): Promise<any[]> {
+  return serverCache.getOrSet(cacheKeyFor(owner), TTL, async () => {
+    const snap = await atestadosCol(owner).get();
+    const list = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+    list.sort((a: any, b: any) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    return list;
+  });
+}
+
+async function loadStudents(owner: string): Promise<any[]> {
+  return serverCache.getOrSet(`students_${owner}`, 1800, async () => {
+    const snap = await getAdminDb().collection('tenants').doc(owner).collection('students').get();
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  });
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -9,75 +35,41 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado. Faça login para continuar.' }, { status: 401 });
     }
 
-    const admin = getSupabaseAdmin();
-    if (!admin) {
-      return NextResponse.json({ error: 'Banco de dados não configurado.' }, { status: 500 });
-    }
+    const owner = session.ownerTeacherId || session.sub;
+    let filtered = await loadAll(owner);
 
-    const ownerTeacherId = session.ownerTeacherId || session.sub;
-
-    // 1. Busca todos os registros vinculados ao ownerTeacherId
-    const { data: records, error } = await admin
-      .from('atestados_rad')
-      .select('*')
-      .eq('owner_teacher_id', ownerTeacherId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Erro ao buscar atestados_rad:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    let filtered = records || [];
-
-    // 2. Se for 2º Professor, restringe a visualização apenas aos alunos sob sua tutoria / turmas vinculadas
     if (session.role === 'second_teacher') {
-      const secondTeacherId = session.sub;
-      // Busca alunos vinculados a este 2º professor
-      const { data: students } = await admin
-        .from('students')
-        .select('id, full_name, matricula, turma')
-        .eq('owner_teacher_id', ownerTeacherId)
-        .or(`second_teacher_id.eq.${secondTeacherId},second_teacher_name.ilike.%${session.name}%`);
+      const students = await loadStudents(owner);
+      const myName = String(session.name || '').toLowerCase().trim();
+      const mine = students.filter(
+        (s: any) =>
+          s.secondTeacherId === session.sub ||
+          (myName && String(s.secondTeacherName || '').toLowerCase().includes(myName))
+      );
 
-      if (students && students.length > 0) {
-        const studentIds = new Set(students.map((s) => s.id));
-        const studentMatriculas = new Set(students.map((s) => s.matricula));
-        const studentNames = new Set(students.map((s) => s.full_name?.toLowerCase().trim()));
-
+      if (mine.length > 0) {
+        const ids = new Set(mine.map((s: any) => s.id));
+        const matriculas = new Set(mine.map((s: any) => s.matricula));
+        const names = new Set(mine.map((s: any) => String(s.fullName || '').toLowerCase().trim()));
         filtered = filtered.filter(
-          (r) =>
-            studentIds.has(r.student_id) ||
-            studentMatriculas.has(r.student_id) ||
-            studentNames.has(r.student_name?.toLowerCase().trim())
+          (r: any) =>
+            ids.has(r.studentId) ||
+            matriculas.has(r.studentId) ||
+            names.has(String(r.studentName || '').toLowerCase().trim())
         );
       } else {
         filtered = [];
       }
     }
 
-    // 3. Se for Aluno, restringe apenas ao próprio aluno
     if (session.role === 'student') {
-      filtered = filtered.filter((r) => r.student_id === session.sub || r.student_name?.toLowerCase() === session.name.toLowerCase());
+      const myName = String(session.name || '').toLowerCase();
+      filtered = filtered.filter(
+        (r: any) => r.studentId === session.sub || String(r.studentName || '').toLowerCase() === myName
+      );
     }
 
-    // Mapeia para o formato tipado do app
-    const mapped = filtered.map((item: any) => ({
-      id: item.id,
-      studentId: item.student_id,
-      studentName: item.student_name,
-      studentTurma: item.student_turma || '',
-      dataFalta: item.data_falta,
-      dataAtestado: item.data_atestado,
-      diasAtestado: Number(item.dias_atestado) || 1,
-      dataFinal: item.data_final,
-      motivo: item.motivo || undefined,
-      tipo: item.tipo as 'Atestado' | 'RAD',
-      createdAt: item.created_at,
-      ownerTeacherId: item.owner_teacher_id,
-    }));
-
-    return NextResponse.json({ success: true, data: mapped });
+    return NextResponse.json({ success: true, data: filtered });
   } catch (err: any) {
     console.error('Erro na rota GET /api/atestados-rad:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -91,65 +83,52 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Não autorizado. Faça login para continuar.' }, { status: 401 });
     }
 
-    // Apenas professores (titular ou 2º professor) podem criar/atualizar atestados
     if (session.role !== 'teacher' && session.role !== 'second_teacher') {
       return NextResponse.json({ error: 'Permissão negada. Apenas professores podem registrar atestados/RAD.' }, { status: 403 });
     }
 
-    const admin = getSupabaseAdmin();
-    if (!admin) {
-      return NextResponse.json({ error: 'Banco de dados não configurado.' }, { status: 500 });
-    }
-
     const body = await req.json();
-    const ownerTeacherId = session.ownerTeacherId || session.sub;
-
-    // Suporte tanto a um único item quanto a um array de itens (sincronização em lote)
+    const owner = session.ownerTeacherId || session.sub;
     const rawItems = Array.isArray(body) ? body : [body];
 
     if (rawItems.length === 0) {
       return NextResponse.json({ error: 'Nenhum dado informado.' }, { status: 400 });
     }
 
-    const dbPayload = rawItems.map((item: any) => {
-      const studentId = item.studentId || item.student_id;
-      const studentName = item.studentName || item.student_name;
-      const studentTurma = item.studentTurma || item.student_turma || '';
-      const dataFalta = item.dataFalta || item.data_falta;
-      const dataAtestado = item.dataAtestado || item.data_atestado;
-      const diasAtestado = Number(item.diasAtestado || item.dias_atestado) || 1;
-      const dataFinal = item.dataFinal || item.data_final;
-      const motivo = item.motivo || null;
-      const tipo = item.tipo || 'Atestado';
-      const createdAt = item.createdAt || item.created_at || new Date().toISOString();
-
+    const records = rawItems.map((item: any) => {
+      const id = String(item.id || `atr-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`);
       return {
-        id: item.id || undefined,
-        student_id: studentId,
-        student_name: studentName,
-        student_turma: studentTurma,
-        data_falta: dataFalta,
-        data_atestado: dataAtestado,
-        dias_atestado: diasAtestado,
-        data_final: dataFinal,
-        motivo: motivo,
-        tipo: tipo,
-        created_at: createdAt,
-        owner_teacher_id: ownerTeacherId, // Forçado pelo backend a partir da sessão segura
+        id,
+        studentId: item.studentId || item.student_id,
+        studentName: item.studentName || item.student_name,
+        studentTurma: item.studentTurma || item.student_turma || '',
+        dataFalta: item.dataFalta || item.data_falta,
+        dataAtestado: item.dataAtestado || item.data_atestado,
+        diasAtestado: Number(item.diasAtestado || item.dias_atestado) || 1,
+        dataFinal: item.dataFinal || item.data_final,
+        motivo: item.motivo || null,
+        tipo: item.tipo || 'Atestado',
+        createdAt: item.createdAt || item.created_at || new Date().toISOString(),
+        ownerTeacherId: owner,
       };
     });
 
-    const { data: upserted, error } = await admin
-      .from('atestados_rad')
-      .upsert(dbPayload, { onConflict: 'id' })
-      .select();
-
-    if (error) {
-      console.error('Erro ao salvar atestados_rad:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    const db = getAdminDb();
+    const col = atestadosCol(owner);
+    for (let i = 0; i < records.length; i += 400) {
+      const batch = db.batch();
+      records.slice(i, i + 400).forEach((r) => batch.set(col.doc(r.id), r, { merge: true }));
+      await batch.commit();
     }
 
-    return NextResponse.json({ success: true, data: upserted });
+    for (const r of records) {
+      if (!serverCache.upsertListItem(cacheKeyFor(owner), TTL, r)) {
+        serverCache.delete(cacheKeyFor(owner));
+        break;
+      }
+    }
+
+    return NextResponse.json({ success: true, data: records });
   } catch (err: any) {
     console.error('Erro na rota POST /api/atestados-rad:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -167,12 +146,6 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Permissão negada.' }, { status: 403 });
     }
 
-    const admin = getSupabaseAdmin();
-    if (!admin) {
-      return NextResponse.json({ error: 'Banco de dados não configurado.' }, { status: 500 });
-    }
-
-    // Busca o ID a ser deletado da URL ou do corpo da requisição
     const url = new URL(req.url);
     let id = url.searchParams.get('id');
 
@@ -180,27 +153,17 @@ export async function DELETE(req: NextRequest) {
       try {
         const body = await req.json();
         id = body.id;
-      } catch (e) {
-        // Ignora erro de parse se não houver body
-      }
+      } catch {}
     }
 
     if (!id) {
       return NextResponse.json({ error: 'ID do registro não informado.' }, { status: 400 });
     }
 
-    const ownerTeacherId = session.ownerTeacherId || session.sub;
-
-    // Deleta com isolamento estrito de ownerTeacherId
-    const { error } = await admin
-      .from('atestados_rad')
-      .delete()
-      .eq('id', id)
-      .eq('owner_teacher_id', ownerTeacherId);
-
-    if (error) {
-      console.error('Erro ao deletar atestados_rad:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    const owner = session.ownerTeacherId || session.sub;
+    await atestadosCol(owner).doc(String(id)).delete();
+    if (!serverCache.removeListItem(cacheKeyFor(owner), TTL, String(id))) {
+      serverCache.delete(cacheKeyFor(owner));
     }
 
     return NextResponse.json({ success: true, message: 'Registro removido com sucesso.' });

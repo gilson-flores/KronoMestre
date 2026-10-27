@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
 
     if (ownerTeacherId) {
       const cacheKey = `second_teachers_${ownerTeacherId}`;
-      teachers = await serverCache.getOrSet(cacheKey, 180, async () => {
+      teachers = await serverCache.getOrSet(cacheKey, 900, async () => {
         try {
           const db = getAdminDb();
           const snap = await db
