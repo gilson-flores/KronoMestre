@@ -89,7 +89,7 @@ export async function DELETE(req: NextRequest) {
     if (studentId) {
       serverCache.recordPresence(ownerTeacherId, String(studentId), false);
 
-      if (!serverCache.isQuotaBlocked()) {
+      if (!serverCache.isQuotaBlocked() && (isOffline || serverCache.shouldPersistPresence(ownerTeacherId, String(studentId)))) {
         try {
           const db = getAdminDb();
           await db
