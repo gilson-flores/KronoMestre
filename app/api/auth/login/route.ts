@@ -51,7 +51,34 @@ export async function POST(request: Request) {
           matchedSecondData = matchedSecondDoc.data();
         }
       } catch (stQueryErr: any) {
-        console.warn("[Login API] Falha na consulta de 2º professor:", stQueryErr?.message);
+        console.warn("[Login API] Aviso collectionGroup second_teachers (usando busca direta por tenant):", stQueryErr?.message);
+      }
+
+      // Fallback sem depender de índice collectionGroup: procura nos tenants existentes (incluindo o UID principal)
+      if (!matchedSecondDoc) {
+        try {
+          const tenantsSnap = await adminDb.collection("tenants").get();
+          const tenantIds = new Set<string>(tenantsSnap.docs.map((d) => d.id));
+          tenantIds.add("5IdpwffjnhewdZ5dONRB9QoIRBZ2");
+
+          for (const tId of tenantIds) {
+            const stCol = await adminDb.collection("tenants").doc(tId).collection("second_teachers").get();
+            const found = stCol.docs.find((d) => {
+              const dt = d.data() || {};
+              const em = String(dt.email || "").trim().toLowerCase();
+              const nm = String(dt.name || "").trim().toLowerCase();
+              const mat = String(dt.matricula || "").trim().toLowerCase();
+              return em === cleanEmail || nm === cleanEmail || mat === cleanEmail;
+            });
+            if (found) {
+              matchedSecondDoc = found;
+              matchedSecondData = found.data();
+              break;
+            }
+          }
+        } catch (fallbackStErr: any) {
+          console.warn("[Login API] Erro no fallback de 2º professor:", fallbackStErr?.message);
+        }
       }
 
       if (!matchedSecondDoc || !matchedSecondData) {
@@ -192,10 +219,14 @@ export async function POST(request: Request) {
       }
     }
 
+    const emailPrefix = userEmail.split("@")[0].toUpperCase();
     let tenantData: any = {
       name: isAdminSupremoEmail ? "Gilson Flores" : userEmail.split("@")[0],
       nome: isAdminSupremoEmail ? "Gilson Flores" : userEmail.split("@")[0],
       email: userEmail,
+      matriculaFuncional: isAdminSupremoEmail ? "755840" : emailPrefix,
+      matricula_funcional: isAdminSupremoEmail ? "755840" : emailPrefix,
+      tenantCode: isAdminSupremoEmail ? "755840" : emailPrefix,
       plan_type: isAdminSupremoEmail ? "unlimited" : "basic",
       is_admin: isAdminSupremoEmail,
       subject: "Sociologia",
@@ -214,6 +245,12 @@ export async function POST(request: Request) {
       } else {
         const existingData = tenantSnap.data() || {};
         tenantData = { ...tenantData, ...existingData };
+        const ensuredCode = String(existingData.tenantCode || existingData.matriculaFuncional || existingData.matricula_funcional || (isAdminSupremoEmail ? "755840" : emailPrefix)).toUpperCase().trim();
+        tenantData.tenantCode = ensuredCode;
+        tenantData.matriculaFuncional = String(existingData.matriculaFuncional || existingData.matricula_funcional || ensuredCode);
+        if (!existingData.tenantCode || !existingData.matriculaFuncional) {
+          await tenantRef.set({ tenantCode: ensuredCode, matriculaFuncional: tenantData.matriculaFuncional, matricula_funcional: tenantData.matriculaFuncional }, { merge: true }).catch(() => {});
+        }
         if (isAdminSupremoEmail && (!existingData.is_admin || existingData.plan_type !== "unlimited")) {
           tenantData.is_admin = true;
           tenantData.plan_type = "unlimited";

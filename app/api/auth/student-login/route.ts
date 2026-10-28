@@ -3,6 +3,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { verifyPassword } from '@/lib/crypto';
 import { signSessionToken, setSessionCookie, SessionPayload } from '@/lib/auth-server';
 import { serverCache } from '@/lib/server-cache';
+import { resolveOwnerTeacherId } from '@/lib/tenantResolver';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,39 +36,8 @@ export async function POST(request: Request) {
     const rawIdentifier = String(identifier).toLowerCase().trim();
     const normIdentifier = rawIdentifier.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-    // 1. ISOLAMENTO DO TENANT: Localizar o Professor dono do Código na coleção correta ('tenants')
-    const tenantCacheKey = `tenant_code_to_id_${cleanTeacherCode}`;
-    let ownerTeacherId: string | null = serverCache.get<string>(tenantCacheKey);
-
-    if (!ownerTeacherId) {
-      try {
-        // Busca pela chave gerada 'tenantCode'
-        const tenantQuery = await db.collection('tenants')
-          .where('tenantCode', '==', cleanTeacherCode)
-          .limit(1)
-          .get();
-
-        if (!tenantQuery.empty) {
-          ownerTeacherId = tenantQuery.docs[0].id;
-        } else {
-          // Fallback preventivo: Se o professor ainda não clicou em gerar código e usou a matrícula antiga
-          const fallbackQuery = await db.collection('tenants')
-            .where('matriculaFuncional', '==', cleanTeacherCode)
-            .limit(1)
-            .get();
-            
-          if (!fallbackQuery.empty) {
-            ownerTeacherId = fallbackQuery.docs[0].id;
-          }
-        }
-
-        if (ownerTeacherId) {
-          serverCache.set(tenantCacheKey, ownerTeacherId, 600); // Cache por 10 min
-        }
-      } catch (tQueryErr: any) {
-        console.warn('[Student Login API] Aviso ao buscar tenant (possível cota excedida):', tQueryErr?.message);
-      }
-    }
+    // 1. ISOLAMENTO DO TENANT COM RESOLVEDOR UNIVERSAL E AUTO-REPARO
+    const ownerTeacherId = await resolveOwnerTeacherId(cleanTeacherCode);
 
     if (!ownerTeacherId) {
       return NextResponse.json(
