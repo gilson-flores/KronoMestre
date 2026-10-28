@@ -226,7 +226,7 @@ export async function POST(request: Request) {
       email: userEmail,
       matriculaFuncional: isAdminSupremoEmail ? "755840" : emailPrefix,
       matricula_funcional: isAdminSupremoEmail ? "755840" : emailPrefix,
-      tenantCode: isAdminSupremoEmail ? "755840" : emailPrefix,
+      tenantCode: isAdminSupremoEmail ? "G2U9" : emailPrefix,
       plan_type: isAdminSupremoEmail ? "unlimited" : "basic",
       is_admin: isAdminSupremoEmail,
       subject: "Sociologia",
@@ -245,11 +245,12 @@ export async function POST(request: Request) {
       } else {
         const existingData = tenantSnap.data() || {};
         tenantData = { ...tenantData, ...existingData };
-        const ensuredCode = String(existingData.tenantCode || existingData.matriculaFuncional || existingData.matricula_funcional || (isAdminSupremoEmail ? "755840" : emailPrefix)).toUpperCase().trim();
+        const ensuredCode = isAdminSupremoEmail ? "G2U9" : String(existingData.tenantCode || existingData.tenant_code || emailPrefix).toUpperCase().trim();
         tenantData.tenantCode = ensuredCode;
-        tenantData.matriculaFuncional = String(existingData.matriculaFuncional || existingData.matricula_funcional || ensuredCode);
-        if (!existingData.tenantCode || !existingData.matriculaFuncional) {
-          await tenantRef.set({ tenantCode: ensuredCode, matriculaFuncional: tenantData.matriculaFuncional, matricula_funcional: tenantData.matriculaFuncional }, { merge: true }).catch(() => {});
+        tenantData.matriculaFuncional = String(existingData.matriculaFuncional || existingData.matricula_funcional || (isAdminSupremoEmail ? "755840" : emailPrefix));
+        if (existingData.tenantCode !== ensuredCode || !existingData.matriculaFuncional) {
+          await tenantRef.set({ tenantCode: ensuredCode, tenant_code: ensuredCode, matriculaFuncional: tenantData.matriculaFuncional, matricula_funcional: tenantData.matriculaFuncional }, { merge: true }).catch(() => {});
+        }, { merge: true }).catch(() => {});
         }
         if (isAdminSupremoEmail && (!existingData.is_admin || existingData.plan_type !== "unlimited")) {
           tenantData.is_admin = true;
