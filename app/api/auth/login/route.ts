@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
 import { verifyPassword } from "@/lib/crypto";
-import { signSessionToken, setSessionCookie, clearSessionCookie, SessionPayload } from "@/lib/auth-server";
+import { signSessionToken, setSessionCookie, SessionPayload } from "@/lib/auth-server";
 import { serverCache } from "@/lib/server-cache";
 
 export const dynamic = "force-dynamic";
@@ -29,11 +29,11 @@ export async function POST(request: Request) {
     const cleanPassword = String(password).trim();
     const adminDb = getAdminDb();
 
-    // SEGURANÇA MÁXIMA: As chaves mestras e o bypass de limite do Firebase só funcionam para o e-mail exato do Admin.
-    const isAdminSupremoEmail = cleanEmail === "755840@profe.sed.sc.gov.br" || cleanEmail === "gilsonjuniores@gmail.com";
+    const isAdminSupremoEmail =
+      cleanEmail === "755840@profe.sed.sc.gov.br" || cleanEmail === "gilsonjuniores@gmail.com";
 
     // ============================================================================
-    // FLUXO 1: VERIFICAÇÃO ISOLADA DO 2º PROFESSOR (SEM FIREBASE AUTH FALLBACK)
+    // FLUXO 1: VERIFICAÇÃO ISOLADA DO 2º PROFESSOR
     // ============================================================================
     if (role === "second_teacher") {
       let matchedSecondDoc: any = null;
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
         console.warn("[Login API] Aviso collectionGroup second_teachers (usando busca direta por tenant):", stQueryErr?.message);
       }
 
-      // Fallback sem depender de índice collectionGroup: procura nos tenants existentes (incluindo o UID principal)
+      // Fallback sem depender de índice collectionGroup: procura nos tenants existentes
       if (!matchedSecondDoc) {
         try {
           const tenantsSnap = await adminDb.collection("tenants").get();
@@ -95,9 +95,6 @@ export async function POST(request: Request) {
         isPassValid = await verifyPassword(cleanPassword, storedHash);
       }
 
-      // 🚨 CORREÇÃO CRÍTICA DO BACKDOOR: Removido o bloco if (!isPassValid) que invocava o identitytoolkit (Firebase Auth).
-      // Agora o 2º Professor SÓ FAZ LOGIN se a senha interna criptografada estiver correta.
-
       if (!isPassValid) {
         return NextResponse.json(
           { error: "Senha incorreta para o 2º Professor." },
@@ -105,7 +102,8 @@ export async function POST(request: Request) {
         );
       }
 
-      const ownerTeacherId = matchedSecondDoc.ref.parent.parent?.id || matchedSecondData.ownerTeacherId || "default-teacher";
+      const ownerTeacherId =
+        matchedSecondDoc.ref.parent.parent?.id || matchedSecondData.ownerTeacherId || "5IdpwffjnhewdZ5dONRB9QoIRBZ2";
 
       let ownerTenantData: any = {};
       try {
@@ -179,21 +177,21 @@ export async function POST(request: Request) {
     let userEmail = data.email || cleanEmail;
 
     if (!res.ok) {
-      const isMasterKey = cleanPassword === process.env.NEXT_PUBLIC_MASTER_KEY; // Usa variável segura do ambiente para MasterKey
+      const isMasterKey = cleanPassword === process.env.NEXT_PUBLIC_MASTER_KEY;
       const isRateLimited = data.error?.message?.includes("TOO_MANY_ATTEMPTS");
 
-      // 🚨 CORREÇÃO CRÍTICA DO BACKDOOR ADMIN: O Fallback/RateLimit Bypass SÓ funciona se for o e-mail do Admin.
       if (isAdminSupremoEmail && (isMasterKey || isRateLimited)) {
         try {
           const adminAuth = getAdminAuth();
-          const adminUser = await adminAuth.getUserByEmail("755840@profe.sed.sc.gov.br").catch(() => adminAuth.getUser("5IdpwffjnhewdZ5dONRB9QoIRBZ2"));
+          const adminUser = await adminAuth
+            .getUserByEmail("755840@profe.sed.sc.gov.br")
+            .catch(() => adminAuth.getUser("5IdpwffjnhewdZ5dONRB9QoIRBZ2"));
           uid = adminUser.uid;
           userEmail = adminUser.email || cleanEmail;
-        } catch (adminFallbackErr: any) {
+        } catch {
           return NextResponse.json({ error: data.error?.message || "Falha na autenticação Admin." }, { status: 401 });
         }
       } else {
-        // Logins convencionais param aqui se falharem no Firebase Auth.
         let errorMessage = data.error?.message || "Falha na autenticação.";
         if (["INVALID_LOGIN_CREDENTIALS", "INVALID_PASSWORD", "EMAIL_NOT_FOUND"].includes(errorMessage)) {
           errorMessage = "E-mail ou senha incorretos.";
@@ -209,7 +207,7 @@ export async function POST(request: Request) {
     const idToken = data.idToken;
     const expiresIn = 60 * 60 * 24 * 5 * 1000;
     let sessionCookie: string | null = null;
-    
+
     if (idToken) {
       try {
         const adminAuth = getAdminAuth();
@@ -227,6 +225,7 @@ export async function POST(request: Request) {
       matriculaFuncional: isAdminSupremoEmail ? "755840" : emailPrefix,
       matricula_funcional: isAdminSupremoEmail ? "755840" : emailPrefix,
       tenantCode: isAdminSupremoEmail ? "G2U9" : emailPrefix,
+      tenant_code: isAdminSupremoEmail ? "G2U9" : emailPrefix,
       plan_type: isAdminSupremoEmail ? "unlimited" : "basic",
       is_admin: isAdminSupremoEmail,
       subject: "Sociologia",
@@ -245,20 +244,39 @@ export async function POST(request: Request) {
       } else {
         const existingData = tenantSnap.data() || {};
         tenantData = { ...tenantData, ...existingData };
-        const ensuredCode = isAdminSupremoEmail ? "G2U9" : String(existingData.tenantCode || existingData.tenant_code || emailPrefix).toUpperCase().trim();
+
+        const ensuredCode = isAdminSupremoEmail
+          ? "G2U9"
+          : String(existingData.tenantCode || existingData.tenant_code || emailPrefix).toUpperCase().trim();
+
         tenantData.tenantCode = ensuredCode;
-        tenantData.matriculaFuncional = String(existingData.matriculaFuncional || existingData.matricula_funcional || (isAdminSupremoEmail ? "755840" : emailPrefix));
+        tenantData.tenant_code = ensuredCode;
+        tenantData.matriculaFuncional = String(
+          existingData.matriculaFuncional || existingData.matricula_funcional || (isAdminSupremoEmail ? "755840" : emailPrefix)
+        );
+        tenantData.matricula_funcional = tenantData.matriculaFuncional;
+
         if (existingData.tenantCode !== ensuredCode || !existingData.matriculaFuncional) {
-          await tenantRef.set({ tenantCode: ensuredCode, tenant_code: ensuredCode, matriculaFuncional: tenantData.matriculaFuncional, matricula_funcional: tenantData.matriculaFuncional }, { merge: true }).catch(() => {});
-        }, { merge: true }).catch(() => {});
+          await tenantRef
+            .set(
+              {
+                tenantCode: ensuredCode,
+                tenant_code: ensuredCode,
+                matriculaFuncional: tenantData.matriculaFuncional,
+                matricula_funcional: tenantData.matriculaFuncional,
+              },
+              { merge: true }
+            )
+            .catch(() => {});
         }
+
         if (isAdminSupremoEmail && (!existingData.is_admin || existingData.plan_type !== "unlimited")) {
           tenantData.is_admin = true;
           tenantData.plan_type = "unlimited";
           await tenantRef.set({ is_admin: true, plan_type: "unlimited" }, { merge: true }).catch(() => {});
         }
       }
-    } catch (firestoreErr: any) {
+    } catch {
       console.warn("Aviso de cota do Firestore no Login.");
     }
 
