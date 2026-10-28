@@ -18,6 +18,7 @@ import { Activity, StudentUser } from '@/lib/types';
 import {  getOriginalTurmas, getTurmaLabel, isActivityAdapted , getActivityStudentAndSubmissionCounts } from "@/lib/studentUtils";
 
 interface CorrectionsViewProps {
+  onSaveActivity?: (updatedActivity: Activity) => void;
   activities: Activity[];
   students: StudentUser[];
   isLoading: boolean;
@@ -56,6 +57,7 @@ export function formatShortActivityName(act: Activity, allList: Activity[]): str
 }
 
 export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
+  onSaveActivity,
   activities,
   students,
   isLoading,
@@ -355,6 +357,9 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                             {gradedSubs.length} corrigidas
                           </span>
                         )}
+                        {act.isRcoPosted && (
+                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">✅ RCO Lançado</span>
+                        )}
                       </div>
                       
                       <h3 className="text-base sm:text-lg font-black text-foreground truncate">{act.title}</h3>
@@ -371,7 +376,21 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                     </div>
                   </div>
 
-                  <div className="shrink-0 border-t md:border-t-0 border-border pt-3 md:pt-0 mt-3 md:mt-0">
+                  <div className="shrink-0 border-t md:border-t-0 border-border pt-3 md:pt-0 mt-3 md:mt-0 flex flex-wrap items-center gap-2">
+                    {onSaveActivity && (
+                      <button
+                        type="button"
+                        onClick={() => onSaveActivity({ ...originalAct, isRcoPosted: !originalAct.isRcoPosted })}
+                        className={`py-2 px-3.5 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 border ${
+                          act.isRcoPosted
+                            ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30'
+                            : 'bg-surface hover:bg-surface-hover text-muted hover:text-foreground border-border'
+                        }`}
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>{act.isRcoPosted ? 'Desmarcar RCO' : 'Marcar Lançado (RCO)'}</span>
+                      </button>
+                    )}
                     <button
                       onClick={() => setExpandedActId(isExpanded ? null : act.id)}
                       className={`w-full md:w-auto py-2 px-6 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 border ${

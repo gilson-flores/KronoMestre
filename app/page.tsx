@@ -213,6 +213,9 @@ export default function Home() {
 
       const isExplicitLogout = sessionStorage.getItem('explicit_logout') === 'true';
       if (isExplicitLogout) {
+        purgeAllAuthAndTenantCaches();
+        setRole(null);
+        setCurrentStudent(null);
         setIsAuthChecking(false);
         return;
       }
@@ -398,6 +401,9 @@ export default function Home() {
         if (savedTimeout !== null) setInactivityTimeoutEnabled(savedTimeout === 'true');
       } catch (e) {
         console.warn('Erro ao restaurar sessão do Firebase:', e);
+        purgeAllAuthAndTenantCaches();
+        setRole(null);
+        setCurrentStudent(null);
       } finally {
         setIsAuthChecking(false);
       }
@@ -2316,6 +2322,7 @@ export default function Home() {
           {(activeTeacherTab === 'correcoes' || activeTeacherTab === 'grading') &&
             role !== 'second_teacher' && (
               <CorrectionsView
+              onSaveActivity={handleSaveEditedActivity}
                 activities={activeActivities}
                 students={visibleStudentsForRole}
                 isLoading={isDataLoading}
