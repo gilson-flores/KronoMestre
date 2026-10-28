@@ -121,6 +121,17 @@ const mergeChatMessage = (
 
 export default function Home() {
 
+  const handleSaveEditedActivity = useCallback((updatedActivity: Activity) => {
+    setActivities((prev) => prev.map((a) => (a.id === updatedActivity.id ? updatedActivity : a)));
+    fetch('/api/activities', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedActivity),
+    }).catch((err) => console.warn('Erro ao persistir alteração da atividade:', err));
+  }, []);
+
+
+
   const handleReturnToSupervision = () => {
     if (typeof window === "undefined") return;
     const snapRaw = localStorage.getItem("teacher_snapshot");
