@@ -1,5 +1,6 @@
-import { AdaptedActivitiesView } from '@/components/views/AdaptedActivitiesView';
 'use client';
+import { AdaptedActivitiesView } from '@/components/views/AdaptedActivitiesView';
+
 
 import React, { useState, useMemo, useEffect } from 'react';
 import {
