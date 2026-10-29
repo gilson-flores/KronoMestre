@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest, signSessionToken, setSessionCookie, SessionPayload } from '@/lib/auth-server';
 import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
-import { hashPasswordBcrypt } from '@/lib/crypto';
+import { hashPasswordBcrypt, verifyPassword } from '@/lib/crypto';
 import { serverCache } from '@/lib/server-cache';
 
 export const dynamic = 'force-dynamic';
+
+
+/**
+ * Troca VOLUNTÁRIA (quando o aluno não está no primeiro acesso obrigatório): exige a senha atual.
+ * Troca OBRIGATÓRIA (mustChangePassword = true): não exige, pois o aluno ainda usa a senha provisória.
+ */
+async function currentPasswordIsRequiredAndWrong(studentData: Record<string, any>, currentPassword: unknown): Promise<boolean> {
+  const forced = Boolean(studentData.mustChangePassword || studentData.must_change_password);
+  if (forced) return false;
+  const stored = studentData.passwordHash || studentData.password_hash || '';
+  if (!currentPassword || typeof currentPassword !== 'string') return true;
+  return !(await verifyPassword(currentPassword, stored));
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -59,6 +72,9 @@ export async function POST(req: NextRequest) {
 
         const snap = await studentRef.get();
         if (snap.exists) {
+          if (await currentPasswordIsRequiredAndWrong(snap.data() || {}, body.currentPassword)) {
+            return NextResponse.json({ error: 'Senha atual incorreta.' }, { status: 401 });
+          }
           await studentRef.set(
             {
               passwordHash: newBcryptHash,
@@ -77,6 +93,9 @@ export async function POST(req: NextRequest) {
         try {
           const querySnap = await db.collectionGroup('students').where('matricula', '==', session.matricula || session.sub).limit(1).get();
           if (!querySnap.empty) {
+            if (await currentPasswordIsRequiredAndWrong(querySnap.docs[0].data() || {}, body.currentPassword)) {
+              return NextResponse.json({ error: 'Senha atual incorreta.' }, { status: 401 });
+            }
             await querySnap.docs[0].ref.set(
               {
                 passwordHash: newBcryptHash,

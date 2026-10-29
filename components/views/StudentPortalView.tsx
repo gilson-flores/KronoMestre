@@ -6,10 +6,12 @@ import { canStudentAccessActivity, getActivityGradeDistribution, isStudentPNE, i
 import { extractCleanHtml } from '@/lib/adaptationUtils';
 import { scrollToTop } from '@/lib/utils';
 import { MessagesView } from './MessagesView';
+import { ChangePasswordModal } from '@/components/modals/ChangePasswordModal';
 import { KronoGamePlayer } from '@/components/views/KronoGamePlayer';
 import { KRONO_AVATARS, AVATAR_CATEGORIES, AvatarItem } from '@/lib/avatarRegistry';
 import {
   LogOut,
+  KeyRound,
   CheckCircle2,
   FileText,
   Send,
@@ -144,6 +146,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   // KronoGames Active Game Activity
   const [activeKronoGameActivity, setActiveKronoGameActivity] = useState<Activity | null>(null);
   const [isAchievementsModalOpen, setIsAchievementsModalOpen] = useState<boolean>(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState<boolean>(false);
 
   // Interactive student answers per activity com persistência de rascunhos no dispositivo
   const [essayInputs, setEssayInputs] = useState<{ [activityId: string]: string }>(() => {
@@ -1008,6 +1011,15 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           </div>
         </div>
 
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto shrink-0">
+        <button
+          type="button"
+          onClick={() => setIsChangePasswordOpen(true)}
+          className="w-full sm:w-auto justify-center py-2.5 px-5 min-h-[44px] min-w-[44px] bg-[#171f33] hover:bg-slate-700 text-slate-200 rounded-full text-xs font-bold border border-border flex items-center gap-2 transition-all cursor-pointer shrink-0"
+        >
+          <KeyRound className="w-4 h-4 shrink-0" />
+          <span>Alterar senha</span>
+        </button>
         <button
           onClick={() => {
             if (student?.id && student?.ownerTeacherId) {
@@ -1028,6 +1040,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           <LogOut className="w-4 h-4 shrink-0" />
           <span>Sair da Conta</span>
         </button>
+        </div>
       </div>
 
       {/* Painel de Rendimento & Conquistas Pedagógicas do Estudante */}
@@ -3006,6 +3019,8 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           </div>
         </div>
       )}
+    
+      <ChangePasswordModal isOpen={isChangePasswordOpen} onClose={() => setIsChangePasswordOpen(false)} />
     </div>
   );
 };

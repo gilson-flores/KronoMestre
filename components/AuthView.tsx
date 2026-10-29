@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { StudentUser, TeacherUser } from '@/lib/types';
-import { BookOpen, User, GraduationCap, Lock, ArrowRight, CheckCircle2, HeartHandshake, KeyRound, X } from 'lucide-react';
+import { BookOpen, User, GraduationCap, Lock, ArrowRight, CheckCircle2, HeartHandshake, KeyRound, X, Eye, EyeOff } from 'lucide-react';
 import { DEFAULT_TURMAS, getTurmaLabel, normalizeStudentName } from '@/lib/studentUtils';
 import { verifyPassword } from '@/lib/crypto';
 import { purgeAllAuthAndTenantCaches, setTenantSessionItem } from '@/lib/cacheUtils';
@@ -23,6 +23,9 @@ export const AuthView: React.FC<AuthViewProps> = ({
   onLoginSecondTeacher,
 }) => {
   const [activeTab, setActiveTab] = useState<'teacher' | 'student' | 'second_teacher'>('teacher');
+  const [showTeacherPassword, setShowTeacherPassword] = useState(false);
+  const [showStudentPassword, setShowStudentPassword] = useState(false);
+  const [showSecondTeacherPassword, setShowSecondTeacherPassword] = useState(false);
 
   // Teacher Login state
   const [teacherEmail, setTeacherEmail] = useState(teacher?.email || '');
@@ -440,14 +443,21 @@ export const AuthView: React.FC<AuthViewProps> = ({
               <label className="block text-xs font-semibold text-muted mb-1.5 ml-1">Senha</label>
               <div className="relative">
                 <input
-                  type="password"
+                  type={showTeacherPassword ? 'text' : 'password'}
                   required
                   value={teacherPassword}
                   onChange={(e) => setTeacherPassword(e.target.value)}
-                  className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-primary"
+                  className="w-full bg-surface border border-border rounded-2xl px-4 py-3 pr-11 text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-primary"
                   placeholder="Sua senha"
                 />
-                <Lock className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-[#869486]" />
+                <button
+                  type="button"
+                  onClick={() => setShowTeacherPassword((v) => !v)}
+                  aria-label={showTeacherPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-[#869486] hover:text-foreground cursor-pointer min-h-[32px] min-w-[32px] flex items-center justify-center"
+                >
+                  {showTeacherPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
               <p className="text-[11px] text-muted mt-1 ml-1">Autenticação do sistema</p>
             </div>
@@ -512,14 +522,21 @@ export const AuthView: React.FC<AuthViewProps> = ({
               </label>
               <div className="relative">
                 <input
-                  type="password"
+                  type={showStudentPassword ? 'text' : 'password'}
                   required
                   value={studentPassword}
                   onChange={(e) => setStudentPassword(e.target.value)}
-                  className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-primary"
+                  className="w-full bg-surface border border-border rounded-2xl px-4 py-3 pr-11 text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-primary"
                   placeholder="Digite sua senha de acesso"
                 />
-                <Lock className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-[#869486]" />
+                <button
+                  type="button"
+                  onClick={() => setShowStudentPassword((v) => !v)}
+                  aria-label={showStudentPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-[#869486] hover:text-foreground cursor-pointer min-h-[32px] min-w-[32px] flex items-center justify-center"
+                >
+                  {showStudentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
               <p className="text-[11px] text-muted mt-1 ml-1">
                 Digite a senha de acesso individual cadastrada pelo professor.
@@ -580,14 +597,21 @@ export const AuthView: React.FC<AuthViewProps> = ({
               </div>
               <div className="relative">
                 <input
-                  type="password"
+                  type={showSecondTeacherPassword ? 'text' : 'password'}
                   required
                   value={secondTeacherPassword}
                   onChange={(e) => setSecondTeacherPassword(e.target.value)}
-                  className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-amber-400"
+                  className="w-full bg-surface border border-border rounded-2xl px-4 py-3 pr-11 text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-amber-400"
                   placeholder="Sua senha de acesso"
                 />
-                <Lock className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-[#869486]" />
+                <button
+                  type="button"
+                  onClick={() => setShowSecondTeacherPassword((v) => !v)}
+                  aria-label={showSecondTeacherPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-[#869486] hover:text-foreground cursor-pointer min-h-[32px] min-w-[32px] flex items-center justify-center"
+                >
+                  {showSecondTeacherPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
