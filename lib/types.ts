@@ -257,6 +257,7 @@ export interface ScheduleItem {
 }
 
 export interface LibraryFile {
+  targetAudience?: 'all_turmas' | 'second_teacher' | 'specific_turmas';
   id: string;
   title: string;
   category: string;

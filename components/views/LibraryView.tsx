@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { LibraryFile } from '@/lib/types';
+import { TurmaMultiSelect } from '@/components/TurmaMultiSelect';
 import {
   FileText,
   ExternalLink,
@@ -43,7 +44,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [showAddForm, setShowAddForm] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState('Apostila');
-  const [newTurma, setNewTurma] = useState('Todas');
+  const [targetAudience, setTargetAudience] = useState<'all_turmas' | 'second_teacher' | 'specific_turmas'>('all_turmas');
+  const [newTurma, setNewTurma] = useState<string[]>([]);
+  const [selectedTurmaFilter, setSelectedTurmaFilter] = useState<string[]>([]);
   const [newDriveUrl, setNewDriveUrl] = useState('');
   const [selectedFileName, setSelectedFileName] = useState('');
   const [selectedFileSize, setSelectedFileSize] = useState('1 MB');
@@ -96,8 +99,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const handleAddFileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
-    
     const submittedUrl = newDriveUrl.trim();
+    const finalTurmaString = targetAudience === 'all_turmas' ? 'Todas' : (targetAudience === 'second_teacher' ? 'Somente 2º Professor' : newTurma.join(', '));
     if (!submittedUrl) {
       alert("Por favor, cole o Link do Google Drive ou Repositório Externo do material no campo correspondente.");
       return;
@@ -109,7 +112,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       id: `file-${Date.now()}`,
       title: newTitle.trim(),
       category: newCategory,
-      turma: newTurma,
+      turma: finalTurmaString,
+        targetAudience: targetAudience,
       fileSize: selectedFileSize,
       updatedAt: new Date().toLocaleDateString('pt-BR'),
       driveUrl: finalUrl,
