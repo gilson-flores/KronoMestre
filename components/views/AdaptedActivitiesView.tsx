@@ -39,6 +39,7 @@ import {
 } from '@/lib/studentUtils';
 
 interface AdaptedActivitiesViewProps {
+  isReadOnly?: boolean;
   activities: Activity[];
   students: StudentUser[];
   teacher: TeacherUser;

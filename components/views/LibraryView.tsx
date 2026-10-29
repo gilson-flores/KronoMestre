@@ -17,7 +17,7 @@ import {
   FileUp,
   Tag,
   Users
-} from 'lucide-react';
+, Filter } from "lucide-react";
 
 interface LibraryViewProps {
   files: LibraryFile[];
