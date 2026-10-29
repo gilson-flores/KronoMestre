@@ -101,7 +101,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     if (!newTitle.trim()) return;
     const submittedUrl = newDriveUrl.trim();
     const finalTurmaString = targetAudience === 'all_turmas' ? 'Todas' : (targetAudience === 'second_teacher' ? 'Somente 2º Professor' : newTurma.join(', '));
-    const finalTurmaString = targetAudience === 'all_turmas' ? 'Todas' : (targetAudience === 'second_teacher' ? 'Somente 2º Professor' : newTurma.join(', '));
     if (!submittedUrl) {
       alert("Por favor, cole o Link do Google Drive ou Repositório Externo do material no campo correspondente.");
       return;
