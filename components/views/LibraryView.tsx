@@ -101,6 +101,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     if (!newTitle.trim()) return;
     const submittedUrl = newDriveUrl.trim();
     const finalTurmaString = targetAudience === 'all_turmas' ? 'Todas' : (targetAudience === 'second_teacher' ? 'Somente 2º Professor' : newTurma.join(', '));
+    const finalTurmaString = targetAudience === 'all_turmas' ? 'Todas' : (targetAudience === 'second_teacher' ? 'Somente 2º Professor' : newTurma.join(', '));
     if (!submittedUrl) {
       alert("Por favor, cole o Link do Google Drive ou Repositório Externo do material no campo correspondente.");
       return;
@@ -169,6 +170,26 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             )}
           </button>
         )}
+      </div>
+
+      
+      {/* 🚀 BARRA DE FERRAMENTAS E FILTROS PADRONIZADA 🚀 */}
+      <div className="flex flex-col md:flex-row gap-3 items-center justify-between bg-surface/50 border border-border/50 p-2.5 rounded-3xl backdrop-blur-sm">
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <div className="relative group w-full md:w-auto">
+            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+              <Filter className="w-4 h-4 text-muted group-focus-within:text-primary transition-colors" />
+            </div>
+            <div className="w-full md:w-64 pl-9">
+              <TurmaMultiSelect
+                selectedTurmas={selectedTurmaFilter}
+                onChange={setSelectedTurmaFilter}
+                placeholder="Filtrar Arquivos por Turma..."
+                options={Array.from(new Set(files.map(f => f.turma).filter(t => t !== 'Todas' && !t.includes(','))))}
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       {uploadSuccessMsg && (
