@@ -373,7 +373,7 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
         </div>
       )}
 
-      {activeMenuTab === 'builder' && (
+      {!isReadOnly && activeMenuTab === 'builder' && (
         <div className="space-y-6 max-w-4xl mx-auto animate-fadeIn">
           <div className="glass-panel p-6 rounded-3xl border border-amber-500/30 space-y-6 shadow-xl bg-surface">
             

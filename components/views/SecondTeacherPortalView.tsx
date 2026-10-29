@@ -1,3 +1,4 @@
+import { AdaptedActivitiesView } from '@/components/views/AdaptedActivitiesView';
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -69,7 +70,7 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
 }) => {
   // Navigation Tab: 'desempenho' | 'alunos' | 'atestados' | 'biblioteca' | 'mensagens' | 'configuracoes'
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'desempenho' | 'alunos' | 'atestados' | 'biblioteca' | 'mensagens' | 'configuracoes'>('desempenho');
+  const [activeTab, setActiveTab] = useState<'desempenho' | 'alunos' | 'atestados' | 'atividades_adaptadas' | 'biblioteca' | 'mensagens' | 'configuracoes'>('desempenho');
 
   // Modal for Viewing Full Student Dossier (Read-Only)
   const [selectedStudentForDossier, setSelectedStudentForDossier] = useState<StudentUser | null>(null);
@@ -824,6 +825,18 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
         )}
 
         {/* TAB 3: ATESTADOS & RAD (TURMAS DERIVADAS) */}
+        
+        {activeTab === 'atividades_adaptadas' && (
+          <div className="space-y-4">
+            <AdaptedActivitiesView
+              activities={activities}
+              onSaveCreatedActivity={async () => {}}
+              onDeleteActivity={() => {}}
+              isReadOnly={true}
+            />
+          </div>
+        )}
+    
         {activeTab === 'atestados' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
