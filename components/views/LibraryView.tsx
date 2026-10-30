@@ -278,8 +278,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   <span>Turma Alvo</span>
                 </label>
                 <select
-                  value={newTurma}
-                  onChange={(e) => setNewTurma(e.target.value)}
+                  value={Array.isArray(newTurma) ? (newTurma[0] || 'Todas') : newTurma}
+                  onChange={(e) => setNewTurma(Array.isArray(newTurma) ? [e.target.value] : (e.target.value as any))}
                   className="w-full bg-background border border-white/15 rounded-xl px-3.5 py-2.5 text-foreground focus:outline-none focus:border-primary"
                 >
                   <option value="Todas">Todas as Turmas</option>

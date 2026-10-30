@@ -143,7 +143,7 @@ export default function Home() {
         localStorage.clear();
         sessionStorage.clear();
         
-        tenantVals.forEach(tv => localStorage.setItem(tv.k, tv.v));
+        tenantVals.forEach(tv => { if (tv.v !== null) localStorage.setItem(tv.k, tv.v); });
         
         localStorage.setItem("role", snap.role);
         if (snap.teacherId) localStorage.setItem("teacherId", snap.teacherId);
@@ -841,7 +841,7 @@ export default function Home() {
   }, [role, currentStudent?.id]);
   const presenceSignature = useMemo(() => {
     if (role === 'student') return 'student_self';
-    if (false) return `live_${liveOnlineCount}`;
+    
 
     const targetStudents = role === 'second_teacher' ? visibleStudentsForRole : activeStudents;
     if (!Array.isArray(targetStudents) || targetStudents.length === 0) return 'empty';
@@ -955,7 +955,7 @@ export default function Home() {
       const tenantVals = keysToKeep.map(k => ({k, v: localStorage.getItem(k)}));
       localStorage.clear();
       sessionStorage.clear();
-      tenantVals.forEach(tv => localStorage.setItem(tv.k, tv.v));
+      tenantVals.forEach(tv => { if (tv.v !== null) localStorage.setItem(tv.k, tv.v); });
     }
 
     setIsDataLoading(true);
@@ -2316,6 +2316,7 @@ export default function Home() {
 
           {activeTeacherTab === 'atividades_adaptadas' && (
             <AdaptedActivitiesView
+              onEditActivity={handleSaveEditedActivity}
               activities={activeActivities}
               students={visibleStudentsForRole}
               teacher={teacher}

@@ -27,6 +27,7 @@ export interface TeacherUser {
 }
 
 export interface StudentUser {
+  name?: string;
   id: string;
   fullName: string;
   turma: string;
@@ -170,6 +171,9 @@ export interface AeePromptSettings {
 }
 
 export interface Activity {
+  isRcoPosted?: boolean;
+  adaptedContent?: string;
+  adaptedPages?: string[];
   id: string;
   title: string;
   subject?: string;

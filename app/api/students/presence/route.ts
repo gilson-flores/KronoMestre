@@ -5,6 +5,8 @@ import { serverCache } from '@/lib/server-cache';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  let isOffline = false;
+
   try {
     const { searchParams } = new URL(req.url);
     const teacherId = searchParams.get('teacherId') || '5IdpwffjnhewdZ5dONRB9QoIRBZ2';
@@ -31,22 +33,26 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  let isOffline = false;
   try {
     const body = await req.json();
+
     const { studentId, ownerTeacherId = '5IdpwffjnhewdZ5dONRB9QoIRBZ2', turma, action = 'ping' } = body;
+    isOffline = action === 'offline';
 
     if (!studentId) {
       return NextResponse.json({ error: 'studentId é obrigatório' }, { status: 400 });
     }
 
-    const isOffline = action === 'offline';
+    
     const nowIso = new Date().toISOString();
 
     // Registra imediatamente em memória (0 leituras/escritas no Firestore)
     serverCache.recordPresence(ownerTeacherId, String(studentId), !isOffline, { turma });
 
     // Oportunisticamente grava no Firestore apenas se não houver bloqueio de cota
-    if (!serverCache.isQuotaBlocked() && (isOffline || serverCache.shouldPersistPresence(ownerTeacherId, String(studentId)))) {
+    
+      if (!serverCache.isQuotaBlocked() && (isOffline || serverCache.shouldPersistPresence(ownerTeacherId, String(studentId)))) {
       try {
         const db = getAdminDb();
         const studentRef = db
@@ -87,6 +93,7 @@ export async function DELETE(req: NextRequest) {
     const ownerTeacherId = searchParams.get('ownerTeacherId') || '5IdpwffjnhewdZ5dONRB9QoIRBZ2';
 
     if (studentId) {
+      const isOffline = true;
       serverCache.recordPresence(ownerTeacherId, String(studentId), false);
 
       if (!serverCache.isQuotaBlocked() && (isOffline || serverCache.shouldPersistPresence(ownerTeacherId, String(studentId)))) {

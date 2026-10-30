@@ -27,7 +27,7 @@ interface StudentSupervisionModalProps {
   student: StudentUser | null;
   activities: Activity[];
   onClose: () => void;
-  onSaveNotes: (studentId: string, notes: string) => void;
+  onSaveNotes?: (studentId: string, notes: string) => void;
   onSendMessage?: () => void;
   onSimulateStudent?: (student: StudentUser) => void;
   onMarkPhysicalDelivery?: (activityId: string, student: StudentUser, score: number, feedback: string) => void;
@@ -129,7 +129,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
   if (!isOpen || !student) return null;
 
   const handleSave = () => {
-    onSaveNotes(student.id, notes);
+    onSaveNotes?.(student.id, notes);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
   };

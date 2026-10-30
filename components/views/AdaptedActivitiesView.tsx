@@ -15,6 +15,7 @@ import {
   Check,
   Play,
   Trash2,
+  Pencil,
   Settings,
   Eye,
   X,
@@ -39,14 +40,15 @@ import {
 } from '@/lib/studentUtils';
 
 interface AdaptedActivitiesViewProps {
-  isReadOnly?: boolean;
+  onOpenNewActivityModal?: () => void;
   activities: Activity[];
   students: StudentUser[];
   teacher: TeacherUser;
-  onOpenNewActivityModal?: () => void;
+  onSaveCreatedActivity: (newActivity: Activity) => Promise<void> | void;
+  onEditActivity?: (updatedActivity: Activity) => Promise<void> | void;
   onDeleteActivity?: (activityId: string) => void;
-  onSaveCreatedActivity: (activity: Activity) => Promise<void> | void;
   onPlayGamePreview?: (activity: Activity) => void;
+  isReadOnly?: boolean;
 }
 
 const getDefaultAeeDeadlineString = () => {
@@ -63,14 +65,16 @@ export function formatShortActivityName(act: Activity, allList: Activity[]): str
 }
 
 export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
-  activities,
-  students,
+  activities = [],
+  students = [],
   teacher,
-  onDeleteActivity,
   onSaveCreatedActivity,
+  onEditActivity,
+  onDeleteActivity,
   onPlayGamePreview,
+  isReadOnly = false,
 }) => {
-  const [activeMenuTab, setActiveMenuTab] = useState<'builder' | 'bank'>('builder');
+  const [activeMenuTab, setActiveMenuTab] = useState<'builder' | 'bank'>(isReadOnly ? 'bank' : 'builder');
 
   const turmasList = useMemo(() => getOriginalTurmas(students), [students]);
   const [selectedTurma, setSelectedTurma] = useState<string>('Todas');
@@ -79,7 +83,7 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
   const [expandedActId, setExpandedActId] = useState<string | null>(null);
 
   const pneStudentsInTurma = useMemo(() => {
-    return students.filter((s) => {
+    return (students || []).filter((s) => {
       if (!isStudentPNE(s)) return false;
       if (selectedTurma === 'Todas') return true;
       return s.turma === selectedTurma || s.turma?.includes(selectedTurma);
@@ -87,7 +91,7 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
   }, [students, selectedTurma]);
 
   const adaptedActivitiesList = useMemo(() => {
-    return activities.filter((act) => {
+    return (activities || []).filter((act) => {
       const adapted = isActivityAdapted(act) || act.activityDomain === 'adapted_aee';
       if (!adapted) return false;
       if (selectedTurma !== 'Todas' && act.turma !== selectedTurma && !act.turma?.includes(selectedTurma)) return false;
@@ -100,7 +104,7 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
   }, [activities, selectedTurma, searchQuery]);
 
   const regularActivitiesInTurma = useMemo(() => {
-    return activities.filter((act) => !isActivityAdapted(act) && act.activityDomain !== 'adapted_aee' && (selectedTurma === 'Todas' || act.turma === selectedTurma));
+    return (activities || []).filter((act) => !isActivityAdapted(act) && act.activityDomain !== 'adapted_aee' && (selectedTurma === 'Todas' || act.turma === selectedTurma));
   }, [activities, selectedTurma]);
 
   const [aeeTopic, setAeeTopic] = useState('');
@@ -122,6 +126,25 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedGameData, setGeneratedGameData] = useState<GameData | null>(null);
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
+  const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
+
+  const handleStartEditAdapted = (act: Activity) => {
+    setEditingActivityId(act.id);
+    setAeeTopic(act.title.replace(/^\[AEE (Inclusiva|Adaptada)\]\s*/i, ''));
+    setAeeMaterial(act.supportMaterial || act.description || '');
+    if (act.deadline) setAeeDeadline(act.deadline);
+    if (act.aeeMechanic) setSelectedMechanic(act.aeeMechanic);
+    if (act.aeePromptSettings) setPromptSettings(act.aeePromptSettings);
+    if (act.includedPneStudentIds && act.includedPneStudentIds.length > 0) {
+      setSelectedTargetIds(act.includedPneStudentIds);
+    }
+    if (act.gameData) {
+      setGeneratedGameData(act.gameData);
+    }
+    setBindingMode(act.adaptedFromId ? 'linked' : 'standalone');
+    setLinkedParentId(act.adaptedFromId || '');
+    setActiveMenuTab('builder');
+  };
 
   // ==========================================
   // ESTADOS DO SIMULADOR INTERATIVO AEE
@@ -215,19 +238,23 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
   };
 
   const handlePublishAdaptedActivity = async () => {
-    if (!generatedGameData) return;
+    if (!generatedGameData && !editingActivityId) return;
+
+    const existingAct = editingActivityId ? (activities || []).find((a) => a.id === editingActivityId) : undefined;
+    const cleanTitle = aeeTopic.trim() || 'Atividade Adaptada';
 
     const newActivity: Activity = {
-      id: `aee_${Date.now()}`,
-      title: `[AEE Inclusiva] ${aeeTopic.trim() || 'Atividade Adaptada'}`,
-      subject: teacher.subject || 'Educação Especial',
-      turma: selectedTurma === 'Todas' ? pneStudentsInTurma[0]?.turma || 'Geral' : selectedTurma,
+      ...(existingAct || {}),
+      id: editingActivityId || `aee_${Date.now()}`,
+      title: cleanTitle.startsWith('[AEE') ? cleanTitle : `[AEE Inclusiva] ${cleanTitle}`,
+      subject: teacher?.subject || 'Educação Especial',
+      turma: selectedTurma === 'Todas' ? pneStudentsInTurma[0]?.turma || existingAct?.turma || 'Geral' : selectedTurma,
       deadline: aeeDeadline,
-      description: generatedGameData.introText || `Atividade adaptada de inclusão para os alunos PNE selecionados.`,
+      description: generatedGameData?.introText || existingAct?.description || 'Atividade adaptada de inclusão para os alunos PNE selecionados.',
       supportMaterial: aeeMaterial || '',
       type: 'Jogo Avaliativo',
-      status: 'Ativo',
-      maxGrade: 10,
+      status: existingAct?.status || 'Ativo',
+      maxGrade: existingAct?.maxGrade || 10,
       allowGroupWork: false,
       isAdapted: true,
       activityDomain: 'adapted_aee',
@@ -238,16 +265,23 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
       aeeMechanic: selectedMechanic,
       aeePromptSettings: promptSettings,
       isGameActivity: true,
-      gameData: generatedGameData,
-      submissions: [],
-      totalSubmissions: 0,
+      gameData: generatedGameData || existingAct?.gameData,
+      submissions: existingAct?.submissions || [],
+      totalSubmissions: existingAct?.totalSubmissions || 0,
       totalStudents: selectedTargetIds.length,
-      pendingCorrection: 0,
+      pendingCorrection: existingAct?.pendingCorrection || 0,
       includedPneStudentIds: selectedTargetIds,
     };
 
-    await onSaveCreatedActivity(newActivity);
-    setSuccessBanner(`✨ Atividade Inclusiva publicada com sucesso para ${selectedTargetIds.length} aluno(s) PNE!`);
+    if (editingActivityId && onEditActivity) {
+      await onEditActivity(newActivity);
+      setSuccessBanner('✨ Atividade Adaptada atualizada com sucesso!');
+    } else {
+      await onSaveCreatedActivity(newActivity);
+      setSuccessBanner(`✨ Atividade Inclusiva publicada com sucesso para ${selectedTargetIds.length} aluno(s) PNE!`);
+    }
+
+    setEditingActivityId(null);
     setGeneratedGameData(null);
     setAeeTopic('');
     setAeeMaterial('');
@@ -309,6 +343,7 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5 p-1 bg-background rounded-2xl border border-border">
+            {!isReadOnly && (
             <button
               type="button"
               onClick={() => setActiveMenuTab('builder')}
@@ -321,6 +356,7 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
               <Wrench className="w-4 h-4" />
               <span className="hidden sm:inline">Criar Atividade</span>
             </button>
+          )}
 
             <button
               type="button"
@@ -703,15 +739,24 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
                           <p className="text-muted"><strong>Alunos Alvo (PNE):</strong> {act.includedPneStudentIds?.length || 0} vinculados.</p>
                           <p className="text-muted"><strong>Descrição:</strong> {act.description}</p>
                         </div>
-                        <div className="pt-3 border-t border-border flex justify-end">
-                          <button
-                            type="button"
-                            onClick={() => { if(confirm(`Deseja excluir a atividade adaptada "${act.title}"?`)) onDeleteActivity?.(act.id); }}
-                            className="px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" /> Excluir
-                          </button>
-                        </div>
+                        {!isReadOnly && (
+                          <div className="pt-3 border-t border-border flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditAdapted(act)}
+                              className="px-3 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              <Pencil className="w-3.5 h-3.5" /> Editar Atividade
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { if(confirm(`Deseja excluir a atividade adaptada "${act.title}"?`)) onDeleteActivity?.(act.id); }}
+                              className="px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Excluir
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

@@ -830,7 +830,17 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
         {activeTab === 'atividades_adaptadas' && (
           <div className="space-y-4">
             <AdaptedActivitiesView
-              activities={activities}
+              activities={(activities || []).filter((act) => {
+                const isAdp = Boolean(act.isAdapted || act.activityDomain === 'adapted_aee' || act.adaptedContent || act.adaptedPages);
+                if (!isAdp) return false;
+                if (tutoredStudents.length === 0) return true;
+                const targetIds = act.includedPneStudentIds || [];
+                const matchesTutoredId = targetIds.some((id) => tutoredStudentIds.has(id));
+                const matchesTutoredTurma = derivedTurmas.includes((act.turma || '').trim());
+                return matchesTutoredId || matchesTutoredTurma || targetIds.length === 0;
+              })}
+              students={tutoredStudents.length > 0 ? tutoredStudents : (classRoster.length > 0 ? classRoster : allStudents || [])}
+              teacher={teacher}
               onSaveCreatedActivity={async () => {}}
               onDeleteActivity={() => {}}
               isReadOnly={true}
