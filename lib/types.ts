@@ -171,6 +171,7 @@ export interface AeePromptSettings {
 }
 
 export interface Activity {
+  rcoPostedStudentIds?: string[];
   isRcoPosted?: boolean;
   adaptedContent?: string;
   adaptedPages?: string[];
