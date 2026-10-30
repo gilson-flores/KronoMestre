@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
-import { LibraryFile } from '@/lib/types';
+import React, { useState, useRef, useMemo } from 'react';
+import { LibraryFile, StudentUser } from '@/lib/types';
 import { TurmaMultiSelect } from '@/components/TurmaMultiSelect';
+import { TurmaFilterDropdown } from '@/components/TurmaFilterDropdown';
 import {
   FileText,
   ExternalLink,
@@ -16,11 +17,15 @@ import {
   Trash2,
   FileUp,
   Tag,
-  Users
-, Filter } from "lucide-react";
+  Users,
+  Search,
+  HeartHandshake,
+  ShieldCheck,
+} from 'lucide-react';
 
 interface LibraryViewProps {
   files: LibraryFile[];
+  students?: StudentUser[];
   driveFolderUrl?: string;
   onSaveDriveFolderUrl?: (url: string) => void;
   onAddFile?: (newFile: LibraryFile) => void;
@@ -29,7 +34,8 @@ interface LibraryViewProps {
 }
 
 export const LibraryView: React.FC<LibraryViewProps> = ({
-  files,
+  files = [],
+  students = [],
   driveFolderUrl = '',
   onSaveDriveFolderUrl,
   onAddFile,
@@ -40,17 +46,20 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [folderInput, setFolderInput] = useState(driveFolderUrl);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
-  // Modal / Form state para cadastrar novo arquivo
+  // Estados de busca e filtro padronizado de turmas (Passo 10)
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedTurmas, setSelectedTurmas] = useState<string[]>(['all']);
+  const [audienceFilter, setAudienceFilter] = useState<'all' | 'all_turmas' | 'second_teacher' | 'specific_turmas'>('all');
+
+  // Estados do formulário de novo arquivo com compartilhamento granular (Passo 9)
   const [showAddForm, setShowAddForm] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState('Apostila');
   const [targetAudience, setTargetAudience] = useState<'all_turmas' | 'second_teacher' | 'specific_turmas'>('all_turmas');
-  const [newTurma, setNewTurma] = useState<string[]>([]);
-  const [selectedTurmaFilter, setSelectedTurmaFilter] = useState<string[]>([]);
+  const [newTurmasSelected, setNewTurmasSelected] = useState<string[]>([]);
   const [newDriveUrl, setNewDriveUrl] = useState('');
   const [selectedFileName, setSelectedFileName] = useState('');
   const [selectedFileSize, setSelectedFileSize] = useState('1 MB');
-  const [fileDataUrl, setFileDataUrl] = useState('');
   const [uploadSuccessMsg, setUploadSuccessMsg] = useState('');
   const [fileToDelete, setFileToDelete] = useState<LibraryFile | null>(null);
 
@@ -61,15 +70,71 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     setFolderInput(driveFolderUrl);
   }
 
+  // Lista unificada de turmas do professor (extraída dos alunos ativos + arquivos)
+  const turmasList = useMemo(() => {
+    const set = new Set<string>();
+    (students || []).forEach((s) => {
+      if (s.turma && s.turma.trim()) set.add(s.turma.trim());
+    });
+    (files || []).forEach((f) => {
+      if (f.turma && f.turma !== 'Todas' && f.turma !== 'Somente 2º Professor') {
+        f.turma.split(',').forEach((part) => {
+          const clean = part.trim();
+          if (clean) set.add(clean);
+        });
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [students, files]);
+
+  // Filtragem de arquivos pelo filtro padronizado de turmas, busca e público-alvo
+  const filteredFiles = useMemo(() => {
+    const isNone = selectedTurmas.includes('none');
+    const isAll =
+      !isNone &&
+      (selectedTurmas.length === 0 ||
+        selectedTurmas.includes('all') ||
+        (turmasList.length > 0 && selectedTurmas.length === turmasList.length));
+
+    return (files || []).filter((file) => {
+      if (isNone) return false;
+
+      const matchesSearch =
+        !searchTerm.trim() ||
+        file.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (file.category || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (file.turma || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+      if (!matchesSearch) return false;
+
+      const fileAudience =
+        file.targetAudience ||
+        (file.turma === 'Somente 2º Professor'
+          ? 'second_teacher'
+          : file.turma === 'Todas'
+          ? 'all_turmas'
+          : 'specific_turmas');
+
+      if (audienceFilter !== 'all' && fileAudience !== audienceFilter) {
+        return false;
+      }
+
+      if (isAll) return true;
+
+      // Arquivos gerais ou de 2º professor aparecem ou filtram conforme turma selecionada
+      if (file.turma === 'Todas' || fileAudience === 'all_turmas') return true;
+      const fileTurmas = (file.turma || '').split(',').map((t) => t.trim());
+      return selectedTurmas.some((sel) => fileTurmas.includes(sel));
+    });
+  }, [files, selectedTurmas, turmasList, searchTerm, audienceFilter]);
+
   const handleSaveDriveFolder = (e: React.FormEvent) => {
     e.preventDefault();
     if (onSaveDriveFolderUrl) {
       onSaveDriveFolderUrl(folderInput.trim());
     }
     setSavedSuccess(true);
-    setTimeout(() => {
-      setSavedSuccess(false);
-    }, 4000);
+    setTimeout(() => setSavedSuccess(false), 4000);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -82,7 +147,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       setNewTitle(nameWithoutExt);
     }
 
-    // Format size
     const sizeInMB = file.size / (1024 * 1024);
     if (sizeInMB >= 1) {
       setSelectedFileSize(`${sizeInMB.toFixed(1)} MB`);
@@ -90,49 +154,53 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       const sizeInKB = Math.round(file.size / 1024);
       setSelectedFileSize(`${sizeInKB} KB`);
     }
-
-    // AVISO DE MIGRAÇÃO: O FileReader (base64) foi desativado para prevenir "Out of Memory" (Passo 51).
-    // O arquivo agora atua apenas como preenchimento visual de metadados. O link do Drive passa a ser mandatório.
-    setFileDataUrl(''); 
   };
 
   const handleAddFileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
+
     const submittedUrl = newDriveUrl.trim();
-    const finalTurmaString = targetAudience === 'all_turmas' ? 'Todas' : (targetAudience === 'second_teacher' ? 'Somente 2º Professor' : newTurma.join(', '));
     if (!submittedUrl) {
-      alert("Por favor, cole o Link do Google Drive ou Repositório Externo do material no campo correspondente.");
+      alert('Por favor, cole o Link do Google Drive ou Repositório Externo do material no campo correspondente.');
       return;
     }
 
-    const finalUrl = submittedUrl;
+    if (targetAudience === 'specific_turmas' && newTurmasSelected.length === 0) {
+      alert('Selecione pelo menos uma turma específica ou mude o compartilhamento para Todas as Turmas.');
+      return;
+    }
 
-    const newLibraryFile: LibraryFile = {
-      id: `file-${Date.now()}`,
+    const finalTurmaLabel =
+      targetAudience === 'all_turmas'
+        ? 'Todas'
+        : targetAudience === 'second_teacher'
+        ? 'Somente 2º Professor'
+        : newTurmasSelected.join(', ');
+
+    const createdFile: LibraryFile = {
+      id: `file_${Date.now()}`,
       title: newTitle.trim(),
       category: newCategory,
-      turma: finalTurmaString,
-        targetAudience: targetAudience,
-      fileSize: selectedFileSize,
+      turma: finalTurmaLabel,
+      targetAudience,
+      fileSize: selectedFileSize || '1 MB',
       updatedAt: new Date().toLocaleDateString('pt-BR'),
-      driveUrl: finalUrl,
+      driveUrl: submittedUrl,
     };
 
     if (onAddFile) {
-      onAddFile(newLibraryFile);
+      onAddFile(createdFile);
     }
 
-    setUploadSuccessMsg('Arquivo cadastrado com sucesso!');
-    setTimeout(() => setUploadSuccessMsg(''), 4000);
-
-    // Reset form
     setNewTitle('');
     setNewDriveUrl('');
     setSelectedFileName('');
-    setFileDataUrl('');
-    setSelectedFileSize('1 MB');
+    setTargetAudience('all_turmas');
+    setNewTurmasSelected([]);
     setShowAddForm(false);
+    setUploadSuccessMsg(`Arquivo "${createdFile.title}" compartilhado com sucesso (${finalTurmaLabel})!`);
+    setTimeout(() => setUploadSuccessMsg(''), 5000);
   };
 
   return (
@@ -146,7 +214,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           <p className="text-sm text-muted mt-1">
             {isReadOnly
               ? 'Consulta de materiais didáticos e repositório do Google Drive de Sociologia. (Modo Somente Leitura)'
-              : 'Gerencie o Google Drive e materiais didáticos de Sociologia para os seus alunos'}
+              : 'Gerencie o Google Drive e o compartilhamento granular de materiais para turmas e 2º Professor'}
           </p>
         </div>
 
@@ -171,23 +239,47 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         )}
       </div>
 
-      
-      {/* 🚀 BARRA DE FERRAMENTAS E FILTROS PADRONIZADA 🚀 */}
-      <div className="flex flex-col md:flex-row gap-3 items-center justify-between bg-surface/50 border border-border/50 p-2.5 rounded-3xl backdrop-blur-sm">
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <div className="relative group w-full md:w-auto">
-            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-              <Filter className="w-4 h-4 text-muted group-focus-within:text-primary transition-colors" />
-            </div>
-            <div className="w-full md:w-64 pl-9">
-              <TurmaMultiSelect
-                selectedTurmas={selectedTurmaFilter}
-                onChange={setSelectedTurmaFilter}
-                placeholder="Filtrar Arquivos por Turma..."
-                options={Array.from(new Set(files.map(f => f.turma).filter(t => t !== 'Todas' && !t.includes(','))))}
-              />
-            </div>
+      {/* BARRA DE BUSCA E FILTRO DE TURMAS PADRONIZADA (PASSO 10 - IDÊNTICA À ÁREA DE ALUNOS) */}
+      <div className="p-4 rounded-3xl bg-surface border border-border shadow-sm space-y-3">
+        <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar arquivo por título, apostila, categoria ou turma..."
+              className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-background border border-border text-xs text-foreground placeholder:text-muted focus:outline-none focus:border-primary transition-all"
+            />
           </div>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+            <TurmaFilterDropdown
+              turmasList={turmasList}
+              selectedTurmas={selectedTurmas}
+              onChange={setSelectedTurmas}
+              students={students}
+              totalCountLabel="alunos"
+            />
+
+            <select
+              value={audienceFilter}
+              onChange={(e) => setAudienceFilter(e.target.value as any)}
+              className="px-3.5 py-2.5 rounded-2xl bg-background border border-border text-xs font-bold text-foreground focus:outline-none focus:border-primary cursor-pointer"
+            >
+              <option value="all">Todos os Públicos ({files.length})</option>
+              <option value="all_turmas">🌐 Todas as Turmas</option>
+              <option value="second_teacher">🤝 Somente 2º Professor</option>
+              <option value="specific_turmas">🎯 Turmas Específicas</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between text-[11px] text-muted px-1">
+          <span>
+            Exibindo <strong className="text-foreground">{filteredFiles.length}</strong> de{' '}
+            <strong className="text-foreground">{files.length}</strong> arquivos
+          </span>
         </div>
       </div>
 
@@ -198,7 +290,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
       )}
 
-      {/* FORMULÁRIO DE CADASTRO DE NOVO ARQUIVO */}
+      {/* FORMULÁRIO DE CADASTRO DE NOVO ARQUIVO COM COMPARTILHAMENTO GRANULAR (PASSO 9) */}
       {!isReadOnly && showAddForm && (
         <div className="glass-panel p-6 rounded-3xl border border-primary/40 bg-surface space-y-4 shadow-2xl animate-fadeIn">
           <div className="flex items-center gap-3 pb-3 border-b border-border">
@@ -207,12 +299,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-foreground">Upload ou Link de Novo Arquivo Didático</h2>
-              <p className="text-xs text-muted">Anexe um arquivo local do seu computador ou informe o link direto</p>
+              <p className="text-xs text-muted">
+                Escolha o público-alvo granular: Todas as Turmas, Somente 2º Professor ou Turmas Específicas
+              </p>
             </div>
           </div>
 
           <form onSubmit={handleAddFileSubmit} className="space-y-4 text-xs">
-            {/* AREA DE UPLOAD DE ARQUIVO LOCAL */}
             <div className="p-4 rounded-2xl border-2 border-dashed border-border bg-background/50 hover:border-primary/60 transition-all text-center space-y-2">
               <input
                 type="file"
@@ -224,7 +317,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               <FileUp className="w-8 h-8 text-primary mx-auto opacity-80" />
               <div>
                 <p className="font-bold text-foreground text-sm">
-                  {selectedFileName ? selectedFileName : 'Clique para selecionar um arquivo do seu computador'}
+                  {selectedFileName ? selectedFileName : 'Clique para extrair metadados de um arquivo do seu computador'}
                 </p>
                 <p className="text-[11px] text-muted mt-0.5">
                   Suporta PDF, Word, PowerPoint, Imagens, ZIP e mais ({selectedFileSize})
@@ -248,7 +341,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   required
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="Ex: Apostila Capitulo 3 - Durkheim e Sociedade"
+                  placeholder="Ex: Apostila Capítulo 3 - Durkheim e Sociedade"
                   className="w-full bg-background border border-white/15 rounded-xl px-3.5 py-2.5 text-foreground focus:outline-none focus:border-primary"
                 />
               </div>
@@ -261,43 +354,59 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 <select
                   value={newCategory}
                   onChange={(e) => setNewCategory(e.target.value)}
-                  className="w-full bg-background border border-white/15 rounded-xl px-3.5 py-2.5 text-foreground focus:outline-none focus:border-primary"
+                  className="w-full bg-background border border-white/15 rounded-xl px-3.5 py-2.5 text-foreground focus:outline-none focus:border-primary cursor-pointer"
                 >
                   <option value="Apostila">Apostila</option>
                   <option value="Exercício">Exercício / Atividade</option>
                   <option value="Slides">Slides / Apresentação</option>
+                  <option value="Material Adaptado / PEI">Material Adaptado / PEI (AEE)</option>
                   <option value="Leitura">Leitura Complementar</option>
                   <option value="Provas">Prova / Gabarito</option>
                   <option value="Outro">Outro Material</option>
                 </select>
               </div>
 
-              <div>
-                <label className="block text-muted font-semibold mb-1 flex items-center gap-1">
-                  <Users className="w-3.5 h-3.5 text-primary" />
-                  <span>Turma Alvo</span>
-                </label>
-                <select
-                  value={Array.isArray(newTurma) ? (newTurma[0] || 'Todas') : newTurma}
-                  onChange={(e) => setNewTurma(Array.isArray(newTurma) ? [e.target.value] : (e.target.value as any))}
-                  className="w-full bg-background border border-white/15 rounded-xl px-3.5 py-2.5 text-foreground focus:outline-none focus:border-primary"
-                >
-                  <option value="Todas">Todas as Turmas</option>
-                  <option value="3º Ano B">3º Ano B</option>
-                  <option value="2º Ano A">2º Ano A</option>
-                  <option value="1º Ano C">1º Ano C</option>
-                  <option value="Turma 301">Turma 301</option>
-                  <option value="Turma 302">Turma 302</option>
-                </select>
+              {/* SELETOR GRANULAR DE COMPARTILHAMENTO (PASSO 9) */}
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-muted font-semibold mb-1 flex items-center gap-1">
+                    <Users className="w-3.5 h-3.5 text-primary" />
+                    <span>Compartilhar Com (Público-Alvo) *</span>
+                  </label>
+                  <select
+                    value={targetAudience}
+                    onChange={(e) => setTargetAudience(e.target.value as any)}
+                    className="w-full bg-background border border-white/15 rounded-xl px-3.5 py-2.5 text-foreground font-semibold focus:outline-none focus:border-primary cursor-pointer"
+                  >
+                    <option value="all_turmas">🌐 Todas as Turmas (Alunos e 2º Professor)</option>
+                    <option value="second_teacher">🤝 Somente 2º Professor (Restrito AEE / Inclusão)</option>
+                    <option value="specific_turmas">🎯 Turma(s) Específica(s)...</option>
+                  </select>
+                </div>
+
+                {targetAudience === 'specific_turmas' && (
+                  <div className="animate-fadeIn">
+                    <label className="block text-muted font-semibold mb-1">
+                      Selecione as Turmas Permitidas (com Marcar/Desmarcar Tudo)
+                    </label>
+                    <TurmaMultiSelect
+                      selectedTurmas={newTurmasSelected}
+                      onChange={setNewTurmasSelected}
+                      options={turmasList}
+                      placeholder="Escolha uma ou mais turmas..."
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
                 <label className="block text-muted font-semibold mb-1 flex items-center gap-1">
                   <Link2 className="w-3.5 h-3.5 text-primary" />
-                  <span>Link Externo / Google Drive (Opcional se já anexou arquivo)</span>
+                  <span>Link do Google Drive / Repositório *</span>
                 </label>
                 <input
                   type="url"
+                  required
                   value={newDriveUrl}
                   onChange={(e) => setNewDriveUrl(e.target.value)}
                   placeholder="https://drive.google.com/file/d/..."
@@ -319,7 +428,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 className="py-2.5 px-6 bg-primary hover:bg-primary-hover text-white font-black rounded-xl text-xs transition-all shadow-lg flex items-center gap-2 cursor-pointer"
               >
                 <Save className="w-4 h-4" />
-                <span>Salvar e Cadastrar Arquivo</span>
+                <span>Salvar e Compartilhar Arquivo</span>
               </button>
             </div>
           </form>
@@ -335,7 +444,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-bold text-foreground leading-tight flex items-center gap-2">
-                <span>Repositório do Google Drive</span>
+                <span>Repositório Geral do Google Drive</span>
                 {folderInput.trim() ? (
                   <span className="text-[10px] font-extrabold bg-primary/20 text-primary border border-primary/40 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
                     Conectado
@@ -347,12 +456,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 )}
               </h2>
               <p className="text-xs text-muted mt-0.5">
-                Defina o repositório público ou pasta do Google Drive com apostilas, livros e materiais de Sociologia
+                Pasta principal do Google Drive compartilhada com as turmas e com o 2º Professor
               </p>
             </div>
           </div>
           <span className="px-3 py-1 bg-primary/20 text-primary border border-primary/40 rounded-full text-[11px] font-bold tracking-wide uppercase shrink-0 w-fit">
-            Acesso dos Alunos
+            Drive Integrado
           </span>
         </div>
 
@@ -371,7 +480,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 target="_blank"
                 rel="noopener noreferrer"
                 className="py-2.5 px-5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95"
-                title="Abrir Repositório no Google Drive"
               >
                 <ExternalLink className="w-4 h-4" />
                 <span>Acessar Repositório no Drive</span>
@@ -383,7 +491,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
                 <Link2 className="w-3.5 h-3.5 text-primary" />
-                <span>Link do Repositório do Google Drive (Pasta ou Drive Compartilhado)</span>
+                <span>Link da Pasta Principal do Google Drive</span>
               </label>
               <input
                 type="url"
@@ -410,7 +518,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     target="_blank"
                     rel="noopener noreferrer"
                     className="py-3 px-5 bg-surface-hover hover:bg-white/20 text-foreground font-bold rounded-xl text-xs transition-all border border-border flex items-center gap-2 cursor-pointer active:scale-95"
-                    title="Abrir Repositório no Google Drive"
                   >
                     <ExternalLink className="w-4 h-4 text-primary" />
                     <span>Acessar Repositório</span>
@@ -429,32 +536,34 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         )}
       </div>
 
-      {/* LISTA DE ARQUIVOS AVULSOS */}
+      {/* LISTA DE ARQUIVOS COMPARTILHADOS */}
       <div className="space-y-3 pt-2">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold text-foreground tracking-tight flex items-center gap-2">
             <FileText className="w-4 h-4 text-primary" />
-            <span>Arquivos Cadastrados e Materiais Didáticos ({files.length})</span>
+            <span>Arquivos Cadastrados e Materiais Didáticos ({filteredFiles.length})</span>
           </h2>
         </div>
 
-        {files.length === 0 ? (
+        {filteredFiles.length === 0 ? (
           <div className="glass-panel p-8 text-center rounded-3xl border border-border text-muted text-xs space-y-3">
-            <p>Nenhum arquivo individual cadastrado até o momento.</p>
+            <p>Nenhum arquivo encontrado para os filtros selecionados.</p>
             {!isReadOnly && (
               <button
                 onClick={() => setShowAddForm(true)}
                 className="py-2.5 px-5 bg-primary hover:bg-primary-hover text-white font-black rounded-xl text-xs transition-all inline-flex items-center gap-2 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                <span>Cadastrar Primeiro Arquivo</span>
+                <span>Cadastrar Novo Arquivo</span>
               </button>
             )}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3">
-            {files.map((file) => {
+            {filteredFiles.map((file) => {
               const fileUrl = file.driveUrl || folderInput.trim();
+              const isSecondTeacherOnly =
+                file.targetAudience === 'second_teacher' || file.turma === 'Somente 2º Professor';
 
               return (
                 <div
@@ -473,9 +582,15 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                             {file.category}
                           </span>
                         )}
-                        {file.turma && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 bg-surface-hover text-muted rounded-full">
-                            Turma: {file.turma}
+                        {isSecondTeacherOnly ? (
+                          <span className="text-[10px] font-extrabold px-2.5 py-0.5 bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded-full flex items-center gap-1">
+                            <HeartHandshake className="w-3 h-3" />
+                            Somente 2º Professor
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 bg-surface-hover text-muted rounded-full flex items-center gap-1">
+                            <ShieldCheck className="w-3 h-3 text-primary" />
+                            Turma: {file.turma || 'Todas'}
                           </span>
                         )}
                         <span className="text-[11px] text-[#869486]">
@@ -492,7 +607,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                         target="_blank"
                         rel="noopener noreferrer"
                         className="py-2.5 px-5 bg-primary hover:bg-primary-hover text-white font-extrabold rounded-full text-xs transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer min-h-[40px]"
-                        title="Baixar ou abrir arquivo"
                       >
                         <ExternalLink className="w-4 h-4" />
                         <span>Baixar / Acessar</span>
@@ -518,7 +632,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         )}
       </div>
 
-      {/* Delete Confirmation Modal */}
       {fileToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
           <div className="bg-surface border border-border rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-6">
@@ -530,7 +643,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 <h3 className="text-xl font-bold text-foreground">Excluir Arquivo</h3>
                 <p className="text-sm text-text-muted mt-2">
                   Deseja realmente excluir o material <strong className="text-foreground">{fileToDelete.title}</strong>?
-                  Isso irá removê-lo da biblioteca dos alunos desta turma.
                 </p>
               </div>
             </div>

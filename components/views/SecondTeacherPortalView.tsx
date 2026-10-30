@@ -260,23 +260,11 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
   }, [atestados, atestadosSearch, atestadosTurmaFilter, atestadosTipoFilter]);
 
   const accessibleLibraryFiles = useMemo(() => {
-    return libraryFiles.filter((f) => {
-      const fileTurma = (f.turma || '').trim().toLowerCase();
-      if (
-        !fileTurma ||
-        fileTurma === 'todas' ||
-        fileTurma === 'todas as turmas' ||
-        fileTurma === 'geral' ||
-        fileTurma === 'all'
-      ) {
-        return true;
-      }
-      if (derivedTurmas.length === 0) return true;
-      const cleanFileTurma = fileTurma.replace(/^turma\s+/i, '').trim();
-      return derivedTurmas.some((dt) => {
-        const cleanDt = dt.trim().toLowerCase().replace(/^turma\s+/i, '').trim();
-        return cleanFileTurma === cleanDt || fileTurma.includes(cleanDt);
-      });
+    return (libraryFiles || []).filter((f) => {
+      if (f.targetAudience === 'second_teacher' || f.turma === 'Somente 2º Professor') return true;
+      if (f.targetAudience === 'all_turmas' || !f.turma || f.turma === 'Todas') return true;
+      const fileTurmas = f.turma.split(',').map((t) => t.trim());
+      return derivedTurmas.some((dt) => fileTurmas.includes(dt));
     });
   }, [libraryFiles, derivedTurmas]);
 
@@ -996,6 +984,7 @@ export const SecondTeacherPortalView: React.FC<SecondTeacherPortalViewProps> = (
 
             <LibraryView
               files={accessibleLibraryFiles}
+              students={classRoster}
               driveFolderUrl={teacher.driveFolderUrl}
               isReadOnly={true}
               onAddFile={() => {}}

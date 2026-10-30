@@ -2417,6 +2417,7 @@ export default function Home() {
 
           {activeTeacherTab === 'arquivos' && (
             <LibraryView
+              students={students}
               files={library}
               driveFolderUrl={teacher.driveFolderUrl}
               onSaveDriveFolderUrl={handleSaveDriveFolderUrl}

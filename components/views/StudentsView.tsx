@@ -79,30 +79,36 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const isNoneTurmasSelected = selectedTurmas.includes('none');
+
   const isAllTurmasSelected = useMemo(() => {
+    if (isNoneTurmasSelected) return false;
     return (
       selectedTurmas.length === 0 ||
       selectedTurmas.includes('all') ||
       (turmasList.length > 0 && selectedTurmas.length === turmasList.length)
     );
-  }, [selectedTurmas, turmasList]);
+  }, [selectedTurmas, turmasList, isNoneTurmasSelected]);
 
   const isTurmaChecked = (t: string) => {
+    if (isNoneTurmasSelected) return false;
     if (isAllTurmasSelected) return true;
     return selectedTurmas.includes(t);
   };
 
   const toggleTurma = (t: string) => {
-    if (isAllTurmasSelected) {
-      // Se estava tudo marcado e o usuário clica em uma turma específica, isola as outras
-      const remaining = turmasList.filter((item) => item !== t);
-      setSelectedTurmas(remaining.length === 0 ? ['all'] : remaining);
+    if (isNoneTurmasSelected) {
+      setSelectedTurmas([t]);
       return;
     }
-
+    if (isAllTurmasSelected) {
+      const remaining = turmasList.filter((item) => item !== t);
+      setSelectedTurmas(remaining.length === 0 ? ['none'] : remaining);
+      return;
+    }
     if (selectedTurmas.includes(t)) {
       const next = selectedTurmas.filter((item) => item !== t);
-      setSelectedTurmas(next.length === 0 ? ['all'] : next);
+      setSelectedTurmas(next.length === 0 ? ['none'] : next);
     } else {
       const next = [...selectedTurmas, t];
       if (next.length === turmasList.length) {
@@ -118,7 +124,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
   };
 
   const handleClearTurmas = () => {
-    setSelectedTurmas(['all']);
+    setSelectedTurmas(['none']);
   };
 
   const handleSelectOnlyTurma = (t: string, e?: React.MouseEvent) => {
@@ -264,17 +270,13 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                       type="button"
                       onClick={handleSelectAllTurmas}
                       className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
-                    >
-                      Todas
-                    </button>
+                    >Marcar Tudo</button>
                     <span className="text-muted">•</span>
                     <button
                       type="button"
                       onClick={handleClearTurmas}
                       className="text-[11px] font-bold text-muted hover:text-foreground cursor-pointer"
-                    >
-                      Redefinir
-                    </button>
+                    >Desmarcar Tudo</button>
                   </div>
                 </div>
 
