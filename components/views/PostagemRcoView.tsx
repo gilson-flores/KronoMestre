@@ -47,10 +47,9 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
   onSaveActivity,
   teacher = initialTeacher,
 }) => {
-  const allTurmas = useMemo(() => {
-    return getOriginalTurmas(students);
-  }, [students]);
+  const allTurmas = useMemo(() => Array.from(new Set((students || []).map(s => (s.turma || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })), [students]);
 
+  const [selectedTurmas, setSelectedTurmas] = useState<string[]>(['all']);
   const [userSelectedTurma, setUserSelectedTurma] = useState<string>('');
   const [selectedActivityId, setSelectedActivityId] = useState<string>('all');
   const [searchStudent, setSearchStudent] = useState<string>('');
@@ -122,9 +121,11 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
   };
 
   const activitiesForTurma = useMemo(() => {
-    if (!selectedTurma) return [];
-    return activities.filter((act) => canStudentAccessActivity(act.turma, selectedTurma));
-  }, [activities, selectedTurma]);
+    if (selectedTurmas.includes('none')) return [];
+    const isAll = selectedTurmas.length === 0 || selectedTurmas.includes('all') || (allTurmas.length > 0 && selectedTurmas.length >= allTurmas.length);
+    if (isAll) return activities;
+    return activities.filter((act) => selectedTurmas.some((sel) => canStudentAccessActivity(act.turma, sel)));
+  }, [activities, selectedTurmas, allTurmas]);
 
   const allSystemActivities = useMemo(() => {
     return [...activities].sort((a, b) => a.title.localeCompare(b.title));
@@ -138,11 +139,16 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
   }, [activities, selectedActivityId]);
 
   const studentsInTurma = useMemo(() => {
-    if (!selectedTurma) return [];
-    return students
-      .filter((s) => s.turma?.trim().toLowerCase() === selectedTurma.trim().toLowerCase())
+    if (selectedTurmas.includes('none')) return [];
+    const isAll = selectedTurmas.length === 0 || selectedTurmas.includes('all') || (allTurmas.length > 0 && selectedTurmas.length >= allTurmas.length);
+    return [...students]
+      .filter((s) => {
+        if (isAll) return true;
+        const stTurma = (s.turma || '').trim().toLowerCase();
+        return selectedTurmas.some((sel) => sel.trim().toLowerCase() === stTurma);
+      })
       .sort((a, b) => a.fullName.localeCompare(b.fullName));
-  }, [students, selectedTurma]);
+  }, [students, selectedTurmas, allTurmas]);
 
   // Chave de contexto atual (Turma + Atividade ou Média Geral)
   const rcoContextKey = useMemo(() => {
@@ -201,7 +207,7 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
   };
 
   const studentGradesList = useMemo(() => {
-    if (activitiesForTurma.length === 0 || studentsInTurma.length === 0) return [];
+    if (studentsInTurma.length === 0) return [];
 
     if (currentActivity) {
       const childRecs = getChildRecoveryActivities(currentActivity, activities);
@@ -499,8 +505,8 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
             </label>
             <TurmaFilterDropdown
               turmasList={allTurmas}
-              selectedTurmas={selectedTurma ? [selectedTurma] : ['all']}
-              onChange={handleTurmaDropdownChange}
+              selectedTurmas={selectedTurmas}
+              onChange={setSelectedTurmas}
               students={students}
               totalCountLabel="alunos"
             />
@@ -572,10 +578,7 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
               <button
                 key={turmaCode}
                 type="button"
-                onClick={() => {
-                  setUserSelectedTurma(turmaCode);
-                  setSelectedActivityId('all');
-                }}
+                onClick={() => { setSelectedTurmas([turmaCode]); setSelectedActivityId('all'); }}
                 className={`py-1.5 px-3 rounded-xl text-[11px] font-bold transition-all cursor-pointer border ${
                   isSelected
                     ? 'bg-primary text-white border-primary shadow-sm'
@@ -681,7 +684,7 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
 
       {/* Tabela de Alunos, Notas e Checkbox Individual de Lançamento RCO */}
       <div className="glass-panel rounded-3xl border border-border bg-surface overflow-hidden shadow-lg">
-        {!selectedTurma || activitiesForTurma.length === 0 ? (
+        {studentsInTurma.length === 0 ? (
           <div className="p-12 text-center text-muted space-y-3">
             <FileSpreadsheet className="w-12 h-12 text-muted/40 mx-auto" />
             <p className="text-sm font-bold text-foreground">Nenhuma atividade encontrada</p>

@@ -1,3 +1,4 @@
+import { TurmaFilterDropdown, extractAllTurmasFromData, isTurmaMatchedByFilter } from '@/components/TurmaFilterDropdown';
 'use client';
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
@@ -65,8 +66,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
   const [resetSuccessMsg, setResetSuccessMsg] = useState('');
 
   // Turmas únicas cadastradas entre os alunos
-  const turmasSet = new Set(students.map((s) => s.turma).filter(Boolean));
-  const turmasList = Array.from(turmasSet).sort((a, b) => a.localeCompare(b));
+  const turmasList = useMemo(() => extractAllTurmasFromData(students), [students]);
 
   // Fecha o menu da lista suspensa ao clicar fora
   useEffect(() => {
@@ -148,8 +148,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
       const matchesName =
         s.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         s.matricula.includes(searchTerm);
-      const matchesTurma =
-        isAllTurmasSelected || selectedTurmas.includes(s.turma);
+      const matchesTurma = isTurmaMatchedByFilter(s.turma, selectedTurmas, turmasList, 'student');
       const matchesTag =
         selectedTagFilter === 'all' ||
         (s.tag && s.tag.toUpperCase() === selectedTagFilter);
@@ -225,60 +224,15 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
           </div>
 
           {/* Lista Suspensa de Turmas (Opção de Escolher Uma, Várias ou Todas as Turmas) */}
-          <div className="md:col-span-4 relative" ref={turmaDropdownRef}>
-            <button
-              type="button"
-              onClick={() => setIsTurmaDropdownOpen(!isTurmaDropdownOpen)}
-              className="w-full bg-surface hover:bg-surface-hover border border-border focus:border-primary rounded-full px-4 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm text-foreground flex items-center justify-between gap-2 transition-all cursor-pointer min-h-[44px] shadow-sm select-none"
-              aria-haspopup="listbox"
-              aria-expanded={isTurmaDropdownOpen}
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <KronoIcon icon={Filter} variant="viking" size="xs" />
-                <span className="font-bold truncate text-foreground">
-                  {turmaDropdownLabel}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {!isAllTurmasSelected && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-primary/20 text-primary border border-primary/30">
-                    {selectedTurmas.length}
-                  </span>
-                )}
-                <ChevronDown
-                  className={`w-4 h-4 text-muted transition-transform duration-200 ${
-                    isTurmaDropdownOpen ? 'rotate-180 text-primary' : ''
-                  }`}
-                />
-              </div>
-            </button>
-
-            {/* Menu Suspenso de Seleção de Turmas */}
-            {isTurmaDropdownOpen && (
-              <div
-                className="absolute left-0 right-0 top-full mt-2 bg-surface/95 backdrop-blur-xl border border-border/80 rounded-2xl shadow-2xl z-50 p-3 space-y-2.5 animate-fadeIn max-h-[380px] overflow-y-auto custom-scrollbar"
-                role="listbox"
-              >
-                {/* Cabeçalho do Dropdown com Ações Rápidas */}
-                <div className="flex items-center justify-between pb-2 border-b border-border/80 text-xs">
-                  <span className="font-bold text-foreground flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-primary" />
-                    <span>Turmas do Professor</span>
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleSelectAllTurmas}
-                      className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
-                    >Marcar Tudo</button>
-                    <span className="text-muted">•</span>
-                    <button
-                      type="button"
-                      onClick={handleClearTurmas}
-                      className="text-[11px] font-bold text-muted hover:text-foreground cursor-pointer"
-                    >Desmarcar Tudo</button>
-                  </div>
-                </div>
+          <div className="md:col-span-4">
+            <TurmaFilterDropdown
+              turmasList={turmasList}
+              selectedTurmas={selectedTurmas}
+              onChange={setSelectedTurmas}
+              students={students}
+              totalCountLabel="alunos"
+            />
+          </div>
 
                 {/* Opção Todas as Turmas */}
                 <div
