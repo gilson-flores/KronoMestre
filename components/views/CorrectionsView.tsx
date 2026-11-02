@@ -1,5 +1,5 @@
-import { TurmaFilterDropdown, extractAllTurmasFromData, isTurmaMatchedByFilter } from '@/components/TurmaFilterDropdown';
 'use client';
+import { TurmaFilterDropdown, extractAllTurmasFromData, isTurmaMatchedByFilter } from '@/components/TurmaFilterDropdown';
 
 import React, { useState, useMemo, useEffect } from 'react';
 import {
