@@ -225,4 +225,47 @@ export const TurmaFilterDropdown: React.FC<TurmaFilterDropdownProps> = ({
   );
 };
 
+
+export function extractAllTurmasFromData(
+  students: StudentUser[] = [],
+  extraTurmas: (string | undefined | null)[] = []
+): string[] {
+  const set = new Set<string>();
+  for (const s of students) {
+    if (s && s.turma && typeof s.turma === "string") {
+      const t = s.turma.trim();
+      if (t && t !== "Todas as Turmas" && t !== "all" && t !== "none") set.add(t);
+    }
+  }
+  for (const raw of extraTurmas) {
+    if (!raw || typeof raw !== "string") continue;
+    for (const part of raw.split(",")) {
+      const t = part.trim();
+      if (t && t !== "Todas as Turmas" && t !== "all" && t !== "none") set.add(t);
+    }
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+}
+
+export function isTurmaMatchedByFilter(
+  itemTurma: string | undefined | null,
+  selectedTurmas: string[],
+  allTurmasList: string[] = [],
+  mode: "student" | "activity" = "student"
+): boolean {
+  if (!selectedTurmas || selectedTurmas.length === 0 || selectedTurmas.includes("none")) {
+    return false;
+  }
+  if (selectedTurmas.includes("all")) {
+    return true;
+  }
+  const raw = (itemTurma || "").trim();
+  if (!raw) return false;
+  if (mode === "activity" && (raw === "Todas as Turmas" || raw.toLowerCase() === "todas")) {
+    return true;
+  }
+  const parts = raw.split(",").map((p) => p.trim()).filter(Boolean);
+  return parts.some((p) => selectedTurmas.includes(p));
+}
+
 export default TurmaFilterDropdown;

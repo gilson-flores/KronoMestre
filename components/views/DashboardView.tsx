@@ -60,11 +60,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'Ativo' | 'Inativo' | 'Todos'>('Ativo');
+  const [selectedTurma, setSelectedTurma] = useState<string>('Todas');
   const [selectedTurmas, setSelectedTurmas] = useState<string[]>(['all']);
-  
+  const [isFilterExpanded, setIsFilterExpanded] = useState(false);
   const [expandedActId, setExpandedActId] = useState<string | null>(null);
 
-  const turmasDisponiveis = useMemo(() => extractAllTurmasFromData(students, activities.map(a => a.turma)), [students, activities]);
+  const turmasDisponiveis = useMemo(() => extractAllTurmasFromData(students, activities.map((a) => a.turma)), [students, activities]);
 
   // Formatação padronizada: (Modo) AV1 ou RP1
   const getShortActivityTitle = (act: Activity) => {
@@ -89,26 +90,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   };
 
   const filteredActivities = useMemo(() => {
-      return activities.filter((act) => {
-        if (statusFilter !== 'Todos' && act.status !== statusFilter) {
-          if (!(statusFilter === 'Inativo' && (act.status === 'Prazo Encerrado' || act.status === 'Inativo'))) {
-            return false;
-          }
-        }
-        if (!isTurmaMatchedByFilter(act.turma, selectedTurmas, turmasDisponiveis, 'activity')) {
+    return activities.filter((act) => {
+      if (statusFilter !== 'Todos' && act.status !== statusFilter) {
+        if (!(statusFilter === 'Inativo' && act.status === 'Prazo Encerrado')) {
           return false;
         }
-        if (searchQuery) {
-          const query = searchQuery.toLowerCase();
-          return (
-            (act.title && act.title.toLowerCase().includes(query)) ||
-            (act.type && act.type.toLowerCase().includes(query)) ||
-            (act.turma && act.turma.toLowerCase().includes(query))
-          );
-        }
-        return true;
-      });
-    }, [activities, statusFilter, selectedTurmas, turmasDisponiveis, searchQuery]);
+      }
+      if (!isTurmaMatchedByFilter(act.turma, selectedTurmas, turmasDisponiveis, 'activity')) {
+        return false;
+      }
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        return (
+          (act.title && act.title.toLowerCase().includes(query)) ||
+          (act.type && act.type.toLowerCase().includes(query)) ||
+          (act.turma && act.turma.toLowerCase().includes(query))
+        );
+      }
+      return true;
+    });
+  }, [activities, statusFilter, selectedTurmas, turmasDisponiveis, searchQuery]);
 
   const toggleExpand = (id: string) => {
     setExpandedActId((prev) => (prev === id ? null : id));
@@ -149,25 +150,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-border bg-surface shadow-md space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           {/* Busca e Botão de Expansão de Turmas */}
-          <div className="flex flex-1 items-center gap-3">
-            <div className="flex-1 max-w-sm">
+          <div className="flex flex-1 items-center gap-2">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Buscar missão..."
-                className="w-full bg-background border border-border rounded-2xl px-4 py-2.5 text-xs text-foreground focus:outline-none focus:border-primary transition-all"
+                className="w-full bg-background border border-border rounded-2xl pl-10 pr-4 py-2.5 text-xs text-foreground focus:outline-none focus:border-primary transition-all"
               />
             </div>
-            <div className="w-64">
-              <TurmaFilterDropdown
-                turmasList={turmasDisponiveis}
-                selectedTurmas={selectedTurmas}
-                onChange={setSelectedTurmas}
-                students={students}
-                totalCountLabel="alunos"
-              />
-            </div>
+            
+            <TurmaFilterDropdown
+              turmasList={turmasDisponiveis}
+              selectedTurmas={selectedTurmas}
+              onChange={setSelectedTurmas}
+              students={students}
+              totalCountLabel="alunos"
+            />
           </div>
 
           {/* Filtro de Status (Pílulas) */}
@@ -189,7 +190,157 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Expansão do Filtro de Turmas (Painel Limpo) */}
-         className={`px-3 py-2 border rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${act.isRcoPosted ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30" : "bg-surface hover:bg-surface-hover text-foreground border-border"}`}>
+        {isFilterExpanded && (
+          <div className="pt-3 border-t border-border animate-fadeIn flex flex-wrap gap-2">
+            <button
+              onClick={() => { setSelectedTurma('Todas'); setIsFilterExpanded(false); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                selectedTurma === 'Todas' ? 'bg-primary text-white border-primary' : 'bg-background text-muted border-border hover:border-primary/50'
+              }`}
+            >
+              Todas as Turmas
+            </button>
+            {turmasDisponiveis.map((t) => (
+              <button
+                key={t}
+                onClick={() => { setSelectedTurma(t); setIsFilterExpanded(false); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
+                  selectedTurma === t ? 'bg-primary text-white border-primary' : 'bg-background text-muted border-border hover:border-primary/50'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5 opacity-70" />
+                Turma {getTurmaLabel(t)}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Lista de Atividades Minimalista */}
+      <div className="space-y-4">
+        {filteredActivities.length === 0 ? (
+          <div className="p-12 text-center rounded-3xl border border-dashed border-border bg-surface text-muted space-y-3 shadow-sm">
+            <FileText className="w-12 h-12 mx-auto opacity-50" />
+            <p className="text-base font-bold text-foreground">Nenhuma missão encontrada.</p>
+            <p className="text-xs">Ajuste os filtros ou crie uma nova atividade.</p>
+          </div>
+        ) : (
+          filteredActivities.map((act) => {
+            const shortName = getShortActivityTitle(act);
+            const isExpanded = expandedActId === act.id;
+            const targetStudents = students.filter(s => isTurmaMatchedByFilter(s.turma, selectedTurmas, turmasDisponiveis, "student"));
+            const metrics = getActivityStudentAndSubmissionCounts(act, activities, targetStudents);
+            const subCount = metrics.subCount;
+            const pendingCount = metrics.pendingCount;
+            const totalCount = metrics.expectedStudentsCount > 0 ? metrics.expectedStudentsCount : 1;
+            const progress = totalCount > 0 ? Math.round((subCount / totalCount) * 100) : 0;
+            const isRec = Boolean(act.isRecovery || act.type === 'Recuperação Paralela' || act.recoveryFromId);
+
+            return (
+              <div key={act.id} className="glass-panel rounded-3xl border border-border bg-surface shadow-md transition-all overflow-hidden">
+                {/* Cabeçalho do Card (Visão Minimalista) */}
+                <div className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  
+                  <div className="flex items-start gap-4 min-w-0 flex-1">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border shadow-sm ${
+                      isRec ? 'bg-amber-500/10 border-amber-500/30 text-amber-500' : 'bg-primary/10 border-primary/30 text-primary'
+                    }`}>
+                      {isRec ? <AlertCircle className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
+                    </div>
+                    
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border ${
+                          isRec ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-primary/20 text-primary border-primary/40'
+                        }`}>
+                          {shortName}
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-background border border-border text-muted flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> {act.deadline || 'Sem Prazo'}
+                        </span>
+                        {act.status === 'Ativo' ? (
+                          <span className="text-[10px] font-bold text-emerald-400">● Ativa</span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-rose-400">● Encerrada</span>
+                        )}
+{act.isRcoPosted && <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">✅ RCO Lançado</span>}
+                      </div>
+                      
+                      <h3 className="text-base sm:text-lg font-black text-foreground truncate" title={act.title}>
+                        {act.title}
+                      </h3>
+                      
+                      {/* Barra de Progresso Rápida */}
+                      <div className="flex items-center gap-3 mt-2 max-w-sm">
+                        <div className="flex-1 h-1.5 bg-background rounded-full overflow-hidden border border-border">
+                          <div className={`h-full rounded-full ${isRec ? 'bg-amber-400' : 'bg-primary'}`} style={{ width: `${progress}%` }} />
+                        </div>
+                        <span className="text-[10px] font-bold text-muted whitespace-nowrap">
+                          {subCount}/{totalCount} entregas
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Ações Primárias (Direita) */}
+                  <div className="flex items-center gap-2 shrink-0 border-t md:border-t-0 border-border pt-3 md:pt-0 mt-3 md:mt-0">
+                    <button
+                      onClick={() => onSelectActivityForGrading(act)}
+                      className="flex-1 md:flex-none py-2 px-4 bg-[#171f33] hover:bg-primary text-white border border-border hover:border-primary font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Correções</span>
+                      {pendingCount > 0 && (
+                        <span className="bg-rose-500 text-white px-1.5 py-0.5 rounded-md text-[10px] ml-1">{pendingCount}</span>
+                      )}
+                    </button>
+                    
+                    <button
+                      onClick={() => toggleExpand(act.id)}
+                      className={`p-2 rounded-xl border transition-all cursor-pointer flex items-center justify-center ${
+                        isExpanded ? 'bg-primary/20 border-primary text-primary' : 'bg-background border-border text-muted hover:text-foreground hover:bg-surface-hover'
+                      }`}
+                      title="Gestão e Detalhes"
+                    >
+                      {isExpanded ? <ChevronUp className="w-5 h-5" /> : <Settings className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Gaveta de Gestão / Detalhes Expansível */}
+                {isExpanded && (
+                  <div className="p-4 sm:p-5 border-t border-border bg-background/50 animate-fadeIn space-y-5">
+                    
+                    {/* Metadados e Travas */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                      <div className="space-y-2">
+                        <strong className="text-muted block uppercase tracking-wider text-[10px]">Turmas Vinculadas:</strong>
+                        <p className="text-foreground bg-surface p-2 rounded-lg border border-border leading-relaxed">
+                          {act.turma}
+                        </p>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <strong className="text-muted block uppercase tracking-wider text-[10px]">Travas de Segurança:</strong>
+                        <div className="flex flex-wrap gap-1.5">
+                          {act.securityFocusLock ? <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2 py-1 rounded-md">🛡️ Trava de Foco</span> : <span className="bg-surface text-muted border border-border px-2 py-1 rounded-md opacity-50">Foco Livre</span>}
+                          {act.securityBlockCopyStatement ? <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-1 rounded-md">🚫 Sem Cópia</span> : <span className="bg-surface text-muted border border-border px-2 py-1 rounded-md opacity-50">Cópia Livre</span>}
+                          {act.securityBlockPasteEssay ? <span className="bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-1 rounded-md">🚫 Sem Cola</span> : <span className="bg-surface text-muted border border-border px-2 py-1 rounded-md opacity-50">Cola Livre</span>}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Botões de CRUD / Ações Secundárias */}
+                    <div className="pt-4 border-t border-border flex flex-wrap items-center justify-end gap-2">
+                      <button onClick={() => onViewActivity(act)} className="px-3 py-2 bg-surface hover:bg-surface-hover text-foreground border border-border rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer">
+                        <Search className="w-3.5 h-3.5" /> Ver Detalhes
+                      </button>
+
+                      <button onClick={() => onEditActivity(act)} className="px-3 py-2 bg-surface hover:bg-surface-hover text-foreground border border-border rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer">
+                        <Edit className="w-3.5 h-3.5" /> Editar
+                      </button>
+
+    <button onClick={() => onSaveActivity({ ...act, isRcoPosted: !act.isRcoPosted })} className={`px-3 py-2 border rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${act.isRcoPosted ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30" : "bg-surface hover:bg-surface-hover text-foreground border-border"}`}>
       <FileText className="w-3.5 h-3.5" /> {act.isRcoPosted ? "Desmarcar RCO" : "Marcar Lançado (RCO)"}
     </button>
 

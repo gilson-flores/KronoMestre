@@ -68,11 +68,12 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
   initialSelectedActivityId,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTurma, setSelectedTurma] = useState<string>('Todas');
   const [selectedTurmas, setSelectedTurmas] = useState<string[]>(['all']);
-  
+  const [isFilterExpanded, setIsFilterExpanded] = useState(false);
   
   // Novo Estado de Filtro de Correção
-  const [correctionFilter, setCorrectionFilter] = useState<'pendentes' | 'corrigidas' | 'todas'>('pendentes');
+  const [correctionFilter, setCorrectionFilter] = useState<'pendentes' | 'corrigidas' | 'inativas' | 'todas'>('todas');
   
   const [expandedActId, setExpandedActId] = useState<string | null>(initialSelectedActivityId || null);
   const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
@@ -80,7 +81,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
   const [draftScores, setDraftScores] = useState<{ [key: string]: string }>({});
   const [draftFeedbacks, setDraftFeedbacks] = useState<{ [key: string]: string }>({});
 
-  const turmasDisponiveis = useMemo(() => extractAllTurmasFromData(students, activities.map(a => a.turma)), [students, activities]);
+  const turmasDisponiveis = useMemo(() => extractAllTurmasFromData(students, activities.map((a) => a.turma)), [students, activities]);
 
   useEffect(() => {
     if (initialSelectedActivityId) {
@@ -92,37 +93,48 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
 
   // Filtra as atividades que possuem envios baseados no filtro atual (Pendentes, Corrigidas ou Todas com entregas)
   const filteredActivities = useMemo(() => {
-      return activities.filter((act) => {
-        const targetStudents = isTurmaMatchedByFilter('', selectedTurmas, turmasDisponiveis) ? students : students.filter(s => isTurmaMatchedByFilter(s.turma, selectedTurmas, turmasDisponiveis, 'student'));
-        const metrics = getActivityStudentAndSubmissionCounts(act, activities, targetStudents);
-        const subs = metrics.submissionsList || [];
-        if (subs.length === 0) return false;
+    return activities.filter((act) => {
+      if (!isTurmaMatchedByFilter(act.turma, selectedTurmas, turmasDisponiveis, 'activity')) {
+        return false;
+      }
 
-        if (!isTurmaMatchedByFilter(act.turma, selectedTurmas, turmasDisponiveis, 'activity')) {
-          return false;
-        }
+      const targetStudents = students.filter((s) =>
+        isTurmaMatchedByFilter(s.turma, selectedTurmas, turmasDisponiveis, 'student')
+      );
+      const metrics = getActivityStudentAndSubmissionCounts(act, activities, targetStudents);
+      const subs = (metrics.submissionsList && metrics.submissionsList.length > 0)
+        ? metrics.submissionsList
+        : (act.submissions || []);
 
-        if (correctionFilter === 'pendentes') {
-          const hasPending = subs.some(s => s.status === 'pending');
-          if (!hasPending) return false;
-        } else if (correctionFilter === 'corrigidas') {
-          const allGraded = subs.length > 0 && subs.every(s => s.status === 'graded');
-          if (!allGraded) return false;
-        }
+      const isInactiveOrClosed = act.status === 'Inativo' || act.status === 'Prazo Encerrado';
 
-        if (searchQuery) {
-          const q = searchQuery.toLowerCase();
-          const matchesTitle = act.title && act.title.toLowerCase().includes(q);
-          const matchesStudent = subs.some(sub => {
-            const st = students.find(s => s.id === sub.studentId || (s.matricula && s.matricula === sub.matricula));
-            const nameToMatch = (st ? (st.fullName || st.name) : sub.studentName) || "";
-            return nameToMatch.toLowerCase().includes(q);
-          });
-          if (!matchesTitle && !matchesStudent) return false;
-        }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchesTitle = Boolean(act.title && act.title.toLowerCase().includes(q));
+        const matchesTurma = Boolean(act.turma && act.turma.toLowerCase().includes(q));
+        const matchesStudent = subs.some((sub) => {
+          const st = students.find((s) => s.id === sub.studentId || (s.matricula && s.matricula === sub.matricula));
+          const nameToMatch = (st ? (st.fullName || st.name) : sub.studentName) || '';
+          return nameToMatch.toLowerCase().includes(q);
+        });
+        if (!matchesTitle && !matchesTurma && !matchesStudent) return false;
         return true;
-      });
-    }, [activities, selectedTurmas, turmasDisponiveis, searchQuery, correctionFilter, students]);
+      }
+
+      if (correctionFilter === 'inativas') {
+        return isInactiveOrClosed;
+      }
+      if (correctionFilter === 'pendentes') {
+        return subs.some((s) => s.status === 'pending');
+      }
+      if (correctionFilter === 'corrigidas') {
+        return subs.length > 0 && subs.some((s) => s.status === 'graded' || s.status === 'returned');
+      }
+
+      // 'todas': exibe todas as atividades com entregas OU inativas/encerradas para consulta e devolução
+      return subs.length > 0 || isInactiveOrClosed;
+    });
+  }, [activities, selectedTurmas, turmasDisponiveis, searchQuery, correctionFilter, students]);
 
   const totalPendingGlobal = useMemo(() => {
     let count = 0;
@@ -207,25 +219,25 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
       {/* Barra de Filtros Inteligente */}
       <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-border bg-surface shadow-md space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex flex-1 items-center gap-3">
-            <div className="flex-1 max-w-sm">
+          <div className="flex flex-1 items-center gap-2">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Buscar atividade por título ou turma..."
-                className="w-full bg-background border border-border rounded-2xl px-4 py-2.5 text-xs text-foreground focus:outline-none focus:border-sky-400 transition-all"
+                className="w-full bg-background border border-border rounded-2xl pl-10 pr-4 py-2.5 text-xs text-foreground focus:outline-none focus:border-sky-400 transition-all"
               />
             </div>
-            <div className="w-64">
-              <TurmaFilterDropdown
-                turmasList={turmasDisponiveis}
-                selectedTurmas={selectedTurmas}
-                onChange={setSelectedTurmas}
-                students={students}
-                totalCountLabel="alunos"
-              />
-            </div>
+            
+            <TurmaFilterDropdown
+              turmasList={turmasDisponiveis}
+              selectedTurmas={selectedTurmas}
+              onChange={setSelectedTurmas}
+              students={students}
+              totalCountLabel="alunos"
+            />
           </div>
 
           {/* Filtro de Status de Correção (Pílulas) */}
@@ -251,6 +263,16 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
               Já Corrigidas
             </button>
             <button
+              onClick={() => setCorrectionFilter('inativas')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                correctionFilter === 'inativas'
+                  ? 'bg-amber-500 text-slate-900 shadow-sm'
+                  : 'text-amber-400 hover:bg-amber-500/10'
+              }`}
+            >
+              Inativas / Encerradas
+            </button>
+            <button
               onClick={() => setCorrectionFilter('todas')}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                 correctionFilter === 'todas'
@@ -263,7 +285,124 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
           </div>
         </div>
 
-        
+        {isFilterExpanded && (
+          <div className="pt-3 border-t border-border animate-fadeIn flex flex-wrap gap-2">
+            <button
+              onClick={() => { setSelectedTurma('Todas'); setIsFilterExpanded(false); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                selectedTurma === 'Todas' ? 'bg-sky-500 text-slate-900 border-sky-500' : 'bg-background text-muted border-border hover:border-sky-500/50'
+              }`}
+            >
+              Todas as Turmas
+            </button>
+            {turmasDisponiveis.map((t) => (
+              <button
+                key={t}
+                onClick={() => { setSelectedTurma(t); setIsFilterExpanded(false); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
+                  selectedTurma === t ? 'bg-sky-500 text-slate-900 border-sky-500' : 'bg-background text-muted border-border hover:border-sky-500/50'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5 opacity-70" />
+                Turma {getTurmaLabel(t)}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Lista de Atividades para Correção */}
+      <div className="space-y-4">
+        {filteredActivities.length === 0 ? (
+          <div className="p-12 text-center rounded-3xl border border-dashed border-border bg-surface text-muted space-y-3 shadow-sm">
+            <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500/50" />
+            <p className="text-base font-bold text-foreground">Sua mesa está limpa!</p>
+            <p className="text-xs">Não há nenhuma entrega de aluno correspondente a este filtro.</p>
+          </div>
+        ) : (
+          filteredActivities.map((originalAct) => {
+            const targetStudents = selectedTurma === "Todas" ? students : students.filter(s => s.turma && s.turma.includes(selectedTurma));
+            const metrics = getActivityStudentAndSubmissionCounts(originalAct, activities, targetStudents);
+            const act = { ...originalAct, submissions: metrics.submissionsList, totalStudents: metrics.expectedStudentsCount };
+            const subs = act.submissions || [];
+            let displaySubs = subs;
+          if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            displaySubs = subs.filter(sub => {
+              const st = students.find(s => s.id === sub.studentId || (s.matricula && s.matricula === sub.matricula));
+              const nameToMatch = (st ? (st.fullName || st.name) : sub.studentName) || "";
+              return nameToMatch.toLowerCase().includes(q) || (act.title && act.title.toLowerCase().includes(q));
+            });
+            if (displaySubs.length === 0) return null; // Oculta tudo se não for o aluno pesquisado
+          }
+          const pendingSubs = displaySubs.filter((s) => s.status === 'pending');
+          const gradedSubs = displaySubs.filter((s) => s.status === 'graded');
+          const returnedSubs = displaySubs.filter((s) => s.status === 'returned');
+          if (searchQuery.trim()) {
+            if (correctionFilter === 'pendentes' && pendingSubs.length === 0 && returnedSubs.length === 0) return null;
+            if (correctionFilter === 'corrigidas' && gradedSubs.length === 0) return null;
+          }
+
+          const isExpanded = expandedActId === act.id || Boolean(searchQuery.trim());
+            const shortName = formatShortActivityName(act, activities);
+            const isRec = Boolean(act.isRecovery || act.type === 'Recuperação Paralela' || act.recoveryFromId);
+
+            const totalStudents = act.totalStudents || 1;
+            const totalDelivered = subs.length;
+            const progress = totalStudents > 0 ? Math.round((totalDelivered / totalStudents) * 100) : 0;
+
+            return (
+              <div key={act.id} className="glass-panel rounded-3xl border border-border bg-surface shadow-md transition-all overflow-hidden">
+                {/* Card Minimalista da Atividade (Com Progress Bar) */}
+                <div className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-start gap-4 min-w-0 flex-1">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border shadow-sm ${
+                      pendingSubs.length > 0 ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                    }`}>
+                      {pendingSubs.length > 0 ? <FileCheck className="w-6 h-6" /> : <CheckCircle2 className="w-6 h-6" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border ${
+                          isRec ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-sky-500/20 text-sky-400 border-sky-500/40'
+                        }`}>
+                          {shortName}
+                        </span>
+                        
+                        {pendingSubs.length > 0 && (
+                          <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/20">
+                            {pendingSubs.length} na fila
+                          </span>
+                        )}
+                        {gradedSubs.length > 0 && (
+                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                            {gradedSubs.length} corrigidas
+                          </span>
+                        )}
+                        {act.isRcoPosted && (
+                          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">✅ RCO Lançado</span>
+                        )}
+                      </div>
+                      
+                      <h3 className="text-base sm:text-lg font-black text-foreground truncate">{act.title}</h3>
+                      
+                      {/* Barra de Progresso Visível */}
+                      <div className="flex items-center gap-3 mt-2 max-w-sm">
+                        <div className="flex-1 h-1.5 bg-background rounded-full overflow-hidden border border-border">
+                          <div className={`h-full rounded-full ${pendingSubs.length > 0 ? 'bg-sky-400' : 'bg-emerald-400'}`} style={{ width: `${progress}%` }} />
+                        </div>
+                        <span className="text-[10px] font-bold text-muted whitespace-nowrap">
+                          {totalDelivered}/{totalStudents} entregas
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 border-t md:border-t-0 border-border pt-3 md:pt-0 mt-3 md:mt-0 flex flex-wrap items-center gap-2">
+                    {onSaveActivity && (
+                      <button
+                        type="button"
+                        onClick={() => onSaveActivity({ ...originalAct, isRcoPosted: !originalAct.isRcoPosted })}
                         className={`py-2 px-3.5 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 border ${
                           act.isRcoPosted
                             ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30'

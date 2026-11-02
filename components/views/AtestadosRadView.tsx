@@ -1,3 +1,4 @@
+import { TurmaFilterDropdown, extractAllTurmasFromData, isTurmaMatchedByFilter } from '@/components/TurmaFilterDropdown';
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -108,6 +109,8 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students, is
   // Filters State
   const [searchTerm, setSearchTerm] = useState('');
   const [turmaFilter, setTurmaFilter] = useState('all');
+  const [selectedTurmas, setSelectedTurmas] = useState<string[]>(['all']);
+  const allTurmasList = useMemo(() => extractAllTurmasFromData(students, records.map((r) => r.studentTurma || '')), [students, records]);
   const [tipoFilter, setTipoFilter] = useState<'all' | 'Atestado' | 'RAD'>('all');
 
   const filteredModalStudents = useMemo(() => {
@@ -492,18 +495,13 @@ export const AtestadosRadView: React.FC<AtestadosRadViewProps> = ({ students, is
           <div className="flex items-center gap-1.5 bg-surface border border-border rounded-2xl px-3 py-1.5 text-xs text-muted">
             <Filter className="w-3.5 h-3.5 text-amber-400" />
             <span className="font-semibold text-foreground">Turma:</span>
-            <select
-              value={turmaFilter}
-              onChange={(e) => setTurmaFilter(e.target.value)}
-              className="bg-transparent text-foreground font-bold focus:outline-none cursor-pointer"
-            >
-              <option value="all" className="bg-surface text-foreground">Todas as Turmas</option>
-              {availableTurmas.map((t) => (
-                <option key={t} value={t} className="bg-surface text-foreground">
-                  {t}
-                </option>
-              ))}
-            </select>
+            <TurmaFilterDropdown
+              turmasList={allTurmasList}
+              selectedTurmas={selectedTurmas}
+              onChange={setSelectedTurmas}
+              students={students}
+              totalCountLabel="alunos"
+            />
           </div>
 
           <div className="flex items-center gap-1 bg-surface border border-border rounded-2xl p-1 text-xs">

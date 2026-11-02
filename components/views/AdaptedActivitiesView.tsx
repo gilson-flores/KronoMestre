@@ -1,3 +1,4 @@
+import { TurmaFilterDropdown, extractAllTurmasFromData, isTurmaMatchedByFilter } from '@/components/TurmaFilterDropdown';
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -76,8 +77,9 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
 }) => {
   const [activeMenuTab, setActiveMenuTab] = useState<'builder' | 'bank'>(isReadOnly ? 'bank' : 'builder');
 
-  const turmasList = useMemo(() => getOriginalTurmas(students), [students]);
+  const turmasList = useMemo(() => extractAllTurmasFromData(students, activities.map((a) => a.turma)), [students, activities]);
   const [selectedTurma, setSelectedTurma] = useState<string>('Todas');
+  const [selectedTurmas, setSelectedTurmas] = useState<string[]>(['all']);
   const [isFilterExpanded, setIsFilterExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedActId, setExpandedActId] = useState<string | null>(null);
@@ -85,23 +87,22 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
   const pneStudentsInTurma = useMemo(() => {
     return (students || []).filter((s) => {
       if (!isStudentPNE(s)) return false;
-      if (selectedTurma === 'Todas') return true;
-      return s.turma === selectedTurma || s.turma?.includes(selectedTurma);
+      return isTurmaMatchedByFilter(s.turma, selectedTurmas, turmasList, 'student');
     });
-  }, [students, selectedTurma]);
+  }, [students, selectedTurmas, turmasList]);
 
   const adaptedActivitiesList = useMemo(() => {
     return (activities || []).filter((act) => {
       const adapted = isActivityAdapted(act) || act.activityDomain === 'adapted_aee';
       if (!adapted) return false;
-      if (selectedTurma !== 'Todas' && act.turma !== selectedTurma && !act.turma?.includes(selectedTurma)) return false;
+      if (!isTurmaMatchedByFilter(act.turma, selectedTurmas, turmasList, 'activity')) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         return act.title.toLowerCase().includes(q) || act.description.toLowerCase().includes(q);
       }
       return true;
     });
-  }, [activities, selectedTurma, searchQuery]);
+  }, [activities, selectedTurmas, turmasList, searchQuery]);
 
   const regularActivitiesInTurma = useMemo(() => {
     return (activities || []).filter((act) => !isActivityAdapted(act) && act.activityDomain !== 'adapted_aee' && (selectedTurma === 'Todas' || act.turma === selectedTurma));
@@ -326,20 +327,13 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
               </div>
             )}
             
-            <button
-              onClick={() => setIsFilterExpanded(!isFilterExpanded)}
-              className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 border cursor-pointer min-h-[44px] ${
-                isFilterExpanded || selectedTurma !== 'Todas'
-                  ? 'bg-amber-500/10 border-amber-500/50 text-amber-400'
-                  : 'bg-background hover:bg-surface-hover text-muted border-border'
-              }`}
-            >
-              <Filter className="w-4 h-4" />
-              <span className="hidden sm:inline">
-                {selectedTurma === 'Todas' ? 'Filtrar Turma' : `Turma ${selectedTurma}`}
-              </span>
-              {isFilterExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
+            <TurmaFilterDropdown
+              turmasList={turmasList}
+              selectedTurmas={selectedTurmas}
+              onChange={setSelectedTurmas}
+              students={students}
+              totalCountLabel="alunos"
+            />
           </div>
 
           <div className="flex items-center gap-1.5 p-1 bg-background rounded-2xl border border-border">
