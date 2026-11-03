@@ -59,7 +59,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenParallelRecoveryModal,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'Ativo' | 'Inativo' | 'Todos'>('Ativo');
+  const [statusFilter, setStatusFilter] = useState<'Ativo' | 'Inativo' | 'Todos'>('Todos');
   const [selectedTurma, setSelectedTurma] = useState<string>('Todas');
   const [selectedTurmas, setSelectedTurmas] = useState<string[]>(['all']);
   const [isFilterExpanded, setIsFilterExpanded] = useState(false);
@@ -89,13 +89,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return `(${mode}) AV${num}`;
   };
 
+  const isDeadlineExpired = (deadlineStr?: string): boolean => {
+    if (!deadlineStr || typeof deadlineStr !== "string") return false;
+    const clean = deadlineStr.trim();
+    if (!clean || clean.toLowerCase() === "sem prazo") return false;
+    const timeMatch = clean.match(/(\d{1,2}):(\d{2})/);
+    const hours = timeMatch ? parseInt(timeMatch[1], 10) : 23;
+    const minutes = timeMatch ? parseInt(timeMatch[2], 10) : 59;
+    const brMatch = clean.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (brMatch) {
+      const exp = new Date(parseInt(brMatch[3], 10), parseInt(brMatch[2], 10) - 1, parseInt(brMatch[1], 10), hours, minutes, 59, 999);
+      return Date.now() > exp.getTime();
+    }
+    const isoMatch = clean.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      const exp = new Date(parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10) - 1, parseInt(isoMatch[3], 10), hours, minutes, 59, 999);
+      return Date.now() > exp.getTime();
+    }
+    return false;
+  };
+
   const filteredActivities = useMemo(() => {
     return activities.filter((act) => {
-      if (statusFilter !== 'Todos' && act.status !== statusFilter) {
-        if (!(statusFilter === 'Inativo' && act.status === 'Prazo Encerrado')) {
-          return false;
-        }
-      }
+      const expired = isDeadlineExpired(act.deadline);
+      const effectivelyActive = act.status === "Ativo" && !expired;
+      if (statusFilter === "Ativo" && !effectivelyActive) return false;
+      if (statusFilter === "Inativo" && effectivelyActive) return false;
       if (!isTurmaMatchedByFilter(act.turma, selectedTurmas, turmasDisponiveis, 'activity')) {
         return false;
       }
@@ -258,10 +277,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-background border border-border text-muted flex items-center gap-1">
                           <Clock className="w-3 h-3" /> {act.deadline || 'Sem Prazo'}
                         </span>
-                        {act.status === 'Ativo' ? (
-                          <span className="text-[10px] font-bold text-emerald-400">● Ativa</span>
+                        {act.status === 'Ativo' && !isDeadlineExpired(act.deadline) ? (
+                          <span className="text-[10px] font-bold text-emerald-400">● Ativa p/ Alunos</span>
+                        ) : isDeadlineExpired(act.deadline) ? (
+                          <span className="text-[10px] font-bold text-amber-400">● Prazo Encerrado</span>
                         ) : (
-                          <span className="text-[10px] font-bold text-rose-400">● Encerrada</span>
+                          <span className="text-[10px] font-bold text-rose-400">● Desativada</span>
                         )}
 {act.isRcoPosted && <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">✅ RCO Lançado</span>}
                       </div>
@@ -284,6 +305,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                   {/* Ações Primárias (Direita) */}
                   <div className="flex items-center gap-2 shrink-0 border-t md:border-t-0 border-border pt-3 md:pt-0 mt-3 md:mt-0">
+                    <button
+                      onClick={() => onSaveActivity({ ...act, status: act.status === "Ativo" ? "Inativo" : "Ativo" })}
+                      className={`py-2 px-3 font-bold text-xs rounded-xl border transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm ${
+                        act.status === "Ativo"
+                          ? "bg-emerald-500/10 hover:bg-rose-500/20 text-emerald-400 hover:text-rose-300 border-emerald-500/30 hover:border-rose-500/40"
+                          : "bg-rose-500/10 hover:bg-emerald-500/20 text-rose-400 hover:text-emerald-300 border-rose-500/30 hover:border-emerald-500/40"
+                      }`}
+                      title={act.status === "Ativo" ? "Clique para desativar manualmente para os alunos" : "Clique para ativar manualmente para os alunos"}
+                    >
+                      <span>{act.status === "Ativo" ? "Desativar" : "Ativar"}</span>
+                    </button>
+
                     <button
                       onClick={() => onSelectActivityForGrading(act)}
                       className="flex-1 md:flex-none py-2 px-4 bg-[#171f33] hover:bg-primary text-white border border-border hover:border-primary font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm"

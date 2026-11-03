@@ -76,6 +76,30 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
 }) => {
   const [activeQueueFilter, setActiveQueueFilter] = useState<OperationalTabFilter>('todas');
 
+  const parseActivityDeadline = (deadlineStr?: string): Date | null => {
+    if (!deadlineStr || typeof deadlineStr !== "string") return null;
+    const clean = deadlineStr.trim();
+    if (!clean || clean.toLowerCase() === "sem prazo") return null;
+    const timeMatch = clean.match(/(\d{1,2}):(\d{2})/);
+    const hours = timeMatch ? parseInt(timeMatch[1], 10) : 23;
+    const minutes = timeMatch ? parseInt(timeMatch[2], 10) : 59;
+    const brMatch = clean.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (brMatch) {
+      return new Date(parseInt(brMatch[3], 10), parseInt(brMatch[2], 10) - 1, parseInt(brMatch[1], 10), hours, minutes, 59, 999);
+    }
+    const isoMatch = clean.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      return new Date(parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10) - 1, parseInt(isoMatch[3], 10), hours, minutes, 59, 999);
+    }
+    const fallback = new Date(clean);
+    return isNaN(fallback.getTime()) ? null : fallback;
+  };
+
+  const formatActivityDeadlineBR = (deadlineStr?: string): string => {
+    const d = parseActivityDeadline(deadlineStr);
+    return d ? d.toLocaleDateString("pt-BR") : (deadlineStr || "Sem prazo");
+  };
+
   const canonicalActivities = useMemo(() => getCanonicalActivities(activities), [activities]);
   const totalActivities = canonicalActivities.length;
 
@@ -155,8 +179,9 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
     const upcomingList: Array<{ activity: Activity; daysLeft: number; isToday: boolean }> = [];
 
     canonicalActivities.forEach((a) => {
-      if (!a.deadline) return;
-      const deadDate = new Date(a.deadline);
+      if (!a.deadline || a.status === "Inativo") return;
+      const deadDate = parseActivityDeadline(a.deadline);
+      if (!deadDate) return;
       const diffMs = deadDate.getTime() - now.getTime();
       const diffHours = diffMs / (1000 * 3600);
       const diffDays = Math.ceil(diffMs / (1000 * 3600 * 24));
@@ -746,7 +771,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                       </span>
                       {activity.deadline && (
                         <span className="text-xs text-text-muted">
-                          • Prazo: {new Date(activity.deadline).toLocaleDateString('pt-BR')}
+                          • Prazo: {formatActivityDeadlineBR(activity.deadline)}
                         </span>
                       )}
                     </div>
@@ -810,7 +835,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                       </span>
                       {activity.deadline && (
                         <span className="text-xs text-text-muted">
-                          • {new Date(activity.deadline).toLocaleDateString('pt-BR')}
+                          • {formatActivityDeadlineBR(activity.deadline)}
                         </span>
                       )}
                     </div>
