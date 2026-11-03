@@ -450,7 +450,7 @@ export default function Home() {
 
     return activities
       .filter((a) => !a.isArchived)
-      .map((a) => (isExpiredByDeadline(a.deadline) ? { ...a, status: "Inativo" as const } : a));
+      
   }, [activities]);
 
   // Extração estável dos identificadores do professor para evitar recálculo desnecessário de visibleStudentsForRole
@@ -1091,13 +1091,6 @@ export default function Home() {
   };
 
   const handleSaveActivity = async (updatedAct: Activity) => {
-    if (updatedAct.status !== 'Inativo' && updatedAct.deadline) {
-      const isoMatch = updatedAct.deadline.match(/\b(20\d\d)-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b/);
-      if (isoMatch) {
-        const todayISO = new Date().toISOString().split('T')[0];
-        updatedAct.status = isoMatch[0] >= todayISO ? 'Ativo' : 'Prazo Encerrado';
-      }
-    }
 
     setActivities((prev) => {
       const next = prev.map((a) => (a.id === updatedAct.id ? updatedAct : a));

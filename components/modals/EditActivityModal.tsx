@@ -215,20 +215,13 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
         const [, day, month, year] = brMatch;
         isoDate = `${year}-${month}-${day}`;
       }
-      const brShortMatch = dateStr.match(/\b(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\b/);
+      const brShortMatch = !brMatch ? dateStr.match(/\b(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\b/) : null;
       if (brShortMatch) {
         const [, day, month] = brShortMatch;
         isoDate = `2026-${month}-${day}`;
       }
 
-      if (isoDate) {
-        const todayISO = new Date().toISOString().split('T')[0];
-        if (isoDate >= todayISO) {
-          finalStatus = 'Ativo';
-        } else {
-          finalStatus = 'Prazo Encerrado';
-        }
-      }
+      // Preserva a escolha manual de status (Ativo / Inativo) do professor
     }
 
     const isParallelRecovery = type === 'Recuperação Paralela';

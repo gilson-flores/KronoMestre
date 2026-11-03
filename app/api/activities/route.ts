@@ -114,7 +114,9 @@ export async function PUT(req: NextRequest) {
     }
 
     const activityRef = db.collection('tenants').doc(ownerTeacherId).collection('activities').doc(body.id);
-    const cleanData = cleanForFirestore(body);
+    const currentDoc = await activityRef.get();
+    const currentData = currentDoc.exists ? currentDoc.data() : {};
+    const cleanData = cleanForFirestore({ ...currentData, ...body });
 
     // TRANSAÇÃO ATÔMICA: Garante ZERO PERDA DE DADOS por Race Condition de alunos entregando simultaneamente
     let savedActivity: any = null;
