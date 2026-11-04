@@ -179,7 +179,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
     const upcomingList: Array<{ activity: Activity; daysLeft: number; isToday: boolean }> = [];
 
     canonicalActivities.forEach((a) => {
-      if (!a.deadline || a.isRcoPosted) return;
+      if (a.isRcoPosted) return;
       const deadDate = parseActivityDeadline(a.deadline);
       if (!deadDate) return;
       const diffMs = deadDate.getTime() - now.getTime();
