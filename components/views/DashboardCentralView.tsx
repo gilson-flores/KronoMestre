@@ -75,6 +75,8 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
   onViewActivity,
 }) => {
   const [activeQueueFilter, setActiveQueueFilter] = useState<OperationalTabFilter>('todas');
+  const [selectedActivityFilterId, setSelectedActivityFilterId] = useState<string>('all');
+  const [statusScopeFilter, setStatusScopeFilter] = useState<'Ativo' | 'Inativo' | 'Todas'>('Todas');
 
   const parseActivityDeadline = (deadlineStr?: string): Date | null => {
     if (!deadlineStr || typeof deadlineStr !== "string") return null;
@@ -102,9 +104,11 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
 
   const allCanonicalActivities = useMemo(() => getCanonicalActivities(activities), [activities]);
   const canonicalActivities = useMemo(() => allCanonicalActivities.filter((a) => {
-    const hasPending = Array.isArray(a.submissions) && a.submissions.some((s) => s.status === "pending");
-    return !a.isRcoPosted || hasPending;
-  }), [allCanonicalActivities]);
+    if (selectedActivityFilterId !== "all" && a.id !== selectedActivityFilterId) return false;
+    if (statusScopeFilter === "Ativo" && a.status !== "Ativo") return false;
+    if (statusScopeFilter === "Inativo" && a.status === "Ativo") return false;
+    return true;
+  }), [allCanonicalActivities, selectedActivityFilterId, statusScopeFilter]);
   const totalActivities = canonicalActivities.length;
 
   // 1. Métricas Agregadas de Correção e Entrega
@@ -125,8 +129,10 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
       ...canonicalActivities,
       ...activities.filter((a) => {
         if (!isActivityRecovery(a) && !isActivityAdapted(a)) return false;
-        const hasPending = Array.isArray(a.submissions) && a.submissions.some((s) => s.status === "pending");
-        return !a.isRcoPosted || hasPending;
+        if (selectedActivityFilterId !== "all" && a.id !== selectedActivityFilterId && a.recoveryFromId !== selectedActivityFilterId && a.adaptedFromId !== selectedActivityFilterId) return false;
+        if (statusScopeFilter === "Ativo" && a.status !== "Ativo") return false;
+        if (statusScopeFilter === "Inativo" && a.status === "Ativo") return false;
+        return true;
       })
     ];
 
@@ -407,6 +413,42 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
           </div>
         </div>
 
+        {/* Filtros de Escopo do Dashboard (Atividade Individual + Ativas/Inativas/Todas) */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="relative">
+            <select
+              aria-label="Selecionar atividade para análise"
+              value={selectedActivityFilterId}
+              onChange={(e) => setSelectedActivityFilterId(e.target.value)}
+              className="min-h-[42px] pl-3.5 pr-8 py-2 bg-surface hover:bg-surface-hover text-foreground text-xs sm:text-sm font-bold rounded-xl border border-border focus:outline-none focus:border-primary transition-colors cursor-pointer"
+            >
+              <option value="all">📋 Todas as Atividades ({allCanonicalActivities.length})</option>
+              {allCanonicalActivities.map((act) => (
+                <option key={act.id} value={act.id}>
+                  {act.title} ({act.turma || "Geral"})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1 p-1 bg-surface rounded-xl border border-border">
+            {(["Todas", "Ativo", "Inativo"] as const).map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => setStatusScopeFilter(st)}
+                className={`min-h-[34px] px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  statusScopeFilter === st
+                    ? "bg-primary text-white shadow-sm"
+                    : "text-text-muted hover:text-foreground"
+                }`}
+              >
+                {st === "Ativo" ? "Somente Ativas" : st === "Inativo" ? "Somente Inativas" : "Todas"}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Ações Primárias Globais */}
         <div className="flex items-center gap-3 flex-wrap">
           <button
@@ -631,43 +673,31 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
             </button>
           </div>
 
-          {/* CARD 6: PENDÊNCIAS ADMINISTRATIVAS (RCO / ATESTADOS / RAD) */}
+          {/* CARD 6: ATESTADOS E RAD */}
           <div className="p-5 rounded-2xl border border-border bg-surface flex flex-col justify-between shadow-sm hover:border-emerald-500/40 transition-colors">
             <div>
               <div className="flex items-center justify-between mb-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
-                  <FileSpreadsheet className="w-5 h-5" />
+                  <FileText className="w-5 h-5" />
                 </div>
                 <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
-                  Registro
+                  Registros RAD
                 </span>
               </div>
-              <div className="text-3xl font-black text-foreground">
-                {turmasReadyForRco.length}
-              </div>
-              <div className="text-base font-bold text-foreground mt-1">Turmas para RCO</div>
+              <div className="text-3xl font-black text-foreground">{radTotal}</div>
+              <div className="text-base font-bold text-foreground mt-1">Atestados e RAD</div>
               <p className="text-xs text-text-muted mt-1 leading-relaxed">
-                {turmasReadyForRco.length > 0
-                  ? `${turmasReadyForRco.length} turma(s) com ${totalRcoSubmissions} entrega(s) para postagem no RCO.`
-                  : 'Sem turmas com entregas pendentes de lançamento no RCO.'}
+                Registros pedagógicos e atestados médicos vinculados às turmas.
               </p>
             </div>
-            <div className="mt-5 grid grid-cols-2 gap-2">
-              <button
-                id="btn-pendencia-rco"
-                onClick={() => onNavigateToTab('postagem_rco')}
-                className="min-h-[44px] min-w-[44px] py-2.5 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 font-bold rounded-xl text-xs transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-98"
-              >
-                <span>Lançar RCO</span>
-              </button>
-              <button
-                id="btn-pendencia-atestados"
-                onClick={() => onNavigateToTab('atestados_rad')}
-                className="min-h-[44px] min-w-[44px] py-2.5 px-3 bg-surface-hover hover:bg-border text-foreground font-bold rounded-xl text-xs border border-border transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-98"
-              >
-                <span>RAD ({radTotal})</span>
-              </button>
-            </div>
+            <button
+              id="btn-pendencia-atestados"
+              onClick={() => onNavigateToTab('atestados_rad')}
+              className="mt-5 w-full min-h-[44px] min-w-[44px] py-2.5 px-4 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 font-bold rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
+            >
+              <span>Acessar RAD</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </section>
@@ -942,47 +972,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
               </div>
             ))}
 
-          {/* Seção RCO na Fila */}
-          {(activeQueueFilter === 'todas' || activeQueueFilter === 'rco') &&
-            turmasReadyForRco.map((turmaInfo) => (
-              <div
-                key={`rco-${turmaInfo.turma}`}
-                className="p-4 sm:p-5 rounded-2xl bg-surface border border-border hover:border-emerald-500/40 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm"
-              >
-                <div className="flex items-start gap-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
-                    <FileSpreadsheet className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 text-xs font-bold">
-                        {turmaInfo.gradedCount > 0 ? 'Notas Prontas' : 'Entregas Registradas'}
-                      </span>
-                      <span className="text-xs font-semibold text-text-muted">Turma {turmaInfo.turma}</span>
-                      <span className="text-xs font-bold text-foreground/80 bg-background px-2 py-0.5 rounded-md border border-border">
-                        {turmaInfo.submissionsCount} {turmaInfo.submissionsCount === 1 ? 'entrega' : 'entregas'}
-                      </span>
-                    </div>
-                    <h3 className="text-base sm:text-lg font-bold text-foreground mt-1">
-                      Postagem RCO — Turma {turmaInfo.turma}
-                    </h3>
-                    <p className="text-xs sm:text-sm text-text-muted mt-0.5">
-                      {turmaInfo.submissionsCount} entrega(s) de alunos nesta turma ({turmaInfo.gradedCount} com nota calculada) prontas para lançamento no RCO / SED estadual.
-                    </p>
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-2 self-end md:self-center shrink-0 w-full md:w-auto">
-                  <button
-                    onClick={() => onNavigateToTab('postagem_rco')}
-                    className="w-full md:w-auto min-h-[44px] min-w-[44px] py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-                  >
-                    <span>Lançar no RCO</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
 
           {/* Estado Vazio Quando Não Há Pendências no Filtro */}
           {activitiesWithPendingCorrections.length === 0 &&

@@ -129,8 +129,7 @@ export const canStudentAccessActivity = (actOrActivityTurma: any, studentOrStude
     }
   }
 
-  // 2. STATUS DA ATIVIDADE
-  if (act.status !== 'Ativo') return false;
+  // 2. STATUS DA ATIVIDADE: Desativar bloqueia apenas novos envios no portal do aluno, NUNCA o vínculo da turma/métricas
 
   // 3. ATIVIDADES ADAPTADAS (PNE) vs REGULARES
   const isAdapted = isActivityAdapted(act);

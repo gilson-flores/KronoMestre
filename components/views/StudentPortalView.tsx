@@ -235,7 +235,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           (Boolean(student.matricula) && sub.matricula === student.matricula) ||
           sub.studentName?.toLowerCase() === student.fullName?.toLowerCase()
       );
-      if (a.status === "Inativo" || a.status === "Prazo Encerrado" || isExpired(a.deadline)) {
+      if (!hasStudentSub && (a.status === "Inativo" || a.status === "Prazo Encerrado" || isExpired(a.deadline))) {
         return false;
       }
       // 1. Turma permission check

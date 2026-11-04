@@ -32,6 +32,7 @@ interface SidebarProps {
   onCloseMobile?: () => void;
   unreadMessagesCount?: number;
   pendingCorrectionsCount?: number;
+  pendingRcoCount?: number;
   hiddenNavItems?: string[];
   role?: 'teacher' | 'second_teacher';
 }
@@ -45,6 +46,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
   unreadMessagesCount = 0,
   pendingCorrectionsCount = 0,
+  pendingRcoCount = 0,
   hiddenNavItems = [],
   role = 'teacher',
 }) => {
@@ -85,7 +87,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'atividades_interativas', label: 'KronoGames (Interativas)', icon: Gamepad2, variant: 'flame' },
         { id: 'atividades_adaptadas', label: 'Atividades Adaptadas (AEE)', icon: Sparkles, variant: 'mystic' },
         { id: 'correcoes', label: 'Correções', icon: FileCheck2, variant: 'emerald', badge: pendingCorrectionsCount },
-        { id: 'postagem_rco', label: 'Postagem RCO', icon: FileSpreadsheet, variant: 'amber' },
+        { id: 'postagem_rco', label: 'Postagem RCO', icon: FileSpreadsheet, variant: 'amber', badge: pendingRcoCount },
         { id: 'mensagens', label: 'Mensagens', icon: MessageSquare, variant: 'glow', badge: unreadMessagesCount },
         { id: 'alunos', label: 'Alunos', icon: Users, variant: 'viking' },
         { id: 'atestados_rad', label: 'Atestados e RAD', icon: BookOpen, variant: 'badge' },
@@ -94,7 +96,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'backup_recuperacao', label: 'Backup e Recuperação', icon: Database, variant: 'glow' },
       ];
 
-  const navItems = baseNavItems;
+  const navItems = baseNavItems.filter((item) => !hiddenNavItems.includes(item.id));
 
   const handleTabClick = (tabId: string) => {
     setCurrentTab(tabId);
