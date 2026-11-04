@@ -12,7 +12,7 @@ export function useFreshness(opts: { enabled: boolean; onChanged: (changed: stri
   const lastRevRef = useRef<Record<string, number> | null>(null);
   const lastCheckRef = useRef(0);
   const onChangedRef = useRef(onChanged);
-  onChangedRef.current = onChanged;
+  useEffect(() => { onChangedRef.current = onChanged; }, [onChanged]);
 
   const check = useCallback(async (force = false) => {
     const now = Date.now();
@@ -44,7 +44,8 @@ export function useFreshness(opts: { enabled: boolean; onChanged: (changed: stri
       return;
     }
 
-    void check(true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+      void check(true);
 
     const onVisible = () => {
       if (document.visibilityState === 'visible') void check();

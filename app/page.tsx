@@ -121,14 +121,6 @@ const mergeChatMessage = (
 
 export default function Home() {
 
-  const handleSaveEditedActivity = useCallback((updatedActivity: Activity) => {
-    setActivities((prev) => prev.map((a) => (a.id === updatedActivity.id ? updatedActivity : a)));
-    fetch('/api/activities', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedActivity),
-    }).catch((err) => console.warn('Erro ao persistir alteração da atividade:', err));
-  }, []);
 
 
 
@@ -179,6 +171,23 @@ export default function Home() {
 
   // Mounting state to prevent SSR/hydration mismatch
   const [isMounted, setIsMounted] = useState(false);
+  const [students, setStudents] = useState<StudentUser[]>(initialStudents);
+  const [activities, setActivities] = useState<Activity[]>(initialActivities);
+  const [schedule] = useState(initialSchedule);
+  const [library, setLibrary] = useState<LibraryFile[]>(initialLibrary);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
+  const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
+  const [isAiAutoReplyEnabled, setIsAiAutoReplyEnabled] = useState<boolean>(true);
+  const handleSaveEditedActivity = useCallback((updatedActivity: Activity) => {
+    setActivities((prev) => prev.map((a) => (a.id === updatedActivity.id ? updatedActivity : a)));
+    fetch('/api/activities', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedActivity),
+    }).catch((err) => console.warn('Erro ao persistir alteração da atividade:', err));
+  }, []);
+
+
 
   // Auth state (substitui 'Carregando...' por 'Prof. Gilson Flores')
   const [role, setRole] = useState<UserRole>(null);
@@ -199,15 +208,12 @@ export default function Home() {
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const lastLoadTimestampRef = useRef<number>(0);
 
-  // App datasets (inicializados de forma pura e estática para garantir paridade 100% entre SSR e hidratação)
-  const [students, setStudents] = useState<StudentUser[]>(initialStudents);
-  const [activities, setActivities] = useState<Activity[]>(initialActivities);
-  const [schedule] = useState(initialSchedule);
-  const [library, setLibrary] = useState<LibraryFile[]>(initialLibrary);
+
 
   // Restaurar sessão de autenticação de forma limpa, prevenindo hydration mismatch
   useEffect(() => {
-    setIsMounted(true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsMounted(true);
 
     // Hidratação segura de preferências locais do navegador pós-montagem
     try {
@@ -423,7 +429,6 @@ export default function Home() {
     checkSession();
   }, []);
 
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
 
   // Active datasets
   const activeStudents = useMemo(() => students.filter((s) => !s.isArchived), [students]);
@@ -515,8 +520,6 @@ export default function Home() {
   const [globalDbStatus, setGlobalDbStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [newTeacherPassword, setNewTeacherPassword] = useState('');
 
-  // Theme preference state
-  const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -531,8 +534,6 @@ export default function Home() {
     }
   }, [themeMode]);
 
-  // AI Auto-Reply State for Teacher (Boby Sociólogo / Prof. Gilson)
-  const [isAiAutoReplyEnabled, setIsAiAutoReplyEnabled] = useState<boolean>(true);
 
   const handleToggleAiAutoReply = (enabled: boolean) => {
     setIsAiAutoReplyEnabled(enabled);
@@ -813,9 +814,7 @@ export default function Home() {
       } finally {
         st.running = false;
       }
-    },
-    [teacher.id]
-  );
+    }, [teacher]);
 
   const { updateAvailable } = useFreshness({
     enabled: role === 'teacher' || role === 'second_teacher' || role === 'student',

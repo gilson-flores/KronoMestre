@@ -90,6 +90,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
 
   useEffect(() => {
     if (student) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNotes(student.pedagogicalNotes || '');
       setSavedSuccess(false);
       setExpandedActivityId(null);

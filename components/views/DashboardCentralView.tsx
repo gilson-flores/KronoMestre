@@ -100,7 +100,11 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
     return d ? d.toLocaleDateString("pt-BR") : (deadlineStr || "Sem prazo");
   };
 
-  const canonicalActivities = useMemo(() => getCanonicalActivities(activities), [activities]);
+  const allCanonicalActivities = useMemo(() => getCanonicalActivities(activities), [activities]);
+  const canonicalActivities = useMemo(() => allCanonicalActivities.filter((a) => {
+    const hasPending = Array.isArray(a.submissions) && a.submissions.some((s) => s.status === "pending");
+    return !a.isRcoPosted || hasPending;
+  }), [allCanonicalActivities]);
   const totalActivities = canonicalActivities.length;
 
   // 1. Métricas Agregadas de Correção e Entrega
@@ -117,7 +121,14 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
     const pendingList: Array<{ activity: Activity; pendingCount: number; subCount: number; expectedCount: number; }> = [];
     const adhesionList: Array<{ title: string; type: string; subCount: number; expectedCount: number; rate: number; isRecovery: boolean; isGame: boolean; }> = [];
 
-    const allRelevantActivities = [...canonicalActivities, ...activities.filter(a => isActivityRecovery(a) || isActivityAdapted(a))];
+    const allRelevantActivities = [
+      ...canonicalActivities,
+      ...activities.filter((a) => {
+        if (!isActivityRecovery(a) && !isActivityAdapted(a)) return false;
+        const hasPending = Array.isArray(a.submissions) && a.submissions.some((s) => s.status === "pending");
+        return !a.isRcoPosted || hasPending;
+      })
+    ];
 
     allRelevantActivities.forEach((a) => {
       const { subCount, expectedStudentsCount, pendingCount } = getUnifiedActivityMetrics(a, activities, students);

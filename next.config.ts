@@ -7,10 +7,10 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["firebase-admin", "jose", "jwks-rsa"],
   reactStrictMode: true,
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
   images: {
     remotePatterns: [

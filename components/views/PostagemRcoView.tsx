@@ -66,7 +66,8 @@ export const PostagemRcoView: React.FC<PostagemRcoViewProps> = ({
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed === 'object') {
-          setLocalPostedMap(parsed);
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLocalPostedMap(parsed);
         }
       }
     } catch (e) {

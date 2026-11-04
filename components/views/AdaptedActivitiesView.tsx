@@ -182,7 +182,8 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
       }
     }).map((st) => st.id);
 
-    setSelectedTargetIds(autoSelectedIds);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedTargetIds(autoSelectedIds);
 
     if (selectedMechanic === 'visual_cards') {
       setPromptSettings({ literalLanguage: true, cognitiveReduction: true, uppercaseText: true, concreteExamples: true });
@@ -657,7 +658,7 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
               <FolderOpen className="w-12 h-12 mx-auto opacity-50" />
               <p className="text-base font-bold text-foreground">Nenhuma atividade adaptada encontrada.</p>
               <p className="text-xs text-muted max-w-md mx-auto">
-                Utilize a aba "Criar Atividade" para gerar tarefas inclusivas focadas em laudos específicos.
+                Utilize a aba &quot;Criar Atividade&quot; para gerar tarefas inclusivas focadas em laudos específicos.
               </p>
             </div>
           ) : (

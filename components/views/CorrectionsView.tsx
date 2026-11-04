@@ -85,6 +85,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
 
   useEffect(() => {
     if (initialSelectedActivityId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setExpandedActId(initialSelectedActivityId);
       // Se abriu via atalho, garante que o filtro seja "todas" para não esconder a atividade se ela já estiver corrigida
       setCorrectionFilter('todas');
@@ -571,7 +572,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                       return true;
                     }).length === 0 && (
                       <div className="p-4 text-center text-xs text-muted">
-                        Nenhum aluno nesta atividade corresponde ao filtro "{correctionFilter}".
+                        Nenhum aluno nesta atividade corresponde ao filtro &quot;{correctionFilter}&quot;.
                       </div>
                     )}
                   </div>

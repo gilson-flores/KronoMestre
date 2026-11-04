@@ -99,22 +99,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     const brMatch = clean.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
     if (brMatch) {
       const exp = new Date(parseInt(brMatch[3], 10), parseInt(brMatch[2], 10) - 1, parseInt(brMatch[1], 10), hours, minutes, 59, 999);
-      return Date.now() > exp.getTime();
+      return new Date().getTime() > exp.getTime();
     }
     const isoMatch = clean.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (isoMatch) {
       const exp = new Date(parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10) - 1, parseInt(isoMatch[3], 10), hours, minutes, 59, 999);
-      return Date.now() > exp.getTime();
+      return new Date().getTime() > exp.getTime();
     }
     return false;
   };
 
   const filteredActivities = useMemo(() => {
     return activities.filter((act) => {
-      const expired = isDeadlineExpired(act.deadline);
-      const effectivelyActive = act.status === "Ativo" && !expired;
-      if (statusFilter === "Ativo" && !effectivelyActive) return false;
-      if (statusFilter === "Inativo" && effectivelyActive) return false;
+      const hasPendingSubs = Array.isArray(act.submissions) && act.submissions.some((s) => s.status === "pending");
+      const isOperationalForTeacher = !act.isRcoPosted || hasPendingSubs;
+      if (statusFilter === "Ativo" && !isOperationalForTeacher) return false;
+      if (statusFilter === "Inativo" && isOperationalForTeacher) return false;
       if (!isTurmaMatchedByFilter(act.turma, selectedTurmas, turmasDisponiveis, 'activity')) {
         return false;
       }
@@ -202,7 +202,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     : 'text-muted hover:text-foreground hover:bg-surface-hover'
                 }`}
               >
-                {status === 'Inativo' ? 'Encerradas' : status === 'Ativo' ? 'Ativas' : 'Todas'}
+                {status === 'Inativo' ? 'RCO Lançado' : status === 'Ativo' ? 'Em Andamento' : 'Todas'}
               </button>
             ))}
           </div>
