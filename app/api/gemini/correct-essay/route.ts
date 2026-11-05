@@ -95,6 +95,7 @@ export async function POST(req: NextRequest) {
       keywords,
       turma,
       maxEssayScore = 5.0,
+      minChars = 150,
     } = await req.json();
 
     if (!essayAnswer || typeof essayAnswer !== 'string') {
@@ -125,47 +126,33 @@ export async function POST(req: NextRequest) {
       gradeLevelRule = 'Nível Padrão ENEM (3º Ano): exija rigor na estrutura dissertativa-argumentativa, norma culta, coesão e argumentação crítica fundamentada.';
     }
 
+    const charCountActual = essayAnswer.trim().length;
     const prompt = `
-Você é um professor avaliador e assistente pedagógico de Sociologia. Sua tarefa é corrigir a produção textual dissertativa fornecida por um aluno.
+Você é um professor avaliador e assistente pedagógico sênior de Sociologia no Ensino Médio. Corrija com rigor e empatia a resposta dissertativa do aluno.
 
 DADOS DA QUESTÃO E DA RESPOSTA:
-- Turma/Ano: ${turma || 'Não especificada'} (${gradeLevelRule})
-- Enunciado / Tema da Questão: ${questionStatement || 'Tema geral de Sociologia'}
-- Palavras-chave exigidas/esperadas: ${keywords || 'Nenhuma palavra-chave específica informada'}
+- Turma/Ano: ${turma || "Ensino Médio"} (${gradeLevelRule})
+- Enunciado / Tema da Questão: ${questionStatement || "Tema de Sociologia"}
+- Palavras-chave exigidas/esperadas: ${keywords || "Conceitos sociológicos pertinentes ao enunciado"}
+- Quantidade mínima de caracteres exigida: ${minChars} caracteres (O aluno escreveu: ${charCountActual} caracteres)
 - Nota Máxima da Questão Dissertativa: ${maxEssayScore}
 - Resposta do Aluno:
 "${essayAnswer}"
 
-INSTRUÇÕES E PARÂMETROS OBRIGATÓRIOS DE CORREÇÃO:
-1. Fidelidade ao Tema: Avalie se a resposta abordou diretamente o enunciado proposto.
-2. Atenção às Palavras-Chave: Verifique se o aluno usou corretamente e contextualizou as palavras-chave informadas (${keywords || 'gerais'}).
-3. Coerência com o Ano Escolar: Aplique a exigência do ano escolar -> ${gradeLevelRule}.
-4. Estrutura Textual Completa: Analise se a resposta contém Introdução, Desenvolvimento e Conclusão (independente da quantidade de caracteres).
-5. Análise de Autoria e Porcentagem de Uso de IA:
-   - Estime uma porcentagem de 0% a 100% quanto à probabilidade de o texto ter sido gerado integralmente por Inteligência Artificial (ex: ChatGPT, Gemini).
-   - RECOMPENSA PEDAGÓGICA: Se o aluno pesquisou fontes e redigiu uma produção autoral própria com suas próprias palavras e reflexões críticas baseadas na pesquisa, ele DEVE SER RECOMPENSADO com valorização na nota sugerida e no feedback.
-6. Feedback Pedagógico do Professor:
-   - Escreva um feedback simpático e construtivo com NO MÁXIMO 300 CARACTERES.
-   - Inclua um elogio ou alerta motivacional simpático e uma breve observação de gramática.
-   - ATENÇÃO: NÃO mencione no feedback as palavras-chave que foram utilizadas como critério de avaliação.
-7. Nota Sugerida: Atribua uma nota numérica de 0 a ${maxEssayScore} proporcional ao desempenho do aluno.
+PARÂMETROS OBRIGATÓRIOS DE ANÁLISE:
+1. Resposta Correta e Fidelidade ao Tema (themeFidelity): Avalie se o aluno respondeu corretamente ao comando da questão e se domina o conceito sociológico central.
+2. Uso das Palavras-Chave (keywordsCheck): Analise quais palavras-chave ou conceitos exigidos foram utilizados com precisão e quais faltaram.
+3. Extensão de Caracteres e Estrutura (structureCheck): Avalie se o aluno atingiu a meta de caracteres (${charCountActual}/${minChars}) e se o texto possui início, desenvolvimento e conclusão claros.
+4. Gramática, Ortografia e Acentuação (grammarCheck): Liste de forma específica os erros gramaticais, de ortografia, acentuação, concordância ou pontuação encontrados no texto (citando os termos incorretos e como corrigi-los), ou elogie caso esteja impecável.
+5. Detecção de Texto Gerado por IA (aiUsagePercentage e aiUsageAnalysis): Estime de 0 a 100 a probabilidade de uso de IA generativa. Valorize textos autorais escritos com as próprias palavras do estudante.
+6. Parecer / Feedback Pedagógico para o Aluno (feedback): Redija um feedback construtivo, direto ao aluno (máximo 450 caracteres), comentando o acerto conceitual, orientando sobre a extensão/estrutura e apontando de forma educativa as correções de gramática e acentuação necessárias (sem entregar a lista bruta de palavras-chave do gabarito).
+7. Nota Sugerida (suggestedScore): Nota numérica de 0 a ${maxEssayScore} (com 1 casa decimal) justa e proporcional aos critérios acima.
 
-Retorne obrigatoriamente um objeto JSON com o formato:
-{
-  "suggestedScore": number,
-  "feedback": string,
-  "themeFidelity": string,
-  "keywordsCheck": string,
-  "structureCheck": string,
-  "grammarCheck": string,
-  "aiUsagePercentage": number,
-  "aiUsageAnalysis": string
-}
-`;
+Retorne obrigatoriamente um objeto JSON válido com as chaves: suggestedScore, feedback, themeFidelity, keywordsCheck, structureCheck, grammarCheck, aiUsagePercentage, aiUsageAnalysis.`;
 
     const candidateModels = [
-      'gemini-3.8-flash',
-      'gemini-3.1-flash-lite',
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
       'gemini-flash-latest',
     ];
 

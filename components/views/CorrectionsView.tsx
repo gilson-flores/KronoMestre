@@ -593,12 +593,117 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                                     </div>
 )}
                                     
-                                    <div className="bg-[#171f33] p-4 rounded-xl border border-border space-y-2">
-                                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted block">Resposta Dissertativa:</span>
-                                      <p className="text-xs text-foreground italic whitespace-pre-wrap leading-relaxed">
-                                        {sub.essayAnswer || <span className="text-muted">Nenhum texto dissertativo enviado.</span>}
-                                      </p>
-                                    </div>
+                                    <div className="bg-[#171f33] p-4 rounded-2xl border border-border space-y-3">
+                                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-3">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-sky-400">
+                                              Resposta Dissertativa do Aluno
+                                            </span>
+                                            {(() => {
+                                              const charLen = (sub.essayAnswer || "").trim().length;
+                                              const essayQ = (act.questions || []).find((q: any) => q.type === "essay") || (act.questions || [])[0];
+                                              const minC = Number((essayQ as any)?.minChars || (act as any).minChars || 150);
+                                              const reachedMin = charLen >= minC;
+                                              return (
+                                                <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-lg border ${
+                                                  reachedMin
+                                                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                                    : "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                                                }`}>
+                                                  📏 {charLen} / mín. {minC} caracteres {reachedMin ? "✓ Meta atingida" : "⚠️ Abaixo do mínimo"}
+                                                </span>
+                                              );
+                                            })()}
+                                          </div>
+
+                                          {Boolean(sub.essayAnswer && sub.essayAnswer.trim()) && (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleRunAiEssayCorrection(act, sub)}
+                                              disabled={aiLoadingKey === subKey}
+                                              className="px-3.5 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50 active:scale-95"
+                                            >
+                                              <RefreshCw className={`w-3.5 h-3.5 ${aiLoadingKey === subKey ? "animate-spin" : ""}`} />
+                                              <span>
+                                                {aiLoadingKey === subKey
+                                                  ? "Analisando texto com IA..."
+                                                  : aiAnalysisMap[subKey]
+                                                  ? "✨ Reanalisar com IA"
+                                                  : "✨ Analisar Resposta com IA"}
+                                              </span>
+                                            </button>
+                                          )}
+                                        </div>
+
+                                        <p className="text-xs sm:text-sm text-foreground whitespace-pre-wrap leading-relaxed bg-background/60 p-3.5 rounded-xl border border-border/50">
+                                          {sub.essayAnswer || <span className="text-muted italic">Nenhum texto dissertativo enviado.</span>}
+                                        </p>
+
+                                        {/* Painel Completo de Diagnóstico da IA (Restaurado do GradingView) */}
+                                        {aiAnalysisMap[subKey] && (
+                                          <div className="mt-3 p-4 rounded-2xl bg-background/90 border border-purple-500/30 space-y-3 animate-fadeIn">
+                                            <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-border">
+                                              <div className="flex items-center gap-2">
+                                                <span className="text-xs font-black uppercase tracking-wider text-purple-300">
+                                                  🤖 Laudo Pedagógico da IA
+                                                </span>
+                                                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                                                  Nota Sugerida: {aiAnalysisMap[subKey].suggestedScore.toFixed(1)} pts
+                                                </span>
+                                              </div>
+
+                                              <div className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border flex items-center gap-1.5 ${
+                                                aiAnalysisMap[subKey].aiUsagePercentage <= 25
+                                                  ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                                                  : aiAnalysisMap[subKey].aiUsagePercentage <= 60
+                                                  ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                                                  : "bg-rose-500/15 text-rose-300 border-rose-500/30"
+                                              }`}>
+                                                <span>🤖 Uso Estimado de IA: {Math.round(aiAnalysisMap[subKey].aiUsagePercentage)}%</span>
+                                                <span>
+                                                  {aiAnalysisMap[subKey].aiUsagePercentage <= 25
+                                                    ? "(Autoral)"
+                                                    : aiAnalysisMap[subKey].aiUsagePercentage <= 60
+                                                    ? "(Misto / Suspeito)"
+                                                    : "(Alta Probabilidade de IA)"}
+                                                </span>
+                                              </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs">
+                                              <div className="p-3 rounded-xl bg-surface border border-border space-y-1">
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 block">
+                                                  ✅ Resposta Correta & Fidelidade ao Tema
+                                                </span>
+                                                <p className="text-muted leading-relaxed">{aiAnalysisMap[subKey].themeFidelity}</p>
+                                              </div>
+
+                                              <div className="p-3 rounded-xl bg-surface border border-border space-y-1">
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-sky-400 block">
+                                                  🔑 Uso das Palavras-Chave
+                                                </span>
+                                                <p className="text-muted leading-relaxed">{aiAnalysisMap[subKey].keywordsCheck}</p>
+                                              </div>
+
+                                              <div className="p-3 rounded-xl bg-surface border border-border space-y-1">
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 block">
+                                                  ✍️ Gramática, Ortografia e Acentuação
+                                                </span>
+                                                <p className="text-muted leading-relaxed">{aiAnalysisMap[subKey].grammarCheck}</p>
+                                              </div>
+
+                                              <div className="p-3 rounded-xl bg-surface border border-border space-y-1">
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-purple-300 block">
+                                                  📐 Extensão ({aiAnalysisMap[subKey].charCount}/{aiAnalysisMap[subKey].minChars} caract.) & Autoria
+                                                </span>
+                                                <p className="text-muted leading-relaxed">
+                                                  {aiAnalysisMap[subKey].structureCheck} {aiAnalysisMap[subKey].aiUsageAnalysis ? `— ${aiAnalysisMap[subKey].aiUsageAnalysis}` : ""}
+                                                </p>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
                                   </>
                                 )}
                               </div>
