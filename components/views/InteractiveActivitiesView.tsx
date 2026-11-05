@@ -38,8 +38,9 @@ import {
   GameStage,
   GameExecutionContext,
 } from '@/lib/types';
-import { getOriginalTurmas, getTurmaLabel } from '@/lib/studentUtils';
+import { getOriginalTurmas, getTurmaLabel, isActivityAdapted } from '@/lib/studentUtils';
 import { KronoIcon } from '@/components/ui/KronoIcon';
+import { TurmaFilterDropdown } from '@/components/TurmaFilterDropdown';
 
 interface InteractiveActivitiesViewProps {
   activities: Activity[];
@@ -72,7 +73,8 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
 
   // Turmas extraídas dos alunos
   const turmasList = useMemo(() => getOriginalTurmas(students), [students]);
-  const [selectedTurmaFilter, setSelectedTurmaFilter] = useState<string>('todas');
+  const [selectedGalleryTurmas, setSelectedGalleryTurmas] = useState<string[]>([]);
+  const selectedTurmaFilter = selectedGalleryTurmas.length === 0 ? 'todas' : selectedGalleryTurmas[0];
   const [isTurmaDropdownOpen, setIsTurmaDropdownOpen] = useState(false);
   const turmaDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -87,15 +89,16 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Jogos Interativos existentes (filtrados por turma se selecionada)
+  // Estúdio KronoGames: Lista APENAS os jogos e missões interativas criadas nativamente aqui
   const interactiveActivities = useMemo(() => {
     return activities.filter((act) => {
-      const isGame = act.isInteractive === true || act.activityDomain === 'interactive_game' || act.isGameActivity === true;
+      const isGame = Boolean(act.isGameActivity || act.gameData || act.isInteractive || act.activityDomain === 'interactive_game' || act.playfulGameHtml);
       if (!isGame) return false;
-      if (selectedTurmaFilter === 'todas') return true;
-      return act.turma === selectedTurmaFilter || act.turma?.includes(selectedTurmaFilter);
+      if (isActivityAdapted(act) || act.activityDomain === 'adapted_aee') return false;
+      if (selectedGalleryTurmas.length === 0) return true;
+      return selectedGalleryTurmas.some((t) => act.turma === t || act.turma?.includes(t));
     });
-  }, [activities, selectedTurmaFilter]);
+  }, [activities, selectedGalleryTurmas]);
 
   // Atividades formais para vínculo opcional
   const formalActivitiesForBinding = useMemo(() => {
@@ -105,7 +108,8 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
   // ==========================================
   // ESTADOS DO FORMULÁRIO DE CRIAÇÃO
   // ==========================================
-  const [targetTurma, setTargetTurma] = useState<string>(turmasList[0] || '101');
+  const [targetTurmas, setTargetTurmas] = useState<string[]>([]);
+  const targetTurma = targetTurmas.length === 0 ? turmasList.join(', ') : targetTurmas.join(', ');
   const [gameTitle, setGameTitle] = useState('');
   const [gameTopic, setGameTopic] = useState('');
   const [gameMaterial, setGameMaterial] = useState('');
@@ -176,11 +180,28 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
     const isGroup = internalTab === 'create_classroom';
     const executionContext: GameExecutionContext = isGroup ? 'classroom_group' : 'homework_individual';
 
+    const mappedQuestions = (stagedGameData.stages || []).map((stg, idx) => {
+      const opts = (stg.options || []).map((o) => o.text);
+      const correctIdx = Math.max(0, (stg.options || []).findIndex((o) => o.isCorrect));
+      return {
+        id: stg.id || `q_stage_${idx + 1}`,
+        type: 'multiple_choice' as const,
+        statement: `[${stg.title || `Fase ${idx + 1}`}] ${stg.scenario}${stg.clue ? `\n💡 Pista: ${stg.clue}` : ''}`,
+        options: opts.length >= 2 ? opts : ['Opção A', 'Opção B'],
+        correctOptionIndex: correctIdx,
+        points: Number((10 / Math.max(1, stagedGameData.stages.length)).toFixed(2)),
+      };
+    });
+
+    const targetStudentsCount = targetTurmas.length === 0
+      ? students.length
+      : students.filter((s) => targetTurmas.includes(s.turma)).length;
+
     const newActivity: Activity = {
-      id: `game_${Date.now()}`,
+      id: `game_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       title: gameTitle.trim() || `[KronoGame] ${gameTopic || 'Missão Interativa'}`,
       subject: teacher.subject || 'Sociologia',
-      turma: targetTurma,
+      turma: targetTurma || turmasList.join(', ') || 'Todas',
       deadline,
       description: stagedGameData.introText || `Jogo avaliativo interativo sobre ${gameTopic}.`,
       supportMaterial: gameMaterial || '',
@@ -195,9 +216,10 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
       executionContext,
       linkedActivityId: bindingMode === 'linked' ? linkedFormalActivityId : undefined,
       gameData: stagedGameData,
+      questions: mappedQuestions,
       submissions: [],
       totalSubmissions: 0,
-      totalStudents: students.filter((s) => s.turma === targetTurma).length,
+      totalStudents: targetStudentsCount,
       pendingCorrection: 0,
     };
 
@@ -236,8 +258,8 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
           </p>
         </div>
 
-        {/* Menu Superior de Acesso Rápido */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        {/* Menu Superior de Acesso Rápido Reorganizado em Barra Única */}
+        <div className="inline-flex flex-wrap sm:flex-nowrap items-center gap-2 p-1.5 rounded-2xl bg-slate-900/90 border border-slate-800 shrink-0 self-start md:self-center">
           <button
             type="button"
             onClick={() => setInternalTab('gallery')}
@@ -295,48 +317,31 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
       ========================================================================= */}
       {internalTab === 'gallery' && (
         <div className="space-y-6">
-          {/* Barra de Filtro de Turmas (Padrão Unificado) */}
-          <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-border bg-surface space-y-2 shadow-md">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <label className="text-xs font-bold text-muted flex items-center gap-1.5 uppercase tracking-wider">
-                <Users className="w-3.5 h-3.5 text-primary" />
-                <span>Filtrar por Turma:</span>
-              </label>
-              <span className="text-xs text-muted">
-                Total de Jogos Interativos: <strong className="text-primary font-bold">{interactiveActivities.length}</strong>
-              </span>
+          {/* Barra de Filtro de Turmas (Padrão Unificado Dropdown) */}
+          <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-border bg-surface flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md">
+            <div className="flex flex-wrap items-center gap-3">
+              <TurmaFilterDropdown
+                turmasList={turmasList}
+                selectedTurmas={selectedGalleryTurmas}
+                onChange={setSelectedGalleryTurmas}
+                students={students}
+                totalCountLabel="alunos"
+              />
+              {selectedGalleryTurmas.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedGalleryTurmas([])}
+                  className="text-xs font-bold text-cyan-400 hover:text-cyan-300 underline cursor-pointer"
+                >
+                  Limpar filtro (Ver Todas)
+                </button>
+              )}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setSelectedTurmaFilter('todas')}
-                className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all duration-200 cursor-pointer border active:scale-95 ${
-                  selectedTurmaFilter === 'todas'
-                    ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 font-extrabold'
-                    : 'bg-background text-muted hover:text-foreground border-border hover:bg-surface-hover'
-                }`}
-              >
-                Todas as Turmas
-              </button>
-              {turmasList.map((t) => {
-                const countStudents = students.filter((s) => s.turma === t).length;
-                const isSelected = selectedTurmaFilter === t;
-                return (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setSelectedTurmaFilter(isSelected ? 'todas' : t)}
-                    className={`py-2 px-4 min-h-[44px] min-w-[44px] rounded-full text-xs font-bold transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 border active:scale-95 ${
-                      isSelected
-                        ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 font-extrabold'
-                        : 'bg-background text-muted hover:text-foreground border-border hover:bg-surface-hover'
-                    }`}
-                  >
-                    <span>Turma {getTurmaLabel(t)}</span>
-                    <span className="text-[10px] opacity-75 font-mono">({countStudents})</span>
-                  </button>
-                );
-              })}
+
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted">
+                Total de Jogos no Estúdio: <strong className="text-cyan-400 font-black">{interactiveActivities.length}</strong>
+              </span>
             </div>
           </div>
 
@@ -426,6 +431,27 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                           <span>Testar Jogo</span>
                         </button>
                       )}
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const duplicated: Activity = {
+                            ...game,
+                            id: `game_${Date.now()}_dup`,
+                            title: `${game.title} (Cópia)`,
+                            submissions: [],
+                            totalSubmissions: 0,
+                            pendingCorrection: 0,
+                          };
+                          await onSaveCreatedActivity(duplicated);
+                          setSuccessBanner(`📋 Jogo "${game.title}" duplicado com sucesso!`);
+                          setTimeout(() => setSuccessBanner(null), 4000);
+                        }}
+                        className="p-2 bg-slate-800 hover:bg-cyan-500/20 text-slate-300 hover:text-cyan-300 rounded-xl border border-slate-700 hover:border-cyan-500/40 transition-all cursor-pointer"
+                        title="Duplicar este jogo (decisão do professor)"
+                      >
+                        <Layers className="w-4 h-4" />
+                      </button>
 
                       {onEditActivity && (
                         <button
@@ -553,7 +579,41 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                       <span>Detetive Estrutural</span>
                     </div>
                     <p className="text-[11px] text-slate-400 leading-snug">
-                      Investigação de causas sociais invisíveis a partir de indícios do caso.
+                      Investigação de causas sociais invisíveis e interesses estratégicos dos atores.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedGameMode('debate_paperless');
+                      if (!gameMaterial.trim()) {
+                        setGameMaterial(
+`ESTRUTURA DO DEBATE SEM PAPEL (KRONOMESTRE):
+1. Equipes de Debate (Bancadas Pró e Contra): Documentos digitais compartilhados para defesa, notícias, dados estatísticos e divisão de falas na tela do celular.
+2. Audiência Analítica (Alunos Avaliadores): Votação em tempo real avaliando Qualidade dos argumentos, Respeito ao tempo (KronoMestre) e Uso de dados.
+3. Interação e Perguntas da Plateia (Q&A): Envio anônimo de perguntas digitais pelo celular para a fase de réplica.
+4. Registro Final e Portfólio: Produção de Infográfico Digital no Canva ou Mini-Podcast de 2 minutos resumindo o aprendizado.`
+                        );
+                      }
+                    }}
+                    className={`p-3.5 rounded-2xl border text-left space-y-1.5 transition-all cursor-pointer sm:col-span-3 ${
+                      selectedGameMode === 'debate_paperless'
+                        ? 'bg-rose-500/20 border-rose-400 ring-2 ring-rose-400/30 text-white'
+                        : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 font-black text-xs sm:text-sm text-rose-300">
+                        <Users className="w-4 h-4 text-rose-400" />
+                        <span>🎙️ Debate Sem Papel & Teoria dos Jogos (Bancadas Pró/Contra + Plateia Analítica + Q&A + Portfólio)</span>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-400/30 font-bold">
+                        100% Digital • Projetor & QR Code
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-snug">
+                      1) Bancadas Pró e Contra em Docs compartilhados; 2) Audiência Analítica avaliando argumentos, dados e tempo; 3) Sessão Q&A de perguntas digitais da plateia; 4) Fechamento com Infográfico Canva ou Mini-Podcast de 2 min.
                     </p>
                   </button>
                 </div>
@@ -601,16 +661,23 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
             {/* Informações Básicas */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="text-xs font-bold text-slate-300 block mb-1">Turma Alvo</label>
-                <select
-                  value={targetTurma}
-                  onChange={(e) => setTargetTurma(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400"
-                >
-                  {turmasList.map((t) => (
-                    <option key={t} value={t}>Turma {getTurmaLabel(t)}</option>
-                  ))}
-                </select>
+                <label className="text-xs font-bold text-slate-300 block mb-1">
+                  Destinação de Turmas (Todas ou Seleção)
+                </label>
+                <div className="flex items-center gap-2">
+                  <TurmaFilterDropdown
+                    turmasList={turmasList}
+                    selectedTurmas={targetTurmas}
+                    onChange={setTargetTurmas}
+                    students={students}
+                    totalCountLabel="alunos"
+                  />
+                </div>
+                <span className="text-[10px] text-cyan-400 block mt-1">
+                  {targetTurmas.length === 0
+                    ? `✓ Destinado a Todas as Turmas (${turmasList.length} turmas)`
+                    : `✓ Selecionadas: ${targetTurmas.join(', ')}`}
+                </span>
               </div>
 
               <div className="sm:col-span-2">
@@ -727,16 +794,44 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
               )}
             </div>
 
-            {/* Botão de Geração */}
-            <button
-              type="button"
-              onClick={handleGenerateGame}
-              disabled={isGenerating}
-              className="w-full py-3.5 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-slate-950 font-black text-sm rounded-2xl transition-all shadow-[0_0_25px_rgba(6,182,212,0.4)] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              <Sparkles className="w-5 h-5 fill-current" />
-              <span>{isGenerating ? 'Compilando 6 Estágios com a IA...' : 'Gerar 6 Fases com Co-Op Inclusivo ✨'}</span>
-            </button>
+            {/* Botões de Geração Completa com IA ou Criação Manual pelo Professor */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={handleGenerateGame}
+                disabled={isGenerating}
+                className="flex-1 py-3.5 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-slate-950 font-black text-sm rounded-2xl transition-all shadow-[0_0_25px_rgba(6,182,212,0.4)] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <Sparkles className="w-5 h-5 fill-current" />
+                <span>{isGenerating ? 'Criando Jogo Inédito Baseado no seu Roteiro...' : 'Gerar Atividade Completa com IA (Baseada no Roteiro) ✨'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!stagedGameData) {
+                    setStagedGameData({
+                      introText: gameMaterial.trim() || `Atividade gamificada sobre ${gameTopic || "Sociologia"}.`,
+                      stages: Array.from({ length: 6 }).map((_, i) => ({
+                        id: `stage-${i + 1}`,
+                        title: `Fase ${i + 1}`,
+                        scenario: `Digite o desafio ou etapa ${i + 1} do seu roteiro...`,
+                        clue: "Dica conceitual ou estratégica...",
+                        options: [
+                          { text: "Alternativa correta", isCorrect: true, pointsWeight: 10, feedback: "Excelente análise!", iconEmoji: "🎯" },
+                          { text: "Alternativa incorreta 1", isCorrect: false, pointsWeight: 0, feedback: "Revise o conceito.", iconEmoji: "❌" },
+                        ],
+                      })),
+                    });
+                  }
+                  setIsReviewOpen(true);
+                }}
+                className="px-5 py-3.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40 font-bold text-xs sm:text-sm rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Pencil className="w-4 h-4" />
+                <span>Criar / Editar Fases Manualmente</span>
+              </button>
+            </div>
           </div>
 
           {/* =========================================================================
@@ -802,21 +897,45 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                       />
                     </div>
 
-                    {/* Alternativas Regulares */}
+                    {/* Alternativas Editáveis pelo Professor */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {stg.options.map((opt, oIdx) => (
                         <div
                           key={oIdx}
-                          className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+                          className={`p-2 rounded-xl border text-xs flex items-center gap-2 ${
                             opt.isCorrect
                               ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-200'
                               : 'bg-slate-900 border-slate-700 text-slate-300'
                           }`}
                         >
-                          <span className="truncate">{opt.iconEmoji || '•'} {opt.text}</span>
-                          <span className="text-[10px] font-bold shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = [...stagedGameData.stages];
+                              updated[sIdx].options = updated[sIdx].options.map((o, idx) => ({
+                                ...o,
+                                isCorrect: idx === oIdx,
+                                pointsWeight: idx === oIdx ? 10 : 0,
+                              }));
+                              setStagedGameData({ ...stagedGameData, stages: updated });
+                            }}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-black shrink-0 cursor-pointer ${
+                              opt.isCorrect ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400 hover:text-white'
+                            }`}
+                            title="Clique para definir como correta"
+                          >
                             {opt.isCorrect ? '✓ Correta' : 'Distrator'}
-                          </span>
+                          </button>
+                          <input
+                            type="text"
+                            value={opt.text}
+                            onChange={(e) => {
+                              const updated = [...stagedGameData.stages];
+                              updated[sIdx].options[oIdx].text = e.target.value;
+                              setStagedGameData({ ...stagedGameData, stages: updated });
+                            }}
+                            className="w-full bg-transparent text-xs text-white focus:outline-none border-b border-transparent focus:border-cyan-400"
+                          />
                         </div>
                       ))}
                     </div>

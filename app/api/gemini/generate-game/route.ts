@@ -639,6 +639,11 @@ export async function POST(req: NextRequest) {
     }
 
     const modeLabels: Record<GameMode, { name: string; context: string; style: string }> = {
+      debate_paperless: {
+        name: "Debate Sem Papel & Teoria dos Jogos",
+        context: "Bancadas Pró e Contra, Audiência Analítica e Q&A digital.",
+        style: "Debate estruturado com cronômetro espelhado."
+      },
       millionaire: {
         name: 'Arena do Milhão',
         context: 'sala de aula em duplas ou grupos (cooperativo)',

@@ -120,7 +120,8 @@ export type ActivityType = 'Simulado' | 'Redação' | 'Dinâmica' | 'Avaliação
 export type ActivityDomain = 'formal' | 'interactive_game' | 'adapted_aee';
 export type AeeMechanic = 'visual_cards' | 'binary_trail' | 'social_story' | 'block_builder';
 
-export type GameMode = 'millionaire' | 'dialectic_tribunal' | 'structural_detective' | 'rpg_campaign' | 'real_life_lab';
+export type GameMode = 'millionaire' | 'dialectic_tribunal' | 'structural_detective' | 'rpg_campaign' | 'real_life_lab'
+  | 'debate_paperless';
 export type GameExecutionContext = 'classroom_group' | 'homework_individual';
 
 export interface GameStageOption {
