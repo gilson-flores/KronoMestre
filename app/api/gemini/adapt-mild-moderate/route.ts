@@ -24,6 +24,8 @@ export async function POST(req: NextRequest) {
       : `Atividade de tema: "${title}". Descrição: "${description}".`;
 
     const prompt = `
+[DIRETIVA DE DIVERSIDADE CRIATIVA E INOVAÇÃO PEDAGÓGICA]: Nunca repita o mesmo formato. Alterne entre estudos de caso do cotidiano juvenil, metáforas sociológicas imersivas (Foucault, Weber, Bourdieu, Durkheim), análise de tirinhas/charges textuais, dilemas éticos contemporâneos e simulações práticas. Seja altamente criativo e estimulante.
+
 Você é um especialista renomado em Educação Especial Inclusiva (AEE - Atendimento Educacional Especializado) e Pedagogia Adaptativa.
 Sua missão é ADAPTAR pedagogicamente esta atividade para alunos com DEFICIÊNCIAS LEVES E MODERADAS (ex: TDAH, Dislexia, Deficiência Intelectual Leve/Moderada, TEA Nível 1 e 2).
 

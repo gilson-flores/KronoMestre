@@ -440,20 +440,17 @@ export function isActivityRecovery(act?: Activity | null): boolean {
  */
 export function isActivityAdapted(act?: Activity | null): boolean {
   if (!act) return false;
-  if (act.activityDomain === 'adapted_aee') return true;
+  if (act.isGameActivity || act.gameData || act.type === "Jogo Avaliativo" || act.isStandaloneAdaptation === false) return false;
+  if (act.activityDomain === "adapted_aee") return true;
   if (act.isAdapted) return true;
-  if (act.isStandaloneAdaptation) return true;
   if (Boolean(act.adaptedFromId)) return true;
   if (Boolean(act.adaptationType)) return true;
-  const title = (act.title || '').trim().toLowerCase();
-  if (title.startsWith('[pne') || title.startsWith('pne')) return true;
-  if (title.includes('adaptação pedagógica') || title.includes('adaptacao pedagogica')) return true;
+  const title = (act.title || "").trim().toLowerCase();
+  if (title.startsWith("[pne") || title.startsWith("pne")) return true;
+  if (title.includes("adaptação pedagógica") || title.includes("adaptacao pedagogica")) return true;
   return false;
 }
 
-/**
- * Calculates expected student count and submission metrics for an activity
- */
 export function getActivityStudentAndSubmissionCounts(
   act: Activity,
   allActivities: Activity[],
