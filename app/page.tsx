@@ -2337,7 +2337,7 @@ export default function Home() {
               />
             )}
 
-          {activeTeacherTab === 'postagem_rco' && role !== 'second_teacher' && (
+          {false && role !== 'second_teacher' && (
             <PostagemRcoView
               activities={activeActivities}
               students={visibleStudentsForRole}
