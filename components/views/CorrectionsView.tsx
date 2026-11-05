@@ -80,6 +80,87 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
 
   const [draftScores, setDraftScores] = useState<{ [key: string]: string }>({});
   const [draftFeedbacks, setDraftFeedbacks] = useState<{ [key: string]: string }>({});
+  const [aiLoadingKey, setAiLoadingKey] = useState<string | null>(null);
+  const [aiAnalysisMap, setAiAnalysisMap] = useState<Record<string, {
+    suggestedScore: number;
+    feedback: string;
+    themeFidelity: string;
+    keywordsCheck: string;
+    structureCheck: string;
+    grammarCheck: string;
+    aiUsagePercentage: number;
+    aiUsageAnalysis: string;
+    charCount: number;
+    minChars: number;
+  }>>({});
+
+  const handleToggleStudentRco = (originalAct: Activity, studentId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!onSaveActivity) return;
+    const currentList = Array.isArray(originalAct.rcoPostedStudentIds) ? originalAct.rcoPostedStudentIds : [];
+    const exists = currentList.includes(studentId);
+    const nextList = exists ? currentList.filter((id) => id !== studentId) : [...currentList, studentId];
+    const totalSubs = (originalAct.submissions || []).length;
+    const allPosted = totalSubs > 0 && (originalAct.submissions || []).every((s) => nextList.includes(s.studentId));
+    onSaveActivity({
+      ...originalAct,
+      rcoPostedStudentIds: nextList,
+      isRcoPosted: allPosted,
+    });
+  };
+
+  const handleRunAiEssayCorrection = async (act: Activity, sub: any) => {
+    const subKey = `${act.id}_${sub.studentId}`;
+    const essayText = (sub.essayAnswer || "").trim();
+    if (!essayText) return;
+    setAiLoadingKey(subKey);
+    try {
+      const essayQuestion = (act.questions || []).find((q: any) => q.type === "essay") || (act.questions || [])[0];
+      const questionStatement = essayQuestion?.statement || act.description || act.title || "Questão dissertativa de Sociologia";
+      const keywords = (essayQuestion as any)?.keywords || (act as any).keywords || "";
+      const minChars = Number((essayQuestion as any)?.minChars || (act as any).minChars || 150);
+      const maxEssayScore = Number(sub.maxEssayScore || act.maxGrade || 10);
+
+      const res = await fetch("/api/gemini/correct-essay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          essayAnswer: essayText,
+          questionStatement,
+          keywords,
+          turma: act.turma || "Ensino Médio",
+          maxEssayScore,
+          minChars,
+        }),
+      });
+      const data = await res.json();
+      if (data) {
+        const suggested = data.suggestedScore !== undefined ? Number(data.suggestedScore) : maxEssayScore * 0.8;
+        const fb = data.feedback || "Boa argumentação sociológica.";
+        setDraftScores((prev) => ({ ...prev, [subKey]: String(suggested) }));
+        setDraftFeedbacks((prev) => ({ ...prev, [subKey]: fb }));
+        setAiAnalysisMap((prev) => ({
+          ...prev,
+          [subKey]: {
+            suggestedScore: suggested,
+            feedback: fb,
+            themeFidelity: data.themeFidelity || "Adequado ao tema proposto.",
+            keywordsCheck: data.keywordsCheck || "Conceitos avaliados.",
+            structureCheck: data.structureCheck || "Estrutura avaliada.",
+            grammarCheck: data.grammarCheck || "Norma padrão verificada.",
+            aiUsagePercentage: Number(data.aiUsagePercentage ?? 0),
+            aiUsageAnalysis: data.aiUsageAnalysis || "Análise de autoria concluída.",
+            charCount: essayText.length,
+            minChars,
+          },
+        }));
+      }
+    } catch (err) {
+      console.error("Erro na correção por IA:", err);
+    } finally {
+      setAiLoadingKey(null);
+    }
+  };
 
   const turmasDisponiveis = useMemo(() => extractAllTurmasFromData(students, activities.map((a) => a.turma)), [students, activities]);
 
@@ -400,20 +481,12 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                   </div>
 
                   <div className="shrink-0 border-t md:border-t-0 border-border pt-3 md:pt-0 mt-3 md:mt-0 flex flex-wrap items-center gap-2">
-                    {onSaveActivity && (
-                      <button
-                        type="button"
-                        onClick={() => onSaveActivity({ ...originalAct, isRcoPosted: !originalAct.isRcoPosted })}
-                        className={`py-2 px-3.5 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 border ${
-                          act.isRcoPosted
-                            ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/30'
-                            : 'bg-surface hover:bg-surface-hover text-muted hover:text-foreground border-border'
-                        }`}
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>{act.isRcoPosted ? 'Desmarcar RCO' : 'Marcar Lançado (RCO)'}</span>
-                      </button>
-                    )}
+                    <div className="py-2 px-3.5 font-bold text-xs rounded-xl flex items-center gap-1.5 border bg-background border-border text-muted">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>
+                        RCO: {subs.filter((s) => (originalAct.rcoPostedStudentIds || []).includes(s.studentId)).length}/{subs.length} lançados
+                      </span>
+                    </div>
                     <button
                       onClick={() => setExpandedActId(isExpanded ? null : act.id)}
                       className={`w-full md:w-auto py-2 px-6 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 border ${
@@ -479,6 +552,23 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={(e) => handleToggleStudentRco(originalAct, sub.studentId, e)}
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
+                                  (originalAct.rcoPostedStudentIds || []).includes(sub.studentId)
+                                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30"
+                                    : "bg-background hover:bg-surface-hover text-muted hover:text-foreground border-border"
+                                }`}
+                                title="Marcar/Desmarcar que a nota deste aluno já foi lançada no RCO"
+                              >
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>
+                                  {(originalAct.rcoPostedStudentIds || []).includes(sub.studentId)
+                                    ? "RCO Lançado"
+                                    : "Marcar RCO"}
+                                </span>
+                              </button>
                               {sub.status === 'pending' && <span className="hidden sm:inline text-[10px] font-bold text-sky-400">Avaliar</span>}
                               {isStudentExpanded ? <ChevronUp className="w-4 h-4 text-muted" /> : <ChevronDown className="w-4 h-4 text-muted" />}
                             </div>

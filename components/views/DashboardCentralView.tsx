@@ -195,8 +195,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
     const todayList: Activity[] = [];
     const upcomingList: Array<{ activity: Activity; daysLeft: number; isToday: boolean }> = [];
 
-    canonicalActivities.forEach((a) => {
-      if (a.isRcoPosted) return;
+    activities.filter((a) => statusScopeFilter === "Todas" ? true : statusScopeFilter === "Ativo" ? a.status === "Ativo" : a.status !== "Ativo").forEach((a) => {
       const deadDate = parseActivityDeadline(a.deadline);
       if (!deadDate) return;
       const diffMs = deadDate.getTime() - now.getTime();
@@ -220,7 +219,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
       dueTodayActivities: todayList,
       approachingDeadlineActivities: upcomingList,
     };
-  }, [canonicalActivities]);
+  }, [activities, statusScopeFilter]);
 
   // 3. Recuperação Paralela: identificar atividades e alunos com notas < 6.0
   const {
@@ -288,10 +287,21 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
   // 4. Pendências Administrativas: turmas com atividades finalizadas prontas para lançamento RCO
   const originalTurmas = useMemo(() => getOriginalTurmas(students), [students]);
   const pneTotal = useMemo(() => students.filter((s) => isStudentPNE(s)).length, [students]);
-  const radTotal = useMemo(
-    () => students.filter((s) => s.tag?.toUpperCase() === 'RAD').length,
-    [students]
-  );
+  const radTotal = useMemo(() => {
+    const tagCount = students.filter((s) => s.tag?.toUpperCase() === "RAD" || (s as any).hasAtestado).length;
+    if (typeof window !== "undefined") {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && (k.includes("atestados_rad_records") || k.includes("local_atestados_rad_data"))) {
+            const parsed = JSON.parse(localStorage.getItem(k) || "[]");
+            if (Array.isArray(parsed) && parsed.length > tagCount) return parsed.length;
+          }
+        }
+      } catch {}
+    }
+    return tagCount;
+  }, [students]);
 
   const turmasReadyForRco = useMemo(() => {
     const list: TurmaRcoInfo[] = [];
@@ -415,23 +425,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
 
         {/* Filtros de Escopo do Dashboard (Atividade Individual + Ativas/Inativas/Todas) */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="relative">
-            <select
-              aria-label="Selecionar atividade para análise"
-              value={selectedActivityFilterId}
-              onChange={(e) => setSelectedActivityFilterId(e.target.value)}
-              className="min-h-[42px] pl-3.5 pr-8 py-2 bg-surface hover:bg-surface-hover text-foreground text-xs sm:text-sm font-bold rounded-xl border border-border focus:outline-none focus:border-primary transition-colors cursor-pointer"
-            >
-              <option value="all">📋 Todas as Atividades ({allCanonicalActivities.length})</option>
-              {allCanonicalActivities.map((act) => (
-                <option key={act.id} value={act.id}>
-                  {act.title} ({act.turma || "Geral"})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center gap-1 p-1 bg-surface rounded-xl border border-border">
+<div className="flex items-center gap-1 p-1 bg-surface rounded-xl border border-border">
             {(["Todas", "Ativo", "Inativo"] as const).map((st) => (
               <button
                 key={st}
@@ -451,15 +445,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
 
         {/* Ações Primárias Globais */}
         <div className="flex items-center gap-3 flex-wrap">
-          <button
-            id="btn-central-rco"
-            onClick={() => onNavigateToTab('postagem_rco')}
-            className="min-h-[44px] min-w-[44px] py-2.5 px-4 bg-surface hover:bg-surface-hover text-foreground font-bold rounded-xl border border-border transition-all text-sm flex items-center gap-2 cursor-pointer shadow-sm active:scale-95"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-primary" />
-            <span>Lançar RCO</span>
-          </button>
-          <button
+<button
             id="btn-central-nova-atividade"
             onClick={onOpenNewActivityModal}
             className="min-h-[44px] min-w-[44px] py-2.5 px-4 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl transition-all text-sm flex items-center gap-2 cursor-pointer shadow-md active:scale-95"
@@ -625,8 +611,13 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
             </div>
             <button
               id="btn-pendencia-prazos"
-              onClick={() => onNavigateToTab('atividades')}
-              disabled={approachingDeadlineActivities.length === 0}
+              onClick={() => {
+                if (approachingDeadlineActivities.length > 0) {
+                  setActiveQueueFilter("prazos");
+                } else {
+                  onNavigateToTab("atividades");
+                }
+              }}
               className="mt-5 w-full min-h-[44px] min-w-[44px] py-2.5 px-4 bg-indigo-500/10 hover:bg-indigo-500/20 disabled:opacity-40 disabled:cursor-not-allowed text-indigo-400 font-bold rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
             >
               <span>Ver Atividades</span>
@@ -665,7 +656,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
                   onNavigateToTab('atividades');
                 }
               }}
-              disabled={studentsNeedingRecoveryCount === 0}
+
               className="mt-5 w-full min-h-[44px] min-w-[44px] py-2.5 px-4 bg-violet-500/10 hover:bg-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed text-violet-600 font-bold rounded-xl text-sm transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
             >
               <span>Organizar Recuperação</span>
