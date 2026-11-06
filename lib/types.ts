@@ -159,9 +159,75 @@ export interface GameStage {
   pneSevereStage?: GameSevereStage;
 }
 
+export type DebateRole = 'pro' | 'contra' | 'juror';
+
+export interface DebateGuidingQuestion {
+  id: string;
+  number: number;
+  side: 'pro' | 'contra';
+  prompt: string;
+  sociologicalConcept: string;
+  researchHint: string;
+}
+
+export interface DebateChecklistItem {
+  id: string;
+  number: number;
+  criterion: string;
+  description: string;
+}
+
+export interface DebateParticipant {
+  studentId: string;
+  studentName: string;
+  role: DebateRole;
+  joinedAt: string;
+}
+
+export interface DebateJurorVerdict {
+  jurorId: string;
+  jurorName: string;
+  proChecklist: Record<string, boolean>; // itemId -> cumpriu (true) / não cumpriu (false)
+  contraChecklist: Record<string, boolean>; // itemId -> cumpriu (true) / não cumpriu (false)
+  writtenOpinion: string;
+  winnerVote?: 'pro' | 'contra' | 'empate';
+  submittedAt: string;
+}
+
+export interface DebateConfig {
+  maxJurors: number; // Padrão: 3 jurados
+  proQuestions: DebateGuidingQuestion[]; // 6 questões dissertativas norteadoras Pró
+  contraQuestions: DebateGuidingQuestion[]; // 6 questões dissertativas norteadoras Contra
+  checklistCriteria: DebateChecklistItem[]; // 6 itens para os 2 checklists (Pró e Contra)
+  jurorInitialGuide: string;
+  // Dados sincronizados de execução da turma
+  participants?: DebateParticipant[];
+  proAnswers?: Record<string, string>; // questionId -> resposta dissertativa do grupo Pró
+  contraAnswers?: Record<string, string>; // questionId -> resposta dissertativa do grupo Contra
+  proResearchCompleted?: boolean;
+  contraResearchCompleted?: boolean;
+  // 3 Resumos gerados pela IA após o término das pesquisas (1 para cada grupo)
+  proSummary?: string;
+  contraSummary?: string;
+  jurorGuideSummary?: string;
+  // Pareceres e checklists enviados pelos 3 jurados na aula do debate
+  jurorVerdicts?: DebateJurorVerdict[];
+  // Notas atribuídas pelo professor (por grupo ou individuais)
+  gradingMode?: 'group' | 'individual';
+  groupGrades?: {
+    proResearchGrade?: number;
+    proPresentationGrade?: number;
+    contraResearchGrade?: number;
+    contraPresentationGrade?: number;
+    jurorsGrade?: number;
+  };
+  individualGrades?: Record<string, { researchGrade: number; presentationGrade: number; finalGrade: number; feedback?: string }>;
+}
+
 export interface GameData {
   introText: string;
   stages: GameStage[];
+  debateConfig?: DebateConfig;
 }
 
 export interface AeePromptSettings {

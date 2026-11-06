@@ -1,4 +1,5 @@
 'use client';
+import { DebatePaperlessView } from '@/components/views/DebatePaperlessView';
 
 import React, { useState, useMemo, useEffect } from 'react';
 import {
@@ -113,7 +114,6 @@ export const KronoGamePlayer: React.FC<KronoGamePlayerProps> = ({
   const stages = gameData.stages || [];
   const maxGrade = activity.maxGrade || 10;
   const isClassroomGroup = activity.executionContext === 'classroom_group' || activity.allowGroupWork;
-
   // Sound toggle
   const [soundEnabled, setSoundEnabled] = useState(true);
 
@@ -270,6 +270,20 @@ export const KronoGamePlayer: React.FC<KronoGamePlayerProps> = ({
   const currentMode = activity.gameMode || 'millionaire';
   const info = modeInfo[currentMode] || modeInfo.millionaire;
   const ModeIcon = info.icon;
+
+  // Delegação limpa após todos os Hooks: se for Debate Sem Papel, abre o motor de 11 passos
+  if (activity.gameMode === 'debate_paperless' || Boolean(gameData.debateConfig) || activity.title.toLowerCase().includes('debate')) {
+    return (
+      <DebatePaperlessView
+        activity={activity}
+        student={student}
+        allStudents={allStudents}
+        debateConfig={gameData.debateConfig}
+        onClose={onClose}
+        onFinishGame={onFinishGame}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-2.5 sm:p-4 md:p-6 overflow-y-auto">

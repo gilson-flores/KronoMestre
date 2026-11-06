@@ -180,18 +180,38 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
     const isGroup = internalTab === 'create_classroom';
     const executionContext: GameExecutionContext = isGroup ? 'classroom_group' : 'homework_individual';
 
-    const mappedQuestions = (stagedGameData.stages || []).map((stg, idx) => {
-      const opts = (stg.options || []).map((o) => o.text);
-      const correctIdx = Math.max(0, (stg.options || []).findIndex((o) => o.isCorrect));
-      return {
-        id: stg.id || `q_stage_${idx + 1}`,
-        type: 'multiple_choice' as const,
-        statement: `[${stg.title || `Fase ${idx + 1}`}] ${stg.scenario}${stg.clue ? `\n💡 Pista: ${stg.clue}` : ''}`,
-        options: opts.length >= 2 ? opts : ['Opção A', 'Opção B'],
-        correctOptionIndex: correctIdx,
-        points: Number((10 / Math.max(1, stagedGameData.stages.length)).toFixed(2)),
-      };
-    });
+    const mappedQuestions =
+      selectedGameMode === 'debate_paperless' && stagedGameData.debateConfig
+        ? [
+            ...(stagedGameData.debateConfig.proQuestions || []).map((q, idx) => ({
+              id: q.id || `pro_q_${idx + 1}`,
+              type: 'essay' as const,
+              statement: `[BANCADA PRÓ • Questão Norteadora ${idx + 1} - ${q.sociologicalConcept}] ${q.prompt}\n💡 O que pesquisar: ${q.researchHint}`,
+              expectedAnswer: q.researchHint,
+              minCharacters: 50,
+              points: Number((5 / 6).toFixed(2)),
+            })),
+            ...(stagedGameData.debateConfig.contraQuestions || []).map((q, idx) => ({
+              id: q.id || `contra_q_${idx + 1}`,
+              type: 'essay' as const,
+              statement: `[BANCADA CONTRA • Questão Norteadora ${idx + 1} - ${q.sociologicalConcept}] ${q.prompt}\n💡 O que pesquisar: ${q.researchHint}`,
+              expectedAnswer: q.researchHint,
+              minCharacters: 50,
+              points: Number((5 / 6).toFixed(2)),
+            })),
+          ]
+        : (stagedGameData.stages || []).map((stg, idx) => {
+            const opts = (stg.options || []).map((o) => o.text);
+            const correctIdx = Math.max(0, (stg.options || []).findIndex((o) => o.isCorrect));
+            return {
+              id: stg.id || `q_stage_${idx + 1}`,
+              type: 'multiple_choice' as const,
+              statement: `[${stg.title || `Fase ${idx + 1}`}] ${stg.scenario}${stg.clue ? `\n💡 Pista: ${stg.clue}` : ''}`,
+              options: opts.length >= 2 ? opts : ['Opção A', 'Opção B'],
+              correctOptionIndex: correctIdx,
+              points: Number((10 / Math.max(1, stagedGameData.stages.length)).toFixed(2)),
+            };
+          });
 
     const targetStudentsCount = targetTurmas.length === 0
       ? students.length
@@ -606,14 +626,14 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2 font-black text-xs sm:text-sm text-rose-300">
                         <Users className="w-4 h-4 text-rose-400" />
-                        <span>🎙️ Debate Sem Papel & Teoria dos Jogos (Bancadas Pró/Contra + Plateia Analítica + Q&A + Portfólio)</span>
+                        <span>🎙️ Debate Sociológico Sem Papel (6 Questões Pró + 6 Contra + 3 Resumos IA + 3 Jurados com 2 Checklists)</span>
                       </div>
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-400/30 font-bold">
                         100% Digital • Projetor & QR Code
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-300 leading-snug">
-                      1) Bancadas Pró e Contra em Docs compartilhados; 2) Audiência Analítica avaliando argumentos, dados e tempo; 3) Sessão Q&A de perguntas digitais da plateia; 4) Fechamento com Infográfico Canva ou Mini-Podcast de 2 min.
+                      1) Alunos se cadastram em Pró, Contra ou 3 Jurados; 2) 6 questões dissertativas Pró e 6 Contra (Peso 5); 3) IA gera 3 resumos exclusivos por grupo; 4) Timer de Réplica/Tréplica e 2 Checklists dos Jurados com nota individual ou em grupo.
                     </p>
                   </button>
                 </div>

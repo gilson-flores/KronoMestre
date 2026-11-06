@@ -1,4 +1,3 @@
-import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { getGeminiClient, isGeminiAuthError } from "@/lib/gemini";
 import {
@@ -8,6 +7,7 @@ import {
   AeePromptSettings,
   GameStage,
   AdaptationRecommendation,
+  DebateConfig,
 } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -23,6 +23,67 @@ interface RequestPayload {
   aeeMechanic?: AeeMechanic;
   aeePromptSettings?: AeePromptSettings;
   adaptationRecommendation?: AdaptationRecommendation;
+}
+
+function buildFallbackDebateConfig(safeTopic: string, safeSubject: string, supportMaterial: string): DebateConfig {
+  const scriptLines = supportMaterial
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 8);
+
+  const proFocuses = [
+    "Fundamentos históricos e conquistas sociais",
+    "Dados empíricos e impactos positivos na cidadania",
+    "Conceitos sociológicos clássicos de coesão e direitos",
+    "Exemplos práticos na realidade brasileira",
+    "Políticas públicas e fortalecimento democrático",
+    "Síntese propositiva para a defesa da Bancada Pró",
+  ];
+
+  const contraFocuses = [
+    "Contradições estruturais e limites práticos",
+    "Crítica sociológica às desigualdades e assimetrias de poder",
+    "Dados empíricos sobre exclusão ou efeitos colaterais",
+    "Análise de interesses hegemônicos e ideologia",
+    "Impactos críticos no cotidiano da população brasileira",
+    "Síntese de refutação para a defesa da Bancada Contra",
+  ];
+
+  return {
+    maxJurors: 3,
+    proQuestions: proFocuses.map((focus, idx) => ({
+      id: `pro_q_${idx + 1}`,
+      number: idx + 1,
+      side: "pro",
+      sociologicalConcept: scriptLines[idx] || focus,
+      prompt: `[Pesquisa PRÓ #${idx + 1}] Considerando o tema "${safeTopic}" (${safeSubject}) e o eixo "${scriptLines[idx] || focus}", pesquise e elabore um argumento fundamentado com fatos e conceitos sociológicos que sustentem a posição FAVORÁVEL da sua bancada.`,
+      researchHint: "Busque dados reais, exemplos históricos ou conceitos sociológicos trabalhados em aula para comprovar este ponto.",
+    })),
+    contraQuestions: contraFocuses.map((focus, idx) => ({
+      id: `contra_q_${idx + 1}`,
+      number: idx + 1,
+      side: "contra",
+      sociologicalConcept: scriptLines[idx] || focus,
+      prompt: `[Pesquisa CONTRA #${idx + 1}] Considerando o tema "${safeTopic}" (${safeSubject}) e o eixo "${scriptLines[idx] || focus}", pesquise e elabore um argumento crítico fundamentado com dados e conceitos sociológicos que sustentem o QUESTIONAMENTO/OPOSIÇÃO da sua bancada.`,
+      researchHint: "Identifique contradições sociais, limites práticos, relações de poder e evidências que contestem a visão dominante.",
+    })),
+    checklistCriteria: [
+      { id: "chk_1", number: 1, criterion: "Domínio Conceitual Sociológico", description: "A bancada utilizou corretamente conceitos e autores da Sociologia pertinentes ao tema?" },
+      { id: "chk_2", number: 2, criterion: "Uso de Dados e Evidências Reais", description: "Os debatedores apresentaram exemplos concretos, fatos históricos ou dados da realidade brasileira?" },
+      { id: "chk_3", number: 3, criterion: "Coerência com o Resumo de Pesquisa", description: "A equipe articulou bem os 6 pontos pesquisados e o resumo estruturado do grupo?" },
+      { id: "chk_4", number: 4, criterion: "Capacidade de Réplica e Tréplica", description: "O grupo respondeu diretamente aos argumentos adversários sem fugir do tema ou usar falácias?" },
+      { id: "chk_5", number: 5, criterion: "Respeito ao Tempo (Timer KronoMestre)", description: "A bancada organizou a fala respeitando o cronômetro de exposição, réplica, tréplica e conclusão?" },
+      { id: "chk_6", number: 6, criterion: "Postura Ética e Democrática", description: "Manteve o respeito mútuo, a escuta ativa e o rigor acadêmico durante todo o debate?" },
+    ],
+    jurorInitialGuide: `Vocês 3 formam o Corpo de Jurados de Sociologia sobre "${safeTopic}". Enquanto as Bancadas Pró e Contra realizam suas 6 pesquisas norteadoras, acompanhem os conceitos centrais do roteiro do professor. Ao término das pesquisas, a IA gerará o Dossiê Guia exclusivo dos Jurados para orientar o julgamento com os 2 Checklists (Pró e Contra).`,
+    participants: [],
+    proAnswers: {},
+    contraAnswers: {},
+    proResearchCompleted: false,
+    contraResearchCompleted: false,
+    jurorVerdicts: [],
+    gradingMode: "group",
+  };
 }
 
 function generateFallbackInteractiveData(payload: RequestPayload): GameData {
@@ -42,7 +103,6 @@ function generateFallbackInteractiveData(payload: RequestPayload): GameData {
   const isUppercase = Boolean(aeePromptSettings?.uppercaseText);
   const formatText = (text: string) => (isUppercase ? text.toUpperCase() : text);
 
-  // Extrai tópicos do roteiro do professor se fornecido
   const scriptLines = supportMaterial
     .split(/\n+/)
     .map((l) => l.trim())
@@ -95,203 +155,64 @@ function generateFallbackInteractiveData(payload: RequestPayload): GameData {
   }
 
   if (gameMode === "debate_paperless") {
-    return {
-      introText: `🎙️ DEBATE SEM PAPEL & TEORIA DOS JOGOS — "${safeTopic}" (${safeSubject})
-1) BANCADAS PRÓ E CONTRA: Centralizem argumentos, notícias e dados estatísticos no documento digital da bancada no celular/tablet.
-2) AUDIÊNCIA ANALÍTICA: Avaliem em tempo real a qualidade dos argumentos, o uso de dados e o respeito ao tempo.
-3) INTERAÇÃO Q&A: Enviem perguntas digitais para a fase de réplica sem interromper a fala controlada pelo KronoMestre projetado no quadro.
-4) FECHAMENTO E PORTFÓLIO: Produzam o Infográfico Digital ou Mini-Podcast de 2 min consolidando a síntese do debate.`,
-      stages: [
-        {
-          id: "stage-1",
-          title: "Fase 1: Central do Debate & Preparação das Bancadas (Pró vs Contra)",
-          scenario: `[BANCADAS PRÓ E CONTRA • TEORIA DOS JOGOS] Tema central: "${safeTopic}". ${scriptLines[0] || "As equipes acessam a Central do Debate via QR Code e estruturam seus argumentos com dados estatísticos e fontes confiáveis."} Qual estratégia gera o melhor equilíbrio argumentativo inicial?`,
-          clue: "Teoria dos Jogos: Em um debate regrado de informação completa, vence a bancada que fundamenta sua tese em evidências empíricas e antecipa a réplica adversária.",
-          options: [
-            { text: "Dividir os papéis de fala no documento digital compartilhado, inserindo dados estatísticos, conceitos sociológicos e fontes verificáveis.", isCorrect: true, pointsWeight: 10, feedback: "Perfeito! A organização colaborativa sem papel garante precisão conceitual e fluidez no tempo de fala.", iconEmoji: "📑" },
-            { text: "Improvisar falas isoladas baseadas apenas em impressões pessoais sem consultar fontes ou dividir tópicos na bancada.", isCorrect: false, pointsWeight: 0, feedback: "Risco estratégico alto: argumentos sem dados ou coordenação de bancada perdem força diante da audiência analítica.", iconEmoji: "⚠️" },
-          ],
-          pneMildStage: {
-            scenario: "Como a equipe se prepara melhor para o Debate Sem Papel?",
-            options: [
-              { text: "Organizando ideias e dados verdadeiros junto com os colegas no celular", isCorrect: true, feedback: "Muito bem! A preparação em equipe deixa o debate claro e forte." },
-              { text: "Falando sem pesquisar e sem combinar com o grupo", isCorrect: false, feedback: "Em equipe, pesquisar e combinar antes ajuda todos a participarem." },
-            ],
-          },
-          pneSevereStage: {
-            playfulPrompt: "Toque no cartão que mostra os colegas pesquisando e preparando o debate juntos:",
-            visualCards: [
-              { iconEmoji: "📱", label: "Equipe Preparada", isCorrect: true, feedback: "Excelente! Tudo organizado na tela para o debate!" },
-              { iconEmoji: "🙈", label: "Sem Pesquisa", isCorrect: false, feedback: "Escolha o cartão da equipe preparada!" },
-              { iconEmoji: "💤", label: "Distração", isCorrect: false, feedback: "Toque no cartão da pesquisa em grupo!" },
-            ],
-          },
-        },
-        {
-          id: "stage-2",
-          title: "Fase 2: Exposição Inicial & Controle de Tempo no KronoMestre",
-          scenario: `[EXPOSIÇÃO REGRADA] ${scriptLines[1] || `Com o cronômetro do KronoMestre espelhado no projetor da sala, as bancadas Pró e Contra apresentam suas teses iniciais sobre "${safeTopic}".`} Como sustentar a hegemonia argumentativa respeitando o tempo?`,
-          clue: "Rigor do Tempo: O respeito estrito ao cronômetro projetado demonstra domínio retórico e evita penalizações da Audiência Analítica.",
-          options: [
-            { text: "Apresentar a tese central logo no início, conectar com a realidade brasileira e concluir dentro do tempo exibido no KronoMestre.", isCorrect: true, pointsWeight: 10, feedback: "Domínio exemplar! Síntese clara, fundamentação teórica e gestão precisa do tempo.", iconEmoji: "⏱️" },
-            { text: "Estourar o tempo do cronômetro repetindo o mesmo ponto sem apresentar evidências novas.", isCorrect: false, pointsWeight: 0, feedback: "Penalidade de tempo: na estrutura do debate, exceder o cronômetro reduz a nota de organização.", iconEmoji: "⏳" },
-          ],
-          pneMildStage: {
-            scenario: "Durante a fala no debate, por que olhamos o relógio do KronoMestre no quadro?",
-            options: [
-              { text: "Para falar com clareza e respeitar o tempo de todos os grupos", isCorrect: true, feedback: "Correto! Respeitar o tempo garante que todos sejam ouvidos." },
-              { text: "Para interromper a vez do colega falar", isCorrect: false, feedback: "No debate, cada grupo tem seu momento certo de falar." },
-            ],
-          },
-          pneSevereStage: {
-            playfulPrompt: "Toque no cartão do relógio que marca o tempo justo para todos:",
-            visualCards: [
-              { iconEmoji: "⏱️", label: "Tempo Justo", isCorrect: true, feedback: "Perfeito! O KronoMestre cuida do tempo de todos!" },
-              { iconEmoji: "🔇", label: "Silêncio Total", isCorrect: false, feedback: "Procure o cartão do cronômetro!" },
-              { iconEmoji: "📢", label: "Grito", isCorrect: false, feedback: "Toque no relógio do tempo justo!" },
-            ],
-          },
-        },
-        {
-          id: "stage-3",
-          title: "Fase 3: Sessão Q&A — Perguntas Digitais da Plateia",
-          scenario: `[INTERAÇÃO DA PLATEIA Q&A] ${scriptLines[2] || `Enquanto ouvem os debatedores sobre "${safeTopic}", os estudantes da plateia enviam perguntas pelo celular para a tela do mediador.`} Qual pergunta eleva o nível analítico da réplica?`,
-          clue: "Dialética: As melhores perguntas da plateia confrontam causas estruturais e exigem que as bancadas apliquem conceitos sociológicos a casos reais.",
-          options: [
-            { text: "Formular uma questão que conecte a tese debatida aos impactos reais na comunidade e exija solução prática fundamentada.", isCorrect: true, pointsWeight: 10, feedback: "Excelente intervenção! A plateia ativa transforma o debate em investigação coletiva.", iconEmoji: "💬" },
-            { text: "Enviar comentários fora do tema que não contribuem para testar a validade dos argumentos.", isCorrect: false, pointsWeight: 0, feedback: "Na sessão Q&A, o foco deve ser desafiar construtivamente as premissas das bancadas.", iconEmoji: "🚫" },
-          ],
-          pneMildStage: {
-            scenario: "Como a plateia participa sem interromper quem está falando?",
-            options: [
-              { text: "Enviando perguntas interessantes pelo celular para o momento da resposta", isCorrect: true, feedback: "Isso mesmo! Assim todos participam com ordem e respeito." },
-              { text: "Gritando no meio da explicação do colega", isCorrect: false, feedback: "Usamos o envio digital de perguntas para manter a organização." },
-            ],
-          },
-          pneSevereStage: {
-            playfulPrompt: "Toque no balão de pergunta respeitosa da plateia:",
-            visualCards: [
-              { iconEmoji: "💬", label: "Boa Pergunta", isCorrect: true, feedback: "Muito bem! Perguntar ajuda todo mundo a aprender!" },
-              { iconEmoji: "❌", label: "Interrupção", isCorrect: false, feedback: "Escolha o balão de conversa!" },
-              { iconEmoji: "🧱", label: "Bloqueio", isCorrect: false, feedback: "Toque no cartão da Boa Pergunta!" },
-            ],
-          },
-        },
-        {
-          id: "stage-4",
-          title: "Fase 4: Réplica, Tréplica & Dilema da Cooperação",
-          scenario: `[RÉPLICA ESTRATÉGICA • EQUILÍBRIO DE NASH] Bancadas Pró e Contra respondem às perguntas selecionadas sobre "${safeTopic}". Diante de um dado verdadeiro apresentado pelo adversário, qual é a melhor jogada racional?`,
-          clue: "Equilíbrio de Nash Pedagógico: Reconhecer um dado válido e aprofundar a interpretação sociológica gera mais credibilidade do que negar fatos comprovados.",
-          options: [
-            { text: "Reconhecer a evidência factual, contextualizá-la historicamente e demonstrar como a tese da sua bancada explica o fenômeno com maior profundidade.", isCorrect: true, pointsWeight: 10, feedback: "Jogada de mestre! Honestidade intelectual combinada com refutação sociológica de alto nível.", iconEmoji: "⚖️" },
-            { text: "Negar dados estatísticos oficiais ou recorrer a ataques pessoais (falácia ad hominem).", isCorrect: false, pointsWeight: 0, feedback: "Falácia detectada! Atacar pessoas ou negar fatos destrói a pontuação perante a Audiência Analítica.", iconEmoji: "🛑" },
-          ],
-          pneMildStage: {
-            scenario: "Na hora de responder ao outro grupo, o que devemos fazer?",
-            options: [
-              { text: "Explicar nossas ideias com respeito e fatos verdadeiros", isCorrect: true, feedback: "Parabéns! Argumentar com respeito mostra sabedoria." },
-              { text: "Ofender o outro grupo por pensar diferente", isCorrect: false, feedback: "No debate respeitamos todas as pessoas." },
-            ],
-          },
-          pneSevereStage: {
-            playfulPrompt: "Toque na balança do equilíbrio e do respeito no debate:",
-            visualCards: [
-              { iconEmoji: "⚖️", label: "Debate Justo", isCorrect: true, feedback: "Sensacional! Equilíbrio e respeito sempre!" },
-              { iconEmoji: "💣", label: "Briga", isCorrect: false, feedback: "Procure a balança da justiça!" },
-              { iconEmoji: "🌪️", label: "Confusão", isCorrect: false, feedback: "Toque na balança do Debate Justo!" },
-            ],
-          },
-        },
-        {
-          id: "stage-5",
-          title: "Fase 5: Julgamento Digital da Audiência Analítica",
-          scenario: `[AUDIÊNCIA ANALÍTICA] Chegou o momento da votação digital no celular sobre "${safeTopic}". Quais critérios técnicos os alunos avaliadores devem priorizar no formulário de avaliação?`,
-          clue: "Avaliação por Evidências: O voto analítico avalia 1) Qualidade dos argumentos, 2) Respeito ao tempo (KronoMestre) e 3) Uso consistente de dados.",
-          options: [
-            { text: "Avaliar com imparcialidade a qualidade conceitual dos argumentos, o uso de dados verificados e o cumprimento do tempo no KronoMestre.", isCorrect: true, pointsWeight: 10, feedback: "Perfeito! A avaliação justa gera gráficos de desempenho fiéis em segundos para toda a turma.", iconEmoji: "📊" },
-            { text: "Votar apenas por amizade pessoal, ignorando quem apresentou os melhores dados e argumentos.", isCorrect: false, pointsWeight: 0, feedback: "Voto enviesado compromete a análise coletiva: na Audiência Analítica, os critérios objetivos vêm em primeiro lugar.", iconEmoji: "📉" },
-          ],
-          pneMildStage: {
-            scenario: "Como a plateia vota de forma justa no final do debate?",
-            options: [
-              { text: "Observando quem explicou bem, usou fatos e respeitou o tempo", isCorrect: true, feedback: "Excelente! Isso é ser um avaliador justo!" },
-              { text: "Escolhendo sem prestar atenção no que foi dito", isCorrect: false, feedback: "Prestar atenção ajuda a votar com justiça." },
-            ],
-          },
-          pneSevereStage: {
-            playfulPrompt: "Toque no gráfico colorido da votação da turma:",
-            visualCards: [
-              { iconEmoji: "📊", label: "Voto Justo", isCorrect: true, feedback: "Parabéns! O gráfico da turma ficou pronto!" },
-              { iconEmoji: "🗑️", label: "Descarte", isCorrect: false, feedback: "Procure o cartão do gráfico!" },
-              { iconEmoji: "🔒", label: "Fechado", isCorrect: false, feedback: "Toque no gráfico do Voto Justo!" },
-            ],
-          },
-        },
-        {
-          id: "stage-6",
-          title: "Fase 6: Registro Final & Portfólio Digital (Canva / Mini-Podcast)",
-          scenario: `[FECHAMENTO SEM PAPEL] Para transformar o debate sobre "${safeTopic}" em registro pedagógico formal e nota da equipe, qual entrega consolida a síntese coletiva?`,
-          clue: "Portfólio Digital: Um Infográfico no Canva ou um Mini-Podcast de 2 minutos sintetiza tese, antítese e conclusão sociológica.",
-          options: [
-            { text: "Produzir em grupo um Infográfico Digital ou Mini-Podcast de 2 minutos sintetizando as conclusões e enviando o registro na plataforma.", isCorrect: true, pointsWeight: 10, feedback: "Missão cumprida com nota máxima! Debate Sem Papel concluído com síntese autoral e portfólio permanente.", iconEmoji: "🎙️" },
-            { text: "Encerrar a discussão sem registrar nenhuma síntese ou conclusão coletiva do aprendizado.", isCorrect: false, pointsWeight: 0, feedback: "O registro final em infográfico ou áudio é essencial para consolidar o aprendizado e a avaliação formal.", iconEmoji: "📝" },
-          ],
-          pneMildStage: {
-            scenario: "Como guardamos o que aprendemos no debate sem usar folhas de papel?",
-            options: [
-              { text: "Criando um cartaz digital colorido ou gravando um áudio curto com o grupo", isCorrect: true, feedback: "Maravilha! Você concluiu todas as etapas do Debate Sem Papel!" },
-              { text: "Esquecendo tudo o que conversamos na aula", isCorrect: false, feedback: "Registrar em imagem ou áudio guarda nosso aprendizado!" },
-            ],
-          },
-          pneSevereStage: {
-            playfulPrompt: "Toque no troféu de conclusão do Debate Sem Papel:",
-            visualCards: [
-              { iconEmoji: "🏆", label: "Debate Concluído!", isCorrect: true, feedback: "Campeão! Você brilhou no Debate Sem Papel!" },
-              { iconEmoji: "🪨", label: "Pedra", isCorrect: false, feedback: "Procure o troféu dourado!" },
-              { iconEmoji: "🥄", label: "Colher", isCorrect: false, feedback: "Toque no troféu da vitória!" },
-            ],
-          },
-        },
+    const debateConfig = buildFallbackDebateConfig(safeTopic, safeSubject, supportMaterial);
+    const stagesFromDebate: GameStage[] = debateConfig.proQuestions.map((q, idx) => ({
+      id: `stage-${idx + 1}`,
+      title: `Eixo Norteador ${idx + 1}: ${q.sociologicalConcept.slice(0, 48)}`,
+      scenario: `[PRÓ]: ${q.prompt}\n\n[CONTRA]: ${debateConfig.contraQuestions[idx]?.prompt || ""}`,
+      clue: q.researchHint,
+      options: [
+        { text: "Pesquisa Dissertativa Pró / Contra + Avaliação por Jurados", isCorrect: true, pointsWeight: 10, feedback: "Questão norteadora registrada no dossiê do grupo.", iconEmoji: "🎙️" },
+        { text: "Aguardando submissão da bancada", isCorrect: false, pointsWeight: 0, feedback: "Preencha a pesquisa no modo Debate.", iconEmoji: "⏳" },
       ],
+    }));
+
+    return {
+      introText: `🎙️ DEBATE SOCIOLÓGICO SEM PAPEL — "${safeTopic}" (${safeSubject})
+1) INSCRIÇÃO DE PAPÉIS: Alunos se dividem entre Bancada PRÓ, Bancada CONTRA e 3 JURADOS.
+2) PESQUISA NORTEADORA: 6 questões dissertativas para a Bancada Pró e 6 questões dissertativas para a Bancada Contra.
+3) SÍNTESE DA IA: Ao concluir a pesquisa, a IA gera 3 resumos exclusivos (Pró, Contra e Guia dos Jurados) visíveis para todos do grupo.
+4) DEBATE EM SALA & PARECER: O professor controla o Timer (Exposição, Réplica, Tréplica e Considerações Finais) e os Jurados preenchem os 2 Checklists.`,
+      stages: stagesFromDebate,
+      debateConfig,
     };
   }
 
-  // Fallback completo de 6 estágios para qualquer outra modalidade usando o roteiro do professor
   const stages: GameStage[] = Array.from({ length: 6 }).map((_, idx) => {
-    const scriptSegment = scriptLines[idx] || `Análise estratégica e sociológica — Etapa ${idx + 1} sobre ${safeTopic}`;
+    const scriptSegment = scriptLines[idx] || `Análise Sociológica — Etapa ${idx + 1} sobre ${safeTopic}`;
     return {
       id: `stage-${idx + 1}`,
       title: `Fase ${idx + 1}: ${scriptSegment.slice(0, 52)}`,
-      scenario: `[Desafio ${idx + 1} • Teoria dos Jogos & Sociologia] ${scriptSegment}. Considerando o tema "${safeTopic}", qual decisão produz o melhor resultado coletivo e conceitual?`,
-      clue: "Pista Estratégica: Analise as relações de poder, cooperação e consequências estruturais antes de decidir.",
+      scenario: `[Investigação Sociológica ${idx + 1}] ${scriptSegment}. Considerando o tema "${safeTopic}", qual interpretação sociológica explica este fenômeno com rigor?`,
+      clue: "Dica Sociológica: Analise as estruturas sociais, relações de poder, cultura e cidadania.",
       options: [
         {
-          text: `Aplicar a análise crítica e cooperativa fundamentada nos conceitos de ${safeSubject} sobre ${safeTopic}.`,
+          text: `Compreender o fenômeno a partir das estruturas históricas, relações sociais e conceitos de ${safeSubject} sobre ${safeTopic}.`,
           isCorrect: true,
           pointsWeight: 10,
-          feedback: "Decisão estratégica correta! Você articulou teoria e realidade social com precisão.",
+          feedback: "Excelente análise sociológica! Você conectou teoria e realidade social com precisão.",
           iconEmoji: "🎯",
         },
         {
-          text: "Adotar uma visão imediatista e individualista que ignora o contexto histórico e coletivo.",
+          text: "Reduzir o fenômeno a opiniões isoladas do senso comum sem considerar o contexto histórico e social.",
           isCorrect: false,
           pointsWeight: 0,
-          feedback: "Atenção: Na Teoria dos Jogos aplicada à vida social, ignorar o coletivo gera perdas para todos os atores.",
+          feedback: "Atenção: A Sociologia supera o senso comum ao investigar causas estruturais e coletivas.",
           iconEmoji: "❌",
         },
       ],
       pneMildStage: {
-        scenario: `Etapa ${idx + 1} sobre ${safeTopic}: qual caminho ajuda toda a comunidade?`,
+        scenario: `Etapa ${idx + 1} sobre ${safeTopic}: como a Sociologia explica esta situação?`,
         options: [
-          { text: "Compreender a realidade, dialogar e agir em cooperação", isCorrect: true, feedback: "Muito bem! Você acertou em cheio!" },
-          { text: "Agir sem pensar nas outras pessoas da sociedade", isCorrect: false, feedback: "Pense em como ajudar a comunidade." },
+          { text: "Analisando a história, a sociedade e os direitos de todos", isCorrect: true, feedback: "Muito bem! Você acertou em cheio!" },
+          { text: "Olhando apenas opiniões sem pesquisar a realidade", isCorrect: false, feedback: "Na Sociologia, sempre pesquisamos a realidade coletiva." },
         ],
       },
       pneSevereStage: {
-        playfulPrompt: "Toque no cartão que mostra sabedoria e união:",
+        playfulPrompt: "Toque no cartão que mostra pesquisa e união social:",
         visualCards: [
-          { iconEmoji: "🌟", label: "Sabedoria e União", isCorrect: true, feedback: "Parabéns! Escolha perfeita!" },
-          { iconEmoji: "🛑", label: "Parado", isCorrect: false, feedback: "Toque na estrela brilhante!" },
+          { iconEmoji: "🌟", label: "Sociedade e Direitos", isCorrect: true, feedback: "Parabéns! Escolha perfeita!" },
+          { iconEmoji: "🛑", label: "Isolamento", isCorrect: false, feedback: "Toque na estrela brilhante!" },
           { iconEmoji: "⚡", label: "Conflito", isCorrect: false, feedback: "Escolha o cartão da estrela!" },
         ],
       },
@@ -299,7 +220,7 @@ function generateFallbackInteractiveData(payload: RequestPayload): GameData {
   });
 
   return {
-    introText: `🎮 Missão KronoGames (${safeSubject}): "${title || safeTopic}". Superem as 6 fases estratégicas baseadas em Teoria dos Jogos e tomada de decisão coletiva!`,
+    introText: `🎮 Missão KronoGames de ${safeSubject}: "${title || safeTopic}". Superem as 6 etapas de investigação sociológica baseadas no roteiro da aula!`,
     stages,
   };
 }
@@ -331,93 +252,225 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Modelos reais e ativos na API Gemini
     const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
     let generatedText: string | null = null;
-
-    const isAee = mode === "adapted_aee";
-    const isUppercase = Boolean(aeePromptSettings?.uppercaseText);
     const creativeSeed = `SEED-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 
+    // Ramo específico para DEBATE SEM PAPEL (Sociologia Pura: 6 Questões Pró + 6 Questões Contra + 2 Checklists de Jurados)
+    if (mode === "krono_game" && gameMode === "debate_paperless") {
+      const debatePrompt = `Você é um Professor Doutor em Sociologia e Arquiteto Pedagógico do Ensino Médio.
+SEMENTE CRIATIVA ÚNICA: ${creativeSeed}
+Sua missão é estruturar uma atividade completa de DEBATE SOCIOLÓGICO SEM PAPEL sobre:
+- Título: "${title}"
+- Tema Central: "${topic}"
+- Disciplina: "${subject}"
+- Roteiro Prévio do Professor (OBRIGATÓRIO SEGUIR INTEGRALMENTE):
+"""
+${supportMaterial || "Explore autores clássicos e contemporâneos da Sociologia (como Hannah Arendt, Gramsci, Durkheim, Weber, Marx, Bourdieu, Foucault) aplicados à realidade brasileira."}
+"""
+
+COMO FUNCIONA O DEBATE:
+1. Os alunos se dividem em Bancada PRÓ, Bancada CONTRA e 3 JURADOS.
+2. Crie EXATAMENTE 6 questões dissertativas norteadoras para o grupo PRÓ pesquisar (focadas em fundamentar a tese favorável com conceitos sociológicos e dados reais).
+3. Crie EXATAMENTE 6 questões dissertativas norteadoras para o grupo CONTRA pesquisar (focadas em fundamentar o contraponto crítico, tensões estruturais e dados empíricos).
+4. Crie um texto orientador inicial para os 3 Jurados ("jurorInitialGuide") e EXATAMENTE 6 critérios claros de avaliação ("checklistCriteria") que serão usados nos 2 Checklists (Cumpriu / Não Cumpriu) para julgar os lados Pró e Contra.
+5. NÃO mencione "Teoria dos Jogos". Use exclusivamente referencial de SOCIOLOGIA.
+
+Retorne EXCLUSIVAMENTE um JSON válido no formato exato abaixo:
+{
+  "introText": "Texto apresentando o tema sociológico do debate, a divisão entre Bancada Pró, Bancada Contra e 3 Jurados, a etapa de pesquisa norteadora e o debate ao vivo com cronômetro.",
+  "proQuestions": [
+    {
+      "id": "pro_q_1",
+      "number": 1,
+      "side": "pro",
+      "sociologicalConcept": "Nome do conceito ou autor sociológico do eixo 1",
+      "prompt": "Pergunta dissertativa norteadora 1 para orientar a pesquisa da Bancada PRÓ...",
+      "researchHint": "Dica prática do que os alunos do grupo Pró devem pesquisar e citar..."
+    }
+  ],
+  "contraQuestions": [
+    {
+      "id": "contra_q_1",
+      "number": 1,
+      "side": "contra",
+      "sociologicalConcept": "Nome do conceito ou tensão sociológica do eixo 1",
+      "prompt": "Pergunta dissertativa norteadora 1 para orientar a pesquisa da Bancada CONTRA...",
+      "researchHint": "Dica prática do que os alunos do grupo Contra devem pesquisar e problematizar..."
+    }
+  ],
+  "jurorInitialGuide": "Orientação sociológica clara para os 3 jurados sobre o que observar nas teses Pró e Contra.",
+  "checklistCriteria": [
+    {
+      "id": "chk_1",
+      "number": 1,
+      "criterion": "Título curto do critério 1",
+      "description": "Pergunta direta para o jurado marcar Cumpriu ou Não Cumpriu..."
+    }
+  ]
+}`;
+
+      for (const model of modelsToTry) {
+        try {
+          const response = await ai.models.generateContent({
+            model,
+            contents: [{ role: "user", parts: [{ text: debatePrompt }] }],
+            config: {
+              responseMimeType: "application/json",
+              temperature: 0.85,
+            },
+          });
+          if (response && response.text) {
+            generatedText = response.text;
+            break;
+          }
+        } catch (err: any) {
+          if (isGeminiAuthError(err)) break;
+          console.warn(`[Debate Generator] Falha no modelo ${model}:`, err?.message || err);
+        }
+      }
+
+      if (generatedText) {
+        try {
+          const cleaned = generatedText.replace(/^\`\`\`json\s*/i, "").replace(/\s*\`\`\`$/i, "").trim();
+          const parsed = JSON.parse(cleaned);
+          const fallbackCfg = buildFallbackDebateConfig(topic, subject, supportMaterial);
+
+          const proQuestions = Array.isArray(parsed.proQuestions) && parsed.proQuestions.length > 0
+            ? parsed.proQuestions.slice(0, 6).map((q: any, i: number) => ({
+                id: `pro_q_${i + 1}`,
+                number: i + 1,
+                side: "pro" as const,
+                sociologicalConcept: q.sociologicalConcept || `Eixo Sociológico ${i + 1}`,
+                prompt: q.prompt || fallbackCfg.proQuestions[i].prompt,
+                researchHint: q.researchHint || fallbackCfg.proQuestions[i].researchHint,
+              }))
+            : fallbackCfg.proQuestions;
+
+          const contraQuestions = Array.isArray(parsed.contraQuestions) && parsed.contraQuestions.length > 0
+            ? parsed.contraQuestions.slice(0, 6).map((q: any, i: number) => ({
+                id: `contra_q_${i + 1}`,
+                number: i + 1,
+                side: "contra" as const,
+                sociologicalConcept: q.sociologicalConcept || `Eixo Crítico ${i + 1}`,
+                prompt: q.prompt || fallbackCfg.contraQuestions[i].prompt,
+                researchHint: q.researchHint || fallbackCfg.contraQuestions[i].researchHint,
+              }))
+            : fallbackCfg.contraQuestions;
+
+          const checklistCriteria = Array.isArray(parsed.checklistCriteria) && parsed.checklistCriteria.length > 0
+            ? parsed.checklistCriteria.slice(0, 6).map((c: any, i: number) => ({
+                id: `chk_${i + 1}`,
+                number: i + 1,
+                criterion: c.criterion || fallbackCfg.checklistCriteria[i].criterion,
+                description: c.description || fallbackCfg.checklistCriteria[i].description,
+              }))
+            : fallbackCfg.checklistCriteria;
+
+          const debateConfig: DebateConfig = {
+            maxJurors: 3,
+            proQuestions,
+            contraQuestions,
+            checklistCriteria,
+            jurorInitialGuide: parsed.jurorInitialGuide || fallbackCfg.jurorInitialGuide,
+            participants: [],
+            proAnswers: {},
+            contraAnswers: {},
+            proResearchCompleted: false,
+            contraResearchCompleted: false,
+            jurorVerdicts: [],
+            gradingMode: "group",
+          };
+
+          const stages: GameStage[] = proQuestions.map((pq: any, idx: number) => {
+            const cq = contraQuestions[idx] || pq;
+            return {
+              id: `stage-${idx + 1}`,
+              title: `Eixo ${idx + 1}: ${pq.sociologicalConcept}`,
+              scenario: `[PESQUISA PRÓ #${idx + 1}]: ${pq.prompt}\n\n[PESQUISA CONTRA #${idx + 1}]: ${cq.prompt}`,
+              clue: `Dica Pró: ${pq.researchHint} | Dica Contra: ${cq.researchHint}`,
+              options: [
+                { text: `Questão Norteadora Pró #${idx + 1}: ${pq.prompt}`, isCorrect: true, pointsWeight: 10, feedback: pq.researchHint, iconEmoji: "🟢" },
+                { text: `Questão Norteadora Contra #${idx + 1}: ${cq.prompt}`, isCorrect: true, pointsWeight: 10, feedback: cq.researchHint, iconEmoji: "🔴" },
+              ],
+            };
+          });
+
+          return NextResponse.json({
+            gameData: {
+              introText: parsed.introText || `Debate Sociológico Sem Papel sobre "${topic}".`,
+              stages,
+              debateConfig,
+            },
+            isFallback: false,
+          });
+        } catch (parseErr) {
+          console.warn("[Debate Generator] Erro ao parsear JSON do debate:", parseErr);
+        }
+      }
+
+      const fallbackData = generateFallbackInteractiveData(payload);
+      return NextResponse.json({ gameData: fallbackData, isFallback: true });
+    }
+
+    // Demais modalidades (AEE e Jogos Sociológicos)
+    const isAee = mode === "adapted_aee";
+    const isUppercase = Boolean(aeePromptSettings?.uppercaseText);
+
     const gameModeInstructions: Record<string, string> = {
-      millionaire: "ARENA DO MILHÃO & TEORIA DOS JOGOS: Crie 6 rodadas progressivas de tomada de decisão sob incerteza, onde cada pergunta exige articular o roteiro do professor com dilemas reais de cooperação vs competição.",
-      dialectic_tribunal: "TRIBUNAL DIALÉTICO & TEORIA DOS JOGOS: Crie 6 casos de julgamento crítico onde os alunos atuam como juízes e estrategistas, analisando teses em conflito, equilíbrio de poder, hegemonia e falácias.",
-      structural_detective: "DETETIVE ESTRUTURAL & TEORIA DOS JOGOS: Crie 6 cenas de investigação sociológica onde pistas empíricas revelam mecanismos invisíveis de poder, ideologia e interesses dos atores sociais.",
-      rpg_campaign: "CRÔNICAS DA PÓLIS (RPG DE TEORIA DOS JOGOS): Crie 6 capítulos interligados onde o aluno vive um protagonista diante de dilemas estratégicos (Dilema do Prisioneiro, Tragédia dos Comuns, Contrato Social, Ação Coletiva).",
-      real_life_lab: "LABORATÓRIO DA VIDA REAL & TEORIA DOS JOGOS: Crie 6 simulações práticas do cotidiano brasileiro onde escolhas individuais e coletivas geram impactos diretos na comunidade.",
-      debate_paperless: `ESTRUTURA DO DEBATE SEM PAPEL & TEORIA DOS JOGOS:
-Estruture os 6 estágios guiando um Debate Sem Papel completo sobre o tema e roteiro do professor:
-- Estágio 1 (Bancadas Pró e Contra - Preparação Digital): Argumentos centrais, dados e conceitos para o documento colaborativo do Grupo Pró e do Grupo Contra.
-- Estágio 2 (Exposição Inicial & Cronômetro KronoMestre): Tese central e defesa inicial sob controle de tempo projetado em sala.
-- Estágio 3 (Interação Q&A da Plateia): Dilema ou pergunta crítica enviada anonimamente pela plateia pelo celular para desafiar os debatedores.
-- Estágio 4 (Réplica, Tréplica & Equilíbrio de Nash): Confronto direto de evidências, superação de senso comum e refutação fundamentada.
-- Estágio 5 (Audiência Analítica - Avaliação Digital): Critérios de julgamento (Qualidade dos argumentos, Respeito ao tempo e Uso de dados) aplicados ao tema.
-- Estágio 6 (Registro Final & Portfólio - Infográfico Canva / Mini-Podcast): Síntese conclusiva do debate para registro pedagógico formal.`,
+      millionaire: "ARENA DO MILHÃO DE SOCIOLOGIA: Crie 6 rodadas progressivas de análise sociológica baseadas integralmente no roteiro do professor.",
+      dialectic_tribunal: "TRIBUNAL DIALÉTICO DE SOCIOLOGIA: Crie 6 casos de julgamento sociológico analisando teses em conflito, relações de poder, hegemonia e direitos humanos.",
+      structural_detective: "DETETIVE ESTRUTURAL DE SOCIOLOGIA: Crie 6 cenas de investigação sociológica onde indícios empíricos revelam estruturas sociais, desigualdades e instituições.",
+      rpg_campaign: "CRÔNICAS DA PÓLIS (RPG SOCIOLÓGICO): Crie 6 capítulos onde o estudante toma decisões éticas, políticas e cidadãs diante de problemas reais da comunidade.",
+      real_life_lab: "LABORATÓRIO DA VIDA REAL (SOCIOLOGIA APLICADA): Crie 6 simulações práticas do cotidiano brasileiro conectando conceitos sociológicos à vida dos jovens.",
     };
 
     const systemPrompt = isAee
-      ? `Você é um Arquiteto Pedagógico Mestre e Game Designer de Educação Especial (AEE) no Ensino Médio.
-SEMENTE CRIATIVA ÚNICA (NUNCA REPITA JOGOS ANTERIORES): ${creativeSeed}
-Sua missão é criar uma atividade interativa completa de 6 ESTÁGIOS INÉDITOS E ALTAMENTE CRIATIVOS em JSON sobre:
-- Tema: "${topic}" (${subject})
-- Título: "${title}"
-- Mecânica Inclusiva: "${aeeMechanic}"
-- Roteiro / Material de Apoio do Professor (USE INTEGRALMENTE):
+      ? `Você é um Arquiteto Pedagógico Mestre de Educação Especial (AEE) em Sociologia.
+SEMENTE CRIATIVA: ${creativeSeed}
+Crie 6 estágios inéditos sobre "${topic}" (${subject}) - Título: "${title}" - Mecânica: "${aeeMechanic}".
+Roteiro do Professor:
 """
-${supportMaterial || "Explore exemplos práticos e visuais do cotidiano dos estudantes."}
+${supportMaterial || "Exemplos práticos do cotidiano escolar e comunitário."}
 """
-
-DIRETRIZES COGNITIVAS:
-- Linguagem clara, acolhedora e objetiva (${aeePromptSettings?.literalLanguage ? "100% literal" : "acessível"}).
-- Frases diretas (${aeePromptSettings?.cognitiveReduction ? "redução cognitiva ativa" : "bem estruturadas"}).
-- Caixa alta: ${isUppercase ? "ESCREVA TODOS OS TEXTOS EM LETRAS MAIÚSCULAS" : "Normal"}.
-- Varie os cenários, personagens, situações do cotidiano e emojis em cada geração. Nunca gere textos genéricos repetidos!`
-      : `Você é um Game Designer Pedagógico Sênior especialista em Sociologia, Filosofia e Teoria dos Jogos para o Ensino Médio.
-SEMENTE CRIATIVA ÚNICA (PROIBIDO REPETIR JOGOS): ${creativeSeed}
-Transforme o tema "${topic}" da disciplina "${subject}" (Título: "${title}") em uma ATIVIDADE COMPLETA E INÉDITA DE 6 ESTÁGIOS!
-
-MODALIDADE ESCOLHIDA:
-${gameModeInstructions[gameMode] || gameModeInstructions.millionaire}
-
-ROTEIRO PRÉVIO / TEXTO BASE FORNECIDO PELO PROFESSOR (OBRIGATÓRIO SEGUIR E DESENVOLVER INTEGRALMENTE NAS 6 FASES):
+Caixa alta: ${isUppercase ? "SIM, TUDO EM MAIÚSCULAS" : "Normal"}.`
+      : `Você é um Professor Doutor em Sociologia e Game Designer Pedagógico do Ensino Médio.
+SEMENTE CRIATIVA ÚNICA: ${creativeSeed}
+Transforme o tema "${topic}" da disciplina "${subject}" (Título: "${title}") em uma atividade de 6 ESTÁGIOS INÉDITOS baseada exclusivamente em SOCIOLOGIA!
+Modalidade: ${gameModeInstructions[gameMode] || gameModeInstructions.millionaire}
+Roteiro Prévio do Professor (OBRIGATÓRIO SEGUIR INTEGRALMENTE NAS 6 FASES):
 """
-${supportMaterial || "Desenvolva os conceitos clássicos e contemporâneos do tema com aplicação à realidade social brasileira e dilemas de Teoria dos Jogos."}
-"""
+${supportMaterial || "Desenvolva os conceitos sociológicos do tema aplicados à realidade brasileira."}
+"""`;
 
-REGRAS DE OURO:
-1. Crie TODOS os 6 estágios completos, profundos e diretamente baseados no roteiro do professor.
-2. Em cada estágio, inclua 4 alternativas ricas em "options" (1 correta com pointsWeight: 10 e 3 distratores plausíveis com pointsWeight: 0 e feedback explicativo detalhado).
-3. Aplique conceitos de Teoria dos Jogos (escolhas estratégicas, dilemas de cooperação, incentivos sociais, hegemonia, ação coletiva) conectados aos autores e temas do roteiro.
-4. Em TODOS os 6 estágios, preencha também "pneMildStage" (2 opções adaptadas) e "pneSevereStage" (3 cartões visuais) para o Co-Op Inclusivo automático em sala.`;
-
-    const prompt = `Retorne EXCLUSIVAMENTE um objeto JSON válido contendo EXATAMENTE 6 estágios ("stage-1" a "stage-6") com a estrutura abaixo:
+    const prompt = `Retorne EXCLUSIVAMENTE um JSON válido com 6 estágios ("stage-1" a "stage-6"):
 {
-  "introText": "Texto de abertura completo apresentando a missão, o contexto do roteiro do professor e as regras estratégicas.",
+  "introText": "Texto de abertura apresentando o contexto sociológico e o roteiro do professor.",
   "stages": [
     {
       "id": "stage-1",
-      "title": "Título específico e criativo da Fase 1",
-      "scenario": "Contextualização rica, dilema ou questão completa baseada no roteiro do professor...",
-      "clue": "Pista teórica/estratégica conectando o autor ou conceito do roteiro...",
+      "title": "Título da Fase 1",
+      "scenario": "Contextualização e questão sociológica baseada no roteiro do professor...",
+      "clue": "Pista teórica conectando autor ou conceito sociológico...",
       "options": [
-        { "text": "Alternativa correta fundamentada...", "isCorrect": true, "pointsWeight": 10, "feedback": "Explicação pedagógica detalhada do acerto...", "iconEmoji": "🎯" },
-        { "text": "Distrator plausível 1...", "isCorrect": false, "pointsWeight": 0, "feedback": "Explicação de por que esta estratégia falha...", "iconEmoji": "❌" },
-        { "text": "Distrator plausível 2...", "isCorrect": false, "pointsWeight": 0, "feedback": "Explicação conceitual...", "iconEmoji": "⚠️" },
-        { "text": "Distrator plausível 3...", "isCorrect": false, "pointsWeight": 0, "feedback": "Explicação conceitual...", "iconEmoji": "🔎" }
+        { "text": "Alternativa correta fundamentada na Sociologia...", "isCorrect": true, "pointsWeight": 10, "feedback": "Explicação sociológica detalhada...", "iconEmoji": "🎯" },
+        { "text": "Distrator plausível 1...", "isCorrect": false, "pointsWeight": 0, "feedback": "Explicação...", "iconEmoji": "❌" },
+        { "text": "Distrator plausível 2...", "isCorrect": false, "pointsWeight": 0, "feedback": "Explicação...", "iconEmoji": "⚠️" },
+        { "text": "Distrator plausível 3...", "isCorrect": false, "pointsWeight": 0, "feedback": "Explicação...", "iconEmoji": "🔎" }
       ],
       "pneMildStage": {
-        "scenario": "Pergunta direta e clara sobre o mesmo conceito da fase...",
+        "scenario": "Pergunta adaptada direta sobre o mesmo conceito...",
         "options": [
-          { "text": "Opção correta clara...", "isCorrect": true, "feedback": "Elogio e explicação simples..." },
-          { "text": "Opção incorreta...", "isCorrect": false, "feedback": "Dica acolhedora..." }
+          { "text": "Opção correta...", "isCorrect": true, "feedback": "Explicação acolhedora..." },
+          { "text": "Opção incorreta...", "isCorrect": false, "feedback": "Dica simples..." }
         ]
       },
       "pneSevereStage": {
-        "playfulPrompt": "Comando lúdico visual...",
+        "playfulPrompt": "Comando visual...",
         "visualCards": [
-          { "iconEmoji": "🤝", "label": "Conceito Correto", "isCorrect": true, "feedback": "Feedback positivo..." },
-          { "iconEmoji": "🛑", "label": "Distrator 1", "isCorrect": false, "feedback": "Dica visual..." },
-          { "iconEmoji": "⚡", "label": "Distrator 2", "isCorrect": false, "feedback": "Dica visual..." }
+          { "iconEmoji": "🤝", "label": "Conceito Correto", "isCorrect": true, "feedback": "Muito bem!" },
+          { "iconEmoji": "🛑", "label": "Distrator 1", "isCorrect": false, "feedback": "Tente novamente!" },
+          { "iconEmoji": "⚡", "label": "Distrator 2", "isCorrect": false, "feedback": "Observe o primeiro cartão!" }
         ]
       }
     }
@@ -431,7 +484,7 @@ REGRAS DE OURO:
           contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${prompt}` }] }],
           config: {
             responseMimeType: "application/json",
-            temperature: 0.95,
+            temperature: 0.9,
           },
         });
 
@@ -447,21 +500,14 @@ REGRAS DE OURO:
 
     if (generatedText) {
       try {
-        const cleaned = generatedText
-          .replace(/^\`\`\`json\s*/i, "")
-          .replace(/\s*\`\`\`$/i, "")
-          .trim();
+        const cleaned = generatedText.replace(/^\`\`\`json\s*/i, "").replace(/\s*\`\`\`$/i, "").trim();
         const parsed: GameData = JSON.parse(cleaned);
-
         if ((parsed as any).submissions) delete (parsed as any).submissions;
         if ((parsed as any).students) delete (parsed as any).students;
         if ((parsed as any).grades) delete (parsed as any).grades;
 
         if (parsed && Array.isArray(parsed.stages) && parsed.stages.length > 0) {
-          return NextResponse.json({
-            gameData: parsed,
-            isFallback: false,
-          });
+          return NextResponse.json({ gameData: parsed, isFallback: false });
         }
       } catch (parseErr) {
         console.warn("[Generate Interactive] Erro ao parsear resposta da IA:", parseErr);
