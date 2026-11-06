@@ -114,6 +114,22 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
   const [gameTopic, setGameTopic] = useState('');
   const [gameMaterial, setGameMaterial] = useState('');
   const [selectedGameMode, setSelectedGameMode] = useState<GameMode>('millionaire');
+
+  // Limpa ou ajusta o texto base ao alternar o modo de jogo
+  const handleSelectGameMode = (mode: GameMode) => {
+    setSelectedGameMode(mode);
+    if (mode === 'debate_paperless') {
+      setGameMaterial(
+`ESTRUTURA DO DEBATE SEM PAPEL (KRONOMESTRE):
+1. Bancada Pró (Grupo): Pesquisa 6 questões norteadoras favoráveis (Peso 5).
+2. Bancada Contra (Grupo): Pesquisa 6 questões norteadoras críticas (Peso 5).
+3. Corpo de Jurados (Máx. 3): Recebem guia e avaliam com 2 Checklists.
+4. Fechamento: Painel Timer de Réplica/Tréplica e lançamento de nota individual ou em grupo.`
+      );
+    } else {
+      setGameMaterial('');
+    }
+  };
   const [deadline, setDeadline] = useState(getDefaultGameDeadlineString);
   const [bindingMode, setBindingMode] = useState<'standalone' | 'linked'>('standalone');
   const [linkedFormalActivityId, setLinkedFormalActivityId] = useState<string>('');
@@ -126,13 +142,13 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
 
   // Iniciar criação para Sala
   const handleOpenCreateClassroom = () => {
-    setSelectedGameMode('millionaire');
+    handleSelectGameMode('millionaire');
     setInternalTab('create_classroom');
   };
 
   // Iniciar criação para Casa
   const handleOpenCreateHomework = () => {
-    setSelectedGameMode('rpg_campaign');
+    handleSelectGameMode('rpg_campaign');
     setInternalTab('create_homework');
   };
 
@@ -448,7 +464,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                           className="flex-1 py-2 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
                         >
                           <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>Testar Jogo</span>
+                          <span>Simular como Aluno 👁️‍🗨️</span>
                         </button>
                       )}
 
@@ -551,7 +567,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <button
                     type="button"
-                    onClick={() => setSelectedGameMode('millionaire')}
+                    onClick={() => handleSelectGameMode('millionaire')}
                     className={`p-3.5 rounded-2xl border text-left space-y-1.5 transition-all cursor-pointer ${
                       selectedGameMode === 'millionaire'
                         ? 'bg-amber-500/20 border-amber-400 ring-2 ring-amber-400/30 text-white'
@@ -569,7 +585,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
 
                   <button
                     type="button"
-                    onClick={() => setSelectedGameMode('dialectic_tribunal')}
+                    onClick={() => handleSelectGameMode('dialectic_tribunal')}
                     className={`p-3.5 rounded-2xl border text-left space-y-1.5 transition-all cursor-pointer ${
                       selectedGameMode === 'dialectic_tribunal'
                         ? 'bg-cyan-500/20 border-cyan-400 ring-2 ring-cyan-400/30 text-white'
@@ -587,7 +603,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
 
                   <button
                     type="button"
-                    onClick={() => setSelectedGameMode('structural_detective')}
+                    onClick={() => handleSelectGameMode('structural_detective')}
                     className={`p-3.5 rounded-2xl border text-left space-y-1.5 transition-all cursor-pointer ${
                       selectedGameMode === 'structural_detective'
                         ? 'bg-emerald-500/20 border-emerald-400 ring-2 ring-emerald-400/30 text-white'
@@ -606,7 +622,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedGameMode('debate_paperless');
+                      handleSelectGameMode('debate_paperless');
                       if (!gameMaterial.trim()) {
                         setGameMaterial(
 `ESTRUTURA DO DEBATE SEM PAPEL (KRONOMESTRE):
@@ -641,7 +657,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={() => setSelectedGameMode('rpg_campaign')}
+                    onClick={() => handleSelectGameMode('rpg_campaign')}
                     className={`p-3.5 rounded-2xl border text-left space-y-1.5 transition-all cursor-pointer ${
                       selectedGameMode === 'rpg_campaign'
                         ? 'bg-purple-500/20 border-purple-400 ring-2 ring-purple-400/30 text-white'
@@ -659,7 +675,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
 
                   <button
                     type="button"
-                    onClick={() => setSelectedGameMode('real_life_lab')}
+                    onClick={() => handleSelectGameMode('real_life_lab')}
                     className={`p-3.5 rounded-2xl border text-left space-y-1.5 transition-all cursor-pointer ${
                       selectedGameMode === 'real_life_lab'
                         ? 'bg-blue-500/20 border-blue-400 ring-2 ring-blue-400/30 text-white'
