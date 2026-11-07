@@ -116,19 +116,38 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
   const [selectedGameMode, setSelectedGameMode] = useState<GameMode>('millionaire');
 
   // Limpa ou ajusta o texto base ao alternar o modo de jogo
+  const MODE_DEFAULT_GUIDELINES: Record<GameMode, { label: string; guideline: string }> = {
+    millionaire: {
+      label: 'Arena do Milhão Sociológica',
+      guideline: 'ROTEIRO ARENA DO MILHÃO (SOCIOLOGIA):\nElabore 6 rodadas progressivas de análise sociológica conectando conceitos clássicos e contemporâneos à realidade brasileira.',
+    },
+    dialectic_tribunal: {
+      label: 'Tribunal Dialético de Sociologia',
+      guideline: 'ROTEIRO TRIBUNAL DIALÉTICO (SOCIOLOGIA):\nEstruture 6 casos de julgamento sociológico analisando teses históricas, direitos humanos, relações de poder e desigualdades.',
+    },
+    structural_detective: {
+      label: 'Detetive Estrutural Sociológico',
+      guideline: 'ROTEIRO DETETIVE ESTRUTURAL (SOCIOLOGIA):\nCrie 6 cenas de investigação sociológica onde evidências do cotidiano revelam causas estruturais, instituições e ideologias.',
+    },
+    rpg_campaign: {
+      label: 'Crônicas da Pólis (RPG Sociológico)',
+      guideline: 'ROTEIRO CRÔNICAS DA PÓLIS (RPG):\nCrie 6 capítulos onde o estudante toma decisões éticas, políticas e cidadãs diante de problemas reais da comunidade.',
+    },
+    real_life_lab: {
+      label: 'Laboratório da Vida Real',
+      guideline: 'ROTEIRO LABORATÓRIO DA VIDA REAL:\nCrie 6 simulações práticas do cotidiano brasileiro aplicando teorias sociológicas a dilemas juvenis e comunitários.',
+    },
+    debate_paperless: {
+      label: 'Debate Sociológico Sem Papel',
+      guideline: 'ROTEIRO DO DEBATE SOCIOLÓGICO SEM PAPEL (18 QUESTÕES ISOLADAS POR GRUPO):\n1. Time PRÓ (Grupo): Recebe 6 questões dissertativas norteadoras favoráveis (isoladas).\n2. Time CONTRA (Grupo): Recebe 6 questões dissertativas norteadoras críticas (isoladas).\n3. Corpo de JURADOS (3 alunos): Recebe 6 questões preparatórias e 2 Checklists de julgamento.\n4. Pós-Pesquisa: A IA gera 1 resumo exclusivo para cada um dos 3 grupos.',
+    },
+  };
+
   const handleSelectGameMode = (mode: GameMode) => {
     setSelectedGameMode(mode);
-    if (mode === 'debate_paperless') {
-      setGameMaterial(
-`ESTRUTURA DO DEBATE SEM PAPEL (KRONOMESTRE):
-1. Bancada Pró (Grupo): Pesquisa 6 questões norteadoras favoráveis (Peso 5).
-2. Bancada Contra (Grupo): Pesquisa 6 questões norteadoras críticas (Peso 5).
-3. Corpo de Jurados (Máx. 3): Recebem guia e avaliam com 2 Checklists.
-4. Fechamento: Painel Timer de Réplica/Tréplica e lançamento de nota individual ou em grupo.`
-      );
-    } else {
-      setGameMaterial('');
-    }
+    setStagedGameData(null);
+    setIsReviewOpen(false);
+    setGameMaterial(MODE_DEFAULT_GUIDELINES[mode]?.guideline || '');
   };
   const [deadline, setDeadline] = useState(getDefaultGameDeadlineString);
   const [bindingMode, setBindingMode] = useState<'standalone' | 'linked'>('standalone');
@@ -210,7 +229,15 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
             ...(stagedGameData.debateConfig.contraQuestions || []).map((q, idx) => ({
               id: q.id || `contra_q_${idx + 1}`,
               type: 'essay' as const,
-              statement: `[BANCADA CONTRA • Questão Norteadora ${idx + 1} - ${q.sociologicalConcept}] ${q.prompt}\n💡 O que pesquisar: ${q.researchHint}`,
+              statement: `[TIME CONTRA • Questão Norteadora ${idx + 1} - ${q.sociologicalConcept}] ${q.prompt}\n💡 O que pesquisar: ${q.researchHint}`,
+              expectedAnswer: q.researchHint,
+              minCharacters: 50,
+              points: Number((5 / 6).toFixed(2)),
+            })),
+            ...(stagedGameData.debateConfig.jurorQuestions || []).map((q, idx) => ({
+              id: q.id || `juror_q_${idx + 1}`,
+              type: 'essay' as const,
+              statement: `[JURADOS • Questão Preparatória ${idx + 1} - ${q.sociologicalConcept}] ${q.prompt}\n💡 O que observar: ${q.researchHint}`,
               expectedAnswer: q.researchHint,
               minCharacters: 50,
               points: Number((5 / 6).toFixed(2)),
@@ -235,7 +262,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
 
     const newActivity: Activity = {
       id: `game_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      title: gameTitle.trim() || `[KronoGame] ${gameTopic || 'Missão Interativa'}`,
+      title: gameTitle.trim() || `[${MODE_DEFAULT_GUIDELINES[selectedGameMode]?.label || 'KronoGame'}] ${gameTopic || 'Sociologia'}`, 
       subject: teacher.subject || 'Sociologia',
       turma: targetTurma || turmasList.join(', ') || 'Todas',
       deadline,
@@ -881,7 +908,11 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                     <CheckCircle2 className="w-5 h-5" />
                   </span>
                   <div>
-                    <h3 className="text-base font-black text-white">Revisão Pré-Publicação das 6 Fases</h3>
+                    <h3 className="text-base font-black text-white">
+                      {selectedGameMode === 'debate_paperless'
+                        ? 'Revisão Pré-Publicação das 18 Questões Isoladas por Grupo (6 Pró + 6 Contra + 6 Jurados)'
+                        : `Revisão Pré-Publicação • ${MODE_DEFAULT_GUIDELINES[selectedGameMode]?.label || '6 Fases'}`}
+                    </h3>
                     <p className="text-xs text-slate-400">Edite enunciados e confira as rodadas adaptadas antes de publicar para os alunos.</p>
                   </div>
                 </div>
@@ -906,7 +937,85 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                 />
               </div>
 
-              {/* Fases */}
+              {/* Fases ou 18 Questões do Debate */}
+              {selectedGameMode === 'debate_paperless' && stagedGameData.debateConfig ? (
+                <div className="space-y-6 max-h-[540px] overflow-y-auto pr-1">
+                  {/* BLOCO 1: 6 QUESTÕES TIME PRÓ */}
+                  <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/40 space-y-3">
+                    <h4 className="text-xs font-black text-emerald-400 uppercase">
+                      📘 Grupo 1: 6 Questões Dissertativas Exclusivas para o TIME PRÓ (Questões 1 a 6)
+                    </h4>
+                    {stagedGameData.debateConfig.proQuestions.map((q, idx) => (
+                      <div key={q.id} className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
+                        <span className="text-[11px] font-black text-emerald-300">Questão Pró #{idx + 1} • {q.sociologicalConcept}</span>
+                        <textarea
+                          value={q.prompt}
+                          onChange={(e) => {
+                            const nextPro = [...stagedGameData.debateConfig!.proQuestions];
+                            nextPro[idx] = { ...nextPro[idx], prompt: e.target.value };
+                            setStagedGameData({
+                              ...stagedGameData,
+                              debateConfig: { ...stagedGameData.debateConfig!, proQuestions: nextPro },
+                            });
+                          }}
+                          rows={2}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* BLOCO 2: 6 QUESTÕES TIME CONTRA */}
+                  <div className="p-4 rounded-2xl bg-rose-950/20 border border-rose-500/40 space-y-3">
+                    <h4 className="text-xs font-black text-rose-400 uppercase">
+                      📕 Grupo 2: 6 Questões Dissertativas Exclusivas para o TIME CONTRA (Questões 7 a 12)
+                    </h4>
+                    {stagedGameData.debateConfig.contraQuestions.map((q, idx) => (
+                      <div key={q.id} className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
+                        <span className="text-[11px] font-black text-rose-300">Questão Contra #{idx + 1} • {q.sociologicalConcept}</span>
+                        <textarea
+                          value={q.prompt}
+                          onChange={(e) => {
+                            const nextContra = [...stagedGameData.debateConfig!.contraQuestions];
+                            nextContra[idx] = { ...nextContra[idx], prompt: e.target.value };
+                            setStagedGameData({
+                              ...stagedGameData,
+                              debateConfig: { ...stagedGameData.debateConfig!, contraQuestions: nextContra },
+                            });
+                          }}
+                          rows={2}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* BLOCO 3: 6 QUESTÕES CORPO DE JURADOS */}
+                  <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/40 space-y-3">
+                    <h4 className="text-xs font-black text-amber-400 uppercase">
+                      ⚖️ Grupo 3: 6 Questões Preparatórias Exclusivas para os 3 JURADOS (Questões 13 a 18)
+                    </h4>
+                    {(stagedGameData.debateConfig.jurorQuestions || []).map((q, idx) => (
+                      <div key={q.id} className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
+                        <span className="text-[11px] font-black text-amber-300">Questão Jurados #{idx + 1} • {q.sociologicalConcept}</span>
+                        <textarea
+                          value={q.prompt}
+                          onChange={(e) => {
+                            const nextJuror = [...(stagedGameData.debateConfig!.jurorQuestions || [])];
+                            nextJuror[idx] = { ...nextJuror[idx], prompt: e.target.value };
+                            setStagedGameData({
+                              ...stagedGameData,
+                              debateConfig: { ...stagedGameData.debateConfig!, jurorQuestions: nextJuror },
+                            });
+                          }}
+                          rows={2}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
               <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
                 {stagedGameData.stages.map((stg, sIdx) => (
                   <div key={stg.id || sIdx} className="p-4 bg-slate-800/80 rounded-2xl border border-slate-700 space-y-3">
@@ -983,6 +1092,8 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                   </div>
                 ))}
               </div>
+
+              )}
 
               {/* Botão Final de Publicação */}
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">

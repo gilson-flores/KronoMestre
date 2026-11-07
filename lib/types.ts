@@ -164,7 +164,7 @@ export type DebateRole = 'pro' | 'contra' | 'juror';
 export interface DebateGuidingQuestion {
   id: string;
   number: number;
-  side: 'pro' | 'contra';
+  side: 'pro' | 'contra' | 'juror';
   prompt: string;
   sociologicalConcept: string;
   researchHint: string;
@@ -197,7 +197,8 @@ export interface DebateJurorVerdict {
 export interface DebateConfig {
   maxJurors: number; // Padrão: 3 jurados
   proQuestions: DebateGuidingQuestion[]; // 6 questões dissertativas norteadoras Pró
-  contraQuestions: DebateGuidingQuestion[]; // 6 questões dissertativas norteadoras Contra
+  contraQuestions: DebateGuidingQuestion[];
+  jurorQuestions?: DebateGuidingQuestion[]; // 6 questões dissertativas norteadoras Contra
   checklistCriteria: DebateChecklistItem[]; // 6 itens para os 2 checklists (Pró e Contra)
   jurorInitialGuide: string;
   // Dados sincronizados de execução da turma

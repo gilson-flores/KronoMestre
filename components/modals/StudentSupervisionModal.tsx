@@ -81,10 +81,21 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
     const isPne = isStudentPNE(student);
 
     return activities.filter((act) => {
-      if (!canStudentAccessActivity(act.turma, student.turma)) return false;
       const adapted = isActivityAdapted(act);
-      if (isPne) return adapted || act.includedPneStudentIds?.includes(student.id);
-      return !adapted;
+      const targetIds = act.includedPneStudentIds || [];
+      const isExplicitlySelected =
+        targetIds.includes(student.id) ||
+        (Boolean(student.matricula) && targetIds.includes(student.matricula)) ||
+        (Boolean(student.fullName) && targetIds.includes(student.fullName));
+
+      if (adapted) {
+        if (!isPne) return false;
+        if (targetIds.length > 0) return isExplicitlySelected;
+        return canStudentAccessActivity(act.turma, student.turma);
+      }
+
+      if (!canStudentAccessActivity(act, student)) return false;
+      return true;
     });
   }, [activities, student]);
 

@@ -85,24 +85,20 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
   const [expandedActId, setExpandedActId] = useState<string | null>(null);
 
   const pneStudentsInTurma = useMemo(() => {
-    return (students || []).filter((s) => {
-      if (!isStudentPNE(s)) return false;
-      return isTurmaMatchedByFilter(s.turma, selectedTurmas, turmasList, 'student');
-    });
-  }, [students, selectedTurmas, turmasList]);
+    return (students || []).filter((s) => !s.isArchived && isStudentPNE(s));
+  }, [students]);
 
   const adaptedActivitiesList = useMemo(() => {
     return (activities || []).filter((act) => {
-      const adapted = isActivityAdapted(act) || act.activityDomain === 'adapted_aee';
+      const adapted = isActivityAdapted(act) || (act as any).activityDomain === 'adapted_aee';
       if (!adapted) return false;
-      if (!isTurmaMatchedByFilter(act.turma, selectedTurmas, turmasList, 'activity')) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         return act.title.toLowerCase().includes(q) || act.description.toLowerCase().includes(q);
       }
       return true;
     });
-  }, [activities, selectedTurmas, turmasList, searchQuery]);
+  }, [activities, searchQuery]);
 
   const regularActivitiesInTurma = useMemo(() => {
     return (activities || []).filter((act) => !isActivityAdapted(act) && act.activityDomain !== 'adapted_aee' && (selectedTurma === 'Todas' || act.turma === selectedTurma));
@@ -250,11 +246,11 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
       id: editingActivityId || `aee_${Date.now()}`,
       title: cleanTitle.startsWith('[AEE') ? cleanTitle : `[AEE Inclusiva] ${cleanTitle}`,
       subject: teacher?.subject || 'Educação Especial',
-      turma: selectedTurma === 'Todas' ? pneStudentsInTurma[0]?.turma || existingAct?.turma || 'Geral' : selectedTurma,
+      turma: 'AEE_EXCLUSIVO',
       deadline: aeeDeadline,
-      description: generatedGameData?.introText || existingAct?.description || 'Atividade adaptada de inclusão para os alunos PNE selecionados.',
+      description: generatedGameData?.introText || existingAct?.description || 'Atividade adaptada exclusiva para os alunos PNE selecionados.',
       supportMaterial: aeeMaterial || '',
-      type: 'Jogo Avaliativo',
+      type: 'Adaptação AEE',
       status: existingAct?.status || 'Ativo',
       maxGrade: existingAct?.maxGrade || 10,
       allowGroupWork: false,
@@ -263,10 +259,10 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
       isStandaloneAdaptation: bindingMode === 'standalone',
       adaptedFromId: bindingMode === 'linked' ? linkedParentId : undefined,
       adaptationType: (selectedMechanic === 'visual_cards' || selectedMechanic === 'social_story') ? 'severe_playful' : 'mild_moderate',
-      adaptationReason: `Adaptado via Construtor para ${selectedTargetIds.length} aluno(s)`,
+      adaptationReason: `Direcionado exclusivamente para ${selectedTargetIds.length} aluno(s) PNE`,
       aeeMechanic: selectedMechanic,
       aeePromptSettings: promptSettings,
-      isGameActivity: true,
+      isGameActivity: false,
       gameData: generatedGameData || existingAct?.gameData,
       submissions: existingAct?.submissions || [],
       totalSubmissions: existingAct?.totalSubmissions || 0,
@@ -328,13 +324,10 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
               </div>
             )}
             
-            <TurmaFilterDropdown
-              turmasList={turmasList}
-              selectedTurmas={selectedTurmas}
-              onChange={setSelectedTurmas}
-              students={students}
-              totalCountLabel="alunos"
-            />
+            <div className="px-3.5 py-2 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-2">
+              <Users className="w-4 h-4 text-amber-400" />
+              <span>Destinação Direta: {pneStudentsInTurma.length} Aluno(s) PNE Cadastrado(s)</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-1.5 p-1 bg-background rounded-2xl border border-border">
@@ -440,11 +433,11 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
                   }`}
                 >
                   <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-amber-400">
-                    <span>🃏 Mapa Visual Lúdico</span>
+                    <span>🎨 Somente Atividade Lúdica (Visual & Criativa)</span>
                     <span className="text-[10px] px-2 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-extrabold">Laudos Severos</span>
                   </div>
                   <p className="text-[11px] text-muted leading-snug">
-                    Cartões ilustrados gigantes. Seleciona alunos severos automaticamente.
+                    Cria exclusivamente dinâmicas lúdicas variadas (histórias sociais, associações visuais, missões ilustradas) para laudos severos.
                   </p>
                 </button>
 
@@ -458,11 +451,11 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
                   }`}
                 >
                   <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-primary">
-                    <span>⚡ Trilha de 2 Escolhas</span>
+                    <span>📘 Somente Atividade Proficiente (Redução Cognitiva)</span>
                     <span className="text-[10px] px-2 py-0.2 rounded-full bg-primary/20 text-primary font-extrabold">Leve / Moderado</span>
                   </div>
                   <p className="text-[11px] text-muted leading-snug">
-                    Apenas 2 alternativas. Seleciona alunos leves/TDAH automaticamente.
+                    Cria exclusivamente desafios adaptados objetivos (estudos de caso práticos, dilemas diretos) para laudos leves/moderados.
                   </p>
                 </button>
               </div>
@@ -507,7 +500,7 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
                             {st.fullName}
                           </span>
                           <span className={`text-[10px] truncate block ${isSevere ? 'text-rose-400' : 'text-primary'}`}>
-                            {st.pneConditions?.join(', ') || 'Laudo PNE'}
+                            Turma {st.turma} • Turma {st.turma} • {st.pneConditions?.join(', ') || 'Laudo PNE'}
                           </span>
                         </div>
                       </button>

@@ -77,6 +77,14 @@ function createDefaultDebateConfig(activity: Activity): DebateConfig {
       prompt: `[Questão Norteadora CONTRA #${idx + 1}] Sobre "${safeTopic}" (${lines[idx] || axis}): pesquise e redija argumentos críticos e evidências que sustentem o CONTRAPONTO da sua bancada.`,
       researchHint: 'Aponte tensões estruturais, limites práticos, relações de poder e dados que problematizem a tese.',
     })),
+    jurorQuestions: proAxes.map((axis, idx) => ({
+      id: `juror_q_${idx + 1}`,
+      number: idx + 1,
+      side: 'juror',
+      sociologicalConcept: lines[idx] ? lines[idx].slice(0, 55) : axis,
+      prompt: `[Questão Preparatória JURADOS #${idx + 1}] Sobre "${safeTopic}" (${lines[idx] || axis}): pesquise os fundamentos sociológicos e critérios de verificação para julgar com imparcialidade tanto a Bancada Pró quanto a Bancada Contra neste eixo.`,
+      researchHint: 'Identifique quais dados reais e conceitos sociológicos cada lado precisará comprovar na apresentação.',
+    })),
     checklistCriteria: [
       { id: 'chk_1', number: 1, criterion: 'Domínio Conceitual Sociológico', description: 'Utilizou corretamente conceitos e autores da Sociologia pertinentes ao tema?' },
       { id: 'chk_2', number: 2, criterion: 'Uso de Dados e Evidências Reais', description: 'Apresentou fatos históricos, estatísticas ou exemplos concretos da realidade brasileira?' },
@@ -643,8 +651,10 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
                   <div>
                     <h4 className="text-xs font-black text-cyan-300 uppercase tracking-wider">
                       {debateRole === 'contra'
-                        ? '📕 6 Questões Dissertativas Norteadoras • Bancada CONTRA (Peso 5)'
-                        : '📘 6 Questões Dissertativas Norteadoras • Bancada PRÓ (Peso 5)'}
+                        ? '📕 6 Questões Norteadoras Exclusivas • TIME CONTRA (Sigilo Total)'
+                        : debateRole === 'juror'
+                        ? '⚖️ 6 Questões Preparatórias Exclusivas • CORPO DE JURADOS (Sigilo Total)'
+                        : '📘 6 Questões Norteadoras Exclusivas • TIME PRÓ (Sigilo Total)'}
                     </h4>
                     <p className="text-xs text-slate-300 mt-0.5">
                       Preencha as 6 questões da sua bancada. Assim que concluir, clique no botão no final para a IA gerar os <strong>3 textos-resumo (Pró, Contra e Jurados)</strong> e avançar para a próxima etapa!
@@ -659,7 +669,12 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
 
                 {/* Seletor rápido caso o professor ou jurado queira ver tanto as 6 questões Pró quanto as 6 Contra */}
                 <div className="space-y-4 max-h-[430px] overflow-y-auto pr-1">
-                  {(debateRole === 'contra' ? debateState.contraQuestions : debateState.proQuestions).map(
+                  {(debateRole === 'contra'
+                    ? debateState.contraQuestions
+                    : debateRole === 'juror'
+                    ? debateState.jurorQuestions || debateState.proQuestions
+                    : debateState.proQuestions
+                  ).map(
                     (q: DebateGuidingQuestion, idx: number) => {
                       const sideKey = debateRole === 'contra' ? 'contra' : 'pro';
                       const currentVal =
@@ -734,51 +749,26 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
                   </button>
                 </div>
 
-                {/* Destaque para o resumo do grupo do aluno logado */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  {/* Resumo Grupo Pró */}
-                  <div className={`p-5 rounded-2xl border space-y-3 ${
-                    debateRole === 'pro' ? 'bg-emerald-950/25 border-emerald-400 ring-2 ring-emerald-400/20' : 'bg-slate-900 border-slate-800'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <h5 className="text-xs font-black text-emerald-400 uppercase">📘 1. Resumo da Bancada PRÓ</h5>
-                      {debateRole === 'pro' && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-black">Seu Grupo</span>
-                      )}
-                    </div>
-                    <div className="text-xs text-slate-200 whitespace-pre-wrap leading-relaxed bg-slate-950 p-3.5 rounded-xl border border-slate-800 max-h-[280px] overflow-y-auto">
-                      {debateState.proSummary || 'Clique em "Gerar Resumos com IA" após preencher as questões norteadoras para consolidar o texto da Bancada Pró.'}
-                    </div>
+                {/* ISOLAMENTO ESTRITO POR GRUPO: Cada time enxerga EXCLUSIVAMENTE o seu próprio resumo! */}
+                <div className="p-5 rounded-2xl bg-slate-900 border-2 border-cyan-500/40 space-y-3 shadow-xl">
+                  <div className="flex items-center justify-between">
+                    <h5 className="text-sm font-black text-cyan-300 uppercase">
+                      {debateRole === 'pro'
+                        ? '📘 Resumo Confidencial Exclusivo • TIME PRÓ (Visível apenas para integrantes Pró)'
+                        : debateRole === 'contra'
+                        ? '📕 Resumo Confidencial Exclusivo • TIME CONTRA (Visível apenas para integrantes Contra)'
+                        : '⚖️ Guia de Julgamento Confidencial • CORPO DE JURADOS (Visível apenas para os 3 Jurados)'}
+                    </h5>
+                    <span className="text-[10px] px-2.5 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-black uppercase">
+                      🔒 Isolado dos outros grupos
+                    </span>
                   </div>
-
-                  {/* Resumo Grupo Contra */}
-                  <div className={`p-5 rounded-2xl border space-y-3 ${
-                    debateRole === 'contra' ? 'bg-rose-950/25 border-rose-400 ring-2 ring-rose-400/20' : 'bg-slate-900 border-slate-800'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <h5 className="text-xs font-black text-rose-400 uppercase">📕 2. Resumo da Bancada CONTRA</h5>
-                      {debateRole === 'contra' && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500 text-slate-950 font-black">Seu Grupo</span>
-                      )}
-                    </div>
-                    <div className="text-xs text-slate-200 whitespace-pre-wrap leading-relaxed bg-slate-950 p-3.5 rounded-xl border border-slate-800 max-h-[280px] overflow-y-auto">
-                      {debateState.contraSummary || 'Clique em "Gerar Resumos com IA" após preencher as questões norteadoras para consolidar o texto da Bancada Contra.'}
-                    </div>
-                  </div>
-
-                  {/* Resumo Guia dos 3 Jurados */}
-                  <div className={`p-5 rounded-2xl border space-y-3 ${
-                    debateRole === 'juror' ? 'bg-amber-950/25 border-amber-400 ring-2 ring-amber-400/20' : 'bg-slate-900 border-slate-800'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <h5 className="text-xs font-black text-amber-400 uppercase">⚖️ 3. Resumo Guia dos JURADOS</h5>
-                      {debateRole === 'juror' && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black">Seu Papel</span>
-                      )}
-                    </div>
-                    <div className="text-xs text-slate-200 whitespace-pre-wrap leading-relaxed bg-slate-950 p-3.5 rounded-xl border border-slate-800 max-h-[280px] overflow-y-auto">
-                      {debateState.jurorGuideSummary || debateState.jurorInitialGuide}
-                    </div>
+                  <div className="text-xs sm:text-sm text-slate-100 whitespace-pre-wrap leading-relaxed bg-slate-950 p-4 rounded-xl border border-slate-800 max-h-[340px] overflow-y-auto">
+                    {debateRole === 'pro'
+                      ? debateState.proSummary || 'Conclua as 6 questões norteadoras na Aba 1 e clique em Gerar Resumos com IA para ver o dossiê exclusivo do Time Pró.'
+                      : debateRole === 'contra'
+                      ? debateState.contraSummary || 'Conclua as 6 questões norteadoras na Aba 1 e clique em Gerar Resumos com IA para ver o dossiê exclusivo do Time Contra.'
+                      : debateState.jurorGuideSummary || debateState.jurorInitialGuide}
                   </div>
                 </div>
 

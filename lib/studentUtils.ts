@@ -96,6 +96,14 @@ export const canStudentAccessActivity = (actOrActivityTurma: any, studentOrStude
     else if (studentOrStudentTurma && studentOrStudentTurma.turma) sTurma = studentOrStudentTurma.turma;
 
     const actList = aTurma.split(/[,;]+/).map((s: string) => s.trim().toLowerCase()).filter(Boolean);
+    if (actList.includes('aee_exclusivo')) {
+      // Se passou objetos, avalia pelo ID do aluno PNE; se passou apenas string de turma regular, bloqueia!
+      if (typeof actOrActivityTurma === 'object' && actOrActivityTurma && typeof studentOrStudentTurma === 'object' && studentOrStudentTurma) {
+        // segue para avaliação completa abaixo
+      } else {
+        return false;
+      }
+    }
     if (actList.length === 0) return true;
     if (actList.includes('todas')) return true;
     if (actList.includes('branco')) return true;
@@ -137,13 +145,15 @@ export const canStudentAccessActivity = (actOrActivityTurma: any, studentOrStude
 
   if (isAdapted) {
     if (!isStudentAdaptive) return false;
-    if (act.includedPneStudentIds && act.includedPneStudentIds.length > 0) {
+    const ids = act.includedPneStudentIds || [];
+    if (ids.length > 0) {
       const isTarget =
-        Boolean(act.includedPneStudentIds.includes(student.id)) ||
-        Boolean(student.matricula && act.includedPneStudentIds.includes(student.matricula)) ||
-        Boolean(student.fullName && act.includedPneStudentIds.includes(student.fullName));
-      if (!isTarget) return false;
+        Boolean(ids.includes(student.id)) ||
+        Boolean(student.matricula && ids.includes(student.matricula)) ||
+        Boolean(student.fullName && ids.includes(student.fullName));
+      return isTarget; // Retorna diretamente! Não depende de string de turma!
     }
+    return true;
   } else {
     if (isStudentAdaptive) {
       const hasSevere = student.pneConditions?.some(isSevereCondition);
@@ -440,8 +450,9 @@ export function isActivityRecovery(act?: Activity | null): boolean {
  */
 export function isActivityAdapted(act?: Activity | null): boolean {
   if (!act) return false;
-  if (act.isGameActivity || act.gameData || act.type === "Jogo Avaliativo" || act.isStandaloneAdaptation === false) return false;
-  if (act.activityDomain === "adapted_aee") return true;
+  if (act.activityDomain === "adapted_aee" || act.isAdapted === true || Boolean(act.adaptedFromId) || Boolean(act.adaptationType) || Boolean((act as any).aeeMechanic)) return true;
+  if (act.activityDomain === "interactive_game" || act.isGameActivity || act.type === "Jogo Avaliativo") return false;
+  if ((act as any).activityDomain === "adapted_aee") return true;
   if (act.isAdapted) return true;
   if (Boolean(act.adaptedFromId)) return true;
   if (Boolean(act.adaptationType)) return true;
