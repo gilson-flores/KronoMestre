@@ -38,7 +38,7 @@ import {
   GameStage,
   GameExecutionContext,
 } from '@/lib/types';
-import { getOriginalTurmas, getTurmaLabel, isActivityAdapted } , getLinkableActivitiesWithLabels } from '@/lib/studentUtils';
+import { getOriginalTurmas, getTurmaLabel, isActivityAdapted, getLinkableActivitiesWithLabels } from '@/lib/studentUtils';
 import { KronoIcon } from '@/components/ui/KronoIcon';
 import { TurmaFilterDropdown } from '@/components/TurmaFilterDropdown';
 
