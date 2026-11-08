@@ -1,12 +1,7 @@
 import { StudentUser, Activity, ActivitySubmission, ActivityQuestion } from './types';
 
-// O array fixo foi esvaziado para forçar escalabilidade.
-// O sistema agora extrairá as turmas de forma 100% dinâmica através da função getOriginalTurmas().
 export const DEFAULT_TURMAS: string[] = ["101", "102", "103", "104", "105", "106", "201", "202", "203", "204", "301", "302"];
 
-/**
- * Extracts school year (1º, 2º, 3º ano) from a turma string for strict ordering
- */
 export function getYearFromTurma(turma: string): number {
   if (!turma) return 999;
   const t = turma.trim();
@@ -17,10 +12,6 @@ export function getYearFromTurma(turma: string): number {
   return 999;
 }
 
-/**
- * Sorts turmas strictly by school year: 1st years first (101, 102, 104...),
- * then 2nd years (201, 202, 2001...), then 3rd years (301, 302, 3001...).
- */
 export function sortTurmas(turmas: string[]): string[] {
   return [...turmas].sort((a, b) => {
     const yearA = getYearFromTurma(a);
@@ -40,9 +31,6 @@ export function sortTurmas(turmas: string[]): string[] {
   });
 }
 
-/**
- * Extracts only original school classes from active registered students
- */
 export function getOriginalTurmas(students: StudentUser[] = []): string[] {
   const set = new Set<string>();
   students.forEach((s) => {
@@ -59,29 +47,18 @@ export function getOriginalTurmas(students: StudentUser[] = []): string[] {
   return sortTurmas(Array.from(set));
 }
 
-/**
- * Validates whether a turma string follows the standard format
- */
 export function isValidTurmaCode(turma: string): boolean {
   if (!turma) return false;
   const trimmed = turma.trim();
   return /^[1-9]$/.test(trimmed) || /^[1-9]\d{2}$/.test(trimmed) || /^[1-9]\d{3}$/.test(trimmed) || trimmed.length >= 2;
 }
 
-/**
- * Returns a clean representation for a turma code without parenthetical explanations
- */
 export function getTurmaLabel(turma: string): string {
   if (!turma) return '';
   return turma.trim();
 }
 
-/**
- * 🚨 HÍBRIDA MULTITENANT: Determines whether a student can access an activity.
- * Recebe objetos completos para Trava Multitenant, ou strings para compatibilidade de UI.
- */
 export const canStudentAccessActivity = (actOrActivityTurma: any, studentOrStudentTurma: any): boolean => {
-  // COMPATIBILIDADE: Se for chamado apenas com os textos
   let isLegacyString = false;
   if (typeof actOrActivityTurma === 'string') isLegacyString = true;
   if (typeof studentOrStudentTurma === 'string') isLegacyString = true;
@@ -96,14 +73,7 @@ export const canStudentAccessActivity = (actOrActivityTurma: any, studentOrStude
     else if (studentOrStudentTurma && studentOrStudentTurma.turma) sTurma = studentOrStudentTurma.turma;
 
     const actList = aTurma.split(/[,;]+/).map((s: string) => s.trim().toLowerCase()).filter(Boolean);
-    if (actList.includes('aee_exclusivo')) {
-      // Se passou objetos, avalia pelo ID do aluno PNE; se passou apenas string de turma regular, bloqueia!
-      if (typeof actOrActivityTurma === 'object' && actOrActivityTurma && typeof studentOrStudentTurma === 'object' && studentOrStudentTurma) {
-        // segue para avaliação completa abaixo
-      } else {
-        return false;
-      }
-    }
+    if (actList.includes('aee_exclusivo')) return false;
     if (actList.length === 0) return true;
     if (actList.includes('todas')) return true;
     if (actList.includes('branco')) return true;
@@ -121,37 +91,31 @@ export const canStudentAccessActivity = (actOrActivityTurma: any, studentOrStude
     });
   }
 
-  // NOVO FORMATO BLINDADO: Recebe os objetos completos
   const act = actOrActivityTurma as Activity;
   const student = studentOrStudentTurma as StudentUser;
 
   if (!act) return false;
   if (!student) return false;
 
-  // 🚨 1. TRAVA ABSOLUTA DE ISOLAMENTO MULTITENANT
   const actOwner = (act as any).ownerTeacherId;
   const stuOwner = (student as any).ownerTeacherId;
-  if (actOwner) {
-    if (stuOwner) {
-      if (actOwner !== stuOwner) return false;
-    }
+  if (actOwner && stuOwner && actOwner !== stuOwner) {
+    return false;
   }
 
-  // 2. STATUS DA ATIVIDADE: Desativar bloqueia apenas novos envios no portal do aluno, NUNCA o vínculo da turma/métricas
-
-  // 3. ATIVIDADES ADAPTADAS (PNE) vs REGULARES
   const isAdapted = isActivityAdapted(act);
   const isStudentAdaptive = isStudentPNE(student);
 
+  // ISOLAMENTO ABSOLUTO AEE: Nunca vaza para aluno regular; verifica apenas os alunos PNE selecionados
   if (isAdapted) {
     if (!isStudentAdaptive) return false;
     const ids = act.includedPneStudentIds || [];
     if (ids.length > 0) {
-      const isTarget =
+      return (
         Boolean(ids.includes(student.id)) ||
         Boolean(student.matricula && ids.includes(student.matricula)) ||
-        Boolean(student.fullName && ids.includes(student.fullName));
-      return isTarget; // Retorna diretamente! Não depende de string de turma!
+        Boolean(student.fullName && ids.includes(student.fullName))
+      );
     }
     return true;
   } else {
@@ -167,11 +131,11 @@ export const canStudentAccessActivity = (actOrActivityTurma: any, studentOrStude
     }
   }
 
-  // 4. LÓGICA DE TURMAS FLEXÍVEL
   const actTurmaStr = act.turma ? act.turma : '';
   const stuTurmaStr = student.turma ? student.turma : '';
-  
+
   const actListFinal = actTurmaStr.split(/[,;]+/).map((s) => s.trim().toLowerCase()).filter(Boolean);
+  if (actListFinal.includes('aee_exclusivo')) return false;
   if (actListFinal.length === 0) return true;
   if (actListFinal.includes('todas')) return true;
   if (actListFinal.includes('branco')) return true;
@@ -187,11 +151,8 @@ export const canStudentAccessActivity = (actOrActivityTurma: any, studentOrStude
       return actStr === studStr;
     });
   });
-}
+};
 
-/**
- * Checks if a student has PNE status (tag PNE)
- */
 export function isStudentPNE(student: StudentUser | { tag?: string; pneConditions?: string[] } | null | undefined): boolean {
   if (!student) return false;
   const tagUpper = student.tag ? String(student.tag).trim().toUpperCase() : '';
@@ -200,9 +161,6 @@ export function isStudentPNE(student: StudentUser | { tag?: string; pneCondition
   return false;
 }
 
-/**
- * Checks whether a given turma code or comma-separated list of turmas has at least one PNE student
- */
 export function doesTurmaHavePNEStudent(activityTurma: string | undefined, students: StudentUser[] | undefined): boolean {
   if (!students || students.length === 0) return false;
   if (!activityTurma) return false;
@@ -231,9 +189,6 @@ export function doesTurmaHavePNEStudent(activityTurma: string | undefined, stude
   });
 }
 
-/**
- * Verifica se uma condição PNE é severa (lúdica) ou leve/moderada
- */
 export function isSevereCondition(condition: string): boolean {
   if (!condition) return false;
   const lower = condition.toLowerCase().trim();
@@ -258,9 +213,6 @@ export interface AdaptationRecommendation {
   matchedStudents: Array<{ id: string; name: string; conditions: string[]; isSevere: boolean }>;
 }
 
-/**
- * Analisa as condições de alunos PNE e decide automaticamente a melhor modalidade de adaptação pedagógica.
- */
 export function getRecommendedAdaptationForClass(
   activityTurma: string | undefined,
   students: StudentUser[] | undefined
@@ -349,9 +301,6 @@ export function getRecommendedAdaptationForClass(
   };
 }
 
-/**
- * Calculates grade distribution: 50% Objetivas + 50% Dissertativas for mixed activities
- */
 export function getActivityGradeDistribution(activity: {
   maxGrade?: number;
   type?: string;
@@ -397,9 +346,6 @@ export function getActivityGradeDistribution(activity: {
   return { maxGrade, hasObjective, hasEssay, maxObjectiveGrade, maxEssayGrade, distributionLabel };
 }
 
-/**
- * Normalizes a student name
- */
 export function normalizeStudentName(name: string): string {
   if (!name) return '';
   return name
@@ -411,9 +357,6 @@ export function normalizeStudentName(name: string): string {
     .trim();
 }
 
-/**
- * Detailed validation for student full name input
- */
 export function validateStudentName(rawName: string): {
   isValid: boolean;
   normalized: string;
@@ -430,9 +373,6 @@ export function validateStudentName(rawName: string): {
   return { isValid: true, normalized, hasSpecialCharsRemoved: rawName.toUpperCase().trim() !== normalized };
 }
 
-/**
- * Verifica se uma atividade é Recuperação Paralela
- */
 export function isActivityRecovery(act?: Activity | null): boolean {
   if (!act) return false;
   if (act.isRecovery) return true;
@@ -445,20 +385,31 @@ export function isActivityRecovery(act?: Activity | null): boolean {
   return false;
 }
 
-/**
- * Verifica se uma atividade é Adaptação Pedagógica PNE
- */
 export function isActivityAdapted(act?: Activity | null): boolean {
   if (!act) return false;
-  if (act.activityDomain === "adapted_aee" || act.isAdapted === true || Boolean(act.adaptedFromId) || Boolean(act.adaptationType) || Boolean((act as any).aeeMechanic)) return true;
-  if (act.activityDomain === "interactive_game" || act.isGameActivity || act.type === "Jogo Avaliativo") return false;
-  if ((act as any).activityDomain === "adapted_aee") return true;
-  if (act.isAdapted) return true;
+  const anyAct = act as any;
+  if (anyAct.activityDomain === 'adapted_aee') return true;
+  if (act.isAdapted === true) return true;
   if (Boolean(act.adaptedFromId)) return true;
   if (Boolean(act.adaptationType)) return true;
-  const title = (act.title || "").trim().toLowerCase();
-  if (title.startsWith("[pne") || title.startsWith("pne")) return true;
-  if (title.includes("adaptação pedagógica") || title.includes("adaptacao pedagogica")) return true;
+  if (Boolean(anyAct.aeeMechanic)) return true;
+  const turmaUpper = (act.turma || '').trim().toUpperCase();
+  if (turmaUpper === 'AEE_EXCLUSIVO' || turmaUpper.startsWith('AEE')) return true;
+  const title = (act.title || '').trim().toLowerCase();
+  if (
+    title.startsWith('[pne') ||
+    title.startsWith('pne') ||
+    title.startsWith('[aee') ||
+    title.includes('[aee') ||
+    title.includes('adaptação pedagógica') ||
+    title.includes('adaptacao pedagogica') ||
+    title.includes('atividade adaptada')
+  ) {
+    return true;
+  }
+  if (anyAct.activityDomain === 'interactive_game' || act.isGameActivity || act.type === 'Jogo Avaliativo') {
+    return false;
+  }
   return false;
 }
 
@@ -470,10 +421,8 @@ export function getActivityStudentAndSubmissionCounts(
   const isAdaptedAct = isActivityAdapted(act);
   const isRecoveryAct = isActivityRecovery(act);
 
-  // 1. Filtra rigorosamente os alunos elegíveis para as turmas da atividade
   const enrolledStudents = students.filter((st) => canStudentAccessActivity(act, st));
 
-  // 2. Separa os PNEs proficientes (que fazem a regular) dos que fazem AEE
   const parentAct = isAdaptedAct ? allActivities.find((a) => a.id === act.adaptedFromId) : null;
   const includedProficientPneIds = new Set(
     isAdaptedAct ? (parentAct?.includedPneStudentIds || []) : (act.includedPneStudentIds || [])
@@ -494,52 +443,43 @@ export function getActivityStudentAndSubmissionCounts(
   let submissionsList: ActivitySubmission[] = [];
 
   if (isAdaptedAct) {
-    // AEE: Apenas PNEs que não são proficientes na normal
     expectedStudentsCount = students && students.length > 0 ? pneEnrolledTakingAdaptation.length : 1;
-    submissionsList = (act.submissions || []).filter(s => {
-      const st = enrolledStudents.find(x => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
+    submissionsList = (act.submissions || []).filter((s) => {
+      const st = enrolledStudents.find((x) => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
       return st && isStudentPNE(st) && !isProficientPne(st);
     });
   } else if (hasAdaptationChild) {
-    // NORMAL COM FILHA AEE: Conta todos menos os PNEs que foram pra adaptada
     expectedStudentsCount = students && students.length > 0 ? studentsTakingNormal.length : (act.totalStudents || 35);
-    submissionsList = (act.submissions || []).filter(s => {
-      const st = enrolledStudents.find(x => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
+    submissionsList = (act.submissions || []).filter((s) => {
+      const st = enrolledStudents.find((x) => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
       return st && (!isStudentPNE(st) || isProficientPne(st));
     });
   } else {
-    // RECUPERAÇÃO E ATIVIDADES NORMAIS: 100% da turma (Direito Universal SC e cálculo exato de turmas múltiplas)
     expectedStudentsCount = students && students.length > 0 ? enrolledStudents.length : (act.totalStudents || 35);
-    submissionsList = (act.submissions || []).filter(s => {
-      const st = enrolledStudents.find(x => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
+    submissionsList = (act.submissions || []).filter((s) => {
+      const st = enrolledStudents.find((x) => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
       return Boolean(st);
     });
   }
 
   const subCount = submissionsList.length;
-  const gradedCount = submissionsList.filter((s) => s.status === "graded").length;
-  const pendingCount = submissionsList.filter((s) => s.status === "pending" || s.status === "draft").length;
-  const ret1x = submissionsList.filter((s) => s.status === "returned" && (s.returnCount === 1 || !s.returnCount)).length;
-  const ret2x = submissionsList.filter((s) => s.status === "returned" && s.returnCount === 2).length;
-  const ret3x = submissionsList.filter((s) => s.status === "returned" && s.returnCount === 3).length;
+  const gradedCount = submissionsList.filter((s) => s.status === 'graded').length;
+  const pendingCount = submissionsList.filter((s) => s.status === 'pending' || s.status === 'draft').length;
+  const ret1x = submissionsList.filter((s) => s.status === 'returned' && (s.returnCount === 1 || !s.returnCount)).length;
+  const ret2x = submissionsList.filter((s) => s.status === 'returned' && s.returnCount === 2).length;
+  const ret3x = submissionsList.filter((s) => s.status === 'returned' && s.returnCount === 3).length;
 
   return { expectedStudentsCount, subCount, gradedCount, pendingCount, ret1x, ret2x, ret3x, submissionsList };
 }
 
-/**
- * Retorna as atividades principais/canônicas
- */
 export function getCanonicalActivities(activities: Activity[]): Activity[] {
   if (!activities || activities.length === 0) return [];
   return activities.filter((act) => !isActivityRecovery(act) && !isActivityAdapted(act));
 }
 
-/**
- * Retorna todas as adaptações filhas associadas a uma atividade central.
- */
 export function getChildAdaptations(canonicalAct: Activity, allActivities: Activity[]): Activity[] {
   if (!canonicalAct || !allActivities || allActivities.length === 0) return [];
-  return allActivities.filter((child) => 
+  return allActivities.filter((child) =>
     child.id !== canonicalAct.id &&
     (child.adaptedFromId === canonicalAct.id || (
       isActivityAdapted(child) &&
@@ -552,14 +492,11 @@ export function getChildAdaptations(canonicalAct: Activity, allActivities: Activ
   );
 }
 
-/**
- * Retorna todas as atividades de recuperação paralela filhas associadas a uma atividade central.
- */
 export function getChildRecoveryActivities(canonicalAct: Activity, allActivities: Activity[]): Activity[] {
   if (!canonicalAct || !allActivities || allActivities.length === 0) return [];
-  return allActivities.filter((child) => 
+  return allActivities.filter((child) =>
     child.id !== canonicalAct.id &&
-    (child.recoveryFromId === canonicalAct.id || 
+    (child.recoveryFromId === canonicalAct.id ||
       (isActivityRecovery(child) &&
         canStudentAccessActivity(child.turma, canonicalAct.turma) &&
         (!child.recoveryFromId || child.recoveryFromId === canonicalAct.id ||
@@ -574,14 +511,11 @@ export function getChildRecoveryActivities(canonicalAct: Activity, allActivities
   );
 }
 
-/**
- * Cria uma nova atividade de Recuperação Paralela
- */
 export function createParallelRecoveryActivity(
   parentActivity: Activity,
-  options: { recoveryTitle?: string; recoveryDescription?: string; recoveryApproach?: string; deadline?: string; turma?: string; questions?: ActivityQuestion[]; }
+  options: { recoveryTitle?: string; recoveryDescription?: string; recoveryApproach?: string; deadline?: string; turma?: string; questions?: ActivityQuestion[] }
 ): Activity {
-  const cleanParentTitle = parentActivity.title.replace(/^\[(PNE.*?\vert{}Recuperação.*?)\]\s*/i, '');
+  const cleanParentTitle = parentActivity.title.replace(/^\[(PNE.*?|Recuperação.*?)\]\s*/i, '');
   const title = options.recoveryTitle || `[Recuperação Paralela] ${cleanParentTitle}`;
   const description = options.recoveryDescription || `Avaliação de Recuperação Paralela vinculada à atividade "${cleanParentTitle}". Abordagem focada em reavaliação.`;
 
@@ -611,9 +545,6 @@ export function createParallelRecoveryActivity(
   };
 }
 
-/**
- * Calcula as métricas unificadas para uma atividade canônica.
- */
 export function getUnifiedActivityMetrics(
   canonicalAct: Activity,
   allActivities: Activity[],
@@ -621,8 +552,7 @@ export function getUnifiedActivityMetrics(
 ) {
   const childAdaptations = getChildAdaptations(canonicalAct, allActivities);
   const childRecoveries = getChildRecoveryActivities(canonicalAct, allActivities);
-  
-  // Trava Multitenant e seleção de alunos da turma
+
   const enrolledStudents = (targetStudents || []).filter((st) => canStudentAccessActivity(canonicalAct, st));
   const expectedStudentsCount = enrolledStudents.length;
 
@@ -665,7 +595,7 @@ export function getUnifiedActivityMetrics(
       if (!submittedStudentMap.has(st.id)) submittedStudentMap.set(st.id, s);
     }
   });
-  
+
   const submissionsList = Array.from(submittedStudentMap.values());
   const subCount = submissionsList.length;
   const gradedCount = submissionsList.filter((s) => s.status === 'graded').length;
@@ -690,9 +620,6 @@ export function getUnifiedActivityMetrics(
   return { expectedStudentsCount, subCount, gradedCount, pendingCount, completionRate, submissionsList, childAdaptations, childRecoveries, hasRecovery: childRecoveries.length > 0, breakdown: { mainCount, mainRate, recoveryCount, recoveryRate, adaptedCount, recoveryOnlyCount, recoveredCount, mainAvg, recoveryAvg } };
 }
 
-/**
- * Calculates the total grade of a single submission
- */
 export function getSubmissionTotalGrade(sub: ActivitySubmission): number {
   const obj = Number(sub.objectiveScore) || 0;
   const ess = Number(sub.essayScore) || 0;
@@ -700,9 +627,6 @@ export function getSubmissionTotalGrade(sub: ActivitySubmission): number {
   return Number((obj + ess + ext).toFixed(1));
 }
 
-/**
- * Calculates the average grade for an activity
- */
 export function getActivityAverageGrade(act: Activity): number | null {
   if (act.averageGrade !== undefined && act.averageGrade !== null && act.averageGrade > 0) return act.averageGrade;
   const subs = act.submissions || [];

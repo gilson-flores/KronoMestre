@@ -1,52 +1,49 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGeminiClient, isGeminiAuthError } from "@/lib/gemini";
-import {
-  GameData,
-  GameMode,
-  AeeMechanic,
-  AeePromptSettings,
-  GameStage,
-  AdaptationRecommendation,
-  DebateConfig,
-} from "@/lib/types";
+import { GameData, GameMode, AeeMechanic, AeePromptSettings, DebateConfig } from "@/lib/types";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 interface RequestPayload {
-  mode: "krono_game" | "adapted_aee";
-  title: string;
+  mode?: "interactive_game" | "adapted_aee";
+  gameMode?: GameMode;
+  title?: string;
   subject?: string;
   topic?: string;
   supportMaterial?: string;
-  gameMode?: GameMode;
   aeeMechanic?: AeeMechanic;
   aeePromptSettings?: AeePromptSettings;
-  adaptationRecommendation?: AdaptationRecommendation;
 }
 
-function buildFallbackDebateConfig(safeTopic: string, safeSubject: string, supportMaterial: string): DebateConfig {
-  const scriptLines = supportMaterial
+function applyUppercaseIfNeeded(text: string, isUpper: boolean): string {
+  return isUpper ? text.toUpperCase() : text;
+}
+
+function createFallbackDebateConfig(topic: string, subject: string, supportMaterial: string): DebateConfig {
+  const safeTopic = (topic || "Cidadania e Sociedade").trim();
+  const safeSubject = (subject || "Sociologia").trim();
+  const scriptLines = (supportMaterial || "")
     .split(/\n+/)
-    .map((l) => l.trim())
+    .map((l) => l.replace(/^[\d\-\*•\.]+\s*/, "").trim())
     .filter((l) => l.length > 8);
 
   const proFocuses = [
-    "Fundamentos históricos e conquistas sociais",
-    "Dados empíricos e impactos positivos na cidadania",
-    "Conceitos sociológicos clássicos de coesão e direitos",
-    "Exemplos práticos na realidade brasileira",
-    "Políticas públicas e fortalecimento democrático",
-    "Síntese propositiva para a defesa da Bancada Pró",
+    "Fundamento Histórico e Institucional",
+    "Impacto Coletivo e Coesão Social",
+    "Direitos Humanos e Inclusão Cidadã",
+    "Dados Empíricos e Evidências Sociais",
+    "Transformação Cultural e Democracia",
+    "Proposta Prática e Síntese Sociológica",
   ];
 
   const contraFocuses = [
-    "Contradições estruturais e limites práticos",
-    "Crítica sociológica às desigualdades e assimetrias de poder",
-    "Dados empíricos sobre exclusão ou efeitos colaterais",
-    "Análise de interesses hegemônicos e ideologia",
-    "Impactos críticos no cotidiano da população brasileira",
-    "Síntese de refutação para a defesa da Bancada Contra",
+    "Contradições Estruturais e Limites Práticos",
+    "Desigualdades e Efeitos Colaterais Invisíveis",
+    "Relações de Poder e Interesses Hegemônicos",
+    "Análise Crítica dos Dados e Indicadores",
+    "Tensões entre Teoria Institucional e Cotidiano",
+    "Contraproposta Crítica e Síntese Sociológica",
   ];
 
   return {
@@ -55,470 +52,370 @@ function buildFallbackDebateConfig(safeTopic: string, safeSubject: string, suppo
       id: `pro_q_${idx + 1}`,
       number: idx + 1,
       side: "pro",
-      sociologicalConcept: scriptLines[idx] || focus,
-      prompt: `[Pesquisa PRÓ #${idx + 1}] Considerando o tema "${safeTopic}" (${safeSubject}) e o eixo "${scriptLines[idx] || focus}", pesquise e elabore um argumento fundamentado com fatos e conceitos sociológicos que sustentem a posição FAVORÁVEL da sua bancada.`,
-      researchHint: "Busque dados reais, exemplos históricos ou conceitos sociológicos trabalhados em aula para comprovar este ponto.",
+      sociologicalConcept: scriptLines[idx] ? scriptLines[idx].slice(0, 60) : focus,
+      prompt: `[Pesquisa PRÓ #${idx + 1}] Considerando o tema "${safeTopic}" (${safeSubject}) e o eixo "${scriptLines[idx] || focus}", pesquise e construa um argumento favorável fundamentado em conceitos sociológicos e fatos reais.`,
+      researchHint: "Busque exemplos históricos, leis, estatísticas ou conceitos da Sociologia que comprovem os benefícios desta tese.",
     })),
     contraQuestions: contraFocuses.map((focus, idx) => ({
       id: `contra_q_${idx + 1}`,
       number: idx + 1,
       side: "contra",
-      sociologicalConcept: scriptLines[idx] || focus,
-      prompt: `[Pesquisa CONTRA #${idx + 1}] Considerando o tema "${safeTopic}" (${safeSubject}) e o eixo "${scriptLines[idx] || focus}", pesquise e elabore um argumento crítico fundamentado com dados e conceitos sociológicos que sustentem o QUESTIONAMENTO/OPOSIÇÃO da sua bancada.`,
-      researchHint: "Identifique contradições sociais, limites práticos, relações de poder e evidências que contestem a visão dominante.",
+      sociologicalConcept: scriptLines[idx] ? scriptLines[idx].slice(0, 60) : focus,
+      prompt: `[Pesquisa CONTRA #${idx + 1}] Considerando o tema "${safeTopic}" (${safeSubject}) e o eixo "${scriptLines[idx] || focus}", pesquise e construa um argumento crítico fundamentado em dados e conceitos sociológicos.`,
+      researchHint: "Identifique contradições sociais, limites práticos, relações de poder e evidências que problematizem a tese.",
+    })),
+    jurorQuestions: proFocuses.map((focus, idx) => ({
+      id: `juror_q_${idx + 1}`,
+      number: idx + 1,
+      side: "juror",
+      sociologicalConcept: scriptLines[idx] ? scriptLines[idx].slice(0, 60) : focus,
+      prompt: `[Preparação JURADOS #${idx + 1}] Sobre "${safeTopic}" (${scriptLines[idx] || focus}): pesquise os conceitos sociológicos neutros e indicadores reais para avaliar com imparcialidade os dois grupos neste eixo.`,
+      researchHint: "Anote o conceito sociológico chave e quais evidências cobrar tanto do Time Pró quanto do Time Contra.",
     })),
     checklistCriteria: [
-      { id: "chk_1", number: 1, criterion: "Domínio Conceitual Sociológico", description: "A bancada utilizou corretamente conceitos e autores da Sociologia pertinentes ao tema?" },
-      { id: "chk_2", number: 2, criterion: "Uso de Dados e Evidências Reais", description: "Os debatedores apresentaram exemplos concretos, fatos históricos ou dados da realidade brasileira?" },
-      { id: "chk_3", number: 3, criterion: "Coerência com o Resumo de Pesquisa", description: "A equipe articulou bem os 6 pontos pesquisados e o resumo estruturado do grupo?" },
-      { id: "chk_4", number: 4, criterion: "Capacidade de Réplica e Tréplica", description: "O grupo respondeu diretamente aos argumentos adversários sem fugir do tema ou usar falácias?" },
-      { id: "chk_5", number: 5, criterion: "Respeito ao Tempo (Timer KronoMestre)", description: "A bancada organizou a fala respeitando o cronômetro de exposição, réplica, tréplica e conclusão?" },
-      { id: "chk_6", number: 6, criterion: "Postura Ética e Democrática", description: "Manteve o respeito mútuo, a escuta ativa e o rigor acadêmico durante todo o debate?" },
+      { id: "crit_1", number: 1, title: "Uso de Conceitos Sociológicos", description: "Mobilizou conceitos, teorias ou autores da Sociologia com precisão (sem ficar no senso comum)." },
+      { id: "crit_2", number: 2, title: "Evidências e Fatos Concretos", description: "Apresentou dados históricos, estatísticos ou exemplos reais verificáveis da sociedade brasileira." },
+      { id: "crit_3", number: 3, title: "Coerência Lógica e Argumentativa", description: "Sustentou a tese sem contradições internas e sem recorrer a falácias ou ataques pessoais." },
+      { id: "crit_4", number: 4, title: "Capacidade de Réplica e Refutação", description: "Respondeu diretamente aos argumentos da bancada oposta com base sociológica." },
+      { id: "crit_5", number: 5, title: "Articulação Coletiva e Uso do Tempo", description: "A equipe dividiu a fala de forma equilibrada e respeitou o tempo de exposição." },
+      { id: "crit_6", number: 6, title: "Ética Democrática e Direitos Humanos", description: "Manteve postura respeitosa e alinhada à cidadania e aos direitos fundamentais." },
     ],
-    jurorInitialGuide: `Vocês 3 formam o Corpo de Jurados de Sociologia sobre "${safeTopic}". Enquanto as Bancadas Pró e Contra realizam suas 6 pesquisas norteadoras, acompanhem os conceitos centrais do roteiro do professor. Ao término das pesquisas, a IA gerará o Dossiê Guia exclusivo dos Jurados para orientar o julgamento com os 2 Checklists (Pró e Contra).`,
+    jurorInitialGuide: `GUIA DE PREPARAÇÃO DOS 3 JURADOS — TEMA: ${safeTopic.toUpperCase()}\n\n1. SEU PAPEL: Vocês são os 3 magistrados analíticos da turma. Sua missão é avaliar com imparcialidade sociológica a Bancada PRÓ e a Bancada CONTRA.\n2. ROTEIRO DO PROFESSOR: ${supportMaterial || "Avaliem o uso de conceitos sociológicos, dados concretos e capacidade de réplica."}\n3. OS 2 CHECKLISTS: Durante o debate oral, preencham o Checklist 1 (Bancada Pró) e o Checklist 2 (Bancada Contra) marcando Cumpriu ou Não Cumpriu nos 6 critérios oficiais.`,
     participants: [],
     proAnswers: {},
     contraAnswers: {},
-    proResearchCompleted: false,
-    contraResearchCompleted: false,
     jurorVerdicts: [],
     gradingMode: "group",
+    groupGrades: {},
+    individualGrades: {},
   };
 }
 
 function generateFallbackInteractiveData(payload: RequestPayload): GameData {
-  const {
-    mode,
-    title,
-    subject = "Sociologia",
-    topic = "Cidadania e Sociedade",
-    supportMaterial = "",
-    gameMode = "millionaire",
-    aeeMechanic = "visual_cards",
-    aeePromptSettings,
-  } = payload;
+  const topic = (payload.topic || payload.title || "Cidadania e Sociedade").trim();
+  const subject = (payload.subject || "Sociologia").trim();
+  const supportMaterial = (payload.supportMaterial || "").trim();
+  const isUpper = Boolean(payload.aeePromptSettings?.uppercaseText);
+  const isAee = payload.mode === "adapted_aee";
+  const isOnlyPlayful = payload.aeeMechanic === "visual_cards" || payload.aeeMechanic === "social_story";
 
-  const safeTopic = topic || title || "Sociedade e Cidadania";
-  const safeSubject = subject || "Sociologia";
-  const isUppercase = Boolean(aeePromptSettings?.uppercaseText);
-  const formatText = (text: string) => (isUppercase ? text.toUpperCase() : text);
-
-  const scriptLines = supportMaterial
-    .split(/\n+/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 8);
-
-  if (mode === "adapted_aee") {
-    const intro = `Atividade Adaptada Interativa de ${safeSubject} sobre "${safeTopic}" (Mecânica: ${aeeMechanic}).`;
-    const aeeStages: GameStage[] = Array.from({ length: 6 }).map((_, idx) => {
-      const refLine = scriptLines[idx] || `Análise prática do conceito ${idx + 1} sobre ${safeTopic}`;
-      return {
-        id: `stage-${idx + 1}`,
-        title: formatText(`Fase ${idx + 1}: ${refLine.slice(0, 48)}`),
-        scenario: formatText(`Considerando "${refLine}", qual atitude promove a cidadania, a cooperação e a compreensão crítica de ${safeTopic}?`),
-        clue: formatText("Dica Pedagógica: Observe como o diálogo, a empatia e os direitos coletivos fortalecem a sociedade."),
-        options: [
-          {
-            text: formatText(`Agir com consciência coletiva, diálogo e respeito aos direitos em relação a ${safeTopic}.`),
-            isCorrect: true,
-            pointsWeight: 10,
-            feedback: formatText("Excelente! A cooperação e a análise consciente transformam a convivência social."),
-            iconEmoji: "🎯",
-          },
-          {
-            text: formatText("Ignorar o coletivo e agir sem considerar as consequências para os demais."),
-            isCorrect: false,
-            pointsWeight: 0,
-            feedback: formatText("Atenção: Na vida em sociedade, nossas escolhas impactam toda a comunidade."),
-            iconEmoji: "❌",
-          },
-        ],
-        pneMildStage: {
-          scenario: formatText(`Sobre ${safeTopic} (Etapa ${idx + 1}), qual é a melhor escolha?`),
-          options: [
-            { text: formatText("Cooperar, dialogar e respeitar os direitos de todos"), isCorrect: true, feedback: formatText("Muito bem! Respeito e diálogo constroem a cidadania.") },
-            { text: formatText("Desrespeitar as regras e excluir os colegas"), isCorrect: false, feedback: formatText("Tente novamente: na sociedade todos devem ser respeitados.") },
-          ],
-        },
-        pneSevereStage: {
-          playfulPrompt: formatText("Toque no cartão visual que representa cooperação e atitude positiva:"),
-          visualCards: [
-            { iconEmoji: "🤝", label: formatText("Cooperação e Diálogo"), isCorrect: true, feedback: formatText("Parabéns! Cooperar é o caminho certo!") },
-            { iconEmoji: "🛑", label: formatText("Exclusão"), isCorrect: false, feedback: formatText("Procure o cartão que mostra união!") },
-            { iconEmoji: "⚡", label: formatText("Conflito"), isCorrect: false, feedback: formatText("Toque no cartão das mãos unidas!") },
-          ],
-        },
-      };
-    });
-
-    return { introText: formatText(intro), stages: aeeStages };
-  }
-
-  if (gameMode === "debate_paperless") {
-    const debateConfig = buildFallbackDebateConfig(safeTopic, safeSubject, supportMaterial);
-    const stagesFromDebate: GameStage[] = debateConfig.proQuestions.map((q, idx) => ({
-      id: `stage-${idx + 1}`,
-      title: `Eixo Norteador ${idx + 1}: ${q.sociologicalConcept.slice(0, 48)}`,
-      scenario: `[PRÓ]: ${q.prompt}\n\n[CONTRA]: ${debateConfig.contraQuestions[idx]?.prompt || ""}`,
-      clue: q.researchHint,
-      options: [
-        { text: "Pesquisa Dissertativa Pró / Contra + Avaliação por Jurados", isCorrect: true, pointsWeight: 10, feedback: "Questão norteadora registrada no dossiê do grupo.", iconEmoji: "🎙️" },
-        { text: "Aguardando submissão da bancada", isCorrect: false, pointsWeight: 0, feedback: "Preencha a pesquisa no modo Debate.", iconEmoji: "⏳" },
-      ],
-    }));
-
+  if (!isAee && payload.gameMode === "debate_paperless") {
+    const debateConfig = createFallbackDebateConfig(topic, subject, supportMaterial);
     return {
-      introText: `🎙️ DEBATE SOCIOLÓGICO SEM PAPEL — "${safeTopic}" (${safeSubject})
-1) INSCRIÇÃO DE PAPÉIS: Alunos se dividem entre Bancada PRÓ, Bancada CONTRA e 3 JURADOS.
-2) PESQUISA NORTEADORA: 6 questões dissertativas para a Bancada Pró e 6 questões dissertativas para a Bancada Contra.
-3) SÍNTESE DA IA: Ao concluir a pesquisa, a IA gera 3 resumos exclusivos (Pró, Contra e Guia dos Jurados) visíveis para todos do grupo.
-4) DEBATE EM SALA & PARECER: O professor controla o Timer (Exposição, Réplica, Tréplica e Considerações Finais) e os Jurados preenchem os 2 Checklists.`,
-      stages: stagesFromDebate,
+      introText: `Debate Sociológico Sem Papel sobre "${topic}". Cadastre-se no seu grupo (Time Pró, Time Contra ou Corpo de 3 Jurados) para acessar suas 6 questões exclusivas.`,
+      stages: [],
       debateConfig,
     };
   }
 
-  const stages: GameStage[] = Array.from({ length: 6 }).map((_, idx) => {
-    const scriptSegment = scriptLines[idx] || `Análise Sociológica — Etapa ${idx + 1} sobre ${safeTopic}`;
+  if (isAee && isOnlyPlayful) {
+    const playfulThemes = [
+      { title: "História Social na Escola", emojiOk: "🤝", labelOk: "Ajudar e incluir o colega", emojiNo1: "🚫", labelNo1: "Deixar o colega sozinho", emojiNo2: "🗯️", labelNo2: "Ignorar a regra do grupo" },
+      { title: "Semáforo da Convivência", emojiOk: "🟢", labelOk: "Ouvir com atenção e respeito", emojiNo1: "🔴", labelNo1: "Gritar ou interromper", emojiNo2: "🟡", labelNo2: "Virar as costas" },
+      { title: "Detetive da Comunidade", emojiOk: "🏛️", labelOk: "Cuidar do espaço de todos", emojiNo1: "🗑️", labelNo1: "Sujar o espaço público", emojiNo2: "⛔", labelNo2: "Impedir a passagem" },
+      { title: "Causa e Efeito Cidadão", emojiOk: "🌱", labelOk: "Colaborar para o bem comum", emojiNo1: "⚡", labelNo1: "Criar confusão na fila", emojiNo2: "🙈", labelNo2: "Fingir que não viu" },
+      { title: "Pontes da Empatia", emojiOk: "💙", labelOk: "Respeitar as diferenças", emojiNo1: "❌", labelNo1: "Rir da dificuldade alheia", emojiNo2: "🧱", labelNo2: "Isolar quem pensa diferente" },
+      { title: "Missão Coletiva", emojiOk: "🏆", labelOk: "Construir juntos com diálogo", emojiNo1: "🛑", labelNo1: "Desistir de participar", emojiNo2: "💢", labelNo2: "Impor vontade sem ouvir" },
+    ];
+
     return {
-      id: `stage-${idx + 1}`,
-      title: `Fase ${idx + 1}: ${scriptSegment.slice(0, 52)}`,
-      scenario: `[Investigação Sociológica ${idx + 1}] ${scriptSegment}. Considerando o tema "${safeTopic}", qual interpretação sociológica explica este fenômeno com rigor?`,
-      clue: "Dica Sociológica: Analise as estruturas sociais, relações de poder, cultura e cidadania.",
-      options: [
-        {
-          text: `Compreender o fenômeno a partir das estruturas históricas, relações sociais e conceitos de ${safeSubject} sobre ${safeTopic}.`,
-          isCorrect: true,
-          pointsWeight: 10,
-          feedback: "Excelente análise sociológica! Você conectou teoria e realidade social com precisão.",
-          iconEmoji: "🎯",
-        },
-        {
-          text: "Reduzir o fenômeno a opiniões isoladas do senso comum sem considerar o contexto histórico e social.",
-          isCorrect: false,
-          pointsWeight: 0,
-          feedback: "Atenção: A Sociologia supera o senso comum ao investigar causas estruturais e coletivas.",
-          iconEmoji: "❌",
-        },
-      ],
-      pneMildStage: {
-        scenario: `Etapa ${idx + 1} sobre ${safeTopic}: como a Sociologia explica esta situação?`,
+      introText: applyUppercaseIfNeeded(`Missão Visual e Lúdica sobre "${topic}". Observe cada cena e toque no cartão correto!`, isUpper),
+      stages: playfulThemes.map((item, idx) => ({
+        id: `stage-${idx + 1}`,
+        title: applyUppercaseIfNeeded(`Etapa ${idx + 1}: ${item.title}`, isUpper),
+        scenario: applyUppercaseIfNeeded(`No dia a dia da escola e da comunidade, estamos aprendendo sobre "${topic}". Qual atitude mostra respeito e cidadania?`, isUpper),
+        clue: applyUppercaseIfNeeded("Observe os símbolos e escolha a atitude positiva.", isUpper),
         options: [
-          { text: "Analisando a história, a sociedade e os direitos de todos", isCorrect: true, feedback: "Muito bem! Você acertou em cheio!" },
-          { text: "Olhando apenas opiniões sem pesquisar a realidade", isCorrect: false, feedback: "Na Sociologia, sempre pesquisamos a realidade coletiva." },
+          { text: applyUppercaseIfNeeded(item.labelOk, isUpper), isCorrect: true, pointsWeight: 10, feedback: applyUppercaseIfNeeded("Muito bem! Atitude cidadã exemplar!", isUpper), iconEmoji: item.emojiOk },
+          { text: applyUppercaseIfNeeded(item.labelNo1, isUpper), isCorrect: false, pointsWeight: 0, feedback: applyUppercaseIfNeeded("Tente novamente observando o cartão de respeito.", isUpper), iconEmoji: item.emojiNo1 },
         ],
-      },
-      pneSevereStage: {
-        playfulPrompt: "Toque no cartão que mostra pesquisa e união social:",
-        visualCards: [
-          { iconEmoji: "🌟", label: "Sociedade e Direitos", isCorrect: true, feedback: "Parabéns! Escolha perfeita!" },
-          { iconEmoji: "🛑", label: "Isolamento", isCorrect: false, feedback: "Toque na estrela brilhante!" },
-          { iconEmoji: "⚡", label: "Conflito", isCorrect: false, feedback: "Escolha o cartão da estrela!" },
-        ],
-      },
+        pneSevereStage: {
+          playfulPrompt: applyUppercaseIfNeeded(`Toque no cartão que representa a melhor atitude sobre "${topic}":`, isUpper),
+          visualCards: [
+            { iconEmoji: item.emojiOk, label: applyUppercaseIfNeeded(item.labelOk, isUpper), isCorrect: true, feedback: applyUppercaseIfNeeded("Parabéns! Você escolheu a atitude certa!", isUpper) },
+            { iconEmoji: item.emojiNo1, label: applyUppercaseIfNeeded(item.labelNo1, isUpper), isCorrect: false, feedback: applyUppercaseIfNeeded("Olhe com carinho para o cartão de cooperação!", isUpper) },
+            { iconEmoji: item.emojiNo2, label: applyUppercaseIfNeeded(item.labelNo2, isUpper), isCorrect: false, feedback: applyUppercaseIfNeeded("Tente escolher o cartão que ajuda o grupo!", isUpper) },
+          ],
+        },
+      })),
     };
-  });
+  }
+
+  if (isAee && !isOnlyPlayful) {
+    const mildAngles = [
+      "Situação Prática na Escola",
+      "Exemplo do Cotidiano no Bairro",
+      "Decisão Consciente em Grupo",
+      "Direitos e Deveres na Prática",
+      "Análise de Caso Direta",
+      "Conclusão Aplicada ao Dia a Dia",
+    ];
+    return {
+      introText: applyUppercaseIfNeeded(`Atividade Adaptada Proficiente sobre "${topic}". Leia cada situação curta e escolha entre as 2 alternativas.`, isUpper),
+      stages: mildAngles.map((angle, idx) => ({
+        id: `stage-${idx + 1}`,
+        title: applyUppercaseIfNeeded(`Desafio ${idx + 1}: ${angle}`, isUpper),
+        scenario: applyUppercaseIfNeeded(`[${angle}] Considerando o tema "${topic}" em ${subject}, qual das duas opções explica corretamente a situação?`, isUpper),
+        clue: applyUppercaseIfNeeded("Foque na relação entre convivência, regras sociais e direitos.", isUpper),
+        options: [
+          { text: applyUppercaseIfNeeded(`Compreender "${topic}" a partir do respeito às regras coletivas e aos direitos de todos.`, isUpper), isCorrect: true, pointsWeight: 10, feedback: applyUppercaseIfNeeded("Excelente! Você identificou o ponto principal com precisão.", isUpper), iconEmoji: "✅" },
+          { text: applyUppercaseIfNeeded("Ignorar as regras coletivas e agir sem considerar o impacto nas outras pessoas.", isUpper), isCorrect: false, pointsWeight: 0, feedback: applyUppercaseIfNeeded("Releia a dica: na vida em sociedade, nossas ações afetam o coletivo.", isUpper), iconEmoji: "❌" },
+        ],
+        pneMildStage: {
+          scenario: applyUppercaseIfNeeded(`[${angle}] Sobre "${topic}": qual opção está correta?`, isUpper),
+          options: [
+            { text: applyUppercaseIfNeeded(`Reconhecer a importância de "${topic}" para uma sociedade justa e organizada.`, isUpper), isCorrect: true, feedback: applyUppercaseIfNeeded("Correto! Muito bem fundamentado.", isUpper) },
+            { text: applyUppercaseIfNeeded("Desconsiderar os direitos e deveres coletivos na vida em comunidade.", isUpper), isCorrect: false, feedback: applyUppercaseIfNeeded("Pense em como a regra ajuda toda a comunidade.", isUpper) },
+          ],
+        },
+      })),
+    };
+  }
+
+  const regularAxes = [
+    "Contexto Histórico e Social",
+    "Estruturas e Instituições",
+    "Relações de Poder e Cidadania",
+    "Desigualdades e Atores Sociais",
+    "Impactos na Realidade Brasileira",
+    "Síntese Crítica Sociológica",
+  ];
 
   return {
-    introText: `🎮 Missão KronoGames de ${safeSubject}: "${title || safeTopic}". Superem as 6 etapas de investigação sociológica baseadas no roteiro da aula!`,
-    stages,
+    introText: `Missão KronoGames de ${subject}: "${topic}". Superem as 6 etapas de investigação sociológica!`,
+    stages: regularAxes.map((axis, idx) => ({
+      id: `stage-${idx + 1}`,
+      title: `Fase ${idx + 1}: ${axis}`,
+      scenario: `[${axis}] Considerando o tema "${topic}", qual interpretação sociológica explica este fenômeno com rigor?`,
+      clue: "Analise as estruturas sociais, históricas e institucionais envolvidas.",
+      options: [
+        { text: `Compreender "${topic}" a partir das relações sociais, históricas e institucionais que moldam a vida coletiva.`, isCorrect: true, pointsWeight: 10, feedback: "Excelente análise sociológica!", iconEmoji: "🎯" },
+        { text: "Reduzir o fenômeno a opiniões isoladas sem relação com a história ou com a sociedade.", isCorrect: false, pointsWeight: 0, feedback: "A Sociologia investiga as estruturas coletivas além do senso comum.", iconEmoji: "❌" },
+        { text: "Considerar que a sociedade nunca muda e independe da ação humana.", isCorrect: false, pointsWeight: 0, feedback: "As instituições sociais são construídas historicamente.", iconEmoji: "⚠️" },
+        { text: "Ignorar os dados empíricos e os direitos fundamentais na análise.", isCorrect: false, pointsWeight: 0, feedback: "A análise sociológica exige base empírica.", iconEmoji: "🔎" },
+      ],
+    })),
   };
 }
 
 export async function POST(req: NextRequest) {
-  let payload: RequestPayload;
+  let payload: RequestPayload = {};
   try {
     payload = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Payload JSON inválido." }, { status: 400 });
-  }
+    const {
+      mode = "interactive_game",
+      gameMode = "millionaire",
+      title = "Atividade Interativa",
+      subject = "Sociologia",
+      topic = "Cidadania e Sociedade",
+      supportMaterial = "",
+      aeeMechanic = "visual_cards",
+      aeePromptSettings,
+    } = payload;
 
-  const {
-    mode = "krono_game",
-    title = "Atividade Interativa",
-    subject = "Sociologia",
-    topic = "Sociedade e Cidadania",
-    supportMaterial = "",
-    gameMode = "millionaire",
-    aeeMechanic = "visual_cards",
-    aeePromptSettings,
-  } = payload;
-
-  const ai = getGeminiClient();
-
-  if (!ai) {
-    const fallbackData = generateFallbackInteractiveData(payload);
-    return NextResponse.json({ gameData: fallbackData, isFallback: true });
-  }
-
-  try {
-    const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
-    let generatedText: string | null = null;
-    const creativeSeed = `SEED-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-
-    // Ramo específico para DEBATE SEM PAPEL (Sociologia Pura: 6 Questões Pró + 6 Questões Contra + 2 Checklists de Jurados)
-    if (mode === "krono_game" && gameMode === "debate_paperless") {
-      const debatePrompt = `Você é um Professor Doutor em Sociologia e Arquiteto Pedagógico do Ensino Médio.
-SEMENTE CRIATIVA ÚNICA: ${creativeSeed}
-Sua missão é estruturar uma atividade completa de DEBATE SOCIOLÓGICO SEM PAPEL sobre:
-- Título: "${title}"
-- Tema Central: "${topic}"
-- Disciplina: "${subject}"
-- Roteiro Prévio do Professor (OBRIGATÓRIO SEGUIR INTEGRALMENTE):
-"""
-${supportMaterial || "Explore autores clássicos e contemporâneos da Sociologia (como Hannah Arendt, Gramsci, Durkheim, Weber, Marx, Bourdieu, Foucault) aplicados à realidade brasileira."}
-"""
-
-COMO FUNCIONA O DEBATE:
-1. Os alunos se dividem em Bancada PRÓ, Bancada CONTRA e 3 JURADOS.
-2. Crie EXATAMENTE 6 questões dissertativas norteadoras para o grupo PRÓ pesquisar (focadas em fundamentar a tese favorável com conceitos sociológicos e dados reais).
-3. Crie EXATAMENTE 6 questões dissertativas norteadoras para o grupo CONTRA pesquisar (focadas em fundamentar o contraponto crítico, tensões estruturais e dados empíricos).
-4. Crie um texto orientador inicial para os 3 Jurados ("jurorInitialGuide") e EXATAMENTE 6 critérios claros de avaliação ("checklistCriteria") que serão usados nos 2 Checklists (Cumpriu / Não Cumpriu) para julgar os lados Pró e Contra.
-5. NÃO mencione "Teoria dos Jogos". Use exclusivamente referencial de SOCIOLOGIA.
-
-Retorne EXCLUSIVAMENTE um JSON válido no formato exato abaixo:
-{
-  "introText": "Texto apresentando o tema sociológico do debate, a divisão entre Bancada Pró, Bancada Contra e 3 Jurados, a etapa de pesquisa norteadora e o debate ao vivo com cronômetro.",
-  "proQuestions": [
-    {
-      "id": "pro_q_1",
-      "number": 1,
-      "side": "pro",
-      "sociologicalConcept": "Nome do conceito ou autor sociológico do eixo 1",
-      "prompt": "Pergunta dissertativa norteadora 1 para orientar a pesquisa da Bancada PRÓ...",
-      "researchHint": "Dica prática do que os alunos do grupo Pró devem pesquisar e citar..."
+    const ai = getGeminiClient();
+    if (!ai) {
+      return NextResponse.json({ gameData: generateFallbackInteractiveData(payload), isFallback: true });
     }
-  ],
-  "contraQuestions": [
-    {
-      "id": "contra_q_1",
-      "number": 1,
-      "side": "contra",
-      "sociologicalConcept": "Nome do conceito ou tensão sociológica do eixo 1",
-      "prompt": "Pergunta dissertativa norteadora 1 para orientar a pesquisa da Bancada CONTRA...",
-      "researchHint": "Dica prática do que os alunos do grupo Contra devem pesquisar e problematizar..."
+
+    const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+    const creativeSeed = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const isUppercase = Boolean(aeePromptSettings?.uppercaseText);
+
+    // ==========================================================================
+    // 1. MODO AEE: SEPARAÇÃO ESTRITA (SOMENTE LÚDICA vs SOMENTE PROFICIENTE)
+    // ==========================================================================
+    if (mode === "adapted_aee") {
+      const isOnlyPlayful = aeeMechanic === "visual_cards" || aeeMechanic === "social_story";
+      const playfulFormats = [
+        "OFICINA DE HISTÓRIAS SOCIAIS DO COTIDIANO: 6 cenas visuais curtas onde estudantes vivem situações reais na escola/comunidade.",
+        "DETETIVE VISUAL DAS EMOÇÕES E CONVIVÊNCIA: 6 desafios visuais de associação causa-e-efeito com símbolos concretos.",
+        "JORNADA DOS SÍMBOLOS DA CIDADANIA: 6 missões lúdicas explorando espaços da cidade, família e escola com cartões ilustrados.",
+        "SEMÁFORO INTERATIVO DE ATITUDES COLETIVAS: 6 situações práticas contrastando cooperação vs exclusão de forma acolhedora.",
+        "ÁLBUM VISUAL DA VIDA DIÁRIA: 6 desafios práticos conectando o tema da aula a hábitos de autonomia, respeito e empatia.",
+      ];
+      const proficientFormats = [
+        "ESTUDOS DE CASO DO COTIDIANO JUVENIL: 6 mini-histórias reais de jovens brasileiros conectadas ao tema, com 2 escolhas diretas.",
+        "DILEMAS PRÁTICOS DE DECISÃO CIDADÃ: 6 situações concretas na escola ou bairro onde o estudante toma uma decisão fundamentada.",
+        "ANÁLISE DE DIÁLOGOS DO DIA A DIA: 6 breves conversas entre estudantes que mostram o conceito da aula na prática.",
+        "INVESTIGAÇÃO PASSO A PASSO: 6 etapas objetivas de causa e consequência com redução cognitiva e linguagem literal.",
+      ];
+
+      const chosenFormat = isOnlyPlayful
+        ? playfulFormats[Math.floor(Math.random() * playfulFormats.length)]
+        : proficientFormats[Math.floor(Math.random() * proficientFormats.length)];
+
+      const aeePrompt = isOnlyPlayful
+        ? [
+            "Você é um Especialista Criativo em Educação Especial Inclusiva (AEE - Laudos Severos).",
+            `SEMENTE CRIATIVA INÉDITA: ${creativeSeed}`,
+            `FORMATO CRIATIVO SORTEADO (OBRIGATÓRIO SEGUIR PARA NÃO REPETIR PADRÃO): ${chosenFormat}`,
+            `Crie uma atividade 100% LÚDICA E VISUAL de 6 etapas sobre o tema "${topic}" (${subject}) - Título: "${title}".`,
+            `Material de Apoio do Professor: "${supportMaterial || "Exemplos concretos de convivência, cidadania e cotidiano."}"`,
+            "Regras Obrigatórias:",
+            "- Gere SOMENTE a modalidade LÚDICA (pneSevereStage com 3 visualCards por etapa: 1 correto e 2 incorretos).",
+            "- Cada uma das 6 etapas deve ter uma situação diferente, criativa e concreta (1 a 2 frases curtas).",
+            "- Use emojis variados e expressivos em cada cartão.",
+            `- Caixa Alta: ${isUppercase ? "SIM, ESCREVA TODOS OS TEXTOS EM LETRAS MAIÚSCULAS" : "Escrita normal"}.`,
+            "Retorne EXCLUSIVAMENTE um JSON válido com a estrutura: { \"introText\": string, \"stages\": [ { \"id\": \"stage-1\", \"title\": string, \"scenario\": string, \"clue\": string, \"options\": [ { \"text\": string, \"isCorrect\": true, \"pointsWeight\": 10, \"feedback\": string, \"iconEmoji\": string }, { \"text\": string, \"isCorrect\": false, \"pointsWeight\": 0, \"feedback\": string, \"iconEmoji\": string } ], \"pneSevereStage\": { \"playfulPrompt\": string, \"visualCards\": [ { \"iconEmoji\": string, \"label\": string, \"isCorrect\": true, \"feedback\": string }, { \"iconEmoji\": string, \"label\": string, \"isCorrect\": false, \"feedback\": string }, { \"iconEmoji\": string, \"label\": string, \"isCorrect\": false, \"feedback\": string } ] } } ] }"
+          ].join("\n")
+        : [
+            "Você é um Especialista Criativo em Educação Especial Inclusiva (AEE - Laudos Leves/Moderados, TDAH, Dislexia, TEA Nível 1/2).",
+            `SEMENTE CRIATIVA INÉDITA: ${creativeSeed}`,
+            `FORMATO CRIATIVO SORTEADO (OBRIGATÓRIO SEGUIR PARA NÃO REPETIR PADRÃO): ${chosenFormat}`,
+            `Crie uma atividade 100% PROFICIENTE ADAPTADA (Redução Cognitiva e Linguagem Literal) de 6 etapas sobre o tema "${topic}" (${subject}) - Título: "${title}".`,
+            `Material de Apoio do Professor: "${supportMaterial || "Exemplos práticos do cotidiano brasileiro e escolar."}"`,
+            "Regras Obrigatórias:",
+            "- Gere SOMENTE a modalidade PROFICIENTE ADAPTADA (pneMildStage e options com exatas 2 alternativas claras: 1 correta e 1 incorreta). Não gere cartões infantis.",
+            "- Linguagem 100% literal, sem metáforas confusas, com enunciados objetivos e criativos.",
+            `- Caixa Alta: ${isUppercase ? "SIM, ESCREVA TODOS OS TEXTOS EM LETRAS MAIÚSCULAS" : "Escrita normal"}.`,
+            "Retorne EXCLUSIVAMENTE um JSON válido com a estrutura: { \"introText\": string, \"stages\": [ { \"id\": \"stage-1\", \"title\": string, \"scenario\": string, \"clue\": string, \"options\": [ { \"text\": string, \"isCorrect\": true, \"pointsWeight\": 10, \"feedback\": string, \"iconEmoji\": \"✅\" }, { \"text\": string, \"isCorrect\": false, \"pointsWeight\": 0, \"feedback\": string, \"iconEmoji\": \"❌\" } ], \"pneMildStage\": { \"scenario\": string, \"options\": [ { \"text\": string, \"isCorrect\": true, \"feedback\": string }, { \"text\": string, \"isCorrect\": false, \"feedback\": string } ] } } ] }"
+          ].join("\n");
+
+      for (const model of modelsToTry) {
+        try {
+          const response = await ai.models.generateContent({
+            model,
+            contents: [{ role: "user", parts: [{ text: aeePrompt }] }],
+            config: { responseMimeType: "application/json", temperature: 0.9 },
+          });
+          if (response && response.text) {
+            const cleaned = response.text.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+            const parsed: GameData = JSON.parse(cleaned);
+            if (parsed && Array.isArray(parsed.stages) && parsed.stages.length > 0) {
+              return NextResponse.json({ gameData: parsed, isFallback: false });
+            }
+          }
+        } catch (err: any) {
+          if (isGeminiAuthError(err)) break;
+        }
+      }
+      return NextResponse.json({ gameData: generateFallbackInteractiveData(payload), isFallback: true });
     }
-  ],
-  "jurorInitialGuide": "Orientação sociológica clara para os 3 jurados sobre o que observar nas teses Pró e Contra.",
-  "checklistCriteria": [
-    {
-      "id": "chk_1",
-      "number": 1,
-      "criterion": "Título curto do critério 1",
-      "description": "Pergunta direta para o jurado marcar Cumpriu ou Não Cumpriu..."
-    }
-  ]
-}`;
+
+    // ==========================================================================
+    // 2. MODO DEBATE SEM PAPEL: 18 QUESTÕES ISOLADAS (6 PRÓ + 6 CONTRA + 6 JURADOS)
+    // ==========================================================================
+    if (gameMode === "debate_paperless") {
+      const debatePrompt = [
+        `Você é um Professor Doutor em Sociologia do Ensino Médio. Crie a estrutura oficial de um DEBATE SOCIOLÓGICO SEM PAPEL sobre o tema "${topic}" (${subject}).`,
+        `Roteiro Prévio do Professor: "${supportMaterial || "Fundamente nas teorias sociológicas clássicas e contemporâneas e na realidade brasileira."}"`,
+        "Gere EXATAMENTE 18 questões dissertativas isoladas por grupo:",
+        "- proQuestions: 6 questões dissertativas norteadoras exclusivas para o TIME PRÓ pesquisar.",
+        "- contraQuestions: 6 questões dissertativas norteadoras exclusivas para o TIME CONTRA pesquisar.",
+        "- jurorQuestions: 6 questões preparatórias exclusivas para os 3 JURADOS pesquisarem.",
+        "- checklistCriteria: 6 critérios objetivos para os 2 Checklists de julgamento dos jurados.",
+        "- jurorInitialGuide: Texto-guia orientando os 3 jurados.",
+        "Retorne EXCLUSIVAMENTE um JSON válido com: { \"introText\": string, \"proQuestions\": [{ \"sociologicalConcept\": string, \"prompt\": string, \"researchHint\": string }], \"contraQuestions\": [{ \"sociologicalConcept\": string, \"prompt\": string, \"researchHint\": string }], \"jurorQuestions\": [{ \"sociologicalConcept\": string, \"prompt\": string, \"researchHint\": string }], \"checklistCriteria\": [{ \"title\": string, \"description\": string }], \"jurorInitialGuide\": string }"
+      ].join("\n");
 
       for (const model of modelsToTry) {
         try {
           const response = await ai.models.generateContent({
             model,
             contents: [{ role: "user", parts: [{ text: debatePrompt }] }],
-            config: {
-              responseMimeType: "application/json",
-              temperature: 0.85,
-            },
+            config: { responseMimeType: "application/json", temperature: 0.8 },
           });
           if (response && response.text) {
-            generatedText = response.text;
-            break;
+            const cleaned = response.text.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+            const parsed = JSON.parse(cleaned);
+            const fallbackCfg = createFallbackDebateConfig(topic, subject, supportMaterial);
+            const debateConfig: DebateConfig = {
+              maxJurors: 3,
+              proQuestions: Array.isArray(parsed.proQuestions) && parsed.proQuestions.length >= 6
+                ? parsed.proQuestions.slice(0, 6).map((q: any, i: number) => ({
+                    id: `pro_q_${i + 1}`,
+                    number: i + 1,
+                    side: "pro" as const,
+                    sociologicalConcept: q.sociologicalConcept || fallbackCfg.proQuestions[i].sociologicalConcept,
+                    prompt: q.prompt || fallbackCfg.proQuestions[i].prompt,
+                    researchHint: q.researchHint || fallbackCfg.proQuestions[i].researchHint,
+                  }))
+                : fallbackCfg.proQuestions,
+              contraQuestions: Array.isArray(parsed.contraQuestions) && parsed.contraQuestions.length >= 6
+                ? parsed.contraQuestions.slice(0, 6).map((q: any, i: number) => ({
+                    id: `contra_q_${i + 1}`,
+                    number: i + 1,
+                    side: "contra" as const,
+                    sociologicalConcept: q.sociologicalConcept || fallbackCfg.contraQuestions[i].sociologicalConcept,
+                    prompt: q.prompt || fallbackCfg.contraQuestions[i].prompt,
+                    researchHint: q.researchHint || fallbackCfg.contraQuestions[i].researchHint,
+                  }))
+                : fallbackCfg.contraQuestions,
+              jurorQuestions: Array.isArray(parsed.jurorQuestions) && parsed.jurorQuestions.length >= 6
+                ? parsed.jurorQuestions.slice(0, 6).map((q: any, i: number) => ({
+                    id: `juror_q_${i + 1}`,
+                    number: i + 1,
+                    side: "juror" as const,
+                    sociologicalConcept: q.sociologicalConcept || fallbackCfg.jurorQuestions![i].sociologicalConcept,
+                    prompt: q.prompt || fallbackCfg.jurorQuestions![i].prompt,
+                    researchHint: q.researchHint || fallbackCfg.jurorQuestions![i].researchHint,
+                  }))
+                : fallbackCfg.jurorQuestions,
+              checklistCriteria: Array.isArray(parsed.checklistCriteria) && parsed.checklistCriteria.length >= 6
+                ? parsed.checklistCriteria.slice(0, 6).map((c: any, i: number) => ({
+                    id: `crit_${i + 1}`,
+                    number: i + 1,
+                    title: c.title || fallbackCfg.checklistCriteria[i].title,
+                    description: c.description || fallbackCfg.checklistCriteria[i].description,
+                  }))
+                : fallbackCfg.checklistCriteria,
+              jurorInitialGuide: parsed.jurorInitialGuide || fallbackCfg.jurorInitialGuide,
+              participants: [],
+              proAnswers: {},
+              contraAnswers: {},
+              jurorVerdicts: [],
+              gradingMode: "group",
+              groupGrades: {},
+              individualGrades: {},
+            };
+            return NextResponse.json({
+              gameData: {
+                introText: parsed.introText || `Debate Sociológico Sem Papel: ${topic}`,
+                stages: [],
+                debateConfig,
+              },
+              isFallback: false,
+            });
           }
         } catch (err: any) {
           if (isGeminiAuthError(err)) break;
-          console.warn(`[Debate Generator] Falha no modelo ${model}:`, err?.message || err);
         }
       }
-
-      if (generatedText) {
-        try {
-          const cleaned = generatedText.replace(/^\`\`\`json\s*/i, "").replace(/\s*\`\`\`$/i, "").trim();
-          const parsed = JSON.parse(cleaned);
-          const fallbackCfg = buildFallbackDebateConfig(topic, subject, supportMaterial);
-
-          const proQuestions = Array.isArray(parsed.proQuestions) && parsed.proQuestions.length > 0
-            ? parsed.proQuestions.slice(0, 6).map((q: any, i: number) => ({
-                id: `pro_q_${i + 1}`,
-                number: i + 1,
-                side: "pro" as const,
-                sociologicalConcept: q.sociologicalConcept || `Eixo Sociológico ${i + 1}`,
-                prompt: q.prompt || fallbackCfg.proQuestions[i].prompt,
-                researchHint: q.researchHint || fallbackCfg.proQuestions[i].researchHint,
-              }))
-            : fallbackCfg.proQuestions;
-
-          const contraQuestions = Array.isArray(parsed.contraQuestions) && parsed.contraQuestions.length > 0
-            ? parsed.contraQuestions.slice(0, 6).map((q: any, i: number) => ({
-                id: `contra_q_${i + 1}`,
-                number: i + 1,
-                side: "contra" as const,
-                sociologicalConcept: q.sociologicalConcept || `Eixo Crítico ${i + 1}`,
-                prompt: q.prompt || fallbackCfg.contraQuestions[i].prompt,
-                researchHint: q.researchHint || fallbackCfg.contraQuestions[i].researchHint,
-              }))
-            : fallbackCfg.contraQuestions;
-
-          const checklistCriteria = Array.isArray(parsed.checklistCriteria) && parsed.checklistCriteria.length > 0
-            ? parsed.checklistCriteria.slice(0, 6).map((c: any, i: number) => ({
-                id: `chk_${i + 1}`,
-                number: i + 1,
-                criterion: c.criterion || fallbackCfg.checklistCriteria[i].criterion,
-                description: c.description || fallbackCfg.checklistCriteria[i].description,
-              }))
-            : fallbackCfg.checklistCriteria;
-
-          const debateConfig: DebateConfig = {
-            maxJurors: 3,
-            proQuestions,
-            contraQuestions,
-            checklistCriteria,
-            jurorInitialGuide: parsed.jurorInitialGuide || fallbackCfg.jurorInitialGuide,
-            participants: [],
-            proAnswers: {},
-            contraAnswers: {},
-            proResearchCompleted: false,
-            contraResearchCompleted: false,
-            jurorVerdicts: [],
-            gradingMode: "group",
-          };
-
-          const stages: GameStage[] = proQuestions.map((pq: any, idx: number) => {
-            const cq = contraQuestions[idx] || pq;
-            return {
-              id: `stage-${idx + 1}`,
-              title: `Eixo ${idx + 1}: ${pq.sociologicalConcept}`,
-              scenario: `[PESQUISA PRÓ #${idx + 1}]: ${pq.prompt}\n\n[PESQUISA CONTRA #${idx + 1}]: ${cq.prompt}`,
-              clue: `Dica Pró: ${pq.researchHint} | Dica Contra: ${cq.researchHint}`,
-              options: [
-                { text: `Questão Norteadora Pró #${idx + 1}: ${pq.prompt}`, isCorrect: true, pointsWeight: 10, feedback: pq.researchHint, iconEmoji: "🟢" },
-                { text: `Questão Norteadora Contra #${idx + 1}: ${cq.prompt}`, isCorrect: true, pointsWeight: 10, feedback: cq.researchHint, iconEmoji: "🔴" },
-              ],
-            };
-          });
-
-          return NextResponse.json({
-            gameData: {
-              introText: parsed.introText || `Debate Sociológico Sem Papel sobre "${topic}".`,
-              stages,
-              debateConfig,
-            },
-            isFallback: false,
-          });
-        } catch (parseErr) {
-          console.warn("[Debate Generator] Erro ao parsear JSON do debate:", parseErr);
-        }
-      }
-
-      const fallbackData = generateFallbackInteractiveData(payload);
-      return NextResponse.json({ gameData: fallbackData, isFallback: true });
+      return NextResponse.json({ gameData: generateFallbackInteractiveData(payload), isFallback: true });
     }
 
-    // Demais modalidades (AEE e Jogos Sociológicos)
-    const isAee = mode === "adapted_aee";
-    const isUppercase = Boolean(aeePromptSettings?.uppercaseText);
-
-    const gameModeInstructions: Record<string, string> = {
-      millionaire: "ARENA DO MILHÃO DE SOCIOLOGIA: Crie 6 rodadas progressivas de análise sociológica baseadas integralmente no roteiro do professor.",
-      dialectic_tribunal: "TRIBUNAL DIALÉTICO DE SOCIOLOGIA: Crie 6 casos de julgamento sociológico analisando teses em conflito, relações de poder, hegemonia e direitos humanos.",
-      structural_detective: "DETETIVE ESTRUTURAL DE SOCIOLOGIA: Crie 6 cenas de investigação sociológica onde indícios empíricos revelam estruturas sociais, desigualdades e instituições.",
-      rpg_campaign: "CRÔNICAS DA PÓLIS (RPG SOCIOLÓGICO): Crie 6 capítulos onde o estudante toma decisões éticas, políticas e cidadãs diante de problemas reais da comunidade.",
-      real_life_lab: "LABORATÓRIO DA VIDA REAL (SOCIOLOGIA APLICADA): Crie 6 simulações práticas do cotidiano brasileiro conectando conceitos sociológicos à vida dos jovens.",
-    };
-
-    const systemPrompt = isAee
-      ? `Você é um Arquiteto Pedagógico Mestre de Educação Especial (AEE) em Sociologia.
-SEMENTE CRIATIVA: ${creativeSeed}
-Crie 6 estágios inéditos sobre "${topic}" (${subject}) - Título: "${title}" - Mecânica: "${aeeMechanic}".
-Roteiro do Professor:
-"""
-${supportMaterial || "Exemplos práticos do cotidiano escolar e comunitário."}
-"""
-Caixa alta: ${isUppercase ? "SIM, TUDO EM MAIÚSCULAS" : "Normal"}.`
-      : `Você é um Professor Doutor em Sociologia e Game Designer Pedagógico do Ensino Médio.
-SEMENTE CRIATIVA ÚNICA: ${creativeSeed}
-Transforme o tema "${topic}" da disciplina "${subject}" (Título: "${title}") em uma atividade de 6 ESTÁGIOS INÉDITOS baseada exclusivamente em SOCIOLOGIA!
-Modalidade: ${gameModeInstructions[gameMode] || gameModeInstructions.millionaire}
-Roteiro Prévio do Professor (OBRIGATÓRIO SEGUIR INTEGRALMENTE NAS 6 FASES):
-"""
-${supportMaterial || "Desenvolva os conceitos sociológicos do tema aplicados à realidade brasileira."}
-"""`;
-
-    const prompt = `Retorne EXCLUSIVAMENTE um JSON válido com 6 estágios ("stage-1" a "stage-6"):
-{
-  "introText": "Texto de abertura apresentando o contexto sociológico e o roteiro do professor.",
-  "stages": [
-    {
-      "id": "stage-1",
-      "title": "Título da Fase 1",
-      "scenario": "Contextualização e questão sociológica baseada no roteiro do professor...",
-      "clue": "Pista teórica conectando autor ou conceito sociológico...",
-      "options": [
-        { "text": "Alternativa correta fundamentada na Sociologia...", "isCorrect": true, "pointsWeight": 10, "feedback": "Explicação sociológica detalhada...", "iconEmoji": "🎯" },
-        { "text": "Distrator plausível 1...", "isCorrect": false, "pointsWeight": 0, "feedback": "Explicação...", "iconEmoji": "❌" },
-        { "text": "Distrator plausível 2...", "isCorrect": false, "pointsWeight": 0, "feedback": "Explicação...", "iconEmoji": "⚠️" },
-        { "text": "Distrator plausível 3...", "isCorrect": false, "pointsWeight": 0, "feedback": "Explicação...", "iconEmoji": "🔎" }
-      ],
-      "pneMildStage": {
-        "scenario": "Pergunta adaptada direta sobre o mesmo conceito...",
-        "options": [
-          { "text": "Opção correta...", "isCorrect": true, "feedback": "Explicação acolhedora..." },
-          { "text": "Opção incorreta...", "isCorrect": false, "feedback": "Dica simples..." }
-        ]
-      },
-      "pneSevereStage": {
-        "playfulPrompt": "Comando visual...",
-        "visualCards": [
-          { "iconEmoji": "🤝", "label": "Conceito Correto", "isCorrect": true, "feedback": "Muito bem!" },
-          { "iconEmoji": "🛑", "label": "Distrator 1", "isCorrect": false, "feedback": "Tente novamente!" },
-          { "iconEmoji": "⚡", "label": "Distrator 2", "isCorrect": false, "feedback": "Observe o primeiro cartão!" }
-        ]
-      }
-    }
-  ]
-}`;
+    // ==========================================================================
+    // 3. DEMAIS MODALIDADES KRONOGAMES (6 FASES SOCIOLÓGICAS)
+    // ==========================================================================
+    const regularPrompt = [
+      `Você é um Professor Doutor em Sociologia do Ensino Médio. Crie um jogo pedagógico de 6 fases na modalidade "${gameMode}" sobre o tema "${topic}" (${subject}).`,
+      `Roteiro do Professor: "${supportMaterial || "Conecte conceitos sociológicos à realidade brasileira."}"`,
+      "Retorne EXCLUSIVAMENTE um JSON válido com: { \"introText\": string, \"stages\": [ { \"id\": \"stage-1\", \"title\": string, \"scenario\": string, \"clue\": string, \"options\": [ { \"text\": string, \"isCorrect\": true, \"pointsWeight\": 10, \"feedback\": string, \"iconEmoji\": \"🎯\" }, { \"text\": string, \"isCorrect\": false, \"pointsWeight\": 0, \"feedback\": string, \"iconEmoji\": \"❌\" }, { \"text\": string, \"isCorrect\": false, \"pointsWeight\": 0, \"feedback\": string, \"iconEmoji\": \"⚠️\" }, { \"text\": string, \"isCorrect\": false, \"pointsWeight\": 0, \"feedback\": string, \"iconEmoji\": \"🔎\" } ] } ] }"
+    ].join("\n");
 
     for (const model of modelsToTry) {
       try {
         const response = await ai.models.generateContent({
           model,
-          contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${prompt}` }] }],
-          config: {
-            responseMimeType: "application/json",
-            temperature: 0.9,
-          },
+          contents: [{ role: "user", parts: [{ text: regularPrompt }] }],
+          config: { responseMimeType: "application/json", temperature: 0.85 },
         });
-
         if (response && response.text) {
-          generatedText = response.text;
-          break;
+          const cleaned = response.text.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+          const parsed: GameData = JSON.parse(cleaned);
+          if (parsed && Array.isArray(parsed.stages) && parsed.stages.length > 0) {
+            return NextResponse.json({ gameData: parsed, isFallback: false });
+          }
         }
       } catch (err: any) {
         if (isGeminiAuthError(err)) break;
-        console.warn(`[Generate Interactive] Falha com modelo ${model}:`, err?.message || err);
       }
     }
 
-    if (generatedText) {
-      try {
-        const cleaned = generatedText.replace(/^\`\`\`json\s*/i, "").replace(/\s*\`\`\`$/i, "").trim();
-        const parsed: GameData = JSON.parse(cleaned);
-        if ((parsed as any).submissions) delete (parsed as any).submissions;
-        if ((parsed as any).students) delete (parsed as any).students;
-        if ((parsed as any).grades) delete (parsed as any).grades;
-
-        if (parsed && Array.isArray(parsed.stages) && parsed.stages.length > 0) {
-          return NextResponse.json({ gameData: parsed, isFallback: false });
-        }
-      } catch (parseErr) {
-        console.warn("[Generate Interactive] Erro ao parsear resposta da IA:", parseErr);
-      }
-    }
-
-    const fallbackData = generateFallbackInteractiveData(payload);
-    return NextResponse.json({ gameData: fallbackData, isFallback: true });
+    return NextResponse.json({ gameData: generateFallbackInteractiveData(payload), isFallback: true });
   } catch (error: any) {
-    console.error("[Generate Interactive] Erro inesperado:", error);
-    const fallbackData = generateFallbackInteractiveData(payload);
-    return NextResponse.json({ gameData: fallbackData, isFallback: true });
+    console.error("[Generate Interactive] Erro:", error);
+    return NextResponse.json({ gameData: generateFallbackInteractiveData(payload), isFallback: true });
   }
 }

@@ -173,7 +173,9 @@ export interface DebateGuidingQuestion {
 export interface DebateChecklistItem {
   id: string;
   number: number;
-  criterion: string;
+  title?: string;
+  label?: string;
+  criterion?: string;
   description: string;
 }
 

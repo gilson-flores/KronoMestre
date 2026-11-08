@@ -91,7 +91,7 @@ export const StudentSupervisionModal: React.FC<StudentSupervisionModalProps> = (
       if (adapted) {
         if (!isPne) return false;
         if (targetIds.length > 0) return isExplicitlySelected;
-        return canStudentAccessActivity(act.turma, student.turma);
+        return canStudentAccessActivity(act, student);
       }
 
       if (!canStudentAccessActivity(act, student)) return false;
