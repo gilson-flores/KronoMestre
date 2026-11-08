@@ -93,6 +93,9 @@ export const TeacherSettingsView: React.FC<TeacherSettingsViewProps> = ({
             onChange={(e) => setTeacher({ ...teacher, email: e.target.value })}
             className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-foreground focus:outline-none focus:border-primary"
           />
+          <p className="text-[10px] text-muted mt-1 ml-1">
+            Você pode alterar seu e-mail de contato e acesso do professor por aqui.
+          </p>
         </div>
         <div>
           <label className="block text-muted font-semibold mb-1">Telefone</label>
@@ -127,12 +130,14 @@ export const TeacherSettingsView: React.FC<TeacherSettingsViewProps> = ({
         </div>
 
         <div className="p-4 bg-primary/10 border border-primary/30 rounded-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
           <label className="block text-primary font-bold mb-1">
             CÓDIGO DE ACESSO DOS ALUNOS
           </label>
           <p className="text-[11px] text-muted mb-3 max-w-[90%]">
-            Este é o código exclusivo do seu ambiente (Tenant). Forneça este código aos seus alunos.
+            Este é o código exclusivo do seu ambiente (Tenant). Forneça este código aos seus alunos para que eles possam acessar as suas atividades.
           </p>
+
           <div className="flex items-center gap-3">
             <input
               type="text"
@@ -141,6 +146,24 @@ export const TeacherSettingsView: React.FC<TeacherSettingsViewProps> = ({
               className="w-40 bg-background/50 border border-primary/40 rounded-xl px-4 py-3 text-foreground font-mono text-lg font-bold tracking-widest text-center"
               placeholder="----"
             />
+            {!teacher.tenantCode && (
+              <button
+                type="button"
+                onClick={() => {
+                  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                  const nums = '0123456789';
+                  const c1 = chars.charAt(Math.floor(Math.random() * chars.length));
+                  const n1 = nums.charAt(Math.floor(Math.random() * nums.length));
+                  const c2 = chars.charAt(Math.floor(Math.random() * chars.length));
+                  const n2 = nums.charAt(Math.floor(Math.random() * nums.length));
+                  const newCode = `${c1}${n1}${c2}${n2}`;
+                  setTeacher({ ...teacher, tenantCode: newCode });
+                }}
+                className="px-4 py-3 bg-primary text-white text-xs font-bold rounded-xl shadow-lg hover:opacity-90 transition-all cursor-pointer"
+              >
+                Gerar Novo Código
+              </button>
+            )}
           </div>
         </div>
 
@@ -152,7 +175,9 @@ export const TeacherSettingsView: React.FC<TeacherSettingsViewProps> = ({
             <input
               type="date"
               value={teacher.contractStartDate || ''}
-              onChange={(e) => setTeacher({ ...teacher, contractStartDate: e.target.value })}
+              onChange={(e) =>
+                setTeacher({ ...teacher, contractStartDate: e.target.value })
+              }
               className="w-full bg-surface border border-border rounded-2xl px-4 py-2.5 text-foreground focus:outline-none focus:border-primary"
             />
           </div>
@@ -176,10 +201,18 @@ export const TeacherSettingsView: React.FC<TeacherSettingsViewProps> = ({
               onChange={(e) => setTeacher({ ...teacher, contractType: e.target.value })}
               className="w-full bg-surface border border-border rounded-2xl px-4 py-2.5 text-foreground focus:outline-none focus:border-primary"
             >
-              <option value="ACT / Contratado">ACT / Admitido em Caráter Temporário</option>
-              <option value="Efetivo">Professor Efetivo / Concursado</option>
-              <option value="Substituto">Professor Substituto</option>
-              <option value="Outro">Outro Vínculo</option>
+              <option value="ACT / Contratado" className="bg-surface text-foreground">
+                ACT / Admitido em Caráter Temporário
+              </option>
+              <option value="Efetivo" className="bg-surface text-foreground">
+                Professor Efetivo / Concursado
+              </option>
+              <option value="Substituto" className="bg-surface text-foreground">
+                Professor Substituto
+              </option>
+              <option value="Outro" className="bg-surface text-foreground">
+                Outro Vínculo
+              </option>
             </select>
           </div>
         </div>
@@ -193,53 +226,62 @@ export const TeacherSettingsView: React.FC<TeacherSettingsViewProps> = ({
             className="w-full bg-surface border border-border rounded-2xl px-4 py-3 text-foreground focus:outline-none focus:border-primary"
             placeholder="Deixe em branco para não alterar"
           />
+          <p className="text-[10px] text-muted mt-1 ml-1">
+            Preencha apenas se desejar alterar a senha de acesso.
+          </p>
         </div>
 
         <div className="pt-4 border-t border-border space-y-2">
-          <h3 className="text-sm font-bold text-foreground">Aparência e Contraste Visual</h3>
+          <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+            <span>Aparência e Contraste Visual</span>
+          </h3>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-surface rounded-2xl border border-border gap-3">
             <div>
-              <p className="text-xs font-bold text-foreground">Modo de Cor da Plataforma</p>
+              <p className="text-xs font-bold text-foreground">
+                Tema Escuro de Alto Contraste
+              </p>
               <p className="text-[11px] text-muted mt-0.5">
-                Escolha entre o tema escuro de alto contraste ou o tema claro.
+                Letras nítidas e legíveis para conforto visual e uso profissional prolongado.
               </p>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setThemeMode('dark')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                   themeMode === 'dark'
-                    ? 'bg-primary text-white border border-primary'
-                    : 'bg-surface-hover text-muted border border-border'
+                    ? 'bg-primary text-white shadow-md shadow-primary/25 border border-primary'
+                    : 'bg-surface-hover text-muted hover:text-foreground border border-border'
                 }`}
               >
-                🌙 Tema Escuro
+                <span>🌙 Tema Escuro (Padrão)</span>
               </button>
               <button
                 type="button"
                 onClick={() => setThemeMode('light')}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                   themeMode === 'light'
-                    ? 'bg-primary text-white border border-primary'
-                    : 'bg-surface-hover text-muted border border-border'
+                    ? 'bg-primary text-white shadow-md shadow-primary/25 border border-primary'
+                    : 'bg-surface-hover text-muted hover:text-foreground border border-border'
                 }`}
               >
-                ☀️ Tema Claro
+                <span>☀️ Tema Claro</span>
               </button>
             </div>
           </div>
         </div>
 
         <div className="pt-4 border-t border-border space-y-2">
-          <h3 className="text-sm font-bold text-foreground">Segurança da Sessão</h3>
+          <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+            <span>Segurança da Sessão</span>
+          </h3>
           <div className="flex items-center justify-between p-4 bg-surface rounded-2xl border border-border">
             <div>
               <p className="text-xs font-bold text-foreground">
                 Deslogar por 8 minutos de inatividade
               </p>
               <p className="text-[11px] text-muted mt-0.5">
-                Encerra a sessão automaticamente após 8 minutos sem interação.
+                Sua sessão será encerrada automaticamente após 8 minutos sem cliques ou movimentação.
               </p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
@@ -255,7 +297,7 @@ export const TeacherSettingsView: React.FC<TeacherSettingsViewProps> = ({
                 }}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+              <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
             </label>
           </div>
         </div>
@@ -265,21 +307,25 @@ export const TeacherSettingsView: React.FC<TeacherSettingsViewProps> = ({
             <Trophy className="w-4 h-4" />
             <span>Modo Platina (Gamificação Trimestral)</span>
           </h3>
-          <div className="flex items-center justify-between p-4 bg-amber-500/5 rounded-2xl border border-amber-500/20">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-amber-500/5 rounded-2xl border border-amber-500/20 gap-3">
             <div>
-              <p className="text-xs font-bold text-amber-500">Ativar Modo Platina para os Alunos</p>
+              <p className="text-xs font-bold text-amber-500">
+                Ativar Modo Platina para os Alunos
+              </p>
               <p className="text-[11px] text-amber-500/80 mt-0.5 max-w-md">
-                Habilita as missões trimestrais de bonificação por conclusão de AVs e RPs.
+                Habilita as 15 missões com dificuldade balanceada (3 AVs e 3 RPs). Se o aluno concluir 75%, ganha +1.0 na pior nota. Concluindo 100%, recebe +1.0 na média geral.
               </p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
               <input
                 type="checkbox"
                 checked={teacher.isPlatinumModeEnabled ?? true}
-                onChange={(e) => setTeacher({ ...teacher, isPlatinumModeEnabled: e.target.checked })}
+                onChange={(e) => {
+                  setTeacher({ ...teacher, isPlatinumModeEnabled: e.target.checked });
+                }}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+              <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
             </label>
           </div>
         </div>
@@ -291,9 +337,11 @@ export const TeacherSettingsView: React.FC<TeacherSettingsViewProps> = ({
           </h3>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-rose-500/5 rounded-2xl border border-rose-500/20 gap-3">
             <div>
-              <p className="text-xs font-bold text-rose-500">Excluir Todos os Alunos Ativos</p>
+              <p className="text-xs font-bold text-rose-500">
+                Excluir Todos os Alunos Ativos
+              </p>
               <p className="text-[11px] text-rose-400/80 mt-0.5 max-w-sm">
-                Zera a base de alunos para nova importação limpa via CSV.
+                Zera completamente a sua base de alunos, permitindo uma nova importação limpa via CSV.
               </p>
             </div>
             <button
@@ -333,13 +381,21 @@ export const TeacherSettingsView: React.FC<TeacherSettingsViewProps> = ({
                   },
                 }),
               });
-              if (!resFirestore.ok) throw new Error('Falha ao salvar no Firestore');
+
+              if (!resFirestore.ok) {
+                const errData = await resFirestore.json().catch(() => ({}));
+                throw new Error(errData.error || 'Falha ao salvar no Firestore');
+              }
+
               setTeacherSaveStatus({
                 type: 'success',
                 message: 'Perfil salvo com sucesso no Firestore (KronoMestre)!',
               });
-              setTimeout(() => setTeacherSaveStatus(null), 5000);
+              setTimeout(() => {
+                setTeacherSaveStatus(null);
+              }, 5000);
             } catch (err: any) {
+              console.error('Erro ao salvar configurações do professor:', err);
               setTeacherSaveStatus({
                 type: 'error',
                 message: `Erro ao salvar: ${err.message || String(err)}`,

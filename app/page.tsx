@@ -2,14 +2,13 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  initialTeacher,
   initialStudents,
   initialActivities,
   initialSchedule,
   initialLibrary,
   initialChatMessages,
 } from '@/lib/initialData';
-import { UserRole, TeacherUser, StudentUser, Activity, ChatMessage, LibraryFile } from '@/lib/types';
+import { StudentUser, Activity, LibraryFile } from '@/lib/types';
 import { AuthView } from '@/components/AuthView';
 import { fetchWithRetry } from '@/lib/fetchRetry';
 import { useFreshness } from '@/lib/useFreshness';
@@ -20,7 +19,6 @@ import { DashboardView } from '@/components/views/DashboardView';
 import { DashboardCentralView } from '@/components/views/DashboardCentralView';
 import { PostagemRcoView } from '@/components/views/PostagemRcoView';
 import { CorrectionsView } from '@/components/views/CorrectionsView';
-import { GradingView } from '@/components/views/GradingView';
 import { StudentsView } from '@/components/views/StudentsView';
 import { LibraryView } from '@/components/views/LibraryView';
 import { StudentPortalView } from '@/components/views/StudentPortalView';
@@ -34,7 +32,6 @@ import { AdaptedActivitiesView } from '@/components/views/AdaptedActivitiesView'
 import { InteractiveActivitiesView } from '@/components/views/InteractiveActivitiesView';
 import { TeacherSettingsView } from '@/components/views/TeacherSettingsView';
 
-import { normalizeStudentName, isActivityAdapted } from '@/lib/studentUtils';
 import { NewActivityModal } from '@/components/modals/NewActivityModal';
 import { EditActivityModal } from '@/components/modals/EditActivityModal';
 import { ViewActivityModal } from '@/components/modals/ViewActivityModal';
@@ -43,180 +40,179 @@ import { EditStudentModal } from '@/components/modals/EditStudentModal';
 import { StudentSupervisionModal } from '@/components/modals/StudentSupervisionModal';
 import { ParallelRecoveryModal } from '@/components/modals/ParallelRecoveryModal';
 import { ForceChangePasswordModal } from '@/components/modals/ForceChangePasswordModal';
-import { hashPasswordBcrypt } from '@/lib/crypto';
 import { scrollToTop } from '@/lib/utils';
 import {
-  getScopedLocalStorageItem,
   setScopedLocalStorageItem,
-  cleanLegacyCacheKeys,
   getTenantSessionItem,
   setTenantSessionItem,
-  removeTenantSessionItem,
-  purgeAllAuthAndTenantCaches,
 } from '@/lib/cacheUtils';
-import { CheckCircle2, AlertTriangle, Trophy } from 'lucide-react';
+import { CheckCircle2, AlertTriangle } from 'lucide-react';
 
-// Helper de unificação e desduplicação atômica de mensagens de chat
-const mergeChatMessage = (
-  prev: ChatMessage[],
-  incoming: ChatMessage
-): { updated: ChatMessage[]; isNew: boolean } => {
-  // 1. Verificação por ID exato
-  const exactIndex = prev.findIndex((m) => m.id === incoming.id);
-  if (exactIndex !== -1) {
-    return { updated: prev, isNew: false };
-  }
-
-  // 2. Verificação de mensagem otimista local vs banco
-  const optimisticMatchIndex = prev.findIndex((m) => {
-    const isSameSender = m.senderId === incoming.senderId;
-    const isSameThread =
-      m.threadId === incoming.threadId ||
-      m.recipientId === incoming.recipientId ||
-      m.threadId === incoming.recipientId ||
-      m.recipientId === incoming.threadId;
-    const isSameContent = m.content.trim() === incoming.content.trim();
-    const isOptimisticOrExtension =
-      m.id.startsWith('msg-') ||
-      incoming.id.startsWith('msg-') ||
-      m.id.startsWith('msg-ext-') ||
-      incoming.id.startsWith('msg-ext-');
-
-    return isSameSender && isSameThread && isSameContent && isOptimisticOrExtension;
-  });
-
-  if (optimisticMatchIndex !== -1) {
-    const clone = [...prev];
-    if (!incoming.id.startsWith('msg-') && clone[optimisticMatchIndex].id.startsWith('msg-')) {
-      clone[optimisticMatchIndex] = {
-        ...clone[optimisticMatchIndex],
-        ...incoming,
-        id: incoming.id,
-      };
-    }
-    return { updated: clone, isNew: false };
-  }
-
-  // 3. Verificação de segurança contra duplicatas idênticas no mesmo canal
-  const duplicateContentIndex = prev.findIndex((m) => {
-    const isSameSender = m.senderId === incoming.senderId;
-    const isSameThread = m.threadId === incoming.threadId;
-    const isSameContent = m.content.trim() === incoming.content.trim();
-    return isSameSender && isSameThread && isSameContent;
-  });
-
-  if (duplicateContentIndex !== -1) {
-    const clone = [...prev];
-    if (!incoming.id.startsWith('msg-') && clone[duplicateContentIndex].id.startsWith('msg-')) {
-      clone[duplicateContentIndex] = {
-        ...clone[duplicateContentIndex],
-        ...incoming,
-        id: incoming.id,
-      };
-    }
-    return { updated: clone, isNew: false };
-  }
-
-  return { updated: [...prev, incoming], isNew: true };
-};
+import { useAuthSession } from '@/hooks/useAuthSession';
+import { useStudentsManager } from '@/hooks/useStudentsManager';
+import { useActivitiesManager } from '@/hooks/useActivitiesManager';
+import { useChatMessaging } from '@/hooks/useChatMessaging';
 
 export default function Home() {
-
-
-
-
-  const handleReturnToSupervision = () => {
-    if (typeof window === "undefined") return;
-    const snapRaw = localStorage.getItem("teacher_snapshot");
-    if (snapRaw) {
-      try {
-        const snap = JSON.parse(snapRaw);
-        const tenantVals = Object.keys(localStorage).filter(k => k.includes("tenant") || k === "teacher_snapshot").map(k => ({k, v: localStorage.getItem(k)}));
-        
-        localStorage.clear();
-        sessionStorage.clear();
-        
-        tenantVals.forEach(tv => { if (tv.v !== null) localStorage.setItem(tv.k, tv.v); });
-        
-        localStorage.setItem("role", snap.role);
-        if (snap.teacherId) localStorage.setItem("teacherId", snap.teacherId);
-        if (snap.teacherName) localStorage.setItem("teacherName", snap.teacherName);
-        if (snap.secondTeacherId) localStorage.setItem("secondTeacherId", snap.secondTeacherId);
-        
-        window.location.reload();
-      } catch(e) {
-        console.error(e);
-      }
-    }
-  };
-
-
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const keys = Object.keys(localStorage);
-        const isStudent = keys.some(k => k.includes("role") && localStorage.getItem(k) === "student");
-        if (isStudent) {
-          keys.forEach(key => {
-            const kLower = key.toLowerCase();
-            if (kLower.includes("activities") || kLower.includes("students") || kLower.includes("submissions") || kLower.includes("library")) {
-              localStorage.removeItem(key);
-            }
-          });
-        }
-      } catch(e) {}
-    }
-  }, []);
-
-
-  // Mounting state to prevent SSR/hydration mismatch
   const [isMounted, setIsMounted] = useState(false);
-  const [students, setStudents] = useState<StudentUser[]>(initialStudents);
-  const [activities, setActivities] = useState<Activity[]>(initialActivities);
   const [schedule] = useState(initialSchedule);
   const [library, setLibrary] = useState<LibraryFile[]>(initialLibrary);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(initialChatMessages);
   const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
   const [isAiAutoReplyEnabled, setIsAiAutoReplyEnabled] = useState<boolean>(true);
-  const handleSaveEditedActivity = useCallback((updatedActivity: Activity) => {
-    setActivities((prev) => prev.map((a) => (a.id === updatedActivity.id ? updatedActivity : a)));
-    fetch('/api/activities', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedActivity),
-    }).catch((err) => console.warn('Erro ao persistir alteração da atividade:', err));
-  }, []);
-
-
-
-  // Auth state (substitui 'Carregando...' por 'Prof. Gilson Flores')
-  const [role, setRole] = useState<UserRole>(null);
-  const [teacher, setTeacher] = useState<TeacherUser>(() => ({
-    ...initialTeacher,
-    name:
-      initialTeacher.name && !initialTeacher.name.toLowerCase().includes('carregando')
-        ? initialTeacher.name
-        : 'Prof. Gilson Flores',
-  }));
-  const [currentStudent, setCurrentStudent] = useState<StudentUser | null>(null);
-  const [mustChangePassword, setMustChangePassword] = useState<boolean>(false);
-  const [inactivityTimeoutEnabled, setInactivityTimeoutEnabled] = useState<boolean>(true);
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [isDataLoading, setIsDataLoading] = useState<boolean>(false);
   const [dataLoadError, setDataLoadError] = useState<boolean>(false);
   const [loadDataTrigger, setLoadDataTrigger] = useState<number>(0);
-  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const lastLoadTimestampRef = useRef<number>(0);
 
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // Modals state
+  const [isNewActivityModalOpen, setIsNewActivityModalOpen] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+  const [isEditActivityModalOpen, setIsEditActivityModalOpen] = useState(false);
+  const [parallelRecoveryParentActivity, setParallelRecoveryParentActivity] =
+    useState<Activity | null>(null);
+  const [viewingActivity, setViewingActivity] = useState<Activity | null>(null);
+  const [teacherSaveStatus, setTeacherSaveStatus] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [globalDbStatus, setGlobalDbStatus] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [newTeacherPassword, setNewTeacherPassword] = useState('');
 
-  // Restaurar sessão de autenticação de forma limpa, prevenindo hydration mismatch
+  const showGlobalStatus = useCallback((type: 'success' | 'error' | 'info', message: string) => {
+    if (type === 'success') {
+      scrollToTop();
+    }
+    setGlobalDbStatus({ type: type === 'info' ? 'success' : type, message });
+    setTimeout(() => {
+      setGlobalDbStatus((current) => (current?.message === message ? null : current));
+    }, 6000);
+  }, []);
+
+  // Referências intermediárias para inicialização coordenada entre os hooks
+  const studentsSetterRef = useRef<React.Dispatch<React.SetStateAction<StudentUser[]>>>(() => {});
+  const activitiesSetterRef = useRef<React.Dispatch<React.SetStateAction<Activity[]>>>(() => {});
+  const messagesSetterRef = useRef<React.Dispatch<React.SetStateAction<any[]>>>(() => {});
+
+  const proxySetStudents = useCallback<React.Dispatch<React.SetStateAction<StudentUser[]>>>(
+    (val) => studentsSetterRef.current(val),
+    []
+  );
+  const proxySetActivities = useCallback<React.Dispatch<React.SetStateAction<Activity[]>>>(
+    (val) => activitiesSetterRef.current(val),
+    []
+  );
+  const proxySetMessages = useCallback<React.Dispatch<React.SetStateAction<any[]>>>(
+    (val) => messagesSetterRef.current(val),
+    []
+  );
+
+  // 1. Hook de Sessão e Autenticação
+  const {
+    role,
+    teacher,
+    setTeacher,
+    currentStudent,
+    setCurrentStudent,
+    mustChangePassword,
+    inactivityTimeoutEnabled,
+    setInactivityTimeoutEnabled,
+    isAuthChecking,
+    handleReturnToSupervision,
+    handleLoginTeacher,
+    handleLoginSecondTeacher,
+    handleLoginStudent,
+    handlePasswordChanged,
+    handleLogout,
+  } = useAuthSession({
+    setStudents: proxySetStudents,
+    setActivities: proxySetActivities,
+    setLibrary,
+    setChatMessages: proxySetMessages,
+    setIsDataLoading,
+    setLoadDataTrigger,
+    setCurrentTab,
+    showGlobalStatus,
+  });
+
+  // 2. Hook de Gestão de Alunos e Laudos PNE
+  const {
+    students,
+    setStudents,
+    isNewStudentModalOpen,
+    setIsNewStudentModalOpen,
+    editingStudent,
+    setEditingStudent,
+    supervisingStudent,
+    setSupervisingStudent,
+    handleUpdateStudentAvatar,
+    handleImportStudents,
+    handleCreateStudent,
+    handleSaveStudent,
+    handleSavePedagogicalNotes,
+    handleDeleteStudent,
+    handleDeleteAllStudents,
+    handleSuperviseStudent,
+  } = useStudentsManager({
+    initialStudents,
+    teacherId: teacher.id,
+    currentStudent,
+    setCurrentStudent,
+    setIsDataLoading,
+    showGlobalStatus,
+  });
+  studentsSetterRef.current = setStudents;
+
+  // 3. Hook de Gestão de Atividades, Submissões, Vínculos e Exclusão AEE
+  const {
+    activities,
+    setActivities,
+    selectedActivityForGrading,
+    setSelectedActivityForGrading,
+    handleSaveEditedActivity,
+    handleCreateActivity,
+    handleSaveActivity,
+    handleDeleteActivity,
+    handleUpdateSubmission,
+    handleStudentSubmitAnswer,
+    handleMarkPhysicalDelivery,
+    handleToggleRecoveryAuthorization,
+    handleGenerateDossier,
+    handleArchiveVinculo,
+    handleRestoreVinculo,
+  } = useActivitiesManager({
+    initialActivities,
+    teacher,
+    students,
+    setStudents,
+    currentStudent,
+    showGlobalStatus,
+  });
+  activitiesSetterRef.current = setActivities;
+
+  // 4. Hook de Mensagens e Boby Sociólogo
+  const {
+    chatMessages,
+    setChatMessages,
+    handleSendMessage,
+    handleMarkThreadAsRead,
+  } = useChatMessaging(
+    initialChatMessages,
+    teacher,
+    students,
+    activities,
+    isAiAutoReplyEnabled
+  );
+  messagesSetterRef.current = setChatMessages;
+
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-      setIsMounted(true);
-
-    // Hidratação segura de preferências locais do navegador pós-montagem
+    setIsMounted(true);
     try {
       const savedTheme = localStorage.getItem('app_theme_mode');
       if (savedTheme === 'light') setThemeMode('light');
@@ -224,242 +220,12 @@ export default function Home() {
       const savedAiReply = localStorage.getItem('teacher_ai_auto_reply_enabled');
       if (savedAiReply !== null) setIsAiAutoReplyEnabled(savedAiReply === 'true');
     } catch (e) {}
-
-    const checkSession = async () => {
-      if (typeof window === 'undefined') return;
-      cleanLegacyCacheKeys();
-
-      const isExplicitLogout = sessionStorage.getItem('explicit_logout') === 'true';
-      if (isExplicitLogout) {
-        purgeAllAuthAndTenantCaches();
-        setRole(null);
-        setCurrentStudent(null);
-        setIsAuthChecking(false);
-        return;
-      }
-
-      // ISOLAMENTO DE TENANT: Busca a sessão associada ao usuário ativo no sessionStorage
-      const currentActiveUid = sessionStorage.getItem('current_active_user_id') || '';
-      const activeSession =
-        (currentActiveUid ? getTenantSessionItem('active_session', currentActiveUid) : null) ||
-        sessionStorage.getItem('active_session');
-      let parsedLocalSession: any = null;
-      if (activeSession) {
-        try {
-          parsedLocalSession = JSON.parse(activeSession);
-        } catch (e) {}
-      }
-
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        let res: Response | null = null;
-        try {
-          res = await fetch('/api/auth/session', {
-            signal: controller.signal,
-            cache: 'no-store',
-            headers: {
-              'Cache-Control': 'no-cache, no-store',
-              'Pragma': 'no-cache',
-            },
-          });
-        } finally {
-          clearTimeout(timeoutId);
-        }
-        if (res && res.ok) {
-          const data = await res.json();
-          if (data.user && data.user.role === 'teacher') {
-            const tenant = data.user.tenant || {};
-            setRole('teacher');
-            setTeacher((prev) => ({
-              ...prev,
-              id: data.user.id,
-              email: data.user.email,
-              name: tenant.name || tenant.nome || data.user.name || 'Prof. Gilson Flores',
-              subject: tenant.subject || prev.subject,
-              school: tenant.school !== undefined ? tenant.school : prev.school,
-              phone: tenant.phone !== undefined ? tenant.phone : prev.phone,
-              avatarUrl: tenant.avatarUrl || prev.avatarUrl,
-              matriculaFuncional:
-                tenant.matriculaFuncional !== undefined
-                  ? tenant.matriculaFuncional
-                  : prev.matriculaFuncional,
-              tenantCode:
-                tenant.tenantCode ||
-                prev.tenantCode ||
-                parsedLocalSession?.teacherData?.tenantCode ||
-                parsedLocalSession?.tenantCode ||
-                'G2U9',
-              contractStartDate: tenant.contractStartDate || prev.contractStartDate,
-              contractEndDate: tenant.contractEndDate || prev.contractEndDate,
-              contractType: tenant.contractType || prev.contractType,
-              contractStatus: tenant.contractStatus || prev.contractStatus,
-              driveFolderUrl: tenant.driveFolderUrl || prev.driveFolderUrl,
-              is_admin:
-                tenant.is_admin ??
-                (data.user.email === '755840@profe.sed.sc.gov.br' ||
-                  data.user.email === 'gilsonjuniores@gmail.com'),
-              isAdmin:
-                tenant.is_admin ??
-                (data.user.email === '755840@profe.sed.sc.gov.br' ||
-                  data.user.email === 'gilsonjuniores@gmail.com'),
-              plan_type: tenant.plan_type || 'unlimited',
-              escolas_vinculadas: tenant.escolas_vinculadas || prev.escolas_vinculadas || [],
-              disciplinas: tenant.disciplinas || prev.disciplinas || [],
-              ownerTeacherId: data.user.id,
-            }));
-
-            if (typeof window !== 'undefined') {
-              const sessionPayload = {
-                role: 'teacher',
-                ownerTeacherId: data.user.id,
-                teacherData: data.user,
-              };
-              setTenantSessionItem('active_session', JSON.stringify(sessionPayload), data.user.id);
-            }
-
-            // Hidratação imediata do cache local para resiliência instantânea
-            if (typeof window !== 'undefined') {
-              try {
-                const cachedStudents = getScopedLocalStorageItem('local_students_data', data.user.id);
-                if (cachedStudents) {
-                  const parsed = JSON.parse(cachedStudents);
-                  if (Array.isArray(parsed) && parsed.length > 0) {
-                    setStudents(parsed);
-                  }
-                }
-                const cachedActs = getScopedLocalStorageItem('local_activities_data', data.user.id);
-                if (cachedActs) {
-                  const parsed = JSON.parse(cachedActs);
-                  if (Array.isArray(parsed) && parsed.length > 0) {
-                    setActivities(parsed);
-                  }
-                }
-                const cachedMsgs = getScopedLocalStorageItem('local_messages_data', data.user.id);
-                if (cachedMsgs) {
-                  const parsed = JSON.parse(cachedMsgs);
-                  if (Array.isArray(parsed) && parsed.length > 0) {
-                    setChatMessages(parsed);
-                  }
-                }
-              } catch (e) {}
-            }
-          } else if (data.user && data.user.role === 'second_teacher') {
-            const updatedTeacher = {
-              ...(parsedLocalSession?.teacherData || {}),
-              id: data.user.id,
-              name: data.user.name,
-              email: data.user.email,
-              ownerTeacherId: data.user.ownerTeacherId,
-              mustChangePassword: Boolean(data.user.mustChangePassword),
-              driveFolderUrl: data.user.driveFolderUrl || parsedLocalSession?.teacherData?.driveFolderUrl || '',
-            };
-            setTeacher(updatedTeacher);
-            setRole('second_teacher');
-            setMustChangePassword(Boolean(data.user.mustChangePassword));
-
-            if (typeof window !== 'undefined') {
-              const sessionPayload = {
-                role: 'second_teacher',
-                ownerTeacherId: data.user.ownerTeacherId,
-                teacherData: updatedTeacher,
-                mustChangePassword: Boolean(data.user.mustChangePassword),
-              };
-              setTenantSessionItem('active_session', JSON.stringify(sessionPayload), data.user.id);
-            }
-          } else if (data.user && data.user.role === 'student') {
-            if (data.user?.tenant) {
-              const t = data.user.tenant;
-              setTeacher((prev) => ({
-                ...prev,
-                id: data.user.ownerTeacherId || prev.id,
-                name: t.name || 'Prof. Gilson Flores',
-                subject: t.subject || prev.subject,
-                school: t.school || prev.school,
-                avatarUrl: t.avatarUrl || prev.avatarUrl,
-                driveFolderUrl: t.driveFolderUrl || prev.driveFolderUrl,
-              }));
-            }
-            const studentPayload = {
-              ...(parsedLocalSession?.studentData || {}),
-              ...data.user,
-            };
-            setCurrentStudent(studentPayload);
-            setRole('student');
-            setMustChangePassword(Boolean(data.user.mustChangePassword));
-
-            if (typeof window !== 'undefined') {
-              const sessionPayload = {
-                role: 'student',
-                studentId: data.user.id,
-                studentData: studentPayload,
-                ownerTeacherId: data.user.ownerTeacherId || '',
-                mustChangePassword: Boolean(data.user.mustChangePassword),
-              };
-              setTenantSessionItem('active_session', JSON.stringify(sessionPayload), data.user.id);
-            }
-          } else {
-            // O servidor respondeu com sucesso que NÃO HÁ USUÁRIO AUTENTICADO (user: null)
-            // Purga caches residuais para impedir herança acidental de sessão
-            purgeAllAuthAndTenantCaches();
-            setRole(null);
-            setCurrentStudent(null);
-          }
-        } else {
-          // SEGURANÇA: Falha de conexão ou token inválido limpa os caches. Zero confiança no cliente.
-          purgeAllAuthAndTenantCaches();
-          setRole(null);
-          setCurrentStudent(null);
-        }
-
-        const savedDriveUrl = localStorage.getItem('teacher_drive_folder_url');
-        if (savedDriveUrl) setTeacher((prev) => ({ ...prev, driveFolderUrl: savedDriveUrl }));
-
-        const savedTimeout = localStorage.getItem('inactivity_timeout_enabled');
-        if (savedTimeout !== null) setInactivityTimeoutEnabled(savedTimeout === 'true');
-      } catch (e) {
-        console.warn('Erro ao restaurar sessão do Firebase:', e);
-        purgeAllAuthAndTenantCaches();
-        setRole(null);
-        setCurrentStudent(null);
-      } finally {
-        setIsAuthChecking(false);
-      }
-    };
-
-    checkSession();
   }, []);
-
 
   // Active datasets
   const activeStudents = useMemo(() => students.filter((s) => !s.isArchived), [students]);
-  const activeActivities = useMemo(() => {
-    const isExpiredByDeadline = (deadlineStr?: string): boolean => {
-      if (!deadlineStr || typeof deadlineStr !== "string") return false;
-      const clean = deadlineStr.trim();
-      if (!clean || clean.toLowerCase() === "sem prazo") return false;
-      const timeMatch = clean.match(/(\d{1,2}):(\d{2})/);
-      const hours = timeMatch ? parseInt(timeMatch[1], 10) : 23;
-      const minutes = timeMatch ? parseInt(timeMatch[2], 10) : 59;
-      const brMatch = clean.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-      if (brMatch) {
-        const exp = new Date(parseInt(brMatch[3], 10), parseInt(brMatch[2], 10) - 1, parseInt(brMatch[1], 10), hours, minutes, 59, 999);
-        return Date.now() > exp.getTime();
-      }
-      const isoMatch = clean.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if (isoMatch) {
-        const exp = new Date(parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10) - 1, parseInt(isoMatch[3], 10), hours, minutes, 59, 999);
-        return Date.now() > exp.getTime();
-      }
-      return false;
-    };
+  const activeActivities = useMemo(() => activities.filter((a) => !a.isArchived), [activities]);
 
-    return activities
-      .filter((a) => !a.isArchived)
-      
-  }, [activities]);
-
-  // Extração estável dos identificadores do professor para evitar recálculo desnecessário de visibleStudentsForRole
   const teacherId = teacher?.id?.toString().trim().toLowerCase() || '';
   const teacherName = teacher?.name?.trim().toLowerCase() || '';
   const teacherEmail = teacher?.email?.trim().toLowerCase() || '';
@@ -474,7 +240,10 @@ export default function Home() {
         const matchEmail = Boolean(stId && teacherEmail && stId === teacherEmail);
         const matchName = Boolean(
           stName &&
-            ((teacherName && (stName === teacherName || stName.includes(teacherName) || teacherName.includes(stName))) ||
+            ((teacherName &&
+              (stName === teacherName ||
+                stName.includes(teacherName) ||
+                teacherName.includes(stName))) ||
               (teacherEmail && stName === teacherEmail))
         );
 
@@ -484,7 +253,6 @@ export default function Home() {
     return activeStudents;
   }, [role, teacherId, teacherName, teacherEmail, activeStudents]);
 
-  // Estrutura memoizada de agrupamento por turma: O(1) de acesso para filtros de turmas
   const studentsByTurma = useMemo(() => {
     const map = new Map<string, StudentUser[]>();
     for (const student of visibleStudentsForRole) {
@@ -499,28 +267,9 @@ export default function Home() {
     return map;
   }, [visibleStudentsForRole]);
 
-  // Lista ordenada única de turmas ativas memoizada
   const availableTurmas = useMemo(() => {
     return Array.from(studentsByTurma.keys()).sort((a, b) => a.localeCompare(b));
   }, [studentsByTurma]);
-
-  const [selectedActivityForGrading, setSelectedActivityForGrading] = useState<Activity | null>(null);
-  const [globalSearch, setGlobalSearch] = useState('');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  // Modals state
-  const [isNewActivityModalOpen, setIsNewActivityModalOpen] = useState(false);
-  const [isNewStudentModalOpen, setIsNewStudentModalOpen] = useState(false);
-  const [editingStudent, setEditingStudent] = useState<StudentUser | null>(null);
-  const [supervisingStudent, setSupervisingStudent] = useState<StudentUser | null>(null);
-  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
-  const [isEditActivityModalOpen, setIsEditActivityModalOpen] = useState(false);
-  const [parallelRecoveryParentActivity, setParallelRecoveryParentActivity] = useState<Activity | null>(null);
-  const [viewingActivity, setViewingActivity] = useState<Activity | null>(null);
-  const [teacherSaveStatus, setTeacherSaveStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [globalDbStatus, setGlobalDbStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [newTeacherPassword, setNewTeacherPassword] = useState('');
-
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
@@ -535,23 +284,12 @@ export default function Home() {
     }
   }, [themeMode]);
 
-
   const handleToggleAiAutoReply = (enabled: boolean) => {
     setIsAiAutoReplyEnabled(enabled);
     if (typeof window !== 'undefined') {
       localStorage.setItem('teacher_ai_auto_reply_enabled', String(enabled));
     }
   };
-
-  const showGlobalStatus = useCallback((type: 'success' | 'error' | 'info', message: string) => {
-    if (type === 'success') {
-      scrollToTop();
-    }
-    setGlobalDbStatus({ type: type === 'info' ? 'success' : type, message });
-    setTimeout(() => {
-      setGlobalDbStatus((current) => (current?.message === message ? null : current));
-    }, 6000);
-  }, []);
 
   const handleSaveDriveFolderUrl = async (url: string) => {
     const cleanUrl = url.trim();
@@ -560,7 +298,8 @@ export default function Home() {
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem('teacher_drive_folder_url', cleanUrl);
-        const currentActiveUid = sessionStorage.getItem('current_active_user_id') || teacher.id || '';
+        const currentActiveUid =
+          sessionStorage.getItem('current_active_user_id') || teacher.id || '';
         const sessionStr =
           (currentActiveUid ? getTenantSessionItem('active_session', currentActiveUid) : null) ||
           sessionStorage.getItem('active_session');
@@ -589,8 +328,6 @@ export default function Home() {
     } catch (err) {
       console.warn('Aviso ao sincronizar link do Drive no Firestore:', err);
     }
-
-    
 
     showGlobalStatus('success', 'Link do repositório do Google Drive salvo e gravado com sucesso!');
   };
@@ -670,7 +407,11 @@ export default function Home() {
           if (Array.isArray(stuData.students) && stuData.students.length > 0) {
             setStudents(stuData.students);
             if (typeof window !== 'undefined') {
-              setScopedLocalStorageItem('local_students_data', JSON.stringify(stuData.students), teacher.id);
+              setScopedLocalStorageItem(
+                'local_students_data',
+                JSON.stringify(stuData.students),
+                teacher.id
+              );
             }
           }
         }
@@ -682,7 +423,11 @@ export default function Home() {
           if (Array.isArray(actData.activities)) {
             setActivities(actData.activities);
             if (typeof window !== 'undefined') {
-              setScopedLocalStorageItem('local_activities_data', JSON.stringify(actData.activities), teacher.id);
+              setScopedLocalStorageItem(
+                'local_activities_data',
+                JSON.stringify(actData.activities),
+                teacher.id
+              );
             }
           }
         }
@@ -694,14 +439,19 @@ export default function Home() {
           if (Array.isArray(msgData.messages)) {
             setChatMessages(msgData.messages);
             if (typeof window !== 'undefined') {
-              setScopedLocalStorageItem('local_messages_data', JSON.stringify(msgData.messages), teacher.id);
+              setScopedLocalStorageItem(
+                'local_messages_data',
+                JSON.stringify(msgData.messages),
+                teacher.id
+              );
             }
           }
         }
 
         const cacheKey = `library_cache_${teacher?.id || 'default'}`;
         const cachedAt = Number(sessionStorage.getItem(`${cacheKey}_ts`) || 0);
-        const cachedLibrary = Date.now() - cachedAt < 10 * 60 * 1000 ? sessionStorage.getItem(cacheKey) : null;
+        const cachedLibrary =
+          Date.now() - cachedAt < 10 * 60 * 1000 ? sessionStorage.getItem(cacheKey) : null;
 
         if (cachedLibrary) {
           setLibrary(JSON.parse(cachedLibrary));
@@ -717,7 +467,8 @@ export default function Home() {
                 category: item.category || 'Geral',
                 turma: item.turma || 'Todas',
                 fileSize: item.fileSize || item.file_size || '1 MB',
-                updatedAt: item.updatedAt || item.updated_at || new Date().toLocaleDateString('pt-BR'),
+                updatedAt:
+                  item.updatedAt || item.updated_at || new Date().toLocaleDateString('pt-BR'),
                 driveUrl: item.driveUrl || item.drive_url || item.file_url || '',
               }));
               setLibrary(mappedLibrary);
@@ -742,9 +493,12 @@ export default function Home() {
         setIsDataLoading(false);
       });
     }
-  }, [loadDataTrigger, role, teacher.id]);
+  }, [loadDataTrigger, role, teacher.id, setStudents, setActivities, setChatMessages]);
 
-  const silentRefreshState = useRef<{ running: boolean; queued: Set<string> }>({ running: false, queued: new Set() });
+  const silentRefreshState = useRef<{ running: boolean; queued: Set<string> }>({
+    running: false,
+    queued: new Set(),
+  });
   const silentRefresh = useCallback(
     async (changed: string[]) => {
       const st = silentRefreshState.current;
@@ -762,7 +516,11 @@ export default function Home() {
               const d = await r.json();
               if (Array.isArray(d.students) && d.students.length > 0) {
                 setStudents(d.students);
-                setScopedLocalStorageItem('local_students_data', JSON.stringify(d.students), teacher.id);
+                setScopedLocalStorageItem(
+                  'local_students_data',
+                  JSON.stringify(d.students),
+                  teacher.id
+                );
               }
             }
           }
@@ -772,7 +530,11 @@ export default function Home() {
               const d = await r.json();
               if (Array.isArray(d.activities)) {
                 setActivities(d.activities);
-                setScopedLocalStorageItem('local_activities_data', JSON.stringify(d.activities), teacher.id);
+                setScopedLocalStorageItem(
+                  'local_activities_data',
+                  JSON.stringify(d.activities),
+                  teacher.id
+                );
               }
             }
           }
@@ -782,7 +544,11 @@ export default function Home() {
               const d = await r.json();
               if (Array.isArray(d.messages)) {
                 setChatMessages(d.messages);
-                setScopedLocalStorageItem('local_messages_data', JSON.stringify(d.messages), teacher.id);
+                setScopedLocalStorageItem(
+                  'local_messages_data',
+                  JSON.stringify(d.messages),
+                  teacher.id
+                );
               }
             }
           }
@@ -800,7 +566,8 @@ export default function Home() {
                   category: item.category || 'Geral',
                   turma: item.turma || 'Todas',
                   fileSize: item.fileSize || item.file_size || '1 MB',
-                  updatedAt: item.updatedAt || item.updated_at || new Date().toLocaleDateString('pt-BR'),
+                  updatedAt:
+                    item.updatedAt || item.updated_at || new Date().toLocaleDateString('pt-BR'),
                   driveUrl: item.driveUrl || item.drive_url || item.file_url || '',
                 }));
                 setLibrary(mapped);
@@ -815,17 +582,25 @@ export default function Home() {
       } finally {
         st.running = false;
       }
-    }, [teacher]);
+    },
+    [teacher.id, setStudents, setActivities, setChatMessages]
+  );
 
   const { updateAvailable } = useFreshness({
     enabled: role === 'teacher' || role === 'second_teacher' || role === 'student',
     onChanged: silentRefresh,
   });
 
-  // Tab efetiva para 2º Professor
   const activeTeacherTab = useMemo(() => {
     if (role === 'second_teacher') {
-      const allowedTabs = ['dashboard', 'painel', 'alunos', 'atestados_rad', 'arquivos', 'configuracoes'];
+      const allowedTabs = [
+        'dashboard',
+        'painel',
+        'alunos',
+        'atestados_rad',
+        'arquivos',
+        'configuracoes',
+      ];
       if (!allowedTabs.includes(currentTab)) {
         return 'dashboard';
       }
@@ -833,29 +608,20 @@ export default function Home() {
     return currentTab;
   }, [role, currentTab]);
 
-  // Efeito de SSE (Server-Sent Events) removido completamente. Evita N x N reads no Firestore.
-  useEffect(() => {
-    if (role === 'student' && currentStudent?.id) {
-    }
-    // Sem EventSource, sem consumo de cota!
-  }, [role, currentStudent?.id]);
+  const targetPresenceStudents =
+    role === 'second_teacher' ? visibleStudentsForRole : activeStudents;
+
   const presenceSignature = useMemo(() => {
     if (role === 'student') return 'student_self';
-    
+    if (!Array.isArray(targetPresenceStudents) || targetPresenceStudents.length === 0)
+      return 'empty';
 
-    const targetStudents = role === 'second_teacher' ? visibleStudentsForRole : activeStudents;
-    if (!Array.isArray(targetStudents) || targetStudents.length === 0) return 'empty';
-
-    return targetStudents
+    return targetPresenceStudents
       .filter((s) => s.isOnline === true && s.lastActiveAt)
       .map((s) => `${s.id}:${s.lastActiveAt}`)
       .join('|');
-  }, [role, role === 'second_teacher' ? visibleStudentsForRole : activeStudents]);
+  }, [role, targetPresenceStudents]);
 
-  // Contador de presença real de alunos (zero dados fantasmas e sem número 37 estático),
-  // protegido por memoização com verificação leve de janela temporal de 5 minutos
-
-  // Carregamento sob demanda da Biblioteca do Firestore
   useEffect(() => {
     if (activeTeacherTab !== 'arquivos') return;
     if (library.length > 0) return;
@@ -872,13 +638,18 @@ export default function Home() {
               category: item.category || 'Geral',
               turma: item.turma || 'Todas',
               fileSize: item.fileSize || item.file_size || '1 MB',
-              updatedAt: item.updatedAt || item.updated_at || new Date().toLocaleDateString('pt-BR'),
+              updatedAt:
+                item.updatedAt || item.updated_at || new Date().toLocaleDateString('pt-BR'),
               driveUrl: item.driveUrl || item.drive_url || item.file_url || '',
             }));
             setLibrary(mappedLibrary);
             if (typeof window !== 'undefined') {
               try {
-                setScopedLocalStorageItem('library_files_data', JSON.stringify(mappedLibrary), teacher.id);
+                setScopedLocalStorageItem(
+                  'library_files_data',
+                  JSON.stringify(mappedLibrary),
+                  teacher.id
+                );
               } catch (e) {}
             }
           }
@@ -889,119 +660,19 @@ export default function Home() {
     };
 
     loadLibrary();
-  }, [activeTeacherTab, teacher.id]);
-
-  // Auth Handlers
-  const handleLoginTeacher = (loggedTeacher: TeacherUser) => {
-    setIsDataLoading(true);
-    setTeacher(loggedTeacher);
-    setRole('teacher');
-    setMustChangePassword(false);
-    setCurrentTab('painel');
-    if (typeof window !== 'undefined') {
-      purgeAllAuthAndTenantCaches();
-      const sessionPayload = {
-        role: 'teacher',
-        ownerTeacherId: loggedTeacher.id,
-        teacherData: loggedTeacher,
-      };
-      setTenantSessionItem('active_session', JSON.stringify(sessionPayload), loggedTeacher.id);
-
-      try {
-        const cachedStudents = getScopedLocalStorageItem('local_students_data', loggedTeacher.id);
-        if (cachedStudents) {
-          const parsed = JSON.parse(cachedStudents);
-          if (Array.isArray(parsed) && parsed.length > 0) setStudents(parsed);
-        }
-        const cachedActs = getScopedLocalStorageItem('local_activities_data', loggedTeacher.id);
-        if (cachedActs) {
-          const parsed = JSON.parse(cachedActs);
-          if (Array.isArray(parsed) && parsed.length > 0) setActivities(parsed);
-        }
-        const cachedLib = getScopedLocalStorageItem('library_files_data', loggedTeacher.id);
-        if (cachedLib) {
-          const parsed = JSON.parse(cachedLib);
-          if (Array.isArray(parsed) && parsed.length > 0) setLibrary(parsed);
-        }
-      } catch (e) {
-        console.warn('Erro ao carregar cache do professor:', e);
-      }
-    }
-    setLoadDataTrigger((prev) => prev + 1);
-  };
-
-  const handleLoginSecondTeacher = (loggedTeacher: TeacherUser) => {
-    setIsDataLoading(true);
-    setTeacher(loggedTeacher);
-    setRole('second_teacher');
-    setMustChangePassword(Boolean(loggedTeacher.mustChangePassword));
-    setCurrentTab('dashboard');
-    if (typeof window !== 'undefined') {
-      purgeAllAuthAndTenantCaches();
-      const sessionPayload = {
-        role: 'second_teacher',
-        ownerTeacherId: loggedTeacher.id,
-        teacherData: loggedTeacher,
-        mustChangePassword: Boolean(loggedTeacher.mustChangePassword),
-      };
-      setTenantSessionItem('active_session', JSON.stringify(sessionPayload), loggedTeacher.id);
-    }
-    setLoadDataTrigger((prev) => prev + 1);
-  };
-
-  const handleLoginStudent = (loggedStudent: StudentUser) => {
-    if (typeof window !== "undefined") {
-      const keysToKeep = Object.keys(localStorage).filter(k => k.includes("tenant") || k === "teacher_snapshot");
-      const tenantVals = keysToKeep.map(k => ({k, v: localStorage.getItem(k)}));
-      localStorage.clear();
-      sessionStorage.clear();
-      tenantVals.forEach(tv => { if (tv.v !== null) localStorage.setItem(tv.k, tv.v); });
-    }
-
-    setIsDataLoading(true);
-    setCurrentStudent(loggedStudent);
-    setRole('student');
-    setMustChangePassword(Boolean(loggedStudent.mustChangePassword));
-    if (typeof window !== 'undefined') {
-      purgeAllAuthAndTenantCaches();
-      const sessionPayload = {
-        role: 'student',
-        studentId: loggedStudent.id,
-        studentData: loggedStudent,
-        ownerTeacherId: loggedStudent.ownerTeacherId || '',
-        mustChangePassword: Boolean(loggedStudent.mustChangePassword),
-      };
-      setTenantSessionItem('active_session', JSON.stringify(sessionPayload), loggedStudent.id);
-    }
-    setLoadDataTrigger((prev) => prev + 1);
-  };
-
-  const handlePasswordChanged = () => {
-    setMustChangePassword(false);
-    showGlobalStatus('success', 'Nova senha pessoal cadastrada com sucesso! Acesso liberado.');
-    if (typeof window !== 'undefined') {
-      try {
-        const currentActiveUid = sessionStorage.getItem('current_active_user_id') || '';
-        const sessionStr =
-          (currentActiveUid ? getTenantSessionItem('active_session', currentActiveUid) : null) ||
-          sessionStorage.getItem('active_session');
-        if (sessionStr) {
-          const session = JSON.parse(sessionStr);
-          session.mustChangePassword = false;
-          if (session.studentData) session.studentData.mustChangePassword = false;
-          if (session.teacherData) session.teacherData.mustChangePassword = false;
-          setTenantSessionItem('active_session', JSON.stringify(session), currentActiveUid);
-        }
-      } catch (e) {
-        console.warn('Erro ao atualizar active_session no cliente:', e);
-      }
-    }
-  };
+  }, [activeTeacherTab, teacher.id, library.length]);
 
   const handleTeacherTabChange = useCallback(
     (tab: string) => {
       if (role === 'second_teacher') {
-        const allowedTabs = ['dashboard', 'painel', 'alunos', 'atestados_rad', 'arquivos', 'configuracoes'];
+        const allowedTabs = [
+          'dashboard',
+          'painel',
+          'alunos',
+          'atestados_rad',
+          'arquivos',
+          'configuracoes',
+        ];
         if (!allowedTabs.includes(tab)) {
           setCurrentTab('dashboard');
           return;
@@ -1010,1114 +681,22 @@ export default function Home() {
       setCurrentTab(tab);
       if (tab !== 'grading' && tab !== 'correcoes') setSelectedActivityForGrading(null);
     },
-    [role]
+    [role, setSelectedActivityForGrading]
   );
 
-  const handleLogout = useCallback(async (reason?: string) => {
-    if (typeof window !== 'undefined') {
-      purgeAllAuthAndTenantCaches();
-      sessionStorage.setItem('explicit_logout', 'true');
-    }
-
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-    } catch (e) {
-      console.warn('Falha ao invalidar cookie no servidor', e);
-    }
-
-    
-
-    setRole(null);
-    setCurrentStudent(null);
-    setStudents(initialStudents);
-    setActivities(initialActivities);
-    setLibrary(initialLibrary);
-
-    if (reason && typeof reason === 'string') {
-      showGlobalStatus('error', reason);
-    }
-
-    window.location.href = '/';
-  }, [showGlobalStatus, setStudents, setActivities, setLibrary]);
-
-  // Temporizador de Desconexão por Inatividade (8 minutos)
-  useEffect(() => {
-    if (!role || !inactivityTimeoutEnabled) return;
-
-    const INACTIVITY_LIMIT_MS = 8 * 60 * 1000;
-    let timeoutId: NodeJS.Timeout;
-
-    const resetTimer = () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        handleLogout('Sessão encerrada por inatividade (8 minutos sem interação).');
-      }, INACTIVITY_LIMIT_MS);
-    };
-
-    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
-    events.forEach((evt) => window.addEventListener(evt, resetTimer, { passive: true }));
-
-    resetTimer();
-
-    return () => {
-      clearTimeout(timeoutId);
-      events.forEach((evt) => window.removeEventListener(evt, resetTimer));
-    };
-  }, [role, inactivityTimeoutEnabled, handleLogout]);
-
-  const handleCreateActivity = async (newAct: Activity) => {
-    setActivities((prev) => {
-      if (prev.some((a) => a.id === newAct.id)) return prev;
-
-      const next = [newAct, ...prev];
-      if (typeof window !== 'undefined')
-        setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
-      return next;
-    });
-
-    try {
-      const res = await fetch('/api/activities', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newAct),
-      });
-      if (!res.ok) throw new Error('Falha ao salvar no banco.');
-
-      showGlobalStatus('success', `Atividade "${newAct.title}" criada com sucesso na nuvem!`);
-    } catch (err) {
-      console.warn('Erro ao criar atividade:', err);
-      showGlobalStatus('error', 'A atividade aparece na tela, mas falhou ao salvar na nuvem.');
-    }
-  };
-
-  const handleSaveActivity = async (updatedAct: Activity) => {
-
-    setActivities((prev) => {
-      const next = prev.map((a) => (a.id === updatedAct.id ? updatedAct : a));
-      if (typeof window !== 'undefined')
-        setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
-      return next;
-    });
-    if (selectedActivityForGrading?.id === updatedAct.id) setSelectedActivityForGrading(updatedAct);
-
-    try {
-      const res = await fetch('/api/activities', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedAct),
-      });
-      if (!res.ok) throw new Error('Falha na atualização.');
-      showGlobalStatus('success', `Atividade "${updatedAct.title}" atualizada com sucesso!`);
-    } catch (err) {
-      console.warn('Erro ao atualizar atividade:', err);
-      showGlobalStatus('error', 'Dados alterados na tela, mas não salvos na nuvem.');
-    }
-  };
-
-  const handleDeleteActivity = async (activity: Activity) => {
-    const subs = activity.submissions || [];
-    const hasAppliedGradesOrWork =
-      subs.length > 0 &&
-      subs.some(
-        (s) =>
-          s.status === 'graded' ||
-          s.status === 'pending' ||
-          s.status === 'returned' ||
-          s.status === 'draft' ||
-          (s.essayScore !== undefined && s.essayScore !== null) ||
-          (s.objectiveScore !== undefined && s.objectiveScore > 0) ||
-          Boolean(s.essayAnswer) ||
-          Boolean(s.submittedAt)
-      );
-
-    const isAeeActivity = isActivityAdapted(activity) || (activity as any).activityDomain === 'adapted_aee';
-    if (hasAppliedGradesOrWork && !isAeeActivity) {
-      const allRcoSigned = subs.length > 0 && subs.every((s) => Boolean(s.registeredInStateSystem));
-      if (!allRcoSigned) {
-        showGlobalStatus(
-          'error',
-          `Bloqueio de Segurança: A atividade "${activity.title}" possui notas aplicadas ou entregas com pendência no RCO.`
-        );
-        return;
-      }
-    }
-
-    setActivities((prev) => {
-      const next = prev.filter((a) => a.id !== activity.id);
-      if (typeof window !== 'undefined')
-        setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
-      return next;
-    });
-    if (selectedActivityForGrading?.id === activity.id) setSelectedActivityForGrading(null);
-
-    try {
-      const res = await fetch(`/api/activities?id=${activity.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Falha ao excluir na nuvem.');
-      showGlobalStatus('success', `Atividade "${activity.title}" excluída com sucesso!`);
-    } catch (err) {
-      console.warn('Erro ao excluir atividade:', err);
-      showGlobalStatus('error', 'Atividade oculta da tela, mas exclusão na nuvem falhou.');
-    }
-  };
-
-  const handleSelectActivityForGrading = (act: Activity) => {
-    setSelectedActivityForGrading(act);
-    setCurrentTab('grading');
-  };
-
-  const handleUpdateSubmission = async (
-    activityId: string,
-    studentId: string,
-    essayScore: number,
-    feedback: string,
-    status: 'graded' | 'returned' | 'draft',
-    extraPoints?: number,
-    registeredInStateSystem?: boolean
-  ) => {
-    try {
-      const targetActivity = activities.find((a) => a.id === activityId);
-      if (!targetActivity) return;
-
-      const currentSub = targetActivity.submissions.find((s) => s.studentId === studentId);
-      const currentReturnCount = currentSub?.returnCount || 0;
-
-      if (status === 'returned' && currentReturnCount >= 3) {
-        showGlobalStatus(
-          'error',
-          '🚨 Bloqueio: Esta atividade já foi devolvida 3 vezes. A 4ª devolução está bloqueada! Atribua a nota final e conclua a avaliação.'
-        );
-        return;
-      }
-
-      const isInitialGroupGrading = currentSub?.status === 'pending' && Boolean(currentSub?.groupMembers);
-      const targetGroupStudentIds = new Set<string>([studentId]);
-      const missingGroupMembers: StudentUser[] = [];
-
-      if (currentSub?.groupMembers) {
-        const memberNames = currentSub.groupMembers
-          .split(',')
-          .map((n) => n.trim())
-          .filter(Boolean);
-
-        memberNames.forEach((memberCandidate) => {
-          const normCandidate = normalizeStudentName(memberCandidate);
-          const matchedSt = students.find(
-            (st) =>
-              normalizeStudentName(st.fullName) === normCandidate ||
-              st.fullName.toLowerCase() === memberCandidate.toLowerCase()
-          );
-          if (matchedSt) {
-            targetGroupStudentIds.add(matchedSt.id);
-            const existsInActivity = targetActivity.submissions.some((s) => s.studentId === matchedSt.id);
-            if (!existsInActivity) {
-              missingGroupMembers.push(matchedSt);
-            }
-          }
-        });
-
-        targetActivity.submissions.forEach((s) => {
-          if (
-            s.groupMembers === currentSub.groupMembers ||
-            memberNames.some((m) => normalizeStudentName(m) === normalizeStudentName(s.studentName))
-          ) {
-            targetGroupStudentIds.add(s.studentId);
-          }
-        });
-      }
-
-      const idsToUpdate = isInitialGroupGrading ? Array.from(targetGroupStudentIds) : [studentId];
-      let updatedSubmissions = [...targetActivity.submissions];
-
-      if (isInitialGroupGrading && missingGroupMembers.length > 0) {
-        missingGroupMembers.forEach((memberSt) => {
-          if (!updatedSubmissions.some((s) => s.studentId === memberSt.id)) {
-            updatedSubmissions.push({
-              studentId: memberSt.id,
-              studentName: memberSt.fullName,
-              matricula: memberSt.matricula,
-              tag: memberSt.tag,
-              avatarUrl: memberSt.avatarUrl,
-              submittedAt: currentSub?.submittedAt || new Date().toLocaleDateString('pt-BR'),
-              objectiveScore: currentSub?.objectiveScore || 0,
-              maxObjectiveScore: currentSub?.maxObjectiveScore || 0,
-              maxEssayScore: currentSub?.maxEssayScore || 0,
-              status: status,
-              essayAnswer: currentSub?.essayAnswer || '',
-              selectedObjectiveAnswers: currentSub?.selectedObjectiveAnswers || {},
-              groupMembers: currentSub?.groupMembers || undefined,
-              teacherFeedback: feedback,
-              essayScore: essayScore,
-              extraPoints: extraPoints || 0,
-              registeredInStateSystem: registeredInStateSystem || false,
-            });
-          }
-        });
-      }
-
-      updatedSubmissions = updatedSubmissions.map((sub) => {
-        if (idsToUpdate.includes(sub.studentId)) {
-          return {
-            ...sub,
-            essayScore,
-            teacherFeedback: feedback,
-            status,
-            returnCount: status === 'returned' ? (sub.returnCount || 0) + 1 : sub.returnCount,
-            extraPoints: extraPoints !== undefined ? extraPoints : sub.extraPoints,
-            registeredInStateSystem:
-              registeredInStateSystem !== undefined
-                ? registeredInStateSystem
-                : sub.registeredInStateSystem,
-          };
-        }
-        return sub;
-      });
-
-      const pendingCorrection = updatedSubmissions.filter((s) => s.status === 'pending').length;
-      const updatedActivity: Activity = {
-        ...targetActivity,
-        pendingCorrection,
-        submissions: updatedSubmissions,
-      };
-
-      setActivities((prev) => {
-        const next = prev.map((act) => (act.id === activityId ? updatedActivity : act));
-        if (typeof window !== 'undefined')
-          setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
-        return next;
-      });
-
-      if (selectedActivityForGrading?.id === activityId) {
-        setSelectedActivityForGrading(updatedActivity);
-      }
-
-      try {
-        const res = await fetch('/api/activities', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedActivity),
-        });
-        if (!res.ok) throw new Error('Falha ao atualizar a atividade na nuvem.');
-        showGlobalStatus('success', 'Nota e feedback sincronizados diretamente no Firebase com sucesso!');
-      } catch (err) {
-        console.warn('Erro ao atualizar nota no Firebase:', err);
-        showGlobalStatus('error', 'A nota foi registrada na tela, mas falhou ao salvar na nuvem.');
-      }
-    } catch (err: any) {
-      console.error('Erro local ao calcular submissão:', err);
-      showGlobalStatus('error', `ARMADILHA DE BUG DISPARADA: Erro de execução (${err?.message || ''})`);
-    }
-  };
-
-  const handleUpdateStudentAvatar = async (studentId: string, newAvatarUrl: string) => {
-    let matchedStudentObj: StudentUser | undefined;
-    setStudents((prev) => {
-      matchedStudentObj = prev.find((s) => s.id === studentId || s.matricula === studentId);
-      const next = prev.map((s) =>
-        s.id === studentId || s.matricula === studentId ? { ...s, avatarUrl: newAvatarUrl } : s
-      );
-      if (typeof window !== 'undefined') {
-        try {
-          setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
-        } catch (e) {}
-      }
-      return next;
-    });
-
-    if (currentStudent && (currentStudent.id === studentId || currentStudent.matricula === studentId)) {
-      const updatedCurr = { ...currentStudent, avatarUrl: newAvatarUrl };
-      setCurrentStudent(updatedCurr);
-      if (typeof window !== 'undefined') {
-        try {
-          setTenantSessionItem(
-            'active_session',
-            JSON.stringify({ role: 'student', studentId: updatedCurr.id, studentData: updatedCurr }),
-            updatedCurr.id
-          );
-        } catch (e) {}
-      }
-    }
-
-    if (supervisingStudent && (supervisingStudent.id === studentId || supervisingStudent.matricula === studentId)) {
-      setSupervisingStudent((prev) => (prev ? { ...prev, avatarUrl: newAvatarUrl } : prev));
-    }
-
-    try {
-      const targetId = matchedStudentObj?.id || studentId;
-      const res = await fetch('/api/students', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: targetId,
-          avatarUrl: newAvatarUrl,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        console.warn('Aviso ao persistir avatar no Firestore:', data.error);
-      }
-
-      showGlobalStatus('success', 'Avatar atualizado com sucesso!');
-    } catch (err: any) {
-      console.warn('Aviso ao persistir avatar no Firestore:', err);
-      showGlobalStatus('success', 'Avatar atualizado com sucesso!');
-    }
-  };
-
-  const handleStudentSubmitAnswer = async (
-    activityId: string,
-    studentId: string,
-    essayAnswer: string,
-    objectiveScore: number = 0,
-    maxObjectiveScore: number = 5.0,
-    maxEssayScore: number = 5.0,
-    selectedObjectiveAnswers?: { [questionId: string]: number },
-    groupMembers?: string
-  ) => {
-    const studentUser = currentStudent || students.find((s) => s.id === studentId);
-    if (!studentUser) {
-      showGlobalStatus('error', 'Aluno não identificado para envio da atividade.');
-      return;
-    }
-
-    try {
-      const targetStudents: StudentUser[] = [studentUser];
-      if (groupMembers) {
-        const memberNames = groupMembers
-          .split(',')
-          .map((n) => n.trim())
-          .filter(Boolean);
-
-        memberNames.forEach((memberCandidate) => {
-          const normCandidate = normalizeStudentName(memberCandidate);
-          const matched = students.find(
-            (st) =>
-              normalizeStudentName(st.fullName) === normCandidate ||
-              st.fullName.toLowerCase() === memberCandidate.toLowerCase()
-          );
-          if (matched && !targetStudents.some((t) => t.id === matched.id)) {
-            targetStudents.push(matched);
-          }
-        });
-      }
-
-      const currentAct = activities.find((a) => a.id === activityId);
-      if (!currentAct) {
-        showGlobalStatus('error', 'Atividade não encontrada na lista.');
-        return;
-      }
-
-      const updatedSubmissions = [...currentAct.submissions];
-
-      targetStudents.forEach((targetSt) => {
-        const existingIndex = updatedSubmissions.findIndex((s) => s.studentId === targetSt.id);
-
-        const isAutoGradedGame = Boolean(
-          currentAct.isGameActivity ||
-          currentAct.type === 'Jogo Avaliativo' ||
-          (maxEssayScore === 0 && objectiveScore !== undefined)
-        );
-        const submissionStatus = isAutoGradedGame ? ('graded' as const) : ('pending' as const);
-
-        if (existingIndex >= 0) {
-          updatedSubmissions[existingIndex] = {
-            ...updatedSubmissions[existingIndex],
-            essayAnswer,
-            objectiveScore,
-            maxObjectiveScore,
-            maxEssayScore,
-            selectedObjectiveAnswers,
-            groupMembers:
-              groupMembers !== undefined
-                ? groupMembers
-                : updatedSubmissions[existingIndex].groupMembers,
-            status: submissionStatus,
-            teacherFeedback: isAutoGradedGame
-              ? (updatedSubmissions[existingIndex].teacherFeedback || '🎮 Avaliação automática KronoGames concluída.')
-              : updatedSubmissions[existingIndex].teacherFeedback,
-          };
-        } else {
-          updatedSubmissions.push({
-            studentId: targetSt.id,
-            studentName: targetSt.fullName,
-            matricula: targetSt.matricula,
-            tag: targetSt.tag,
-            avatarUrl: targetSt.avatarUrl,
-            submittedAt: new Date().toLocaleDateString('pt-BR'),
-            objectiveScore,
-            maxObjectiveScore,
-            maxEssayScore,
-            status: submissionStatus,
-            essayAnswer,
-            selectedObjectiveAnswers,
-            groupMembers: groupMembers || undefined,
-            teacherFeedback: isAutoGradedGame ? '🎮 Avaliação automática KronoGames concluída.' : '',
-          });
-        }
-      });
-
-      const pendingCorrection = updatedSubmissions.filter((s) => s.status === 'pending').length;
-
-      const targetActivityToSave: Activity = {
-        ...currentAct,
-        totalSubmissions: updatedSubmissions.length,
-        pendingCorrection,
-        submissions: updatedSubmissions,
-      };
-
-      // 1. Atualiza estado e cache local de forma atômica
-      const targetOwnerId = studentUser.ownerTeacherId || teacher.id || '5IdpwffjnhewdZ5dONRB9QoIRBZ2';
-      setActivities((prev) => {
-        const next = prev.map((act) => (act.id === activityId ? targetActivityToSave : act));
-        if (typeof window !== 'undefined') {
-          setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), targetOwnerId);
-        }
-        return next;
-      });
-
-      if (selectedActivityForGrading && selectedActivityForGrading.id === activityId) {
-        setSelectedActivityForGrading(targetActivityToSave);
-      }
-
-      // 2. Grava diretamente no Firestore (com retry preventivo)
-      const res = await fetch('/api/activities', {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-tenant-id': targetOwnerId,
-        },
-        body: JSON.stringify({
-          ...targetActivityToSave,
-          ownerTeacherId: targetOwnerId,
-        }),
-      });
-
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || `HTTP ${res.status}`);
-      }
-
-      showGlobalStatus('success', 'Resposta da atividade enviada com sucesso para o Professor!');
-    } catch (err: any) {
-      console.error('Erro ao enviar resposta:', err);
-      showGlobalStatus('error', `Falha ao salvar na nuvem: Erro de conexão (${err?.message || ''})`);
-    }
-  };
-
-  const handleImportStudents = async (newStudents: StudentUser[]) => {
-    const processedStudents = await Promise.all(
-      newStudents.map(async (s) => {
-        let hashed = s.passwordHash;
-        if (!hashed || (!hashed.startsWith('$2a$') && !hashed.startsWith('$2b$'))) {
-          hashed = await hashPasswordBcrypt(hashed || '123456');
-        }
-        // O mustChangePassword: true obriga a tela de Nova Senha no primeiro acesso
-        return { ...s, passwordHash: hashed, mustChangePassword: true };
-      })
-    );
-
-    setStudents((prev) => {
-      const next = [...prev, ...processedStudents];
-      if (typeof window !== 'undefined')
-        setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
-      return next;
-    });
-
-    try {
-      const res = await fetch('/api/students', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(processedStudents),
-      });
-      if (!res.ok) throw new Error('Falha ao gravar lote de alunos no Firestore.');
-      showGlobalStatus('success', `${processedStudents.length} aluno(s) importado(s) e confirmados no Banco!`);
-    } catch (err) {
-      console.warn('Erro ao conectar na importação de alunos:', err);
-      showGlobalStatus('error', 'A importação ocorreu na tela, mas houve falha ao salvar na nuvem.');
-    }
-  };
-
-  const handleCreateStudent = async (newStudent: StudentUser) => {
-    let hashedPass = newStudent.passwordHash;
-    if (!hashedPass || (!hashedPass.startsWith('$2a$') && !hashedPass.startsWith('$2b$'))) {
-      hashedPass = await hashPasswordBcrypt(hashedPass || newStudent.matricula || '123456');
-    }
-
-    const studentToSave: StudentUser = {
-      ...newStudent,
-      passwordHash: hashedPass,
-      mustChangePassword: true,
-    };
-
-    setStudents((prev) => {
-      if (prev.some((s) => s.id === studentToSave.id || s.matricula === studentToSave.matricula))
-        return prev;
-
-      const next = [...prev, studentToSave];
-      if (typeof window !== 'undefined')
-        setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
-      return next;
-    });
-
-    try {
-      const res = await fetch('/api/students', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(studentToSave),
-      });
-      if (!res.ok) throw new Error('Falha ao salvar no banco.');
-      showGlobalStatus('success', `Aluno "${studentToSave.fullName}" cadastrado com sucesso!`);
-    } catch (err) {
-      console.warn('Erro ao cadastrar aluno:', err);
-      showGlobalStatus('error', 'O aluno aparece na tela, mas falhou ao salvar na nuvem.');
-    }
-  };
-
-  const handleSaveStudent = async (updatedStudent: StudentUser) => {
-    setStudents((prev) => {
-      const next = prev.map((s) =>
-        s.id === updatedStudent.id || s.matricula === updatedStudent.matricula ? updatedStudent : s
-      );
-      if (typeof window !== 'undefined')
-        setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
-      return next;
-    });
-
-    if (
-      supervisingStudent &&
-      (supervisingStudent.id === updatedStudent.id ||
-        supervisingStudent.matricula === updatedStudent.matricula)
-    ) {
-      setSupervisingStudent(updatedStudent);
-    }
-
-    try {
-      const res = await fetch('/api/students', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedStudent),
-      });
-      if (!res.ok) throw new Error('Falha na atualização.');
-      showGlobalStatus('success', `Vínculo do aluno "${updatedStudent.fullName}" salvo e gravado com sucesso!`);
-    } catch (err) {
-      console.warn('Erro ao atualizar aluno:', err);
-      showGlobalStatus('error', 'Dados alterados na tela, mas não salvos na nuvem.');
-    }
-  };
-
-  const handleSavePedagogicalNotes = async (studentId: string, notes: string) => {
-    const targetStudent = students.find((s) => s.id === studentId);
-    if (!targetStudent) return;
-    const updatedStudent = { ...targetStudent, pedagogicalNotes: notes };
-
-    setStudents((prev) => {
-      const next = prev.map((s) => (s.id === studentId ? updatedStudent : s));
-      if (typeof window !== 'undefined')
-        setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
-      return next;
-    });
-
-    if (supervisingStudent && supervisingStudent.id === studentId) {
-      setSupervisingStudent(updatedStudent);
-    }
-
-    try {
-      await fetch('/api/students', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedStudent),
-      });
-    } catch (err) {
-      console.error('Erro ao salvar anotações pedagógicas:', err);
-    }
-  };
-
-  const handleDeleteStudent = async (studentId: string) => {
-    setStudents((prev) => {
-      const next = prev.filter((s) => s.id !== studentId);
-      if (typeof window !== 'undefined')
-        setScopedLocalStorageItem('local_students_data', JSON.stringify(next), teacher.id);
-      return next;
-    });
-
-    try {
-      const res = await fetch(`/api/students?id=${studentId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Falha ao excluir na nuvem.');
-      showGlobalStatus('success', 'Aluno removido com sucesso!');
-    } catch (err) {
-      console.warn('Erro ao deletar aluno:', err);
-      showGlobalStatus('error', 'Aluno oculto da tela, mas exclusão na nuvem falhou.');
-    }
-  };
-
-  const handleDeleteAllStudents = async () => {
-    if (!window.confirm('⚠️ ATENÇÃO EXTREMA: Tem certeza que deseja EXCLUIR TODOS OS ALUNOS da base ativa?')) return;
-    
-    const confirmText = window.prompt('Para confirmar, digite EXCLUIR TODOS:');
-    if (confirmText !== 'EXCLUIR TODOS') {
-      showGlobalStatus('error', 'Exclusão cancelada. O texto de confirmação não confere.');
-      return;
-    }
-
-    setIsDataLoading(true);
-    try {
-      const res = await fetch('/api/students?id=all', { method: 'DELETE' });
-      if (!res.ok) throw new Error('Falha ao excluir na nuvem.');
-      
-      setStudents([]);
-      if (typeof window !== 'undefined') {
-        setScopedLocalStorageItem('local_students_data', '[]', teacher.id);
-      }
-      showGlobalStatus('success', 'Todos os alunos foram excluídos com sucesso da base de dados!');
-    } catch (err) {
-      console.warn('Erro ao deletar todos os alunos:', err);
-      showGlobalStatus('error', 'Erro ao processar exclusão em massa no servidor.');
-    } finally {
-      setIsDataLoading(false);
-    }
-  };
-
-  const handleSuperviseStudent = (student: StudentUser) => {
-    setSupervisingStudent(student);
-  };
-
-  const handleMarkPhysicalDelivery = async (activityId: string, targetStudent: StudentUser, score: number, feedback: string) => {
-    const targetAct = activities.find((a) => a.id === activityId);
-    if (!targetAct) return;
-
-    const existingSubIndex = targetAct.submissions.findIndex(
-      (s) => s.studentId === targetStudent.id || (Boolean(targetStudent.matricula) && s.matricula === targetStudent.matricula)
-    );
-
-    const physicalSub = {
-      studentId: targetStudent.id,
-      studentName: targetStudent.fullName,
-      matricula: targetStudent.matricula,
-      tag: targetStudent.tag,
-      avatarUrl: targetStudent.avatarUrl,
-      submittedAt: new Date().toLocaleDateString('pt-BR'),
-      objectiveScore: 0,
-      maxObjectiveScore: 0,
-      maxEssayScore: targetAct.maxGrade || 10,
-      essayScore: score,
-      status: 'graded' as const,
-      isPhysicalDelivery: true,
-      essayAnswer: '📄 ATIVIDADE ANALÓGICA: Realizada sem uso do sistema digital. Lançamento direto efetuado pelo professor.',
-      teacherFeedback: feedback || 'Atividade avaliada fisicamente pelo professor.',
-    };
-
-    const updatedSubmissions = [...targetAct.submissions];
-    if (existingSubIndex >= 0) {
-      updatedSubmissions[existingSubIndex] = {
-        ...updatedSubmissions[existingSubIndex],
-        ...physicalSub,
-      };
-    } else {
-      updatedSubmissions.push(physicalSub);
-    }
-
-    const updatedAct: Activity = {
-      ...targetAct,
-      totalSubmissions: updatedSubmissions.length,
-      pendingCorrection: updatedSubmissions.filter((s) => s.status === 'pending').length,
-      submissions: updatedSubmissions,
-    };
-
-    await handleSaveActivity(updatedAct);
-    showGlobalStatus(
-      'success',
-      `📄 Registro analógico concluído! Nota ${score} atribuída para ${targetStudent.fullName} em "${targetAct.title}".`
-    );
-  };
-
-  const handleToggleRecoveryAuthorization = async (recoveryActivityId: string, targetStudent: StudentUser) => {
-    const targetAct = activities.find((a) => a.id === recoveryActivityId);
-    if (!targetAct) return;
-
-    const currentList = targetAct.authorizedRecoveryStudentIds || [];
-    const isAlreadyAuthorized = currentList.includes(targetStudent.id);
-    const updatedList = isAlreadyAuthorized
-      ? currentList.filter((id) => id !== targetStudent.id && id !== targetStudent.matricula)
-      : [...currentList, targetStudent.id];
-
-    const updatedAct: Activity = {
-      ...targetAct,
-      authorizedRecoveryStudentIds: updatedList,
-    };
-
-    await handleSaveActivity(updatedAct);
-    showGlobalStatus(
-      'success',
-      isAlreadyAuthorized
-        ? `🔒 Recuperação Paralela ocultada novamente para ${targetStudent.fullName}.`
-        : `🔓 Recuperação Paralela liberada para ${targetStudent.fullName}!`
-    );
-  };
-
-  const handleGenerateDossier = (act: Activity) => {
-    alert(`Dossiê em PDF/Planilha gerado com sucesso para a atividade: ${act.title}`);
-  };
-
-  const handleArchiveVinculo = async (reason: string, schoolName?: string, vinculoCode?: string) => {
-    const now = new Date();
-    const nowIso = now.toISOString();
-    const trimmedReason = reason.trim() || 'Troca de vínculo';
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const year = now.getFullYear();
-    const finalMonthYear = `${month}/${year}`;
-    const finalSchool = (schoolName || teacher.school || 'Escola Estadual').trim();
-    const finalVinculoCode = vinculoCode || `Vínculo ${finalMonthYear}`;
-    const finalVinculoId = `VINC-${month}${year}-${Date.now().toString(36)}`;
-
-    const activeStudentsList = students.filter((s) => !s.isArchived);
-    const activeActivitiesList = activities.filter((a) => !a.isArchived);
-    const studentsCount = activeStudentsList.length;
-    const activitiesCount = activeActivitiesList.length;
-
-    if (studentsCount === 0 && activitiesCount === 0) {
-      showGlobalStatus('info', 'Não há alunos ou atividades ativas para arquivar no vínculo atual.');
-      return { success: false, studentsCount: 0, activitiesCount: 0 };
-    }
-
-    try {
-      const archiveRes = await fetch('/api/vinculos/archive', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reason: trimmedReason,
-          schoolName: finalSchool,
-          vinculoId: finalVinculoId,
-          vinculoCode: finalVinculoCode,
-        }),
-      });
-
-      if (!archiveRes.ok) {
-        const errorData = await archiveRes.json().catch(() => ({}));
-        console.warn('Aviso ao arquivar no Firestore:', errorData.error);
-      }
-
-      setStudents((prev) => {
-        const updated = prev.map((s) =>
-          !s.isArchived
-            ? {
-                ...s,
-                isArchived: true,
-                archivedAt: nowIso,
-                archivedReason: trimmedReason,
-                archivedVinculoId: finalVinculoId,
-                archivedSchool: finalSchool,
-              }
-            : s
-        );
-        if (typeof window !== 'undefined') {
-          try {
-            setScopedLocalStorageItem('local_students_data', JSON.stringify(updated), teacher.id);
-          } catch (e) {}
-        }
-        return updated;
-      });
-
-      setActivities((prev) => {
-        const updated = prev.map((a) =>
-          !a.isArchived
-            ? {
-                ...a,
-                isArchived: true,
-                archivedAt: nowIso,
-                archivedReason: trimmedReason,
-                archivedVinculoId: finalVinculoId,
-                archivedSchool: finalSchool,
-              }
-            : a
-        );
-        if (typeof window !== 'undefined') {
-          try {
-            setScopedLocalStorageItem('local_activities_data', JSON.stringify(updated), teacher.id);
-          } catch (e) {}
-        }
-        return updated;
-      });
-
-      const successMsg = `${finalVinculoCode} (${finalSchool}) arquivado com sucesso: ${studentsCount} alunos e ${activitiesCount} atividades.`;
-      showGlobalStatus('success', successMsg);
-
-      return {
-        success: true,
-        studentsCount,
-        activitiesCount,
-      };
-    } catch (err: any) {
-      console.error('Erro ao arquivar vínculo:', err);
-      showGlobalStatus('error', `Falha ao arquivar vínculo: ${err?.message || 'Erro de conexão'}`);
-      return {
-        success: false,
-        studentsCount: 0,
-        activitiesCount: 0,
-        error: err?.message,
-      };
-    }
-  };
-
-  const handleRestoreVinculo = async (target: {
-    vinculoId?: string;
-    studentIds?: string[];
-    activityIds?: string[];
-    vinculoCode?: string;
-  }) => {
-    try {
-      const studentIdsToRestore =
-        target.studentIds && target.studentIds.length > 0
-          ? target.studentIds
-          : students
-              .filter((s) => s.isArchived && (!target.vinculoId || s.archivedVinculoId === target.vinculoId))
-              .map((s) => s.id);
-
-      const activityIdsToRestore =
-        target.activityIds && target.activityIds.length > 0
-          ? target.activityIds
-          : activities
-              .filter((a) => a.isArchived && (!target.vinculoId || a.archivedVinculoId === target.vinculoId))
-              .map((a) => a.id);
-
-      if (studentIdsToRestore.length === 0 && activityIdsToRestore.length === 0) {
-        showGlobalStatus('info', 'Nenhum registro encontrado para este vínculo.');
-        return { success: false, studentsCount: 0, activitiesCount: 0 };
-      }
-
-      const restoreRes = await fetch('/api/vinculos/restore', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vinculoId: target.vinculoId,
-          studentIds: studentIdsToRestore,
-          activityIds: activityIdsToRestore,
-        }),
-      });
-
-      if (!restoreRes.ok) {
-        const errorData = await restoreRes.json().catch(() => ({}));
-        console.warn('Aviso ao restaurar vínculo no Firestore:', errorData.error);
-      }
-
-      setStudents((prev) => {
-        const updated = prev.map((s) => {
-          if (studentIdsToRestore.includes(s.id)) {
-            return {
-              ...s,
-              isArchived: false,
-              archivedAt: undefined,
-              archivedReason: undefined,
-              archivedVinculoId: undefined,
-              archivedSchool: undefined,
-            };
-          }
-          return s;
-        });
-        if (typeof window !== 'undefined') {
-          try {
-            setScopedLocalStorageItem('local_students_data', JSON.stringify(updated), teacher.id);
-          } catch (e) {}
-        }
-        return updated;
-      });
-
-      setActivities((prev) => {
-        const updated = prev.map((a) => {
-          if (activityIdsToRestore.includes(a.id)) {
-            return {
-              ...a,
-              isArchived: false,
-              archivedAt: undefined,
-              archivedReason: undefined,
-              archivedVinculoId: undefined,
-              archivedSchool: undefined,
-            };
-          }
-          return a;
-        });
-        if (typeof window !== 'undefined') {
-          try {
-            setScopedLocalStorageItem('local_activities_data', JSON.stringify(updated), teacher.id);
-          } catch (e) {}
-        }
-        return updated;
-      });
-
-      const msg = `${target.vinculoCode || 'Vínculo'} restaurado com sucesso! ${studentIdsToRestore.length} aluno(s) e ${activityIdsToRestore.length} atividade(s) foram reativados na base de trabalho.`;
-      showGlobalStatus('success', msg);
-
-      return {
-        success: true,
-        studentsCount: studentIdsToRestore.length,
-        activitiesCount: activityIdsToRestore.length,
-      };
-    } catch (err: any) {
-      console.error('Erro ao restaurar vínculo:', err);
-      showGlobalStatus('error', `Falha ao restaurar vínculo: ${err?.message || 'Erro inesperado'}`);
-      return {
-        success: false,
-        studentsCount: 0,
-        activitiesCount: 0,
-        error: err?.message,
-      };
-    }
-  };
-
-  // Messaging Handlers
-  const handleSendMessage = async (msgData: {
-    threadId: string;
-    senderId: string;
-    senderName: string;
-    senderRole: 'teacher' | 'student' | 'second_teacher';
-    senderAvatar?: string;
-    recipientId: string;
-    recipientName: string;
-    content: string;
-    activityId?: string;
-    activityTitle?: string;
-  }) => {
-    const now = new Date();
-    const formattedDate = `${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    })}`;
-    const newMsgId = `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    const newMsg: ChatMessage = {
-      id: newMsgId,
-      threadId: msgData.threadId,
-      senderId: msgData.senderId,
-      senderName: msgData.senderName,
-      senderRole: msgData.senderRole as 'teacher' | 'student',
-      senderAvatar: msgData.senderAvatar,
-      recipientId: msgData.recipientId,
-      recipientName: msgData.recipientName,
-      content: msgData.content,
-      createdAt: formattedDate,
-      read: false,
-      activityId: msgData.activityId,
-      activityTitle: msgData.activityTitle,
-    };
-
-    // 1. Otimismo UI
-    setChatMessages((prev) => mergeChatMessage(prev, newMsg).updated);
-
-    // 2. Persistir mensagem no Firebase Firestore
-    try {
-      await fetch('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...newMsg,
-          createdAtIso: now.toISOString(),
-        }),
-      });
-    } catch (err) {
-      console.warn('Erro ao persistir mensagem no Firestore:', err);
-    }
-
-    // 3. Se a mensagem for de um aluno para o Prof. Titular e o Boby Sociólogo estiver ativo:
-    if (
-      msgData.senderRole === 'student' &&
-      isAiAutoReplyEnabled &&
-      msgData.recipientId !== 'second-teacher'
-    ) {
-      const studentObj = students.find((s) => s.id === msgData.senderId);
-      const cleanTeacherName =
-        teacher.name && !teacher.name.toLowerCase().includes('carregando')
-          ? teacher.name
-          : 'Prof. Gilson Flores';
-
-      try {
-        const res = await fetch('/api/gemini/teacher-bot', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            studentName: msgData.senderName,
-            studentTurma: studentObj?.turma || 'Geral',
-            studentTag: studentObj?.tag || 'REGULAR',
-            teacherName: cleanTeacherName,
-            teacherSubject: teacher.subject || 'Sociologia',
-            schoolName: teacher.school || "EEB Prof. Jandira D'Ávila",
-            messages: [...chatMessages, newMsg],
-            activities: activities,
-            currentMessage: msgData.content,
-          }),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data.reply) {
-            const replyNow = new Date();
-            const replyDate = `${replyNow.toLocaleDateString('pt-BR')} ${replyNow.toLocaleTimeString(
-              'pt-BR',
-              { hour: '2-digit', minute: '2-digit' }
-            )}`;
-            const botMsg: ChatMessage = {
-              id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-              threadId: msgData.threadId,
-              senderId: teacher.id || 'teacher-1',
-              senderName: data.teacherName || `Boby Sociólogo 🤖 (${cleanTeacherName})`,
-              senderRole: 'teacher',
-              senderAvatar: teacher.avatarUrl,
-              recipientId: msgData.senderId,
-              recipientName: msgData.senderName,
-              content: data.reply,
-              createdAt: replyDate,
-              read: false,
-            };
-
-            setChatMessages((prev) => mergeChatMessage(prev, botMsg).updated);
-
-            await fetch('/api/messages', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                ...botMsg,
-                createdAtIso: replyNow.toISOString(),
-              }),
-            });
-          }
-        }
-      } catch (botErr) {
-        console.warn('Erro ao disparar resposta automática do Boby Sociólogo:', botErr);
-      }
-    }
-  };
-
-  const handleMarkThreadAsRead = useCallback((threadId: string, currentRole: 'teacher' | 'student') => {
-    setChatMessages((prev) => {
-      const unreadMsgs = prev.filter(
-        (m) =>
-          (m.threadId === threadId || m.recipientId === threadId || m.senderId === threadId) &&
-          m.senderRole !== currentRole &&
-          !m.read
-      );
-      if (unreadMsgs.length === 0) return prev;
-
-      fetch('/api/messages', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threadId, currentRole }),
-      }).catch((err) => console.warn('Erro ao marcar mensagens como lidas no Firestore:', err));
-
-      return prev.map((m) => {
-        if (
-          (m.threadId === threadId || m.recipientId === threadId || m.senderId === threadId) &&
-          m.senderRole !== currentRole &&
-          !m.read
-        ) {
-          return { ...m, read: true };
-        }
-        return m;
-      });
-    });
-  }, []);
+  const handleSelectActivityForGrading = useCallback(
+    (act: Activity) => {
+      setSelectedActivityForGrading(act);
+      setCurrentTab('grading');
+    },
+    [setSelectedActivityForGrading]
+  );
 
   const teacherUnreadMessagesCount = chatMessages.filter(
     (m) => m.senderRole === 'student' && !m.read
   ).length;
 
-  const teacherPendingCorrectionsCount = React.useMemo(() => {
+  const teacherPendingCorrectionsCount = useMemo(() => {
     let count = 0;
     activities.forEach((act) => {
       (act.submissions || []).forEach((sub) => {
@@ -2158,7 +737,7 @@ export default function Home() {
   if (role === 'student' && currentStudent) {
     return (
       <StudentPortalView
-              onReturnToSupervision={handleReturnToSupervision}
+        onReturnToSupervision={handleReturnToSupervision}
         student={currentStudent}
         teacher={teacher}
         activities={activities}
@@ -2328,7 +907,7 @@ export default function Home() {
           {(activeTeacherTab === 'correcoes' || activeTeacherTab === 'grading') &&
             role !== 'second_teacher' && (
               <CorrectionsView
-              onSaveActivity={handleSaveEditedActivity}
+                onSaveActivity={handleSaveEditedActivity}
                 activities={activeActivities}
                 students={visibleStudentsForRole}
                 isLoading={isDataLoading}
@@ -2393,7 +972,10 @@ export default function Home() {
               onSaveStudent={handleSaveStudent}
               onSimulateSecondTeacher={(st) => {
                 handleLoginSecondTeacher(st);
-                showGlobalStatus('success', `Simulando ambiente do 2º Professor ${st.name} (Admin Supremo)`);
+                showGlobalStatus(
+                  'success',
+                  `Simulando ambiente do 2º Professor ${st.name} (Admin Supremo)`
+                );
               }}
             />
           )}
@@ -2508,12 +1090,15 @@ export default function Home() {
             ? undefined
             : (st) => {
                 setSupervisingStudent(null);
-                localStorage.setItem("teacher_snapshot", JSON.stringify({
-                  role: localStorage.getItem("role"),
-                  teacherId: localStorage.getItem("teacherId"),
-                  teacherName: localStorage.getItem("teacherName") || "",
-                  secondTeacherId: localStorage.getItem("secondTeacherId") || ""
-                }));
+                localStorage.setItem(
+                  'teacher_snapshot',
+                  JSON.stringify({
+                    role: localStorage.getItem('role'),
+                    teacherId: localStorage.getItem('teacherId'),
+                    teacherName: localStorage.getItem('teacherName') || '',
+                    secondTeacherId: localStorage.getItem('secondTeacherId') || '',
+                  })
+                );
                 handleLoginStudent(st);
                 showGlobalStatus('success', `Simulando ambiente do aluno ${st.fullName}`);
               }
@@ -2527,10 +1112,7 @@ export default function Home() {
               }
         }
       />
-      
 
-
-      {/* Modal Obrigatório de Troca de Senha no Primeiro Acesso */}
       {mustChangePassword && role && role !== 'teacher' && (
         <ForceChangePasswordModal
           isOpen={mustChangePassword}
