@@ -113,6 +113,8 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
   const [gameTitle, setGameTitle] = useState('');
   const [gameTopic, setGameTopic] = useState('');
   const [gameMaterial, setGameMaterial] = useState('');
+  const [aiCustomPrompt, setAiCustomPrompt] = useState('');
+  const [aiQuestionCount, setAiQuestionCount] = useState<number>(3);
   const [selectedGameMode, setSelectedGameMode] = useState<GameMode>('millionaire');
 
   // Limpa ou ajusta o texto base ao alternar o modo de jogo
@@ -979,7 +981,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                               side: 'pro' as const,
                               sociologicalConcept: `Eixo Pró #${nextNum}`,
                               prompt: '',
-                              researchHint: 'Pesquise dados, conceitos sociológicos e exemplos práticos.',
+                              researchHint: '',
                             },
                           ];
                           setStagedGameData({
@@ -1053,7 +1055,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                               side: 'contra' as const,
                               sociologicalConcept: `Eixo Contra #${nextNum}`,
                               prompt: '',
-                              researchHint: 'Pesquise contradições estruturais, dados críticos e limites práticos.',
+                              researchHint: '',
                             },
                           ];
                           setStagedGameData({
@@ -1127,7 +1129,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                               side: 'juror' as const,
                               sociologicalConcept: `Eixo Jurados #${nextNum}`,
                               prompt: '',
-                              researchHint: 'Pesquise critérios sociológicos neutros e fatos para avaliar as bancadas.',
+                              researchHint: '',
                             },
                           ];
                           setStagedGameData({
