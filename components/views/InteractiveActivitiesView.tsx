@@ -218,29 +218,29 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
     const mappedQuestions =
       selectedGameMode === 'debate_paperless' && stagedGameData.debateConfig
         ? [
-            ...(stagedGameData.debateConfig.proQuestions || []).map((q, idx) => ({
+            ...((stagedGameData.debateConfig?.proQuestions || []) || []).map((q, idx) => ({
               id: q.id || `pro_q_${idx + 1}`,
               type: 'essay' as const,
               statement: `[BANCADA PRÓ • Questão Norteadora ${idx + 1} - ${q.sociologicalConcept}] ${q.prompt}\n💡 O que pesquisar: ${q.researchHint}`,
               expectedAnswer: q.researchHint,
               minCharacters: 50,
-              points: Number((5 / Math.max(1, (stagedGameData.debateConfig.proQuestions || []).length)).toFixed(2)),
+              points: Number((5 / Math.max(1, ((stagedGameData.debateConfig?.proQuestions || []) || []).length)).toFixed(2)),
             })),
-            ...(stagedGameData.debateConfig.contraQuestions || []).map((q, idx) => ({
+            ...((stagedGameData.debateConfig?.contraQuestions || []) || []).map((q, idx) => ({
               id: q.id || `contra_q_${idx + 1}`,
               type: 'essay' as const,
               statement: `[TIME CONTRA • Questão Norteadora ${idx + 1} - ${q.sociologicalConcept}] ${q.prompt}\n💡 O que pesquisar: ${q.researchHint}`,
               expectedAnswer: q.researchHint,
               minCharacters: 50,
-              points: Number((5 / Math.max(1, (stagedGameData.debateConfig.proQuestions || []).length)).toFixed(2)),
+              points: Number((5 / Math.max(1, ((stagedGameData.debateConfig?.proQuestions || []) || []).length)).toFixed(2)),
             })),
-            ...(stagedGameData.debateConfig.jurorQuestions || []).map((q, idx) => ({
+            ...((stagedGameData.debateConfig?.jurorQuestions || []) || []).map((q, idx) => ({
               id: q.id || `juror_q_${idx + 1}`,
               type: 'essay' as const,
               statement: `[JURADOS • Questão Preparatória ${idx + 1} - ${q.sociologicalConcept}] ${q.prompt}\n💡 O que observar: ${q.researchHint}`,
               expectedAnswer: q.researchHint,
               minCharacters: 50,
-              points: Number((5 / Math.max(1, (stagedGameData.debateConfig.proQuestions || []).length)).toFixed(2)),
+              points: Number((5 / Math.max(1, ((stagedGameData.debateConfig?.proQuestions || []) || []).length)).toFixed(2)),
             })),
           ]
         : (stagedGameData.stages || []).map((stg, idx) => {
@@ -964,7 +964,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                   <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/40 space-y-3">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-black text-emerald-400 uppercase">
-                        📘 Grupo 1: Perguntas Norteadoras • TIME PRÓ ({stagedGameData.debateConfig.proQuestions.length} pergunta(s))
+                        📘 Grupo 1: Perguntas Norteadoras • TIME PRÓ ({(stagedGameData.debateConfig?.proQuestions || []).length} pergunta(s))
                       </h4>
                       <button
                         type="button"
@@ -992,7 +992,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                         + Adicionar Pergunta Pró
                       </button>
                     </div>
-                    {stagedGameData.debateConfig.proQuestions.map((q, idx) => (
+                    {(stagedGameData.debateConfig?.proQuestions || []).map((q, idx) => (
                       <div key={q.id || idx} className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-black text-emerald-300">
@@ -1038,7 +1038,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                   <div className="p-4 rounded-2xl bg-rose-950/20 border border-rose-500/40 space-y-3">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-black text-rose-400 uppercase">
-                        📕 Grupo 2: Perguntas Norteadoras • TIME CONTRA ({stagedGameData.debateConfig.contraQuestions.length} pergunta(s))
+                        📕 Grupo 2: Perguntas Norteadoras • TIME CONTRA ({(stagedGameData.debateConfig?.contraQuestions || []).length} pergunta(s))
                       </h4>
                       <button
                         type="button"
@@ -1066,7 +1066,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                         + Adicionar Pergunta Contra
                       </button>
                     </div>
-                    {stagedGameData.debateConfig.contraQuestions.map((q, idx) => (
+                    {(stagedGameData.debateConfig?.contraQuestions || []).map((q, idx) => (
                       <div key={q.id || idx} className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-black text-rose-300">
@@ -1112,7 +1112,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                   <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/40 space-y-3">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-black text-amber-400 uppercase">
-                        ⚖️ Grupo 3: Perguntas Norteadoras • JURADOS ({(stagedGameData.debateConfig.jurorQuestions || []).length} pergunta(s))
+                        ⚖️ Grupo 3: Perguntas Norteadoras • JURADOS ({((stagedGameData.debateConfig?.jurorQuestions || []) || []).length} pergunta(s))
                       </h4>
                       <button
                         type="button"
@@ -1140,7 +1140,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                         + Adicionar Pergunta Jurados
                       </button>
                     </div>
-                    {(stagedGameData.debateConfig.jurorQuestions || []).map((q, idx) => (
+                    {((stagedGameData.debateConfig?.jurorQuestions || []) || []).map((q, idx) => (
                       <div key={q.id || idx} className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-black text-amber-300">
