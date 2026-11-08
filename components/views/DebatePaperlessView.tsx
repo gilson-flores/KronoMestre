@@ -651,10 +651,10 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
                   <div>
                     <h4 className="text-xs font-black text-cyan-300 uppercase tracking-wider">
                       {debateRole === 'contra'
-                        ? '📕 6 Questões Norteadoras Exclusivas • TIME CONTRA (Sigilo Total)'
+                        ? '📕 Questões Norteadoras Exclusivas • TIME CONTRA (Sigilo Total)'
                         : debateRole === 'juror'
-                        ? '⚖️ 6 Questões Preparatórias Exclusivas • CORPO DE JURADOS (Sigilo Total)'
-                        : '📘 6 Questões Norteadoras Exclusivas • TIME PRÓ (Sigilo Total)'}
+                        ? '⚖️ Questões Preparatórias Exclusivas • CORPO DE JURADOS (Sigilo Total)'
+                        : '📘 Questões Norteadoras Exclusivas • TIME PRÓ (Sigilo Total)'}
                     </h4>
                     <p className="text-xs text-slate-300 mt-0.5">
                       Preencha as 6 questões da sua bancada. Assim que concluir, clique no botão no final para a IA gerar os <strong>3 textos-resumo (Pró, Contra e Jurados)</strong> e avançar para a próxima etapa!

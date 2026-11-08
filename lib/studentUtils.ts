@@ -481,7 +481,7 @@ export function getChildAdaptations(canonicalAct: Activity, allActivities: Activ
   if (!canonicalAct || !allActivities || allActivities.length === 0) return [];
   return allActivities.filter((child) =>
     child.id !== canonicalAct.id &&
-    (child.adaptedFromId === canonicalAct.id || (
+    (child.adaptedFromId === canonicalAct.id || child.linkedActivityId === canonicalAct.id || (
       isActivityAdapted(child) &&
       !isActivityRecovery(child) &&
       canStudentAccessActivity(child.turma, canonicalAct.turma) &&
@@ -496,7 +496,7 @@ export function getChildRecoveryActivities(canonicalAct: Activity, allActivities
   if (!canonicalAct || !allActivities || allActivities.length === 0) return [];
   return allActivities.filter((child) =>
     child.id !== canonicalAct.id &&
-    (child.recoveryFromId === canonicalAct.id ||
+    (child.recoveryFromId === canonicalAct.id || (child.isRecovery && child.linkedActivityId === canonicalAct.id) ||
       (isActivityRecovery(child) &&
         canStudentAccessActivity(child.turma, canonicalAct.turma) &&
         (!child.recoveryFromId || child.recoveryFromId === canonicalAct.id ||
@@ -635,4 +635,34 @@ export function getActivityAverageGrade(act: Activity): number | null {
   if (gradedSubs.length === 0) return null;
   const sum = gradedSubs.reduce((acc, s) => acc + getSubmissionTotalGrade(s), 0);
   return Number((sum / gradedSubs.length).toFixed(1));
+}
+
+
+/**
+ * Retorna a lista de Avaliações Formais (AV1, AV2...) e Recuperações (RP1, RP2, RP3...)
+ * prontas para vínculo direto com KronoGames, Atividades Simples ou AEE.
+ */
+export function getLinkableActivitiesWithLabels(activities: Activity[] = []) {
+  const formalList = (activities || []).filter(
+    (a) => !isActivityRecovery(a) && !isActivityAdapted(a)
+  );
+  const recoveryList = (activities || []).filter((a) => isActivityRecovery(a));
+
+  return {
+    formalOptions: formalList.map((a, idx) => ({
+      id: a.id,
+      badge: `AV${idx + 1}`,
+      title: a.title,
+      turma: a.turma,
+      label: `[AV${idx + 1}] ${a.title} (${a.turma})`,
+    })),
+    recoveryOptions: recoveryList.map((r, idx) => ({
+      id: r.id,
+      badge: `RP${idx + 1}`,
+      parentAvId: r.recoveryFromId || r.id,
+      title: r.title,
+      turma: r.turma,
+      label: `[RP${idx + 1}] ${r.title} (${r.turma})`,
+    })),
+  };
 }

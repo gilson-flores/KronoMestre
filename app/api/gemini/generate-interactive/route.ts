@@ -300,10 +300,10 @@ export async function POST(req: NextRequest) {
       const debatePrompt = [
         `Você é um Professor Doutor em Sociologia do Ensino Médio. Crie a estrutura oficial de um DEBATE SOCIOLÓGICO SEM PAPEL sobre o tema "${topic}" (${subject}).`,
         `Roteiro Prévio do Professor: "${supportMaterial || "Fundamente nas teorias sociológicas clássicas e contemporâneas e na realidade brasileira."}"`,
-        "Gere EXATAMENTE 18 questões dissertativas isoladas por grupo:",
-        "- proQuestions: 6 questões dissertativas norteadoras exclusivas para o TIME PRÓ pesquisar.",
-        "- contraQuestions: 6 questões dissertativas norteadoras exclusivas para o TIME CONTRA pesquisar.",
-        "- jurorQuestions: 6 questões preparatórias exclusivas para os 3 JURADOS pesquisarem.",
+        "Gere questões dissertativas norteadoras isoladas para cada um dos 3 grupos (na quantidade pedida pelo professor no comando, ou 3 por grupo como padrão):",
+        "- proQuestions: questões dissertativas norteadoras exclusivas para o TIME PRÓ pesquisar.",
+        "- contraQuestions: questões dissertativas norteadoras exclusivas para o TIME CONTRA pesquisar.",
+        "- jurorQuestions: questões preparatórias exclusivas para os JURADOS pesquisarem.",
         "- checklistCriteria: 6 critérios objetivos para os 2 Checklists de julgamento dos jurados.",
         "- jurorInitialGuide: Texto-guia orientando os 3 jurados.",
         "Retorne EXCLUSIVAMENTE um JSON válido com: { \"introText\": string, \"proQuestions\": [{ \"sociologicalConcept\": string, \"prompt\": string, \"researchHint\": string }], \"contraQuestions\": [{ \"sociologicalConcept\": string, \"prompt\": string, \"researchHint\": string }], \"jurorQuestions\": [{ \"sociologicalConcept\": string, \"prompt\": string, \"researchHint\": string }], \"checklistCriteria\": [{ \"title\": string, \"description\": string }], \"jurorInitialGuide\": string }"
@@ -322,34 +322,31 @@ export async function POST(req: NextRequest) {
             const fallbackCfg = createFallbackDebateConfig(topic, subject, supportMaterial);
             const debateConfig: DebateConfig = {
               maxJurors: 3,
-              proQuestions: Array.isArray(parsed.proQuestions) && parsed.proQuestions.length >= 6
-                ? parsed.proQuestions.slice(0, 6).map((q: any, i: number) => ({
+              proQuestions: Array.isArray(parsed.proQuestions) && parsed.proQuestions.length > 0 ? parsed.proQuestions.map((q: any, i: number) => ({
                     id: `pro_q_${i + 1}`,
                     number: i + 1,
                     side: "pro" as const,
-                    sociologicalConcept: q.sociologicalConcept || fallbackCfg.proQuestions[i].sociologicalConcept,
-                    prompt: q.prompt || fallbackCfg.proQuestions[i].prompt,
-                    researchHint: q.researchHint || fallbackCfg.proQuestions[i].researchHint,
+                    sociologicalConcept: q.sociologicalConcept || (fallbackCfg.proQuestions[i] || fallbackCfg.proQuestions[0]).sociologicalConcept,
+                    prompt: q.prompt || (fallbackCfg.proQuestions[i] || fallbackCfg.proQuestions[0]).prompt,
+                    researchHint: q.researchHint || (fallbackCfg.proQuestions[i] || fallbackCfg.proQuestions[0]).researchHint,
                   }))
                 : fallbackCfg.proQuestions,
-              contraQuestions: Array.isArray(parsed.contraQuestions) && parsed.contraQuestions.length >= 6
-                ? parsed.contraQuestions.slice(0, 6).map((q: any, i: number) => ({
+              contraQuestions: Array.isArray(parsed.contraQuestions) && parsed.contraQuestions.length > 0 ? parsed.contraQuestions.map((q: any, i: number) => ({
                     id: `contra_q_${i + 1}`,
                     number: i + 1,
                     side: "contra" as const,
-                    sociologicalConcept: q.sociologicalConcept || fallbackCfg.contraQuestions[i].sociologicalConcept,
-                    prompt: q.prompt || fallbackCfg.contraQuestions[i].prompt,
-                    researchHint: q.researchHint || fallbackCfg.contraQuestions[i].researchHint,
+                    sociologicalConcept: q.sociologicalConcept || (fallbackCfg.contraQuestions[i] || fallbackCfg.contraQuestions[0]).sociologicalConcept,
+                    prompt: q.prompt || (fallbackCfg.contraQuestions[i] || fallbackCfg.contraQuestions[0]).prompt,
+                    researchHint: q.researchHint || (fallbackCfg.contraQuestions[i] || fallbackCfg.contraQuestions[0]).researchHint,
                   }))
                 : fallbackCfg.contraQuestions,
-              jurorQuestions: Array.isArray(parsed.jurorQuestions) && parsed.jurorQuestions.length >= 6
-                ? parsed.jurorQuestions.slice(0, 6).map((q: any, i: number) => ({
+              jurorQuestions: Array.isArray(parsed.jurorQuestions) && parsed.jurorQuestions.length > 0 ? parsed.jurorQuestions.map((q: any, i: number) => ({
                     id: `juror_q_${i + 1}`,
                     number: i + 1,
                     side: "juror" as const,
-                    sociologicalConcept: q.sociologicalConcept || fallbackCfg.jurorQuestions![i].sociologicalConcept,
-                    prompt: q.prompt || fallbackCfg.jurorQuestions![i].prompt,
-                    researchHint: q.researchHint || fallbackCfg.jurorQuestions![i].researchHint,
+                    sociologicalConcept: q.sociologicalConcept || (fallbackCfg.jurorQuestions![i] || fallbackCfg.jurorQuestions![0]).sociologicalConcept,
+                    prompt: q.prompt || (fallbackCfg.jurorQuestions![i] || fallbackCfg.jurorQuestions![0]).prompt,
+                    researchHint: q.researchHint || (fallbackCfg.jurorQuestions![i] || fallbackCfg.jurorQuestions![0]).researchHint,
                   }))
                 : fallbackCfg.jurorQuestions,
               checklistCriteria: Array.isArray(parsed.checklistCriteria) && parsed.checklistCriteria.length >= 6
