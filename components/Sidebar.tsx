@@ -16,7 +16,8 @@ import {
   FileSpreadsheet,
   Database,
   Sparkles,
-  Gamepad2
+  Gamepad2,
+  Calendar,
 } from 'lucide-react';
 import { TeacherUser } from '@/lib/types';
 import { formatAvatarUrl } from '@/lib/utils';
@@ -82,7 +83,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'mensagens', label: 'Mensagens', icon: MessageSquare, variant: 'glow', badge: unreadMessagesCount },
       ]
     : [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, variant: 'rpg' },
+        { id: 'cronograma', label: 'Cronograma', icon: Calendar, variant: 'emerald' },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, variant: 'rpg' },
         { id: 'atividades', label: 'Atividades Formais', icon: FileCheck, variant: 'viking' },
         { id: 'atividades_interativas', label: 'KronoGames (Interativas)', icon: Gamepad2, variant: 'flame' },
         { id: 'atividades_adaptadas', label: 'Atividades Adaptadas (AEE)', icon: Sparkles, variant: 'mystic' },

@@ -666,3 +666,16 @@ export function getLinkableActivitiesWithLabels(activities: Activity[] = []) {
     })),
   };
 }
+
+
+export function isActivityKronoGame(act?: Activity | null): boolean {
+  if (!act) return false;
+  if (isActivityAdapted(act)) return false;
+  const anyAct = act as any;
+  return Boolean(
+    anyAct.activityDomain === 'interactive_game' ||
+      act.isGameActivity === true ||
+      act.type === 'Jogo Avaliativo' ||
+      Boolean(act.gameData)
+  );
+}

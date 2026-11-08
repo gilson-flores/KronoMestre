@@ -331,7 +331,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
     }
 
     // Only open adaptation decision if selected turma has at least one PNE student
-    const hasPneStudents = doesTurmaHavePNEStudent(resolvedTurma, students);
+    const hasPneStudents = false;
     if (hasPneStudents) {
       setPendingActivityForDecision(newActivity);
     } else {

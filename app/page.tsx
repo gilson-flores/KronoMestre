@@ -31,6 +31,7 @@ import { BackupView } from '@/components/views/BackupView';
 import { AdaptedActivitiesView } from '@/components/views/AdaptedActivitiesView';
 import { InteractiveActivitiesView } from '@/components/views/InteractiveActivitiesView';
 import { TeacherSettingsView } from '@/components/views/TeacherSettingsView';
+import { CronogramaView } from '@/components/views/CronogramaView';
 
 import { NewActivityModal } from '@/components/modals/NewActivityModal';
 import { EditActivityModal } from '@/components/modals/EditActivityModal';
@@ -822,6 +823,9 @@ export default function Home() {
         )}
 
         <main className="flex-1 p-3 sm:p-6 md:p-8 max-w-7xl w-full mx-auto">
+          {activeTeacherTab === 'cronograma' && role !== 'second_teacher' && (
+            <CronogramaView teacher={teacher} />
+          )}
           {(activeTeacherTab === 'dashboard' || activeTeacherTab === 'painel') &&
             (role === 'second_teacher' ? (
               <SecondTeacherDashboardView
