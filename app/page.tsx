@@ -53,6 +53,7 @@ import { useAuthSession } from '@/hooks/useAuthSession';
 import { useStudentsManager } from '@/hooks/useStudentsManager';
 import { useActivitiesManager } from '@/hooks/useActivitiesManager';
 import { useChatMessaging } from '@/hooks/useChatMessaging';
+import { isolateActivitiesForStudentTurma } from '@/lib/groupActivityUtils';
 
 export default function Home() {
   const [isMounted, setIsMounted] = useState(false);
@@ -741,7 +742,7 @@ export default function Home() {
         onReturnToSupervision={handleReturnToSupervision}
         student={currentStudent}
         teacher={teacher}
-        activities={activities}
+        activities={isolateActivitiesForStudentTurma(activities, currentStudent)}
         libraryFiles={library}
         messages={chatMessages}
         students={students}
@@ -831,7 +832,7 @@ export default function Home() {
               <SecondTeacherDashboardView
                 teacher={teacher}
                 students={visibleStudentsForRole}
-                activities={activities}
+                activities={isolateActivitiesForStudentTurma(activities, currentStudent)}
                 onNavigateToTab={handleTeacherTabChange}
               />
             ) : (

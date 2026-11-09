@@ -1,1315 +1,2008 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Activity, StudentUser, TeacherUser } from '@/lib/types';
 import {
-  X,
-  Sparkles,
-  RotateCcw,
-  CheckCircle2,
-  Users,
-  FileText,
-  Award,
-  Clock,
   Scale,
-  ShieldCheck,
-  Send,
-  UserCheck
+  Clock,
+  Play,
+  Pause,
+  RotateCcw,
+  CheckSquare,
+  Trash2,
+  UserPlus,
+  ArrowRight,
+  Sparkles,
+  CheckCircle2,
+  Lock,
 } from 'lucide-react';
 import {
-  Activity,
-  StudentUser,
-  DebateConfig,
-  DebateGuidingQuestion,
-  DebateChecklistItem,
-  DebateParticipant,
-  DebateJurorVerdict,
-} from '@/lib/types';
+  isSameStudentTurma,
+  getEligibleClassmatesForGroup,
+  syncGroupGradeToSubmissions,
+} from '@/lib/groupActivityUtils';
 
-interface DebatePaperlessViewProps {
-  activity: Activity;
-  student: StudentUser;
+type GroupRole = 'pro' | 'contra' | 'juror';
+
+export interface LocalDebateQuestion {
+  id: string;
+  number?: number;
+  side?: string;
+  sociologicalConcept: string;
+  prompt: string;
+  researchHint?: string;
+}
+
+export interface LocalDebateParticipant {
+  studentId: string;
+  studentName: string;
+  role: GroupRole;
+  turma?: string;
+  isLeader?: boolean;
+}
+
+export interface LocalDebateCriterion {
+  id: string;
+  number?: number;
+  title?: string;
+  criterion?: string;
+  description: string;
+}
+
+export interface LocalDebateConfig {
+  maxJurors: number;
+  proQuestions: LocalDebateQuestion[];
+  contraQuestions: LocalDebateQuestion[];
+  jurorQuestions?: LocalDebateQuestion[];
+  checklistCriteria: LocalDebateCriterion[];
+  jurorInitialGuide: string;
+  participants: LocalDebateParticipant[];
+  proAnswers: Record<string, string>;
+  contraAnswers: Record<string, string>;
+  jurorAnswers?: Record<string, string>;
+  proResearchCompleted?: boolean;
+  contraResearchCompleted?: boolean;
+  proSummaryAI?: string;
+  contraSummaryAI?: string;
+  jurorGuideAI?: string;
+  jurorVerdicts: any[];
+  gradingMode?: 'group' | 'individual';
+  groupGrades?: Record<string, number>;
+  individualGrades?: Record<string, number>;
+  teacherChecklists?: Record<string, TeacherGroupChecklistState>;
+  [key: string]: any;
+}
+
+interface TeacherGroupChecklistState {
+  criteriaChecked: Record<string, boolean>;
+  customScore: number;
+  teacherNotes: string;
+  appliedAt?: string;
+}
+
+export interface DebatePaperlessViewProps {
+  activity?: Activity | null;
+  debateConfig?: any;
+  title?: string;
+  topic?: string;
+  student?: StudentUser | null;
+  currentStudent?: StudentUser | null;
+  students?: StudentUser[];
   allStudents?: StudentUser[];
-  debateConfig?: DebateConfig;
-  onClose: () => void;
+  teacher?: TeacherUser | null;
+  isTeacher?: boolean;
+  isTeacherPreview?: boolean;
+  role?: 'teacher' | 'student' | 'second_teacher' | string | null;
+  onSaveActivity?: (updatedActivity: Activity) => void | Promise<void>;
+  onUpdateActivity?: (updatedActivity: Activity) => void | Promise<void>;
+  onUpdateDebateConfig?: (updatedConfig: any) => void | Promise<void>;
+  onSubmitAnswer?: (
+    activityId: string,
+    studentId: string,
+    essayAnswer: string,
+    objectiveScore?: number,
+    maxObjectiveScore?: number,
+    maxEssayScore?: number,
+    selectedObjectiveAnswers?: { [questionId: string]: number },
+    groupMembers?: string
+  ) => void | Promise<void>;
   onFinishGame?: (finalScore: number, groupMembersStr?: string) => void;
+  onClose?: () => void;
+  [key: string]: any;
 }
 
-function createDefaultDebateConfig(activity: Activity): DebateConfig {
-  const safeTopic = activity.title.replace(/^\[KronoGame\]\s*/i, '') || 'Tema Sociológico';
-  const lines = (activity.supportMaterial || activity.description || '')
-    .split(/\n+/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 8);
+const DEFAULT_TEACHER_CRITERIA = [
+  { id: 'tc_1', label: 'Domínio Conceitual Sociológico', weight: 2.0 },
+  { id: 'tc_2', label: 'Uso de Evidências, Dados e Fatos Reais', weight: 2.0 },
+  { id: 'tc_3', label: 'Coerência Argumentativa na Exposição', weight: 2.0 },
+  { id: 'tc_4', label: 'Capacidade de Réplica, Tréplica ou Análise Crítica', weight: 1.5 },
+  { id: 'tc_5', label: 'Articulação em Equipe e Divisão de Fala', weight: 1.5 },
+  { id: 'tc_6', label: 'Respeito ao Tempo (Timer) e Postura Democrática', weight: 1.0 },
+];
 
-  const proAxes = [
-    'Fundamentos históricos e conquistas sociais',
-    'Dados empíricos e impactos positivos na cidadania',
-    'Conceitos sociológicos de coesão e direitos',
-    'Exemplos práticos na realidade brasileira',
-    'Políticas públicas e fortalecimento democrático',
-    'Síntese propositiva para a defesa da Bancada Pró',
-  ];
-
-  const contraAxes = [
-    'Contradições estruturais e limites práticos',
-    'Crítica sociológica às desigualdades e assimetrias de poder',
-    'Dados empíricos sobre exclusão ou efeitos colaterais',
-    'Análise de interesses hegemônicos e ideologia',
-    'Impactos críticos no cotidiano da população brasileira',
-    'Síntese de refutação para a defesa da Bancada Contra',
-  ];
-
-  return {
-    maxJurors: 3,
-    proQuestions: proAxes.map((axis, idx) => ({
-      id: `pro_q_${idx + 1}`,
-      number: idx + 1,
-      side: 'pro',
-      sociologicalConcept: lines[idx] ? lines[idx].slice(0, 55) : axis,
-      prompt: `[Questão Norteadora PRÓ #${idx + 1}] Sobre "${safeTopic}" (${lines[idx] || axis}): pesquise e redija argumentos sociológicos e dados que sustentem a posição FAVORÁVEL da sua bancada.`,
-      researchHint: 'Cite conceitos sociológicos trabalhados em aula, dados estatísticos ou exemplos históricos brasileiros.',
-    })),
-    contraQuestions: contraAxes.map((axis, idx) => ({
-      id: `contra_q_${idx + 1}`,
-      number: idx + 1,
-      side: 'contra',
-      sociologicalConcept: lines[idx] ? lines[idx].slice(0, 55) : axis,
-      prompt: `[Questão Norteadora CONTRA #${idx + 1}] Sobre "${safeTopic}" (${lines[idx] || axis}): pesquise e redija argumentos críticos e evidências que sustentem o CONTRAPONTO da sua bancada.`,
-      researchHint: 'Aponte tensões estruturais, limites práticos, relações de poder e dados que problematizem a tese.',
-    })),
-    jurorQuestions: proAxes.map((axis, idx) => ({
-      id: `juror_q_${idx + 1}`,
-      number: idx + 1,
-      side: 'juror',
-      sociologicalConcept: lines[idx] ? lines[idx].slice(0, 55) : axis,
-      prompt: `[Questão Preparatória JURADOS #${idx + 1}] Sobre "${safeTopic}" (${lines[idx] || axis}): pesquise os fundamentos sociológicos e critérios de verificação para julgar com imparcialidade tanto a Bancada Pró quanto a Bancada Contra neste eixo.`,
-      researchHint: 'Identifique quais dados reais e conceitos sociológicos cada lado precisará comprovar na apresentação.',
-    })),
-    checklistCriteria: [
-      { id: 'chk_1', number: 1, criterion: 'Domínio Conceitual Sociológico', description: 'Utilizou corretamente conceitos e autores da Sociologia pertinentes ao tema?' },
-      { id: 'chk_2', number: 2, criterion: 'Uso de Dados e Evidências Reais', description: 'Apresentou fatos históricos, estatísticas ou exemplos concretos da realidade brasileira?' },
-      { id: 'chk_3', number: 3, criterion: 'Articulação com o Resumo do Grupo', description: 'Seguiu a linha argumentativa construída nas 6 questões pesquisadas pela bancada?' },
-      { id: 'chk_4', number: 4, criterion: 'Consistência na Réplica e Tréplica', description: 'Respondeu diretamente aos argumentos adversários sem recorrer a falácias ou senso comum?' },
-      { id: 'chk_5', number: 5, criterion: 'Respeito ao Tempo (Timer KronoMestre)', description: 'Cumpriu rigorosamente o tempo de exposição, réplica, tréplica e considerações finais?' },
-      { id: 'chk_6', number: 6, criterion: 'Postura Ética e Democrática', description: 'Manteve o respeito mútuo, a escuta ativa e a organização em equipe?' },
-    ],
-    jurorInitialGuide: `Vocês 3 compõem o Corpo de Jurados sobre "${safeTopic}". Acompanhem os resumos gerados pela IA e avaliem as Bancadas Pró e Contra usando os 2 Checklists de 6 itens (Cumpriu / Não Cumpriu).`,
-    participants: [],
-    proAnswers: {},
-    contraAnswers: {},
-    proResearchCompleted: false,
-    contraResearchCompleted: false,
-    jurorVerdicts: [],
-    gradingMode: 'group',
-    groupGrades: {
-      proResearchGrade: 5,
-      proPresentationGrade: 5,
-      contraResearchGrade: 5,
-      contraPresentationGrade: 5,
-      jurorsGrade: 10,
-    },
-    individualGrades: {},
-  };
-}
+const DEBATE_TIMER_PRESETS = [
+  { id: 'exp_pro', label: '🎙️ Exposição Inicial • PRÓ', seconds: 180 },
+  { id: 'exp_contra', label: '⚡ Exposição Inicial • CONTRA', seconds: 180 },
+  { id: 'rep_pro', label: '🔄 Réplica • PRÓ', seconds: 120 },
+  { id: 'rep_contra', label: '🛡️ Réplica • CONTRA', seconds: 120 },
+  { id: 'sabatina_juror', label: '⚖️ Perguntas dos Jurados', seconds: 120 },
+  { id: 'final', label: '🏁 Considerações Finais', seconds: 90 },
+];
 
 export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
-  activity,
+  activity: activityProp,
+  debateConfig: debateConfigProp,
+  title: titleProp,
   student,
+  currentStudent,
+  students = [],
   allStudents = [],
-  debateConfig: propDebateConfig,
-  onClose,
+  isTeacher: isTeacherProp,
+  isTeacherPreview,
+  role: roleProp,
+  onSaveActivity,
+  onUpdateActivity,
+  onUpdateDebateConfig,
+  onSubmitAnswer,
   onFinishGame,
+  onClose,
 }) => {
-  const storageKey = `krono_debate_state_${activity.id}`;
-
-  // Inicializa o estado combinando propDebateConfig + fallback + localStorage para persistência entre aulas
-  const [debateState, setDebateState] = useState<DebateConfig>(() => {
-    const base = createDefaultDebateConfig(activity);
-    const merged: DebateConfig = {
-      ...base,
-      ...(propDebateConfig || {}),
-      proQuestions:
-        propDebateConfig?.proQuestions && propDebateConfig.proQuestions.length === 6
-          ? propDebateConfig.proQuestions
-          : base.proQuestions,
-      contraQuestions:
-        propDebateConfig?.contraQuestions && propDebateConfig.contraQuestions.length === 6
-          ? propDebateConfig.contraQuestions
-          : base.contraQuestions,
-      checklistCriteria:
-        propDebateConfig?.checklistCriteria && propDebateConfig.checklistCriteria.length === 6
-          ? propDebateConfig.checklistCriteria
-          : base.checklistCriteria,
-    };
-
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(storageKey);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          return {
-            ...merged,
-            ...parsed,
-            proQuestions: merged.proQuestions,
-            contraQuestions: merged.contraQuestions,
-            checklistCriteria: merged.checklistCriteria,
-          };
-        }
-      } catch {
-        // ignore storage errors
-      }
-    }
-    return merged;
-  });
-
-  // Salva automaticamente em localStorage e sincroniza com activity.gameData.debateConfig
-  const updateDebateState = (updater: (prev: DebateConfig) => DebateConfig) => {
-    setDebateState((prev) => {
-      const next = updater(prev);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem(storageKey, JSON.stringify(next));
-        } catch {
-          // ignore
-        }
-      }
-      if (activity.gameData) {
-        activity.gameData.debateConfig = next;
-      }
-      return next;
-    });
-  };
-
-  // Verifica se o aluno já estava cadastrado em algum papel
-  const existingEnrollment = useMemo(() => {
-    return (debateState.participants || []).find((p) => p.studentId === student.id || p.studentName === student.name);
-  }, [debateState.participants, student.id, student.name]);
-
-  const [debateRole, setDebateRole] = useState<'pro' | 'contra' | 'juror' | null>(
-    existingEnrollment ? existingEnrollment.role : null
+  // Auto-hidratação de Sessão, Alunos e Atividade quando chamado via KronoGamePlayer
+  const [sessionRole, setSessionRole] = useState<string | null>(roleProp || null);
+  const [sessionStudent, setSessionStudent] = useState<StudentUser | null>(
+    student || currentStudent || null
   );
-
-  // Abas principais:
-  // 'research' (Fase 2: 6 questões norteadoras Pró/Contra)
-  // 'summaries' (Fase 3, 5, 6, 7: 3 Resumos IA compartilhados por grupo)
-  // 'timer_arena' (Fase 8: Painel do Professor com Timer de Exposição, Réplica, Tréplica e Conclusão)
-  // 'juror_checklists' (Fase 9 e 10: 2 Checklists Cumpriu/Não Cumpriu + Parecer dos Jurados)
-  // 'teacher_grading' (Fase 4, 10 e 11: Lançamento de Notas Individual ou em Grupo pelo Professor)
-  const [activeTab, setActiveTab] = useState<'research' | 'summaries' | 'timer_arena' | 'juror_checklists' | 'teacher_grading'>('research');
-
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-
-  // Estados locais para os 2 Checklists do Jurado atual
-  const existingVerdict = useMemo(() => {
-    return (debateState.jurorVerdicts || []).find((v) => v.jurorId === student.id || v.jurorName === student.name);
-  }, [debateState.jurorVerdicts, student.id, student.name]);
-
-  const [jurorProChecklist, setJurorProChecklist] = useState<Record<string, boolean>>(existingVerdict?.proChecklist || {});
-  const [jurorContraChecklist, setJurorContraChecklist] = useState<Record<string, boolean>>(existingVerdict?.contraChecklist || {});
-  const [jurorOpinion, setJurorOpinion] = useState<string>(existingVerdict?.writtenOpinion || '');
-  const [winnerVote, setWinnerVote] = useState<'pro' | 'contra' | 'empate'>(existingVerdict?.winnerVote || 'empate');
-
-  // Timer de Sala (Passo 8)
-  const [timerSeconds, setTimerSeconds] = useState(180);
-  const [timerActive, setTimerActive] = useState(false);
-  const [currentPhase, setCurrentPhase] = useState('Exposição Inicial das Bancadas');
+  const [fetchedStudents, setFetchedStudents] = useState<StudentUser[]>([]);
+  const [fetchedActivity, setFetchedActivity] = useState<Activity | null>(activityProp || null);
 
   useEffect(() => {
-    if (!timerActive) return;
-    const interval = setInterval(() => {
-      setTimerSeconds((s) => {
-        if (s <= 1) {
-          setTimerActive(false);
-          return 0;
+    if (activityProp) setFetchedActivity(activityProp);
+  }, [activityProp]);
+
+  useEffect(() => {
+    if (student || currentStudent) {
+      setSessionStudent(student || currentStudent || null);
+    }
+    if (roleProp) {
+      setSessionRole(roleProp);
+    }
+  }, [student, currentStudent, roleProp]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    // 1. Hidratar sessão local/servidor se não veio por prop
+    if (!student && !currentStudent && !roleProp) {
+      try {
+        const activeUid = sessionStorage.getItem('current_active_user_id') || '';
+        const rawSession =
+          (activeUid ? sessionStorage.getItem(`tenant_${activeUid}_active_session`) : null) ||
+          sessionStorage.getItem('active_session');
+        if (rawSession) {
+          const parsed = JSON.parse(rawSession);
+          if (parsed.role) setSessionRole(parsed.role);
+          if (parsed.studentData) setSessionStudent(parsed.studentData);
         }
-        return s - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [timerActive]);
+      } catch (e) {}
 
-  const formatTimer = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
+      fetch('/api/auth/session')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d?.user) {
+            setSessionRole(d.user.role || null);
+            if (d.user.role === 'student') {
+              setSessionStudent(d.user);
+            }
+          }
+        })
+        .catch(() => {});
+    }
 
-  // Contadores de integrantes por papel
+    // 2. Hidratar lista de alunos da turma se não veio por prop
+    if ((!students || students.length === 0) && (!allStudents || allStudents.length === 0)) {
+      fetch('/api/students')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d && Array.isArray(d.students)) {
+            setFetchedStudents(d.students);
+          }
+        })
+        .catch(() => {});
+    }
+
+    // 3. Hidratar atividade correspondente se foi aberto via KronoGamePlayer apenas com debateConfig
+    if (!activityProp) {
+      fetch('/api/activities')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d && Array.isArray(d.activities)) {
+            const matched =
+              d.activities.find(
+                (a: Activity) =>
+                  a.gameMode === 'debate_paperless' ||
+                  Boolean(a.gameData?.debateConfig)
+              ) || null;
+            if (matched) setFetchedActivity(matched);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [student, currentStudent, roleProp, students, allStudents, activityProp]);
+
+  const activeStudent = student || currentStudent || sessionStudent || null;
+  const effectiveRole = roleProp || sessionRole;
+  const isTeacherMode = Boolean(
+    isTeacherProp ||
+      isTeacherPreview ||
+      effectiveRole === 'teacher' ||
+      effectiveRole === 'second_teacher' ||
+      (!activeStudent && effectiveRole !== 'student')
+  );
+
+  const safeActivity: Activity = useMemo(() => {
+    if (activityProp) return activityProp;
+    if (fetchedActivity) return fetchedActivity;
+    return {
+      id: 'debate-live',
+      title: titleProp || 'Debate Sociológico Sem Papel',
+      subject: 'Sociologia',
+      turma: activeStudent?.turma || 'Geral',
+      dueDate: '',
+      status: 'active',
+      totalSubmissions: 0,
+      pendingCorrection: 0,
+      submissions: [],
+      gameMode: 'debate_paperless',
+    } as Activity;
+  }, [activityProp, fetchedActivity, titleProp, activeStudent?.turma]);
+
+  const rosterStudents = useMemo(() => {
+    if (Array.isArray(students) && students.length > 0) return students;
+    if (Array.isArray(allStudents) && allStudents.length > 0) return allStudents;
+    return fetchedStudents;
+  }, [students, allStudents, fetchedStudents]);
+
+  const availableTurmas = useMemo(() => {
+    const set = new Set<string>();
+    rosterStudents.forEach((s) => {
+      if (!s.isArchived && s.turma) set.add(s.turma.trim());
+    });
+    const rawActTurma = ((safeActivity as any)._originalTurmaScope || safeActivity.turma || '').trim();
+    if (rawActTurma && rawActTurma.toLowerCase() !== 'todas') {
+      rawActTurma
+        .split(',')
+        .map((t: string) => t.trim())
+        .filter(Boolean)
+        .forEach((t: string) => set.add(t));
+    }
+    const arr = Array.from(set).sort((a, b) => a.localeCompare(b));
+    return arr.length > 0 ? arr : ['Geral'];
+  }, [rosterStudents, safeActivity]);
+
+  const [selectedTeacherTurma, setSelectedTeacherTurma] = useState<string>(() => {
+    return availableTurmas[0] || 'Geral';
+  });
+
+  useEffect(() => {
+    if (
+      isTeacherMode &&
+      availableTurmas.length > 0 &&
+      !availableTurmas.includes(selectedTeacherTurma)
+    ) {
+      setSelectedTeacherTurma(availableTurmas[0]);
+    }
+  }, [isTeacherMode, availableTurmas, selectedTeacherTurma]);
+
+  // REQ 1: O aluno SEMPRE enxerga apenas a sua própria turma
+  const currentTurmaScope = useMemo(() => {
+    if (!isTeacherMode && activeStudent?.turma) {
+      return activeStudent.turma.trim();
+    }
+    return selectedTeacherTurma || availableTurmas[0] || 'Geral';
+  }, [isTeacherMode, activeStudent?.turma, selectedTeacherTurma, availableTurmas]);
+
+  const baseDebateConfig: LocalDebateConfig = useMemo(() => {
+    const cfg: any = debateConfigProp || safeActivity.gameData?.debateConfig || {};
+    return {
+      maxJurors: cfg.maxJurors || 3,
+      proQuestions: Array.isArray(cfg.proQuestions) ? cfg.proQuestions : [],
+      contraQuestions: Array.isArray(cfg.contraQuestions) ? cfg.contraQuestions : [],
+      jurorQuestions: Array.isArray(cfg.jurorQuestions)
+        ? cfg.jurorQuestions
+        : [
+            {
+              id: 'juror_q_1',
+              number: 1,
+              side: 'juror',
+              sociologicalConcept: 'Verificação Conceitual e Imparcialidade',
+              prompt: `Quais conceitos sociológicos e fatos concretos sobre "${safeActivity.title}" as bancadas Pró e Contra precisam comprovar para convencer o júri?`,
+              researchHint: '',
+            },
+          ],
+      checklistCriteria: Array.isArray(cfg.checklistCriteria) ? cfg.checklistCriteria : [],
+      jurorInitialGuide:
+        cfg.jurorInitialGuide ||
+        'Acompanhem as teses e avaliem com imparcialidade sociológica nos 2 Checklists oficiais.',
+      participants: Array.isArray(cfg.participants) ? cfg.participants : [],
+      proAnswers: cfg.proAnswers || {},
+      contraAnswers: cfg.contraAnswers || {},
+      jurorAnswers: cfg.jurorAnswers || {},
+      proResearchCompleted: Boolean(cfg.proResearchCompleted),
+      contraResearchCompleted: Boolean(cfg.contraResearchCompleted),
+      proSummaryAI: cfg.proSummaryAI || '',
+      contraSummaryAI: cfg.contraSummaryAI || '',
+      jurorGuideAI: cfg.jurorGuideAI || '',
+      jurorVerdicts: Array.isArray(cfg.jurorVerdicts) ? cfg.jurorVerdicts : [],
+      gradingMode: cfg.gradingMode || 'group',
+      groupGrades: cfg.groupGrades || {},
+      individualGrades: cfg.individualGrades || {},
+      teacherChecklists: cfg.teacherChecklists || {},
+    };
+  }, [debateConfigProp, safeActivity]);
+
+  const [localConfig, setLocalConfig] = useState<LocalDebateConfig>(baseDebateConfig);
+  const [statusBanner, setStatusBanner] = useState<{
+    type: 'success' | 'error' | 'info';
+    text: string;
+  } | null>(null);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+
+  useEffect(() => {
+    setLocalConfig(baseDebateConfig);
+  }, [baseDebateConfig]);
+
+  const notify = useCallback((type: 'success' | 'error' | 'info', text: string) => {
+    setStatusBanner({ type, text });
+    setTimeout(() => {
+      setStatusBanner((prev) => (prev?.text === text ? null : prev));
+    }, 4500);
+  }, []);
+
+  const persistDebateConfig = useCallback(
+    async (
+      nextConfig: LocalDebateConfig,
+      updatedSubmissions?: Activity['submissions'],
+      toastMsg?: string
+    ) => {
+      setLocalConfig(nextConfig);
+
+      if (onUpdateDebateConfig) {
+        await onUpdateDebateConfig(nextConfig);
+      }
+
+      const originalTurmaScope =
+        (safeActivity as any)._originalTurmaScope || safeActivity.turma;
+      const updatedActivity: Activity = {
+        ...safeActivity,
+        turma: originalTurmaScope,
+        submissions:
+          updatedSubmissions !== undefined ? updatedSubmissions : safeActivity.submissions,
+        totalSubmissions:
+          updatedSubmissions !== undefined
+            ? updatedSubmissions.length
+            : safeActivity.totalSubmissions,
+        pendingCorrection:
+          updatedSubmissions !== undefined
+            ? updatedSubmissions.filter((s) => s.status === 'pending').length
+            : safeActivity.pendingCorrection,
+        gameData: {
+          ...(safeActivity.gameData || {
+            introText: safeActivity.description || '',
+            stages: [],
+          }),
+          debateConfig: nextConfig as any,
+        },
+      };
+
+      setFetchedActivity(updatedActivity);
+
+      try {
+        if (onSaveActivity) await onSaveActivity(updatedActivity);
+        if (onUpdateActivity) await onUpdateActivity(updatedActivity);
+
+        if (safeActivity.id && safeActivity.id !== 'debate-live') {
+          await fetch('/api/activities', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updatedActivity),
+          });
+        }
+
+        if (toastMsg) notify('success', toastMsg);
+      } catch (err) {
+        console.warn('Aviso ao persistir configuração do debate:', err);
+        if (toastMsg) notify('info', toastMsg);
+      }
+    },
+    [safeActivity, onUpdateDebateConfig, onSaveActivity, onUpdateActivity, notify]
+  );
+
+  // ==========================================================================
+  // ISOLAMENTO DE PARTICIPANTES E RESPOSTAS POR TURMA (REQ 1)
+  // ==========================================================================
+  const allParticipants = useMemo(
+    () => (Array.isArray(localConfig.participants) ? localConfig.participants : []),
+    [localConfig.participants]
+  );
+
+  const turmaParticipants = useMemo(() => {
+    return allParticipants.filter((p) => {
+      if (p.turma) return isSameStudentTurma(p.turma, currentTurmaScope);
+      const found = rosterStudents.find((s) => s.id === p.studentId);
+      if (found?.turma) return isSameStudentTurma(found.turma, currentTurmaScope);
+      return true;
+    });
+  }, [allParticipants, currentTurmaScope, rosterStudents]);
+
   const proMembers = useMemo(
-    () => (debateState.participants || []).filter((p) => p.role === 'pro'),
-    [debateState.participants]
+    () => turmaParticipants.filter((p) => p.role === 'pro'),
+    [turmaParticipants]
   );
   const contraMembers = useMemo(
-    () => (debateState.participants || []).filter((p) => p.role === 'contra'),
-    [debateState.participants]
+    () => turmaParticipants.filter((p) => p.role === 'contra'),
+    [turmaParticipants]
   );
   const jurorMembers = useMemo(
-    () => (debateState.participants || []).filter((p) => p.role === 'juror'),
-    [debateState.participants]
+    () => turmaParticipants.filter((p) => p.role === 'juror'),
+    [turmaParticipants]
   );
 
-  // Passo 1: Cadastrar aluno no papel escolhido (Pró, Contra ou Jurado máx. 3)
-  const handleSelectRole = (role: 'pro' | 'contra' | 'juror') => {
-    const isAlreadyJuror = jurorMembers.some((j) => j.studentId === student.id || j.studentName === student.name);
-    if (role === 'juror' && jurorMembers.length >= 3 && !isAlreadyJuror) {
-      alert('As 3 vagas do Corpo de Jurados já foram preenchidas! Escolha a Bancada Pró ou a Bancada Contra.');
-      return;
-    }
+  const assignedIdsInTurma = useMemo(
+    () => new Set(turmaParticipants.map((p) => p.studentId)),
+    [turmaParticipants]
+  );
 
-    updateDebateState((prev) => {
-      const filtered = (prev.participants || []).filter(
-        (p) => p.studentId !== student.id && p.studentName !== student.name
-      );
-      const nextParticipants: DebateParticipant[] = [
-        ...filtered,
-        {
-          studentId: student.id,
-          studentName: student.name || "Estudante",
-          role,
-          joinedAt: new Date().toISOString(),
-        },
-      ];
-      return { ...prev, participants: nextParticipants };
-    });
+  // REQ 2: Colegas da mesma turma disponíveis na lista suspensa (<select>)
+  const unassignedClassmates = useMemo(
+    () => getEligibleClassmatesForGroup(rosterStudents, currentTurmaScope, assignedIdsInTurma),
+    [rosterStudents, currentTurmaScope, assignedIdsInTurma]
+  );
 
-    setDebateRole(role);
-    if (role === 'juror') {
-      setActiveTab('summaries');
-    } else {
-      setActiveTab('research');
-    }
-  };
+  const myParticipantRecord = useMemo(() => {
+    if (!activeStudent) return null;
+    return turmaParticipants.find((p) => p.studentId === activeStudent.id) || null;
+  }, [activeStudent, turmaParticipants]);
 
-  // Atualizar resposta de uma das 6 questões norteadoras (sincronizado com o grupo)
-  const handleAnswerChange = (side: 'pro' | 'contra', questionId: string, value: string) => {
-    updateDebateState((prev) => {
-      if (side === 'pro') {
-        return { ...prev, proAnswers: { ...(prev.proAnswers || {}), [questionId]: value } };
-      } else {
-        return { ...prev, contraAnswers: { ...(prev.contraAnswers || {}), [questionId]: value } };
+  const myRole: GroupRole | null = myParticipantRecord?.role || null;
+
+  // REQ 3: Passo atual do túnel do grupo (Passo 1 -> Passo 2 -> Passo 3: O Grande Debate)
+  const [studentStep, setStudentStep] = useState<1 | 2 | 3>(1);
+  const [selectedClassmateIdToAdd, setSelectedClassmateIdToAdd] = useState<string>('');
+
+  const answerScopePrefix = useMemo(() => {
+    const cleanTurma = currentTurmaScope.replace(/[^a-zA-Z0-9]/g, '_');
+    return `t_${cleanTurma}_`;
+  }, [currentTurmaScope]);
+
+  const getScopedAnswer = useCallback(
+    (roleKey: GroupRole, questionId: string): string => {
+      const scopedKey = `${answerScopePrefix}${questionId}`;
+      if (roleKey === 'pro') {
+        return localConfig.proAnswers?.[scopedKey] ?? localConfig.proAnswers?.[questionId] ?? '';
       }
+      if (roleKey === 'contra') {
+        return (
+          localConfig.contraAnswers?.[scopedKey] ??
+          localConfig.contraAnswers?.[questionId] ??
+          ''
+        );
+      }
+      const jurorMap = localConfig.jurorAnswers || {};
+      return jurorMap[scopedKey] ?? jurorMap[questionId] ?? '';
+    },
+    [answerScopePrefix, localConfig]
+  );
+
+  const handleChangeScopedAnswer = (roleKey: GroupRole, questionId: string, val: string) => {
+    const scopedKey = `${answerScopePrefix}${questionId}`;
+    setLocalConfig((prev) => {
+      if (roleKey === 'pro') {
+        return {
+          ...prev,
+          proAnswers: { ...(prev.proAnswers || {}), [scopedKey]: val, [questionId]: val },
+        };
+      }
+      if (roleKey === 'contra') {
+        return {
+          ...prev,
+          contraAnswers: { ...(prev.contraAnswers || {}), [scopedKey]: val, [questionId]: val },
+        };
+      }
+      return {
+        ...prev,
+        jurorAnswers: { ...(prev.jurorAnswers || {}), [scopedKey]: val, [questionId]: val },
+      };
     });
   };
 
-  // Passo 3: Finalizar pesquisa e gerar os 3 resumos com a IA (Pró, Contra e Guia dos Jurados)
-  const handleGenerateSummaries = async () => {
-    setIsGenerating(true);
-    setStatusMessage(null);
+  // ==========================================================================
+  // INSCRIÇÃO E GERENCIAMENTO DE INTEGRANTES (REQ 2 & REQ 6)
+  // ==========================================================================
+  const handleAddStudentToGroup = async (
+    targetStudent: { id: string; fullName: string; turma?: string },
+    targetRole: GroupRole
+  ) => {
+    if (targetRole === 'juror' && jurorMembers.length >= (localConfig.maxJurors || 3)) {
+      const alreadyInJurors = jurorMembers.some((j) => j.studentId === targetStudent.id);
+      if (!alreadyInJurors) {
+        notify(
+          'error',
+          `O Corpo de Jurados desta turma já atingiu o limite de ${localConfig.maxJurors || 3} integrantes.`
+        );
+        return;
+      }
+    }
+
+    const filtered = allParticipants.filter((p) => p.studentId !== targetStudent.id);
+    const existingForRoleInTurma = turmaParticipants.filter((p) => p.role === targetRole);
+    const isFirstLeader = existingForRoleInTurma.length === 0;
+
+    const newParticipant: LocalDebateParticipant = {
+      studentId: targetStudent.id,
+      studentName: targetStudent.fullName,
+      role: targetRole,
+      turma: targetStudent.turma || currentTurmaScope,
+      isLeader: isFirstLeader,
+    };
+
+    const nextParticipants = [...filtered, newParticipant];
+    const nextConfig: LocalDebateConfig = {
+      ...localConfig,
+      participants: nextParticipants,
+    };
+
+    setSelectedClassmateIdToAdd('');
+    await persistDebateConfig(
+      nextConfig,
+      undefined,
+      `${targetStudent.fullName} integrado(a) ao grupo ${
+        targetRole === 'pro'
+          ? 'Bancada PRÓ'
+          : targetRole === 'contra'
+          ? 'Bancada CONTRA'
+          : 'Corpo de JURADOS'
+      }!`
+    );
+  };
+
+  const handleRemoveStudentFromGroup = async (studentId: string, studentName: string) => {
+    const nextParticipants = allParticipants.filter((p) => p.studentId !== studentId);
+    const nextConfig: LocalDebateConfig = {
+      ...localConfig,
+      participants: nextParticipants,
+    };
+    await persistDebateConfig(nextConfig, undefined, `${studentName} removido(a) do grupo.`);
+  };
+
+  const handleMoveStudentGroup = async (
+    participant: LocalDebateParticipant,
+    newRole: GroupRole
+  ) => {
+    if (participant.role === newRole) return;
+    await handleAddStudentToGroup(
+      {
+        id: participant.studentId,
+        fullName: participant.studentName,
+        turma: participant.turma || currentTurmaScope,
+      },
+      newRole
+    );
+  };
+
+  // ==========================================================================
+  // SÍNTESE IA EXCLUSIVA DO GRUPO (PASSO 2)
+  // ==========================================================================
+  const handleGenerateGroupSynthesis = async (targetRole: GroupRole) => {
+    setIsGeneratingAI(true);
     try {
       const res = await fetch('/api/gemini/debate-summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: activity.title,
-          topic: activity.description || activity.title,
-          subject: activity.subject || 'Sociologia',
-          supportMaterial: activity.supportMaterial || '',
-          proQuestions: debateState.proQuestions,
-          contraQuestions: debateState.contraQuestions,
-          proAnswers: debateState.proAnswers || {},
-          contraAnswers: debateState.contraAnswers || {},
+          title: safeActivity.title,
+          topic: safeActivity.description || safeActivity.title,
+          proQuestions: localConfig.proQuestions,
+          contraQuestions: localConfig.contraQuestions,
+          proAnswers: localConfig.proAnswers,
+          contraAnswers: localConfig.contraAnswers,
         }),
       });
 
-      if (!res.ok) throw new Error('Falha ao gerar resumos');
-      const data = await res.json();
+      let nextConfig = { ...localConfig };
+      if (res.ok) {
+        const data = await res.json();
+        nextConfig = {
+          ...localConfig,
+          proSummaryAI: data.proSummaryAI || localConfig.proSummaryAI,
+          contraSummaryAI: data.contraSummaryAI || localConfig.contraSummaryAI,
+          jurorGuideAI: data.jurorGuideAI || localConfig.jurorGuideAI,
+        };
+      } else {
+        const fallbackText =
+          targetRole === 'pro'
+            ? `SÍNTESE ESTRATÉGICA BANCADA PRÓ (${currentTurmaScope}): Tese fundamentada nos eixos pesquisados pela equipe sobre "${safeActivity.title}".`
+            : targetRole === 'contra'
+            ? `SÍNTESE ESTRATÉGICA BANCADA CONTRA (${currentTurmaScope}): Contraponto crítico estruturado pela equipe sobre "${safeActivity.title}".`
+            : `DOSSIÊ DE ANÁLISE DOS JURADOS (${currentTurmaScope}): Guia de verificação imparcial das teses Pró e Contra.`;
 
-      updateDebateState((prev) => ({
-        ...prev,
-        proSummary: data.proSummary || prev.proSummary,
-        contraSummary: data.contraSummary || prev.contraSummary,
-        jurorGuideSummary: data.jurorGuideSummary || prev.jurorGuideSummary,
-        proResearchCompleted: debateRole === 'pro' ? true : prev.proResearchCompleted,
-        contraResearchCompleted: debateRole === 'contra' ? true : prev.contraResearchCompleted,
-      }));
+        if (targetRole === 'pro') nextConfig.proSummaryAI = fallbackText;
+        if (targetRole === 'contra') nextConfig.contraSummaryAI = fallbackText;
+        if (targetRole === 'juror') nextConfig.jurorGuideAI = fallbackText;
+      }
 
-      setStatusMessage('✅ Pesquisa concluída! Os 3 resumos (Pró, Contra e Guia dos Jurados) foram gerados pela IA e já estão visíveis para todo o grupo.');
-      setActiveTab('summaries');
-    } catch (err) {
-      console.error(err);
-      alert('Houve um erro ao gerar os resumos. Tente novamente.');
+      await persistDebateConfig(nextConfig, undefined, 'Dossiê Estratégico do Grupo atualizado!');
+    } catch (e) {
+      notify('error', 'Não foi possível gerar a síntese agora. Suas respostas já estão salvas.');
     } finally {
-      setIsGenerating(false);
+      setIsGeneratingAI(false);
     }
   };
 
-  // Passo 9 e 10: Enviar os 2 Checklists e o Parecer dos Jurados
-  const handleSubmitJurorVerdict = () => {
-    const newVerdict: DebateJurorVerdict = {
-      jurorId: student.id,
-      jurorName: student.name || "Jurado",
-      proChecklist: jurorProChecklist,
-      contraChecklist: jurorContraChecklist,
-      writtenOpinion: jurorOpinion,
-      winnerVote,
-      submittedAt: new Date().toISOString(),
-    };
+  // ==========================================================================
+  // SUBMISSÃO FINAL DO GRUPO NO PASSO 3 (O GRANDE DEBATE)
+  // ==========================================================================
+  const [groupFinalArgument, setGroupFinalArgument] = useState<string>('');
+  const [jurorChecklistPro, setJurorChecklistPro] = useState<Record<string, boolean>>({});
+  const [jurorChecklistContra, setJurorChecklistContra] = useState<Record<string, boolean>>({});
+  const [jurorVerdictComment, setJurorVerdictComment] = useState<string>('');
 
-    updateDebateState((prev) => {
-      const others = (prev.jurorVerdicts || []).filter(
-        (v) => v.jurorId !== student.id && v.jurorName !== student.name
+  const handleStudentFinishDebateStep3 = async () => {
+    if (!activeStudent || !myRole) return;
+
+    const myTeamMembers =
+      myRole === 'pro' ? proMembers : myRole === 'contra' ? contraMembers : jurorMembers;
+    const memberNamesCsv = myTeamMembers.map((m) => m.studentName).join(', ');
+
+    const questionsList: LocalDebateQuestion[] =
+      myRole === 'pro'
+        ? localConfig.proQuestions
+        : myRole === 'contra'
+        ? localConfig.contraQuestions
+        : localConfig.jurorQuestions || [];
+
+    const compiledQuestionsAndAnswers = questionsList
+      .map((q, idx) => {
+        const ans = getScopedAnswer(myRole, q.id) || '(Sem resposta registrada)';
+        return `[Questão ${idx + 1} - ${q.sociologicalConcept}]: ${q.prompt}\nResposta da Equipe: ${ans}`;
+      })
+      .join('\n\n');
+
+    let finalReportText = `=== RELATÓRIO DE TRAJETÓRIA DO GRUPO (${
+      myRole === 'pro'
+        ? 'BANCADA PRÓ'
+        : myRole === 'contra'
+        ? 'BANCADA CONTRA'
+        : 'CORPO DE JURADOS'
+    }) • TURMA ${currentTurmaScope} ===\nIntegrantes: ${memberNamesCsv}\n\n${compiledQuestionsAndAnswers}`;
+
+    if (myRole === 'juror') {
+      const proScoreCount = Object.values(jurorChecklistPro).filter(Boolean).length;
+      const contraScoreCount = Object.values(jurorChecklistContra).filter(Boolean).length;
+      finalReportText += `\n\n=== VEREDITO DO GRANDE DEBATE (JURADOS) ===\nCritérios cumpridos pela Bancada PRÓ: ${proScoreCount}/${
+        localConfig.checklistCriteria.length || 6
+      }\nCritérios cumpridos pela Bancada CONTRA: ${contraScoreCount}/${
+        localConfig.checklistCriteria.length || 6
+      }\nParecer Fundamentado do Júri: ${jurorVerdictComment || 'Registrado em sala.'}`;
+    } else if (groupFinalArgument.trim()) {
+      finalReportText += `\n\n=== SÍNTESE FINAL DO GRANDE DEBATE ===\n${groupFinalArgument.trim()}`;
+    }
+
+    if (onSubmitAnswer) {
+      await onSubmitAnswer(
+        safeActivity.id,
+        activeStudent.id,
+        finalReportText,
+        0,
+        0,
+        safeActivity.maxGrade || 10,
+        {},
+        memberNamesCsv
       );
-      return {
-        ...prev,
-        jurorVerdicts: [...others, newVerdict],
-      };
-    });
-
-    setStatusMessage('⚖️ Parecer e os 2 Checklists (Pró e Contra) enviados com sucesso ao Painel do Professor!');
-    setActiveTab('teacher_grading');
-  };
-
-  // Passo 4, 10 e 11: Lançar nota final (Em Grupo ou Individual)
-  const handleApplyFinalGrade = () => {
-    const gGrades = debateState.groupGrades || {
-      proResearchGrade: 5,
-      proPresentationGrade: 5,
-      contraResearchGrade: 5,
-      contraPresentationGrade: 5,
-      jurorsGrade: 10,
-    };
-
-    let calculatedScore = 10;
-    let groupNames = student.name;
-
-    if (debateState.gradingMode === 'individual' && debateState.individualGrades?.[student.id]) {
-      calculatedScore = debateState.individualGrades[student.id].finalGrade;
-    } else if (debateRole === 'pro') {
-      calculatedScore = Number(((gGrades.proResearchGrade || 5) + (gGrades.proPresentationGrade || 5)).toFixed(1));
-      if (proMembers.length > 0) {
-        groupNames = proMembers.map((m) => m.studentName).join(', ');
-      }
-    } else if (debateRole === 'contra') {
-      calculatedScore = Number(((gGrades.contraResearchGrade || 5) + (gGrades.contraPresentationGrade || 5)).toFixed(1));
-      if (contraMembers.length > 0) {
-        groupNames = contraMembers.map((m) => m.studentName).join(', ');
-      }
-    } else if (debateRole === 'juror') {
-      calculatedScore = Number((gGrades.jurorsGrade || 10).toFixed(1));
-      if (jurorMembers.length > 0) {
-        groupNames = jurorMembers.map((m) => m.studentName).join(', ');
-      }
     }
 
     if (onFinishGame) {
-      onFinishGame(Math.min(10, Math.max(0, calculatedScore)), groupNames);
+      onFinishGame(safeActivity.maxGrade || 10, memberNamesCsv);
     }
-    setStatusMessage(`🏆 Nota consolidada (${calculatedScore.toFixed(1)} / 10) registrada para ${groupNames}!`);
+
+    notify(
+      'success',
+      `Trajetória e participação de toda a equipe (${memberNamesCsv}) enviadas com sucesso para avaliação do Professor!`
+    );
   };
 
-  // Contabiliza acertos nos checklists para exibir resumo ao professor
-  const countChecklistPositive = (chkMap: Record<string, boolean>) =>
-    Object.values(chkMap).filter((v) => v === true).length;
+  // ==========================================================================
+  // REQ 4: TIMER OFICIAL DO PROFESSOR PARA O GRANDE DEBATE
+  // ==========================================================================
+  const [activeTimerPresetId, setActiveTimerPresetId] = useState<string>('exp_pro');
+  const [timerSecondsLeft, setTimerSecondsLeft] = useState<number>(180);
+  const [isTimerRunning, setIsTimerRunning] = useState<boolean>(false);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fadeIn overflow-y-auto">
-      <div className="bg-[#09101f] border border-cyan-500/40 rounded-3xl max-w-5xl w-full p-5 sm:p-7 space-y-6 shadow-2xl text-slate-100 my-6 max-h-[94vh] overflow-y-auto">
-        
-        {/* Cabeçalho Oficial do Debate */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[11px] font-black px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase tracking-wider">
-                🎙️ Debate Sociológico Sem Papel
-              </span>
-              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
-                Turma {activity.turma}
-              </span>
-              <span className="text-[11px] text-slate-400">
-                Participante: <strong className="text-white">{student.name}</strong>
-              </span>
+  useEffect(() => {
+    if (!isTimerRunning) return;
+    const interval = setInterval(() => {
+      setTimerSecondsLeft((prev) => {
+        if (prev <= 1) {
+          setIsTimerRunning(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isTimerRunning]);
+
+  const formatTimerMMSS = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  // ==========================================================================
+  // REQ 5: CHECKLIST DE AVALIAÇÃO DO PROFESSOR POR GRUPO -> ABA CORREÇÕES
+  // ==========================================================================
+  const [teacherTab, setTeacherTab] = useState<'grupos_timer' | 'respostas' | 'checklist_notas'>(
+    'grupos_timer'
+  );
+
+  const [teacherChecklists, setTeacherChecklists] = useState<
+    Record<string, TeacherGroupChecklistState>
+  >(() => {
+    return localConfig.teacherChecklists || {};
+  });
+
+  useEffect(() => {
+    if (localConfig.teacherChecklists) {
+      setTeacherChecklists(localConfig.teacherChecklists);
+    }
+  }, [localConfig.teacherChecklists]);
+
+  const getChecklistKey = (roleKey: GroupRole) => `${answerScopePrefix}${roleKey}`;
+
+  const getGroupChecklistState = (roleKey: GroupRole): TeacherGroupChecklistState => {
+    const key = getChecklistKey(roleKey);
+    return (
+      teacherChecklists[key] || {
+        criteriaChecked: {},
+        customScore: 0,
+        teacherNotes: '',
+      }
+    );
+  };
+
+  const handleToggleTeacherCriterion = (roleKey: GroupRole, critId: string) => {
+    const key = getChecklistKey(roleKey);
+    const current = getGroupChecklistState(roleKey);
+    const nextChecked = {
+      ...current.criteriaChecked,
+      [critId]: !current.criteriaChecked[critId],
+    };
+
+    const autoScore = DEFAULT_TEACHER_CRITERIA.reduce((acc, c) => {
+      return acc + (nextChecked[c.id] ? c.weight : 0);
+    }, 0);
+
+    const roundedScore = Math.min(10, Math.round(autoScore * 10) / 10);
+
+    setTeacherChecklists((prev) => ({
+      ...prev,
+      [key]: {
+        ...current,
+        criteriaChecked: nextChecked,
+        customScore: roundedScore,
+      },
+    }));
+  };
+
+  const handleChangeTeacherGroupScore = (roleKey: GroupRole, score: number) => {
+    const key = getChecklistKey(roleKey);
+    const current = getGroupChecklistState(roleKey);
+    setTeacherChecklists((prev) => ({
+      ...prev,
+      [key]: {
+        ...current,
+        customScore: Math.max(0, Math.min(10, score)),
+      },
+    }));
+  };
+
+  const handleChangeTeacherGroupNotes = (roleKey: GroupRole, notes: string) => {
+    const key = getChecklistKey(roleKey);
+    const current = getGroupChecklistState(roleKey);
+    setTeacherChecklists((prev) => ({
+      ...prev,
+      [key]: {
+        ...current,
+        teacherNotes: notes,
+      },
+    }));
+  };
+
+  const handleApplyGroupChecklistToCorrections = async (roleKey: GroupRole) => {
+    const groupParticipants =
+      roleKey === 'pro' ? proMembers : roleKey === 'contra' ? contraMembers : jurorMembers;
+
+    if (groupParticipants.length === 0) {
+      notify('error', 'Este grupo ainda não possui alunos cadastrados nesta turma.');
+      return;
+    }
+
+    const groupStudentObjects: StudentUser[] = groupParticipants.map((p) => {
+      const found = rosterStudents.find((s) => s.id === p.studentId);
+      return (
+        found || {
+          id: p.studentId,
+          fullName: p.studentName,
+          matricula: p.studentId,
+          turma: currentTurmaScope,
+          tag: 'REGULAR',
+          avatarUrl: '',
+          xp: 0,
+          level: 1,
+        }
+      );
+    });
+
+    const chkState = getGroupChecklistState(roleKey);
+    const roleLabel =
+      roleKey === 'pro'
+        ? 'Bancada PRÓ'
+        : roleKey === 'contra'
+        ? 'Bancada CONTRA'
+        : 'Corpo de JURADOS';
+
+    const checkedLabels = DEFAULT_TEACHER_CRITERIA.filter(
+      (c) => chkState.criteriaChecked[c.id]
+    ).map((c) => `✅ ${c.label} (+${c.weight.toFixed(1)})`);
+
+    const uncheckedLabels = DEFAULT_TEACHER_CRITERIA.filter(
+      (c) => !chkState.criteriaChecked[c.id]
+    ).map((c) => `⬜ ${c.label}`);
+
+    const feedbackSummary = [
+      `📋 CHECKLIST DE AVALIAÇÃO DO PROFESSOR — ${roleLabel.toUpperCase()} (Turma ${currentTurmaScope})`,
+      `Nota Final do Grupo: ${chkState.customScore.toFixed(1)} / 10.0`,
+      '',
+      'Critérios Atendidos:',
+      ...(checkedLabels.length > 0 ? checkedLabels : ['Nenhum critério marcado no checklist']),
+      ...(uncheckedLabels.length > 0 ? ['', 'Critérios Pendentes:', ...uncheckedLabels] : []),
+      ...(chkState.teacherNotes.trim()
+        ? ['', `Parecer Pedagógico do Professor: ${chkState.teacherNotes.trim()}`]
+        : []),
+    ].join('\n');
+
+    const questionsList: LocalDebateQuestion[] =
+      roleKey === 'pro'
+        ? localConfig.proQuestions
+        : roleKey === 'contra'
+        ? localConfig.contraQuestions
+        : localConfig.jurorQuestions || [];
+
+    const compiledAnswer = questionsList
+      .map((q, idx) => {
+        const ans = getScopedAnswer(roleKey, q.id) || '(Respondido oralmente / em grupo)';
+        return `Questão ${idx + 1} (${q.sociologicalConcept}): ${q.prompt}\nResposta: ${ans}`;
+      })
+      .join('\n\n');
+
+    const updatedActWithSubs = syncGroupGradeToSubmissions({
+      activity: safeActivity,
+      groupMembers: groupStudentObjects,
+      finalScore: chkState.customScore,
+      checklistSummary: feedbackSummary,
+      groupCompiledAnswer: compiledAnswer,
+      groupRoleLabel: roleLabel,
+    });
+
+    const key = getChecklistKey(roleKey);
+    const nextTeacherChecklists = {
+      ...teacherChecklists,
+      [key]: {
+        ...chkState,
+        appliedAt: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      },
+    };
+
+    const nextConfig: LocalDebateConfig = {
+      ...localConfig,
+      groupGrades: {
+        ...(localConfig.groupGrades || {}),
+        [roleKey]: chkState.customScore,
+      },
+      teacherChecklists: nextTeacherChecklists,
+    };
+
+    setTeacherChecklists(nextTeacherChecklists);
+    await persistDebateConfig(
+      nextConfig,
+      updatedActWithSubs.submissions,
+      `Nota ${chkState.customScore.toFixed(1)} aplicada a todos os ${groupStudentObjects.length} integrantes do grupo (${roleLabel}) e vinculada à Aba Correções!`
+    );
+  };
+
+  // ==========================================================================
+  // RENDERIZAÇÃO: 1. PAINEL DE CONTROLE ROBUSTO DO PROFESSOR (REQ 4, 5, 6)
+  // ==========================================================================
+  if (isTeacherMode) {
+    return (
+      <div className="space-y-6 text-slate-100">
+        <div className="p-5 rounded-3xl bg-[#070b14] border border-cyan-500/30 shadow-2xl space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-[10px] font-black uppercase tracking-wider">
+                  Cockpit do Professor • Controle de Sala & Avaliação
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[10px] font-black uppercase">
+                  Turma Ativa: {currentTurmaScope}
+                </span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-white mt-1">
+                {safeActivity.title}
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Gerencie os integrantes dos 3 grupos, controle o Timer Oficial do Grande Debate e aplique o Checklist de Avaliação conectado à aba Correções.
+              </p>
             </div>
-            <h2 className="text-lg sm:text-2xl font-black text-white mt-1.5">{activity.title}</h2>
+
+            <div className="flex flex-wrap items-center gap-2 bg-slate-900/90 border border-slate-800 p-2 rounded-2xl">
+              <span className="text-xs font-bold text-slate-400 px-2">Sala em Aula:</span>
+              <select
+                value={currentTurmaScope}
+                onChange={(e) => setSelectedTeacherTurma(e.target.value)}
+                className="bg-slate-950 border border-cyan-500/40 rounded-xl px-3 py-2 text-xs font-black text-cyan-300 focus:outline-none"
+              >
+                {availableTurmas.map((t) => (
+                  <option key={t} value={t}>
+                    Turma {t}
+                  </option>
+                ))}
+              </select>
+              {onClose && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 cursor-pointer"
+                >
+                  Fechar
+                </button>
+              )}
+            </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl transition-colors cursor-pointer self-end sm:self-center"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setTeacherTab('grupos_timer')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
+                teacherTab === 'grupos_timer'
+                  ? 'bg-cyan-500 text-slate-950 shadow-lg'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
+              }`}
+            >
+              <Clock className="w-4 h-4" />
+              <span>1. Timer Ao Vivo & Gestão dos 3 Grupos ({turmaParticipants.length} alunos)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTeacherTab('checklist_notas')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
+                teacherTab === 'checklist_notas'
+                  ? 'bg-emerald-500 text-slate-950 shadow-lg'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
+              }`}
+            >
+              <CheckSquare className="w-4 h-4" />
+              <span>2. Checklist de Avaliação do Professor (Ligado a Correções)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTeacherTab('respostas')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
+                teacherTab === 'respostas'
+                  ? 'bg-amber-500 text-slate-950 shadow-lg'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
+              }`}
+            >
+              <Scale className="w-4 h-4" />
+              <span>3. Espelho de Pesquisas & Dossiês da Turma</span>
+            </button>
+          </div>
         </div>
 
-        {/* Banner de Status */}
-        {statusMessage && (
-          <div className="p-3.5 rounded-2xl bg-emerald-500/20 border border-emerald-400 text-emerald-200 text-xs font-bold flex items-center justify-between gap-2 animate-fadeIn">
-            <span>{statusMessage}</span>
-            <button type="button" onClick={() => setStatusMessage(null)} className="text-emerald-300 hover:text-white">
+        {statusBanner && (
+          <div
+            className={`p-4 rounded-2xl border text-xs font-bold flex items-center justify-between ${
+              statusBanner.type === 'error'
+                ? 'bg-rose-500/15 border-rose-500/40 text-rose-200'
+                : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200'
+            }`}
+          >
+            <span>{statusBanner.text}</span>
+            <button
+              type="button"
+              onClick={() => setStatusBanner(null)}
+              className="text-slate-300 hover:text-white ml-3"
+            >
               ✕
             </button>
           </div>
         )}
 
-        {/* =====================================================================
-            PASSO 1: LOBBY DE INSCRIÇÃO DE PAPÉIS (PRÓ, CONTRA E 3 JURADOS)
-        ===================================================================== */}
-        {debateRole === null ? (
-          <div className="space-y-6 py-2 animate-fadeIn">
-            <div className="text-center space-y-2 max-w-2xl mx-auto">
-              <h3 className="text-base sm:text-lg font-black text-white">
-                Passo 1: Cadastre-se no seu Grupo do Debate (Pró, Contra ou Jurados)
-              </h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                1) As bancadas <strong>Pró</strong> e <strong>Contra</strong> respondem a 6 questões dissertativas norteadoras (Peso 5) e recebem um resumo estratégico exclusivo da IA para o grupo.<br />
-                2) Os <strong>3 Jurados</strong> recebem o guia de julgamento da IA e avaliam o debate com 2 Checklists (Cumpriu / Não Cumpriu).
-              </p>
+        {teacherTab === 'grupos_timer' && (
+          <div className="space-y-6">
+            {/* TIMER OFICIAL DO GRANDE DEBATE (REQ 4) */}
+            <div className="p-6 rounded-3xl bg-slate-900/95 border border-slate-800 shadow-xl space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-amber-400 block">
+                    CRONÔMETRO OFICIAL DE SALA • O GRANDE DEBATE
+                  </span>
+                  <h3 className="text-base font-black text-white">
+                    Controle de Tempo por Rodada (Exposição, Réplica, Tréplica e Júri)
+                  </h3>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <div
+                    className={`px-6 py-3 rounded-2xl font-mono text-3xl font-black tracking-widest border ${
+                      timerSecondsLeft <= 15
+                        ? 'bg-rose-500/20 border-rose-500 text-rose-300 animate-pulse'
+                        : timerSecondsLeft <= 60
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                        : 'bg-slate-950 border-cyan-500/40 text-cyan-300'
+                    }`}
+                  >
+                    {formatTimerMMSS(timerSecondsLeft)}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsTimerRunning((prev) => !prev)}
+                    className={`px-4 py-3 rounded-2xl text-xs font-black flex items-center gap-1.5 cursor-pointer ${
+                      isTimerRunning
+                        ? 'bg-amber-500 text-slate-950'
+                        : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
+                    }`}
+                  >
+                    {isTimerRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                    <span>{isTimerRunning ? 'Pausar' : 'Iniciar'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTimerRunning(false);
+                      const preset = DEBATE_TIMER_PRESETS.find((p) => p.id === activeTimerPresetId);
+                      setTimerSecondsLeft(preset ? preset.seconds : 180);
+                    }}
+                    className="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer"
+                    title="Reiniciar tempo da rodada"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTimerSecondsLeft((prev) => Math.max(0, prev - 30))}
+                    className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 cursor-pointer"
+                  >
+                    -30s
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTimerSecondsLeft((prev) => prev + 30)}
+                    className="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 cursor-pointer"
+                  >
+                    +30s
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-2">
+                {DEBATE_TIMER_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => {
+                      setIsTimerRunning(false);
+                      setActiveTimerPresetId(preset.id);
+                      setTimerSecondsLeft(preset.seconds);
+                    }}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      activeTimerPresetId === preset.id
+                        ? 'bg-cyan-500/20 border-cyan-400 text-white'
+                        : 'bg-slate-950/80 border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <span className="text-[11px] font-black block leading-tight">{preset.label}</span>
+                    <span className="text-[10px] font-mono text-cyan-400 mt-1 block">
+                      {formatTimerMMSS(preset.seconds)}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-              {/* Card Bancada Pró */}
-              <button
-                type="button"
-                onClick={() => handleSelectRole('pro')}
-                className="p-5 rounded-2xl bg-emerald-950/30 border border-emerald-500/40 hover:bg-emerald-900/40 hover:border-emerald-400 transition-all text-left space-y-3 cursor-pointer group shadow-lg flex flex-col justify-between"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="px-3 py-1 rounded-xl bg-emerald-500/20 border border-emerald-400 text-emerald-300 font-black text-xs">
-                      🏛️ BANCADA PRÓ
-                    </span>
-                    <span className="text-[11px] text-emerald-300 font-bold">
-                      {proMembers.length} inscrito(s)
-                    </span>
-                  </div>
-                  <h4 className="text-sm font-black text-white">Grupo Favorável (Pró)</h4>
-                  <p className="text-[11px] text-slate-300 leading-snug">
-                    Pesquisa as <strong>6 questões dissertativas norteadoras Pró</strong>. Todos do grupo enxergam o mesmo resumo gerado pela IA.
-                  </p>
-                  {proMembers.length > 0 && (
-                    <p className="text-[10px] text-emerald-300/80 truncate">
-                      Integrantes: {proMembers.map((m) => m.studentName).join(', ')}
-                    </p>
-                  )}
-                </div>
-                <span className="text-xs font-black text-emerald-400 block pt-2 group-hover:translate-x-1 transition-transform">
-                  Cadastrar na Bancada Pró →
-                </span>
-              </button>
+            {/* GESTÃO DOS 3 GRUPOS: ESCOLHER 1º ALUNO, MOVER ENTRE GRUPOS E EXCLUIR (REQ 2 & REQ 6) */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {(
+                [
+                  {
+                    roleKey: 'pro' as GroupRole,
+                    title: '🟢 Bancada Favorável (PRÓ)',
+                    subtitle: 'Defesa sociológica da tese favorável',
+                    members: proMembers,
+                    borderClass: 'border-emerald-500/40',
+                    badgeClass: 'bg-emerald-500/20 text-emerald-300',
+                  },
+                  {
+                    roleKey: 'contra' as GroupRole,
+                    title: '🔴 Bancada Opositora (CONTRA)',
+                    subtitle: 'Questionamento crítico e tensões estruturais',
+                    members: contraMembers,
+                    borderClass: 'border-rose-500/40',
+                    badgeClass: 'bg-rose-500/20 text-rose-300',
+                  },
+                  {
+                    roleKey: 'juror' as GroupRole,
+                    title: '⚖️ Corpo de Jurados (Análise)',
+                    subtitle: `Até ${localConfig.maxJurors || 3} jurados imparciais na turma`,
+                    members: jurorMembers,
+                    borderClass: 'border-amber-500/40',
+                    badgeClass: 'bg-amber-500/20 text-amber-300',
+                  },
+                ] as const
+              ).map((grp) => (
+                <div
+                  key={grp.roleKey}
+                  className={`p-5 rounded-3xl bg-slate-900/90 border ${grp.borderClass} flex flex-col justify-between space-y-4`}
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-sm font-black text-white">{grp.title}</h4>
+                        <p className="text-[11px] text-slate-400">{grp.subtitle}</p>
+                      </div>
+                      <span className={`px-2.5 py-1 rounded-xl text-xs font-black ${grp.badgeClass}`}>
+                        {grp.members.length} integrante(s)
+                      </span>
+                    </div>
 
-              {/* Card Bancada Contra */}
-              <button
-                type="button"
-                onClick={() => handleSelectRole('contra')}
-                className="p-5 rounded-2xl bg-rose-950/30 border border-rose-500/40 hover:bg-rose-900/40 hover:border-rose-400 transition-all text-left space-y-3 cursor-pointer group shadow-lg flex flex-col justify-between"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="px-3 py-1 rounded-xl bg-rose-500/20 border border-rose-400 text-rose-300 font-black text-xs">
-                      🏛️ BANCADA CONTRA
-                    </span>
-                    <span className="text-[11px] text-rose-300 font-bold">
-                      {contraMembers.length} inscrito(s)
-                    </span>
-                  </div>
-                  <h4 className="text-sm font-black text-white">Grupo Oposição (Contra)</h4>
-                  <p className="text-[11px] text-slate-300 leading-snug">
-                    Pesquisa as <strong>6 questões dissertativas norteadoras Contra</strong>. Todos do grupo enxergam o mesmo resumo gerado pela IA.
-                  </p>
-                  {contraMembers.length > 0 && (
-                    <p className="text-[10px] text-rose-300/80 truncate">
-                      Integrantes: {contraMembers.map((m) => m.studentName).join(', ')}
-                    </p>
-                  )}
-                </div>
-                <span className="text-xs font-black text-rose-400 block pt-2 group-hover:translate-x-1 transition-transform">
-                  Cadastrar na Bancada Contra →
-                </span>
-              </button>
+                    <div className="p-3 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-2">
+                      <label className="text-[10px] font-black uppercase text-slate-400 block">
+                        {grp.members.length === 0
+                          ? '⭐ Escolher 1º Aluno (Líder do Grupo):'
+                          : '+ Adicionar Aluno da Turma ao Grupo:'}
+                      </label>
+                      <div className="flex gap-2">
+                        <select
+                          value=""
+                          onChange={(e) => {
+                            const stId = e.target.value;
+                            if (!stId) return;
+                            const stObj = unassignedClassmates.find((s) => s.id === stId);
+                            if (stObj) {
+                              handleAddStudentToGroup(
+                                { id: stObj.id, fullName: stObj.fullName, turma: stObj.turma },
+                                grp.roleKey
+                              );
+                            }
+                          }}
+                          className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400"
+                        >
+                          <option value="">
+                            Selecionar aluno da Turma {currentTurmaScope} ({unassignedClassmates.length} disponíveis)...
+                          </option>
+                          {unassignedClassmates.map((st) => (
+                            <option key={st.id} value={st.id}>
+                              {st.fullName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
 
-              {/* Card 3 Jurados */}
-              <button
-                type="button"
-                onClick={() => handleSelectRole('juror')}
-                className={`p-5 rounded-2xl border text-left space-y-3 transition-all shadow-lg flex flex-col justify-between ${
-                  jurorMembers.length >= 3
-                    ? 'bg-slate-900/60 border-slate-800 opacity-60 cursor-not-allowed'
-                    : 'bg-amber-950/30 border-amber-500/40 hover:bg-amber-900/40 hover:border-amber-400 cursor-pointer group'
-                }`}
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="px-3 py-1 rounded-xl bg-amber-500/20 border border-amber-400 text-amber-300 font-black text-xs">
-                      ⚖️ JURADOS
-                    </span>
-                    <span className="text-[11px] text-amber-300 font-bold">
-                      {jurorMembers.length} / 3 vagas
-                    </span>
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {grp.members.length === 0 ? (
+                        <p className="text-xs text-slate-500 italic py-4 text-center">
+                          Nenhum aluno alocado neste grupo na Turma {currentTurmaScope}.
+                        </p>
+                      ) : (
+                        grp.members.map((member, mIdx) => (
+                          <div
+                            key={member.studentId}
+                            className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between gap-2"
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                {mIdx === 0 && (
+                                  <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[9px] font-black uppercase">
+                                    Líder
+                                  </span>
+                                )}
+                                <span className="text-xs font-bold text-slate-100 truncate block">
+                                  {member.studentName}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <select
+                                value={member.role}
+                                onChange={(e) =>
+                                  handleMoveStudentGroup(member, e.target.value as GroupRole)
+                                }
+                                className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-[10px] font-bold text-slate-200 focus:outline-none"
+                                title="Mover aluno para outro grupo"
+                              >
+                                <option value="pro">🟢 Pró</option>
+                                <option value="contra">🔴 Contra</option>
+                                <option value="juror">⚖️ Jurado</option>
+                              </select>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleRemoveStudentFromGroup(
+                                    member.studentId,
+                                    member.studentName
+                                  )
+                                }
+                                className="p-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/30 border border-rose-500/30 text-rose-300 cursor-pointer"
+                                title="Excluir aluno do grupo"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
-                  <h4 className="text-sm font-black text-white">Corpo de Jurados (Máx. 3)</h4>
-                  <p className="text-[11px] text-slate-300 leading-snug">
-                    Recebe o <strong>Resumo Guia dos Jurados</strong> e julga os dois lados usando <strong>2 Checklists</strong> (Cumpriu / Não Cumpriu).
-                  </p>
-                  {jurorMembers.length > 0 && (
-                    <p className="text-[10px] text-amber-300/80 truncate">
-                      Jurados: {jurorMembers.map((m) => m.studentName).join(', ')}
-                    </p>
-                  )}
                 </div>
-                <span className="text-xs font-black text-amber-400 block pt-2">
-                  {jurorMembers.length >= 3 ? 'Vagas de Jurados Preenchidas (3/3)' : 'Cadastrar como Jurado →'}
-                </span>
-              </button>
+              ))}
             </div>
           </div>
-        ) : (
-          /* =====================================================================
-              FLUXO COMPLETO DO DEBATE (ETAPAS 2 A 11)
-          ===================================================================== */
-          <div className="space-y-5">
-            {/* Barra de Navegação entre as Fases do Debate */}
-            <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-2xl bg-slate-900 border border-slate-800">
-              <div className="flex items-center gap-2">
-                <span className={`px-3 py-1 rounded-full text-xs font-black uppercase ${
-                  debateRole === 'pro'
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                    : debateRole === 'contra'
-                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                }`}>
-                  {debateRole === 'pro' ? '🏛️ Bancada Pró' : debateRole === 'contra' ? '🏛️ Bancada Contra' : '⚖️ Jurado (a)'}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setDebateRole(null)}
-                  className="text-[11px] text-slate-400 hover:text-white underline cursor-pointer"
+        )}
+
+        {teacherTab === 'checklist_notas' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            {(
+              [
+                {
+                  roleKey: 'pro' as GroupRole,
+                  title: '🟢 Checklist • Bancada PRÓ',
+                  members: proMembers,
+                },
+                {
+                  roleKey: 'contra' as GroupRole,
+                  title: '🔴 Checklist • Bancada CONTRA',
+                  members: contraMembers,
+                },
+                {
+                  roleKey: 'juror' as GroupRole,
+                  title: '⚖️ Checklist • Corpo de JURADOS',
+                  members: jurorMembers,
+                },
+              ] as const
+            ).map((grp) => {
+              const chkState = getGroupChecklistState(grp.roleKey);
+              return (
+                <div
+                  key={grp.roleKey}
+                  className="p-5 rounded-3xl bg-slate-900/95 border border-slate-800 flex flex-col justify-between space-y-4 shadow-xl"
                 >
-                  Trocar Papel
-                </button>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('research')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    activeTab === 'research'
-                      ? 'bg-cyan-500 text-slate-950 font-black shadow-md'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                  }`}
-                >
-                  📝 1. Pesquisa (6 Questões)
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('summaries')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    activeTab === 'summaries'
-                      ? 'bg-cyan-500 text-slate-950 font-black shadow-md'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                  }`}
-                >
-                  📖 2. Resumos do Grupo (IA)
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('timer_arena')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    activeTab === 'timer_arena'
-                      ? 'bg-cyan-500 text-slate-950 font-black shadow-md'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                  }`}
-                >
-                  ⏱️ 3. Painel Timer (Debate)
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('juror_checklists')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    activeTab === 'juror_checklists'
-                      ? 'bg-amber-500 text-slate-950 font-black shadow-md'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                  }`}
-                >
-                  ⚖️ 4. Checklists Jurados (2)
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('teacher_grading')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    activeTab === 'teacher_grading'
-                      ? 'bg-purple-500 text-slate-950 font-black shadow-md'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                  }`}
-                >
-                  🎓 5. Avaliação & Notas
-                </button>
-              </div>
-            </div>
-
-            {/* =====================================================================
-                ABA 1 (PASSOS 2 e 3): 6 QUESTÕES DISSERTATIVAS NORTEADORAS (PRÓ E CONTRA)
-            ===================================================================== */}
-            {activeTab === 'research' && (
-              <div className="space-y-5 animate-fadeIn">
-                <div className="p-4 rounded-2xl bg-cyan-950/30 border border-cyan-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <h4 className="text-xs font-black text-cyan-300 uppercase tracking-wider">
-                      {debateRole === 'contra'
-                        ? '📕 Questões Norteadoras Exclusivas • TIME CONTRA (Sigilo Total)'
-                        : debateRole === 'juror'
-                        ? '⚖️ Questões Preparatórias Exclusivas • CORPO DE JURADOS (Sigilo Total)'
-                        : '📘 Questões Norteadoras Exclusivas • TIME PRÓ (Sigilo Total)'}
-                    </h4>
-                    <p className="text-xs text-slate-300 mt-0.5">
-                      Preencha as 6 questões da sua bancada. Assim que concluir, clique no botão no final para a IA gerar os <strong>3 textos-resumo (Pró, Contra e Jurados)</strong> e avançar para a próxima etapa!
-                    </p>
-                  </div>
-                  {debateRole === 'juror' && (
-                    <span className="text-[11px] px-3 py-1 rounded-xl bg-amber-500/20 text-amber-300 font-bold shrink-0">
-                      Visão de Consulta do Jurado
-                    </span>
-                  )}
-                </div>
-
-                {/* Seletor rápido caso o professor ou jurado queira ver tanto as 6 questões Pró quanto as 6 Contra */}
-                <div className="space-y-4 max-h-[430px] overflow-y-auto pr-1">
-                  {(debateRole === 'contra'
-                    ? debateState.contraQuestions
-                    : debateRole === 'juror'
-                    ? debateState.jurorQuestions || debateState.proQuestions
-                    : debateState.proQuestions
-                  ).map(
-                    (q: DebateGuidingQuestion, idx: number) => {
-                      const sideKey = debateRole === 'contra' ? 'contra' : 'pro';
-                      const currentVal =
-                        sideKey === 'pro'
-                          ? debateState.proAnswers?.[q.id] || ''
-                          : debateState.contraAnswers?.[q.id] || '';
-
-                      return (
-                        <div key={q.id} className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className={`text-xs font-black ${sideKey === 'pro' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                              Questão Norteadora {idx + 1} de 6 ({sideKey.toUpperCase()}) • {q.sociologicalConcept}
-                            </span>
-                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 font-bold">
-                              Pesquisa em Grupo
-                            </span>
-                          </div>
-                          <p className="text-xs text-white font-medium leading-relaxed">{q.prompt}</p>
-                          <p className="text-[11px] text-cyan-300/80 italic">💡 O que pesquisar: {q.researchHint}</p>
-                          <textarea
-                            value={currentVal}
-                            onChange={(e) => handleAnswerChange(sideKey, q.id, e.target.value)}
-                            rows={3}
-                            placeholder={`Digite aqui a pesquisa do grupo ${sideKey.toUpperCase()} para a questão ${idx + 1}...`}
-                            className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-cyan-400"
-                          />
-                        </div>
-                      );
-                    }
-                  )}
-                </div>
-
-                <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={handleGenerateSummaries}
-                    disabled={isGenerating}
-                    className="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-sm rounded-2xl transition-all shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                  >
-                    <Sparkles className="w-5 h-5 fill-current" />
-                    <span>
-                      {isGenerating
-                        ? 'Gerando os 3 Resumos com a IA (Pró, Contra e Jurados)...'
-                        : 'Concluir Pesquisa & Gerar Textos-Resumo com IA (Avançar para Fase 3) ✨'}
-                    </span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* =====================================================================
-                ABA 2 (PASSOS 3, 5, 6 e 7): UM RESUMO PARA CADA GRUPO (VISÃO COMPARTILHADA)
-            ===================================================================== */}
-            {activeTab === 'summaries' && (
-              <div className="space-y-5 animate-fadeIn">
-                <div className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <h4 className="text-xs font-black text-emerald-300 uppercase tracking-wider">
-                      📖 Passos 5, 6 e 7: Resumos Gerados pela IA (1 Resumo Exclusivo para Cada Grupo)
-                    </h4>
-                    <p className="text-xs text-slate-300 mt-0.5">
-                      Na aula do debate, todos os integrantes da mesma bancada enxergam o mesmo resumo e suas respostas para defender a tese. Os jurados enxergam seu guia do que julgar.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleGenerateSummaries}
-                    disabled={isGenerating}
-                    className="px-3.5 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/40 text-cyan-300 text-xs font-bold shrink-0 cursor-pointer"
-                  >
-                    {isGenerating ? 'Atualizando...' : '🔄 Regerar Resumos com IA'}
-                  </button>
-                </div>
-
-                {/* ISOLAMENTO ESTRITO POR GRUPO: Cada time enxerga EXCLUSIVAMENTE o seu próprio resumo! */}
-                <div className="p-5 rounded-2xl bg-slate-900 border-2 border-cyan-500/40 space-y-3 shadow-xl">
-                  <div className="flex items-center justify-between">
-                    <h5 className="text-sm font-black text-cyan-300 uppercase">
-                      {debateRole === 'pro'
-                        ? '📘 Resumo Confidencial Exclusivo • TIME PRÓ (Visível apenas para integrantes Pró)'
-                        : debateRole === 'contra'
-                        ? '📕 Resumo Confidencial Exclusivo • TIME CONTRA (Visível apenas para integrantes Contra)'
-                        : '⚖️ Guia de Julgamento Confidencial • CORPO DE JURADOS (Visível apenas para os 3 Jurados)'}
-                    </h5>
-                    <span className="text-[10px] px-2.5 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-black uppercase">
-                      🔒 Isolado dos outros grupos
-                    </span>
-                  </div>
-                  <div className="text-xs sm:text-sm text-slate-100 whitespace-pre-wrap leading-relaxed bg-slate-950 p-4 rounded-xl border border-slate-800 max-h-[340px] overflow-y-auto">
-                    {debateRole === 'pro'
-                      ? debateState.proSummary || 'Conclua as 6 questões norteadoras na Aba 1 e clique em Gerar Resumos com IA para ver o dossiê exclusivo do Time Pró.'
-                      : debateRole === 'contra'
-                      ? debateState.contraSummary || 'Conclua as 6 questões norteadoras na Aba 1 e clique em Gerar Resumos com IA para ver o dossiê exclusivo do Time Contra.'
-                      : debateState.jurorGuideSummary || debateState.jurorInitialGuide}
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('timer_arena')}
-                    className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs cursor-pointer"
-                  >
-                    Ir para Aula do Debate & Timer (Passo 8) →
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* =====================================================================
-                ABA 3 (PASSO 8): PAINEL DO PROFESSOR COM TIMER (RÉPLICA, TRÉPLICA, CONSIDERAÇÕES FINAIS)
-            ===================================================================== */}
-            {activeTab === 'timer_arena' && (
-              <div className="space-y-6 animate-fadeIn">
-                <div className="p-6 rounded-3xl bg-slate-900 border-2 border-cyan-500/50 space-y-6 shadow-2xl text-center">
-                  <div className="space-y-1">
-                    <span className="text-xs font-black px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 uppercase">
-                      ⏱️ Passo 8: Painel KronoMestre do Professor (Timer de Sala)
-                    </span>
-                    <h3 className="text-xl font-black text-white mt-2">{currentPhase}</h3>
-                    <p className="text-xs text-slate-400">
-                      Projete este cronômetro na TV/quadro enquanto os debatedores consultam seus resumos e os jurados preenchem os 2 checklists.
-                    </p>
-                  </div>
-
-                  <div className="text-6xl sm:text-7xl font-black font-mono text-cyan-400 tracking-widest py-3">
-                    {formatTimer(timerSeconds)}
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setTimerActive(!timerActive)}
-                      className={`px-6 py-3 rounded-xl font-black text-sm cursor-pointer ${
-                        timerActive ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-slate-950'
-                      }`}
-                    >
-                      {timerActive ? '⏸ Pausar Timer' : '▶ Iniciar Timer'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTimerActive(false);
-                        setTimerSeconds(180);
-                      }}
-                      className="p-3 bg-slate-800 text-slate-300 hover:text-white rounded-xl cursor-pointer"
-                      title="Reiniciar Timer"
-                    >
-                      <RotateCcw className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  {/* Botões das 4 Fases Oficiais do Debate (Passo 8) */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-4 border-t border-slate-800">
-                    {[
-                      { title: '1. Exposição Inicial (Pró/Contra)', secs: 240 },
-                      { title: '2. Réplica', secs: 180 },
-                      { title: '3. Tréplica', secs: 180 },
-                      { title: '4. Considerações Finais', secs: 120 },
-                    ].map((phase) => (
-                      <button
-                        key={phase.title}
-                        type="button"
-                        onClick={() => {
-                          setCurrentPhase(phase.title);
-                          setTimerSeconds(phase.secs);
-                          setTimerActive(false);
-                        }}
-                        className={`p-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                          currentPhase === phase.title
-                            ? 'bg-cyan-500/20 border-cyan-400 text-white'
-                            : 'bg-slate-950 hover:bg-slate-800 text-cyan-300 border-slate-800'
-                        }`}
-                      >
-                        {phase.title} ({phase.secs / 60} min)
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('juror_checklists')}
-                    className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs cursor-pointer"
-                  >
-                    Abrir os 2 Checklists dos Jurados (Passos 9 e 10) →
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* =====================================================================
-                ABA 4 (PASSOS 9 e 10): 2 CHECKLISTS DOS JURADOS (LADO PRÓ E LADO CONTRA) + PARECER
-            ===================================================================== */}
-            {activeTab === 'juror_checklists' && (
-              <div className="space-y-5 animate-fadeIn">
-                <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-800/40 space-y-1">
-                  <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider">
-                    ⚖️ Passos 9 e 10: Os 2 Checklists dos Jurados (Cumpriu / Não Cumpriu) & Envio de Parecer
-                  </h4>
-                  <p className="text-xs text-slate-300">
-                    Os jurados avaliam separadamente a Bancada Pró (Checklist 1) e a Bancada Contra (Checklist 2) e enviam o parecer para o professor definir a nota.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  {/* CHECKLIST 1: BANCADA PRÓ */}
-                  <div className="p-4 rounded-2xl bg-slate-900 border border-emerald-500/30 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h5 className="text-xs font-black text-emerald-400 uppercase">
-                        📘 Checklist 1: Julgamento da Bancada PRÓ
-                      </h5>
-                      <span className="text-[11px] font-bold text-emerald-300">
-                        Cumpriu: {countChecklistPositive(jurorProChecklist)} / 6
-                      </span>
-                    </div>
-                    <div className="space-y-2.5">
-                      {debateState.checklistCriteria.map((chk: DebateChecklistItem) => (
-                        <div key={`pro_${chk.id}`} className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
-                          <span className="text-xs font-bold text-white block">
-                            {chk.number}. {chk.criterion}
-                          </span>
-                          <p className="text-[11px] text-slate-400">{chk.description}</p>
-                          <div className="flex items-center gap-4 pt-1">
-                            <label className="flex items-center gap-1.5 text-xs text-emerald-300 cursor-pointer font-bold">
-                              <input
-                                type="radio"
-                                name={`pro_chk_${chk.id}`}
-                                checked={jurorProChecklist[chk.id] === true}
-                                onChange={() => setJurorProChecklist({ ...jurorProChecklist, [chk.id]: true })}
-                                className="accent-emerald-400"
-                              />
-                              <span>✓ Cumpriu</span>
-                            </label>
-                            <label className="flex items-center gap-1.5 text-xs text-rose-300 cursor-pointer font-bold">
-                              <input
-                                type="radio"
-                                name={`pro_chk_${chk.id}`}
-                                checked={jurorProChecklist[chk.id] === false}
-                                onChange={() => setJurorProChecklist({ ...jurorProChecklist, [chk.id]: false })}
-                                className="accent-rose-400"
-                              />
-                              <span>✕ Não Cumpriu</span>
-                            </label>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* CHECKLIST 2: BANCADA CONTRA */}
-                  <div className="p-4 rounded-2xl bg-slate-900 border border-rose-500/30 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h5 className="text-xs font-black text-rose-400 uppercase">
-                        📕 Checklist 2: Julgamento da Bancada CONTRA
-                      </h5>
-                      <span className="text-[11px] font-bold text-rose-300">
-                        Cumpriu: {countChecklistPositive(jurorContraChecklist)} / 6
-                      </span>
-                    </div>
-                    <div className="space-y-2.5">
-                      {debateState.checklistCriteria.map((chk: DebateChecklistItem) => (
-                        <div key={`contra_${chk.id}`} className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
-                          <span className="text-xs font-bold text-white block">
-                            {chk.number}. {chk.criterion}
-                          </span>
-                          <p className="text-[11px] text-slate-400">{chk.description}</p>
-                          <div className="flex items-center gap-4 pt-1">
-                            <label className="flex items-center gap-1.5 text-xs text-emerald-300 cursor-pointer font-bold">
-                              <input
-                                type="radio"
-                                name={`contra_chk_${chk.id}`}
-                                checked={jurorContraChecklist[chk.id] === true}
-                                onChange={() => setJurorContraChecklist({ ...jurorContraChecklist, [chk.id]: true })}
-                                className="accent-emerald-400"
-                              />
-                              <span>✓ Cumpriu</span>
-                            </label>
-                            <label className="flex items-center gap-1.5 text-xs text-rose-300 cursor-pointer font-bold">
-                              <input
-                                type="radio"
-                                name={`contra_chk_${chk.id}`}
-                                checked={jurorContraChecklist[chk.id] === false}
-                                onChange={() => setJurorContraChecklist({ ...jurorContraChecklist, [chk.id]: false })}
-                                className="accent-rose-400"
-                              />
-                              <span>✕ Não Cumpriu</span>
-                            </label>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Parecer Escrito do Jurado */}
-                <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <label className="text-xs font-black text-amber-300 uppercase">
-                      Parecer do Jurado sobre o Debate (Enviado para o Professor):
-                    </label>
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-slate-400">Destaque argumentativo:</span>
-                      {(['pro', 'contra', 'empate'] as const).map((opt) => (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() => setWinnerVote(opt)}
-                          className={`px-2.5 py-1 rounded-lg font-bold uppercase cursor-pointer ${
-                            winnerVote === opt ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'
-                          }`}
-                        >
-                          {opt === 'pro' ? 'Bancada Pró' : opt === 'contra' ? 'Bancada Contra' : 'Equilíbrio'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <textarea
-                    value={jurorOpinion}
-                    onChange={(e) => setJurorOpinion(e.target.value)}
-                    rows={3}
-                    placeholder="Escreva o parecer analítico explicando como cada grupo utilizou os conceitos sociológicos e os dados pesquisados..."
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-amber-400"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={handleSubmitJurorVerdict}
-                    className="py-3 px-6 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all cursor-pointer"
-                  >
-                    Enviar 2 Checklists & Parecer ao Professor 🚀
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* =====================================================================
-                ABA 5 (PASSOS 4, 10 e 11): PAINEL DE NOTAS DO PROFESSOR (INDIVIDUAL OU EM GRUPO)
-            ===================================================================== */}
-            {activeTab === 'teacher_grading' && (
-              <div className="space-y-5 animate-fadeIn">
-                <div className="p-4 rounded-2xl bg-purple-950/30 border border-purple-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <h4 className="text-xs font-black text-purple-300 uppercase tracking-wider">
-                      🎓 Passos 4, 10 e 11: Decisão de Nota pelo Professor (Diante dos Resumos e Pareceres dos Jurados)
-                    </h4>
-                    <p className="text-xs text-slate-300 mt-0.5">
-                      Escolha se o lançamento de notas será <strong>Em Grupo</strong> (por Bancada Pró, Contra e Jurados) ou <strong>Individual</strong>.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => updateDebateState((p) => ({ ...p, gradingMode: 'group' }))}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-black cursor-pointer ${
-                        debateState.gradingMode !== 'individual'
-                          ? 'bg-purple-500 text-slate-950'
-                          : 'bg-slate-800 text-slate-300'
-                      }`}
-                    >
-                      👥 Nota em Grupo
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateDebateState((p) => ({ ...p, gradingMode: 'individual' }))}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-black cursor-pointer ${
-                        debateState.gradingMode === 'individual'
-                          ? 'bg-purple-500 text-slate-950'
-                          : 'bg-slate-800 text-slate-300'
-                      }`}
-                    >
-                      👤 Nota Individual
-                    </button>
-                  </div>
-                </div>
-
-                {/* Pareceres Recebidos dos Jurados */}
-                <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
-                  <h5 className="text-xs font-black text-amber-400 uppercase">
-                    ⚖️ Pareceres e Checklists Recebidos dos Jurados ({(debateState.jurorVerdicts || []).length} / 3)
-                  </h5>
-                  {(debateState.jurorVerdicts || []).length === 0 ? (
-                    <p className="text-xs text-slate-400 italic">
-                      Nenhum jurado enviou parecer ainda. Assim que enviarem na Aba 4, os resultados aparecerão aqui.
-                    </p>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {(debateState.jurorVerdicts || []).map((v, i) => (
-                        <div key={i} className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5 text-xs">
-                          <div className="flex items-center justify-between font-bold text-amber-300">
-                            <span>Jurado: {v.jurorName}</span>
-                            <span className="text-[10px] uppercase px-2 py-0.5 rounded bg-amber-500/20">
-                              Voto: {v.winnerVote || 'Equilíbrio'}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-emerald-400">
-                            • Checklist Pró: {countChecklistPositive(v.proChecklist || {})} / 6 critérios cumpridos
-                          </p>
-                          <p className="text-[11px] text-rose-400">
-                            • Checklist Contra: {countChecklistPositive(v.contraChecklist || {})} / 6 critérios cumpridos
-                          </p>
-                          <p className="text-[11px] text-slate-300 pt-1 border-t border-slate-800">
-                            &ldquo;{v.writtenOpinion || 'Sem observações adicionais.'}&rdquo;
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Modo 1: Lançamento de Notas em Grupo */}
-                {debateState.gradingMode !== 'individual' ? (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Nota Bancada Pró */}
-                    <div className="p-4 rounded-2xl bg-slate-900 border border-emerald-500/30 space-y-3">
-                      <h5 className="text-xs font-black text-emerald-400 uppercase">🏛️ Nota Grupo PRÓ</h5>
-                      <div className="space-y-2 text-xs">
-                        <label className="block text-slate-300">
-                          Nota Pesquisa & Resumo (0 a 5):
-                          <input
-                            type="number"
-                            min={0}
-                            max={5}
-                            step={0.5}
-                            value={debateState.groupGrades?.proResearchGrade ?? 5}
-                            onChange={(e) =>
-                              updateDebateState((p) => ({
-                                ...p,
-                                groupGrades: { ...(p.groupGrades || {}), proResearchGrade: Number(e.target.value) },
-                              }))
-                            }
-                            className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
-                          />
-                        </label>
-                        <label className="block text-slate-300">
-                          Nota Apresentação no Debate (0 a 5):
-                          <input
-                            type="number"
-                            min={0}
-                            max={5}
-                            step={0.5}
-                            value={debateState.groupGrades?.proPresentationGrade ?? 5}
-                            onChange={(e) =>
-                              updateDebateState((p) => ({
-                                ...p,
-                                groupGrades: { ...(p.groupGrades || {}), proPresentationGrade: Number(e.target.value) },
-                              }))
-                            }
-                            className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
-                          />
-                        </label>
-                        <p className="text-xs font-black text-emerald-300 pt-1">
-                          Média Final Grupo Pró:{' '}
-                          {(
-                            (debateState.groupGrades?.proResearchGrade ?? 5) +
-                            (debateState.groupGrades?.proPresentationGrade ?? 5)
-                          ).toFixed(1)}{' '}
-                          / 10
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                      <div>
+                        <h4 className="text-sm font-black text-white">{grp.title}</h4>
+                        <p className="text-[11px] text-slate-400">
+                          {grp.members.length} integrante(s) na Turma {currentTurmaScope}
                         </p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold text-slate-400 block">Nota Sugerida</span>
+                        <span className="text-xl font-black text-emerald-400">
+                          {chkState.customScore.toFixed(1)}
+                        </span>
                       </div>
                     </div>
 
-                    {/* Nota Bancada Contra */}
-                    <div className="p-4 rounded-2xl bg-slate-900 border border-rose-500/30 space-y-3">
-                      <h5 className="text-xs font-black text-rose-400 uppercase">🏛️ Nota Grupo CONTRA</h5>
-                      <div className="space-y-2 text-xs">
-                        <label className="block text-slate-300">
-                          Nota Pesquisa & Resumo (0 a 5):
-                          <input
-                            type="number"
-                            min={0}
-                            max={5}
-                            step={0.5}
-                            value={debateState.groupGrades?.contraResearchGrade ?? 5}
-                            onChange={(e) =>
-                              updateDebateState((p) => ({
-                                ...p,
-                                groupGrades: { ...(p.groupGrades || {}), contraResearchGrade: Number(e.target.value) },
-                              }))
-                            }
-                            className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
-                          />
-                        </label>
-                        <label className="block text-slate-300">
-                          Nota Apresentação no Debate (0 a 5):
-                          <input
-                            type="number"
-                            min={0}
-                            max={5}
-                            step={0.5}
-                            value={debateState.groupGrades?.contraPresentationGrade ?? 5}
-                            onChange={(e) =>
-                              updateDebateState((p) => ({
-                                ...p,
-                                groupGrades: { ...(p.groupGrades || {}), contraPresentationGrade: Number(e.target.value) },
-                              }))
-                            }
-                            className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
-                          />
-                        </label>
-                        <p className="text-xs font-black text-rose-300 pt-1">
-                          Média Final Grupo Contra:{' '}
-                          {(
-                            (debateState.groupGrades?.contraResearchGrade ?? 5) +
-                            (debateState.groupGrades?.contraPresentationGrade ?? 5)
-                          ).toFixed(1)}{' '}
-                          / 10
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Nota Corpo de Jurados */}
-                    <div className="p-4 rounded-2xl bg-slate-900 border border-amber-500/30 space-y-3">
-                      <h5 className="text-xs font-black text-amber-400 uppercase">⚖️ Nota Corpo de Jurados</h5>
-                      <div className="space-y-2 text-xs">
-                        <label className="block text-slate-300">
-                          Nota pelos 2 Checklists & Parecer (0 a 10):
-                          <input
-                            type="number"
-                            min={0}
-                            max={10}
-                            step={0.5}
-                            value={debateState.groupGrades?.jurorsGrade ?? 10}
-                            onChange={(e) =>
-                              updateDebateState((p) => ({
-                                ...p,
-                                groupGrades: { ...(p.groupGrades || {}), jurorsGrade: Number(e.target.value) },
-                              }))
-                            }
-                            className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
-                          />
-                        </label>
-                        <p className="text-xs font-black text-amber-300 pt-1">
-                          Nota Final Jurados: {(debateState.groupGrades?.jurorsGrade ?? 10).toFixed(1)} / 10
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  /* Modo 2: Lançamento de Notas Individuais */
-                  <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
-                    <h5 className="text-xs font-black text-purple-300 uppercase">
-                      👤 Atribuição de Notas Individuais por Aluno Participante
-                    </h5>
-                    <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
-                      {(debateState.participants || []).map((part) => {
-                        const indiv = debateState.individualGrades?.[part.studentId] || {
-                          researchGrade: 5,
-                          presentationGrade: 5,
-                          finalGrade: 10,
-                        };
+                    <div className="space-y-2">
+                      {DEFAULT_TEACHER_CRITERIA.map((crit) => {
+                        const checked = Boolean(chkState.criteriaChecked[crit.id]);
                         return (
-                          <div
-                            key={part.studentId}
-                            className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                          <label
+                            key={crit.id}
+                            onClick={() => handleToggleTeacherCriterion(grp.roleKey, crit.id)}
+                            className={`p-3 rounded-2xl border flex items-center justify-between gap-2 cursor-pointer transition-all ${
+                              checked
+                                ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-100'
+                                : 'bg-slate-950/70 border-slate-800 text-slate-400 hover:border-slate-700'
+                            }`}
                           >
-                            <div>
-                              <strong className="text-white">{part.studentName}</strong>{' '}
-                              <span className="text-[10px] uppercase px-2 py-0.5 rounded bg-slate-800 text-cyan-300 ml-1">
-                                {part.role === 'pro' ? 'Pró' : part.role === 'contra' ? 'Contra' : 'Jurado'}
-                              </span>
+                            <div className="flex items-center gap-2.5">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => {}}
+                                className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
+                              />
+                              <span className="text-xs font-bold leading-snug">{crit.label}</span>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <label className="text-[11px] text-slate-400">
-                                Pesquisa (0-5):
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={5}
-                                  step={0.5}
-                                  value={indiv.researchGrade}
-                                  onChange={(e) => {
-                                    const r = Number(e.target.value);
-                                    const f = Number((r + indiv.presentationGrade).toFixed(1));
-                                    updateDebateState((p) => ({
-                                      ...p,
-                                      individualGrades: {
-                                        ...(p.individualGrades || {}),
-                                        [part.studentId]: { ...indiv, researchGrade: r, finalGrade: f },
-                                      },
-                                    }));
-                                  }}
-                                  className="w-16 ml-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white"
-                                />
-                              </label>
-                              <label className="text-[11px] text-slate-400">
-                                Debate (0-5):
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={5}
-                                  step={0.5}
-                                  value={indiv.presentationGrade}
-                                  onChange={(e) => {
-                                    const pr = Number(e.target.value);
-                                    const f = Number((indiv.researchGrade + pr).toFixed(1));
-                                    updateDebateState((p) => ({
-                                      ...p,
-                                      individualGrades: {
-                                        ...(p.individualGrades || {}),
-                                        [part.studentId]: { ...indiv, presentationGrade: pr, finalGrade: f },
-                                      },
-                                    }));
-                                  }}
-                                  className="w-16 ml-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white"
-                                />
-                              </label>
-                              <span className="font-black text-emerald-400 ml-2">
-                                Total: {indiv.finalGrade.toFixed(1)}
-                              </span>
-                            </div>
-                          </div>
+                            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-900 text-cyan-300 shrink-0">
+                              +{crit.weight.toFixed(1)}
+                            </span>
+                          </label>
                         );
                       })}
                     </div>
-                  </div>
-                )}
 
-                <div className="flex justify-end pt-2">
+                    <div className="grid grid-cols-1 gap-3 pt-2">
+                      <div className="flex items-center justify-between bg-slate-950 border border-slate-800 rounded-2xl px-3.5 py-2.5">
+                        <label className="text-xs font-bold text-slate-300">
+                          Nota Final do Grupo (0 a 10):
+                        </label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="10"
+                          value={chkState.customScore}
+                          onChange={(e) =>
+                            handleChangeTeacherGroupScore(grp.roleKey, Number(e.target.value))
+                          }
+                          className="w-20 bg-slate-900 border border-emerald-500/40 rounded-xl px-2.5 py-1 text-right text-sm font-black text-emerald-300 focus:outline-none"
+                        />
+                      </div>
+
+                      <textarea
+                        rows={2}
+                        value={chkState.teacherNotes}
+                        onChange={(e) =>
+                          handleChangeTeacherGroupNotes(grp.roleKey, e.target.value)
+                        }
+                        placeholder="Parecer complementar do professor para este grupo (vai para a Aba Correções)..."
+                        className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-400"
+                      />
+                    </div>
+                  </div>
+
                   <button
                     type="button"
-                    onClick={handleApplyFinalGrade}
-                    className="px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg cursor-pointer"
+                    onClick={() => handleApplyGroupChecklistToCorrections(grp.roleKey)}
+                    className="w-full py-3 px-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg cursor-pointer transition-all"
                   >
-                    Consolidar e Salvar Notas do Debate no Diário 🏆
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Aplicar Nota ao Grupo & Enviar para Correções</span>
                   </button>
                 </div>
+              );
+            })}
+          </div>
+        )}
+
+        {teacherTab === 'respostas' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {(
+              [
+                {
+                  roleKey: 'pro' as GroupRole,
+                  title: '🟢 Respostas • Bancada PRÓ',
+                  questions: localConfig.proQuestions,
+                },
+                {
+                  roleKey: 'contra' as GroupRole,
+                  title: '🔴 Respostas • Bancada CONTRA',
+                  questions: localConfig.contraQuestions,
+                },
+                {
+                  roleKey: 'juror' as GroupRole,
+                  title: '⚖️ Respostas • Corpo de JURADOS',
+                  questions: localConfig.jurorQuestions || [],
+                },
+              ] as const
+            ).map((col) => (
+              <div
+                key={col.roleKey}
+                className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 space-y-3"
+              >
+                <h4 className="text-sm font-black text-white border-b border-slate-800 pb-2">
+                  {col.title} ({currentTurmaScope})
+                </h4>
+                {col.questions.map((q, idx) => {
+                  const ans = getScopedAnswer(col.roleKey, q.id);
+                  return (
+                    <div
+                      key={q.id}
+                      className="p-3 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-1.5"
+                    >
+                      <span className="text-[10px] font-black uppercase text-cyan-400 block">
+                        Questão {idx + 1} • {q.sociologicalConcept}
+                      </span>
+                      <p className="text-xs font-bold text-slate-200">{q.prompt}</p>
+                      <div className="p-2.5 rounded-xl bg-slate-900 text-xs text-slate-300 whitespace-pre-wrap">
+                        {ans || (
+                          <span className="text-slate-600 italic">
+                            Ainda não respondida pelo grupo.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            )}
+            ))}
           </div>
         )}
       </div>
+    );
+  }
+
+  // ==========================================================================
+  // RENDERIZAÇÃO: 2. VISÃO DO ALUNO (ISOLADA POR TURMA E COM TÚNEL DE 3 PASSOS)
+  // ==========================================================================
+  const myGroupMembers =
+    myRole === 'pro' ? proMembers : myRole === 'contra' ? contraMembers : jurorMembers;
+
+  const myQuestions: LocalDebateQuestion[] =
+    myRole === 'pro'
+      ? localConfig.proQuestions
+      : myRole === 'contra'
+      ? localConfig.contraQuestions
+      : localConfig.jurorQuestions || [];
+
+  const myRoleTitle =
+    myRole === 'pro'
+      ? '🟢 Bancada Favorável (PRÓ)'
+      : myRole === 'contra'
+      ? '🔴 Bancada Opositora (CONTRA)'
+      : '⚖️ Corpo de Jurados (Análise Imparcial)';
+
+  return (
+    <div className="space-y-6 text-slate-100">
+      {/* REQ 1: CABEÇALHO ISOLADO MOSTRANDO APENAS A TURMA DO ALUNO */}
+      <div className="p-5 rounded-3xl bg-[#070b14] border border-slate-800 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5" />
+              <span>Ambiente Exclusivo • Turma {currentTurmaScope}</span>
+            </span>
+            {myRole && (
+              <span className="px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-xs font-black">
+                {myRoleTitle}
+              </span>
+            )}
+          </div>
+          <h2 className="text-xl sm:text-2xl font-black text-white mt-2">{safeActivity.title}</h2>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Atividade restrita aos estudantes da Turma <strong>{currentTurmaScope}</strong>.
+          </p>
+        </div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 self-start sm:self-auto cursor-pointer"
+          >
+            Voltar
+          </button>
+        )}
+      </div>
+
+      {statusBanner && (
+        <div
+          className={`p-4 rounded-2xl border text-xs font-bold flex items-center justify-between ${
+            statusBanner.type === 'error'
+              ? 'bg-rose-500/15 border-rose-500/40 text-rose-200'
+              : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200'
+          }`}
+        >
+          <span>{statusBanner.text}</span>
+          <button
+            type="button"
+            onClick={() => setStatusBanner(null)}
+            className="text-slate-300 hover:text-white ml-3"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {!myRole && activeStudent && (
+        <div className="p-6 rounded-3xl bg-slate-900/90 border border-slate-800 space-y-5">
+          <div>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-cyan-400 block">
+              ETAPA DE CREDENCIAMENTO • TURMA {currentTurmaScope}
+            </span>
+            <h3 className="text-lg font-black text-white mt-1">
+              Escolha sua Bancada para Iniciar a Trajetória do seu Grupo
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Ao ingressar como 1º integrante da bancada, você poderá selecionar os demais colegas do seu grupo na lista suspensa da sua turma.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-5 rounded-3xl bg-emerald-950/25 border border-emerald-500/40 flex flex-col justify-between space-y-4">
+              <div>
+                <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 text-xs font-black">
+                  {proMembers.length} integrante(s) na Turma {currentTurmaScope}
+                </span>
+                <h4 className="text-base font-black text-white mt-3">🟢 Bancada PRÓ</h4>
+                <p className="text-xs text-slate-300 mt-1">
+                  Pesquisa e sustenta os argumentos sociológicos favoráveis à tese central.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  handleAddStudentToGroup(
+                    {
+                      id: activeStudent.id,
+                      fullName: activeStudent.fullName,
+                      turma: currentTurmaScope,
+                    },
+                    'pro'
+                  )
+                }
+                className="w-full py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs cursor-pointer"
+              >
+                Ingressar na Bancada PRÓ
+              </button>
+            </div>
+
+            <div className="p-5 rounded-3xl bg-rose-950/25 border border-rose-500/40 flex flex-col justify-between space-y-4">
+              <div>
+                <span className="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 text-xs font-black">
+                  {contraMembers.length} integrante(s) na Turma {currentTurmaScope}
+                </span>
+                <h4 className="text-base font-black text-white mt-3">🔴 Bancada CONTRA</h4>
+                <p className="text-xs text-slate-300 mt-1">
+                  Pesquisa contradições estruturais e sustenta o contraponto crítico no debate.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  handleAddStudentToGroup(
+                    {
+                      id: activeStudent.id,
+                      fullName: activeStudent.fullName,
+                      turma: currentTurmaScope,
+                    },
+                    'contra'
+                  )
+                }
+                className="w-full py-3 rounded-2xl bg-rose-500 hover:bg-rose-400 text-white font-black text-xs cursor-pointer"
+              >
+                Ingressar na Bancada CONTRA
+              </button>
+            </div>
+
+            <div className="p-5 rounded-3xl bg-amber-950/25 border border-amber-500/40 flex flex-col justify-between space-y-4">
+              <div>
+                <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 text-xs font-black">
+                  {jurorMembers.length}/{localConfig.maxJurors || 3} Jurados na Turma {currentTurmaScope}
+                </span>
+                <h4 className="text-base font-black text-white mt-3">⚖️ Corpo de Jurados</h4>
+                <p className="text-xs text-slate-300 mt-1">
+                  Analisa os critérios sociológicos e julga o Grande Debate com 2 Checklists oficiais.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={jurorMembers.length >= (localConfig.maxJurors || 3)}
+                onClick={() =>
+                  handleAddStudentToGroup(
+                    {
+                      id: activeStudent.id,
+                      fullName: activeStudent.fullName,
+                      turma: currentTurmaScope,
+                    },
+                    'juror'
+                  )
+                }
+                className="w-full py-3 rounded-2xl bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-slate-950 font-black text-xs cursor-pointer"
+              >
+                {jurorMembers.length >= (localConfig.maxJurors || 3)
+                  ? 'Vagas de Jurados Preenchidas'
+                  : 'Ingressar nos Jurados'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {myRole && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              {
+                step: 1 as const,
+                title: 'Passo 1: Equipe & Pesquisa',
+                desc: 'Formação do grupo e questões exclusivas da sua bancada',
+              },
+              {
+                step: 2 as const,
+                title: 'Passo 2: Dossiê Estratégico',
+                desc: 'Síntese dos argumentos e preparação para a arena',
+              },
+              {
+                step: 3 as const,
+                title: 'Passo 3: O Grande Debate',
+                desc:
+                  myRole === 'juror'
+                    ? 'Checklists oficiais de julgamento e veredito'
+                    : 'Arena ao vivo, cronômetro e envio final da equipe',
+              },
+            ].map((s) => (
+              <button
+                key={s.step}
+                type="button"
+                onClick={() => setStudentStep(s.step)}
+                className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
+                  studentStep === s.step
+                    ? 'bg-cyan-500/20 border-cyan-400 text-white shadow-lg'
+                    : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-400 block">
+                  Trajetória Exclusiva • {myRoleTitle}
+                </span>
+                <span className="text-sm font-black block mt-0.5">{s.title}</span>
+                <span className="text-[11px] text-slate-400 block mt-0.5">{s.desc}</span>
+              </button>
+            ))}
+          </div>
+
+          {studentStep === 1 && (
+            <div className="space-y-6">
+              {/* REQ 2: CAIXA DE SELEÇÃO COM LISTA SUSPENSA PARA ESCOLHER O RESTO DO GRUPO */}
+              <div className="p-5 rounded-3xl bg-slate-900/95 border border-cyan-500/30 space-y-4">
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-cyan-400 block">
+                    FORMAÇÃO DA SUA EQUIPE • TURMA {currentTurmaScope}
+                  </span>
+                  <h3 className="text-base font-black text-white">
+                    Integrantes de {myRoleTitle} ({myGroupMembers.length})
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Selecione seus colegas de grupo na lista suspensa abaixo (apenas colegas da Turma {currentTurmaScope}).
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2.5">
+                  <select
+                    value={selectedClassmateIdToAdd}
+                    onChange={(e) => setSelectedClassmateIdToAdd(e.target.value)}
+                    className="flex-1 bg-slate-950 border border-slate-700 focus:border-cyan-400 rounded-2xl px-4 py-3 text-xs sm:text-sm font-bold text-white focus:outline-none"
+                  >
+                    <option value="">
+                      📋 Clique para escolher um colega da Turma {currentTurmaScope} ({unassignedClassmates.length} disponíveis)...
+                    </option>
+                    {unassignedClassmates.map((colleague) => (
+                      <option key={colleague.id} value={colleague.id}>
+                        {colleague.fullName}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    disabled={!selectedClassmateIdToAdd}
+                    onClick={() => {
+                      const stObj = unassignedClassmates.find(
+                        (s) => s.id === selectedClassmateIdToAdd
+                      );
+                      if (stObj) {
+                        handleAddStudentToGroup(
+                          { id: stObj.id, fullName: stObj.fullName, turma: stObj.turma },
+                          myRole
+                        );
+                      }
+                    }}
+                    className="px-5 py-3 rounded-2xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-slate-950 font-black text-xs flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>+ Incluir Colega no Grupo</span>
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {myGroupMembers.map((m, idx) => (
+                    <span
+                      key={m.studentId}
+                      className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-bold text-slate-200 flex items-center gap-2"
+                    >
+                      {idx === 0 && (
+                        <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[9px] font-black uppercase">
+                          1º Escolhido / Líder
+                        </span>
+                      )}
+                      <span>{m.studentName}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* QUESTÕES EXCLUSIVAS DO GRUPO DO ALUNO */}
+              <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 space-y-4">
+                <div className="border-b border-slate-800 pb-3">
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-400 block">
+                    PASSO 1 • ROTEIRO EXCLUSIVO ({myRoleTitle.toUpperCase()})
+                  </span>
+                  <h3 className="text-base font-black text-white">
+                    Questões Norteadoras da Sua Equipe ({myQuestions.length})
+                  </h3>
+                </div>
+
+                <div className="space-y-4">
+                  {myQuestions.map((q, idx) => (
+                    <div
+                      key={q.id}
+                      className="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-2.5"
+                    >
+                      <span className="px-2.5 py-0.5 rounded-lg bg-cyan-500/15 text-cyan-300 text-[10px] font-black uppercase inline-block">
+                        Eixo {idx + 1} • {q.sociologicalConcept}
+                      </span>
+                      <p className="text-xs sm:text-sm font-bold text-white leading-relaxed">
+                        {q.prompt}
+                      </p>
+                      <textarea
+                        rows={3}
+                        value={getScopedAnswer(myRole, q.id)}
+                        onChange={(e) => handleChangeScopedAnswer(myRole, q.id, e.target.value)}
+                        placeholder="Registre aqui os argumentos, dados e conceitos sociológicos pesquisados pelo seu grupo..."
+                        className="w-full bg-slate-900 border border-slate-800 focus:border-cyan-400 rounded-xl p-3 text-xs sm:text-sm text-white focus:outline-none"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      persistDebateConfig(
+                        localConfig,
+                        undefined,
+                        'Respostas do Passo 1 salvas para todo o seu grupo!'
+                      )
+                    }
+                    className="px-5 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold cursor-pointer"
+                  >
+                    💾 Salvar Rascunho do Grupo
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await persistDebateConfig(localConfig);
+                      setStudentStep(2);
+                    }}
+                    className="px-6 py-3 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <span>Salvar e Avançar para o Passo 2</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {studentStep === 2 && (
+            <div className="p-6 rounded-3xl bg-slate-900/95 border border-slate-800 space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-cyan-400 block">
+                    PASSO 2 • PREPARAÇÃO DE ARGUMENTOS ({myRoleTitle.toUpperCase()})
+                  </span>
+                  <h3 className="text-lg font-black text-white">
+                    Dossiê & Síntese Estratégica da Sua Bancada
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Organize os argumentos que o seu grupo utilizará durante o Grande Debate no Passo 3.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isGeneratingAI}
+                  onClick={() => handleGenerateGroupSynthesis(myRole)}
+                  className="px-4 py-2.5 rounded-2xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-200 text-xs font-black flex items-center gap-2 cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>
+                    {isGeneratingAI
+                      ? 'Consolidando Dossiê...'
+                      : 'Gerar Síntese com IA para Minha Bancada'}
+                  </span>
+                </button>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                <span className="text-[10px] font-black uppercase text-emerald-400 block">
+                  Resumo Estratégico Exclusivo do Seu Grupo:
+                </span>
+                <p className="text-xs sm:text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">
+                  {(myRole === 'pro'
+                    ? localConfig.proSummaryAI
+                    : myRole === 'contra'
+                    ? localConfig.contraSummaryAI
+                    : localConfig.jurorGuideAI || localConfig.jurorInitialGuide) ||
+                    'Clique no botão acima para consolidar a síntese estratégica das respostas do seu grupo ou avance diretamente para o Grande Debate.'}
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  type="button"
+                  onClick={() => setStudentStep(1)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 text-xs font-bold text-slate-300 cursor-pointer"
+                >
+                  ← Voltar ao Passo 1
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStudentStep(3)}
+                  className="px-6 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-2 cursor-pointer"
+                >
+                  <span>Ir para o Passo 3: O Grande Debate</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {studentStep === 3 && (
+            <div className="p-6 rounded-3xl bg-slate-900/95 border border-emerald-500/40 space-y-5 shadow-2xl">
+              <div className="border-b border-slate-800 pb-4">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-400 block">
+                  PASSO 3 • ARENA AO VIVO • TURMA {currentTurmaScope}
+                </span>
+                <h3 className="text-xl font-black text-white">
+                  🎙️ O Grande Debate — {myRoleTitle}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Acompanhe as rodadas conduzidas pelo Professor no cronômetro de sala e conclua a entrega oficial da sua equipe.
+                </p>
+              </div>
+
+              {myRole === 'juror' ? (
+                <div className="space-y-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-2xl bg-slate-950 border border-emerald-500/30 space-y-3">
+                      <h4 className="text-xs font-black uppercase text-emerald-400">
+                        Checklist 1 • Avaliar Bancada PRÓ
+                      </h4>
+                      {localConfig.checklistCriteria.map((c) => (
+                        <label
+                          key={`pro_${c.id}`}
+                          className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={Boolean(jurorChecklistPro[c.id])}
+                            onChange={() =>
+                              setJurorChecklistPro((prev) => ({ ...prev, [c.id]: !prev[c.id] }))
+                            }
+                            className="mt-0.5 accent-emerald-500"
+                          />
+                          <div>
+                            <span className="text-xs font-bold text-white block">
+                              {c.title || c.criterion}
+                            </span>
+                            <span className="text-[11px] text-slate-400 block">{c.description}</span>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-slate-950 border border-rose-500/30 space-y-3">
+                      <h4 className="text-xs font-black uppercase text-rose-400">
+                        Checklist 2 • Avaliar Bancada CONTRA
+                      </h4>
+                      {localConfig.checklistCriteria.map((c) => (
+                        <label
+                          key={`contra_${c.id}`}
+                          className="flex items-start gap-2.5 p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={Boolean(jurorChecklistContra[c.id])}
+                            onChange={() =>
+                              setJurorChecklistContra((prev) => ({
+                                ...prev,
+                                [c.id]: !prev[c.id],
+                              }))
+                            }
+                            className="mt-0.5 accent-rose-500"
+                          />
+                          <div>
+                            <span className="text-xs font-bold text-white block">
+                              {c.title || c.criterion}
+                            </span>
+                            <span className="text-[11px] text-slate-400 block">{c.description}</span>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-300 block">
+                      Veredito Fundamentado do Corpo de Jurados:
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={jurorVerdictComment}
+                      onChange={(e) => setJurorVerdictComment(e.target.value)}
+                      placeholder="Justifiquem qual bancada apresentou maior rigor conceitual e consistência sociológica no Grande Debate..."
+                      className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3.5 text-xs sm:text-sm text-white focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    {[
+                      '1. Exposição Inicial (3 min)',
+                      '2. Réplica Direta (2 min)',
+                      '3. Sabatina do Júri (2 min)',
+                      '4. Considerações Finais (1m30s)',
+                    ].map((etapa, i) => (
+                      <div
+                        key={i}
+                        className="p-3 rounded-2xl bg-slate-950 border border-slate-800 text-center"
+                      >
+                        <span className="text-xs font-bold text-cyan-300 block">{etapa}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-300 block">
+                      Argumento Final / Réplica Central Apresentada pela Sua Bancada no Debate:
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={groupFinalArgument}
+                      onChange={(e) => setGroupFinalArgument(e.target.value)}
+                      placeholder="Registrem a conclusão final defendida pelo grupo durante o Grande Debate..."
+                      className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3.5 text-xs sm:text-sm text-white focus:outline-none focus:border-emerald-400"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setStudentStep(2)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 text-xs font-bold text-slate-300 cursor-pointer"
+                >
+                  ← Voltar ao Passo 2
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleStudentFinishDebateStep3}
+                  className="px-6 py-3.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xl cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>
+                    Concluir e Enviar Participação de Todo o Grupo ({myGroupMembers.length} integrantes)
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
