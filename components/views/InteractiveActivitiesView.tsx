@@ -114,7 +114,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
   const [gameTopic, setGameTopic] = useState('');
   const [gameMaterial, setGameMaterial] = useState('');
   const [aiCustomPrompt, setAiCustomPrompt] = useState('');
-  const [aiQuestionCount, setAiQuestionCount] = useState<number>(3);
+  const [aiQuestionCount, setAiQuestionCount] = useState<number>(6);
   const [selectedGameMode, setSelectedGameMode] = useState<GameMode>('millionaire');
 
   // Limpa ou ajusta o texto base ao alternar o modo de jogo

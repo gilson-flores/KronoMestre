@@ -22,6 +22,18 @@ export const AuthView: React.FC<AuthViewProps> = ({
   onLoginStudent,
   onLoginSecondTeacher,
 }) => {
+  React.useEffect(() => {
+    // explicit_password_sanitize: Limpa qualquer senha residual ou cache exposto ao abrir a tela de Login
+    if (typeof window !== "undefined") {
+      try {
+        const sensitiveKeys = Object.keys(localStorage).filter((k) => {
+          const kl = k.toLowerCase();
+          return kl.includes("pass") || kl.includes("senha") || kl.includes("auth") || kl.includes("session");
+        });
+        sensitiveKeys.forEach((k) => localStorage.removeItem(k));
+      } catch (e) {}
+    }
+  }, []);
   const [activeTab, setActiveTab] = useState<'teacher' | 'student' | 'second_teacher'>('teacher');
   const [showTeacherPassword, setShowTeacherPassword] = useState(false);
   const [showStudentPassword, setShowStudentPassword] = useState(false);

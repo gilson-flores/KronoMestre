@@ -25,10 +25,10 @@ function applyUppercaseIfNeeded(text: string, isUpper: boolean): string {
 function createFallbackDebateConfig(
   topic: string,
   subject: string,
-  count: number = 3
-): DebateConfig {
+  count: number = 6
+): any {
   const safeTopic = (topic || "Cidadania e Sociedade").trim();
-  const safeCount = Math.max(1, Math.min(10, count || 3));
+  const safeCount = Math.max(1, Math.min(10, count || 6));
 
   const proTemplates = [
     {
@@ -155,6 +155,9 @@ function createFallbackDebateConfig(
       { id: "crit_6", number: 6, title: "Ética Democrática e Direitos Humanos", description: "Manteve postura respeitosa e alinhada à cidadania e aos direitos fundamentais." },
     ],
     jurorInitialGuide: `GUIA DOS 3 JURADOS — TEMA: ${safeTopic.toUpperCase()}\nAvaliem com imparcialidade sociológica a Bancada PRÓ e a Bancada CONTRA utilizando as questões preparatórias e os 2 Checklists oficiais.`,
+    proSummaryAI: `📘 RESUMO ELABORADO DE RESPOSTAS — BANCADA PRÓ (${safeTopic.toUpperCase()}):\n1. Fundamentos Históricos e Direitos: A defesa favorável demonstra que "${safeTopic}" representa uma conquista histórica essencial para a cidadania e para a redução de assimetrias sociais.\n2. Coesão Social e Democracia: Sob a ótica sociológica (Durkheim, Habermas e Bobbio), o fortalecimento de políticas e garantias ligadas ao tema amplia a participação democrática e protege grupos vulnerabilizados.\n3. Síntese Argumentativa para o Debate: A bancada deve sustentar com dados empíricos que eventuais falhas práticas decorrem da falta de efetivação plena, e não do princípio em si.`,
+    contraSummaryAI: `📕 RESUMO ELABORADO DE RESPOSTAS — BANCADA CONTRA (${safeTopic.toUpperCase()}):\n1. Contradições Estruturais e Limites Reais: A análise crítica evidencia o abismo entre a promessa formal de "${safeTopic}" e a realidade material vivida pela população brasileira.\n2. Assimetrias de Poder e Ideologia: A partir da sociologia crítica (Marx, Weber, Bourdieu e Foucault), observa-se como interesses hegemônicos e barreiras institucionais distorcem sua aplicação prática.\n3. Síntese de Refutação para o Debate: A bancada deve exigir transformações estruturais profundas, demonstrando os efeitos colaterais e exclusões geradas pelo modelo atual.`,
+    jurorGuideAI: `⚖️ DOSSIÊ E RESUMO ELABORADO DE ANÁLISE — CORPO DE JURADOS (${safeTopic.toUpperCase()}):\n1. Eixo de Verificação Teórica: Avaliar se ambas as bancadas superaram o senso comum e mobilizaram conceitos sociológicos rigorosos (fato social, ação social, ideologia, cidadania e poder).\n2. Auditoria de Evidências: Conferir qual equipe comprovou suas teses com dados históricos, estatísticos ou exemplos concretos da realidade brasileira.\n3. Critério de Desempate no Grande Debate: Vence a bancada que mantiver maior coerência lógica, responder diretamente às réplicas adversárias sem falácias e respeitar o tempo oficial.`,
     participants: [],
     proAnswers: {},
     contraAnswers: {},
@@ -171,7 +174,7 @@ function generateFallbackInteractiveData(payload: RequestPayload): GameData {
   const isUpper = Boolean(payload.aeePromptSettings?.uppercaseText);
   const isAee = payload.mode === "adapted_aee";
   const isOnlyPlayful = payload.aeeMechanic === "visual_cards" || payload.aeeMechanic === "social_story";
-  const stageCount = Math.max(1, Math.min(12, payload.questionCount || (payload.gameMode === "debate_paperless" ? 3 : 6)));
+  const stageCount = Math.max(1, Math.min(12, payload.questionCount || (6)));
 
   if (!isAee && payload.gameMode === "debate_paperless") {
     const debateConfig = createFallbackDebateConfig(topic, subject, stageCount);
@@ -354,7 +357,7 @@ export async function POST(req: NextRequest) {
     // 2. MODO DEBATE SEM PAPEL: PERGUNTAS DIRETAS E INÉDITAS (ZERO REPETIÇÃO)
     // ==========================================================================
     if (gameMode === "debate_paperless") {
-      const targetQuestionsPerGroup = Math.max(1, Math.min(10, questionCount || 3));
+      const targetQuestionsPerGroup = Math.max(1, Math.min(10, questionCount || 6));
 
       const debatePrompt = [
         `Você é um Professor Doutor em ${subject} do Ensino Médio. Estruture um DEBATE SOCIOLÓGICO SEM PAPEL sobre o tema "${topic}" (Título: "${title}").`,
@@ -370,7 +373,7 @@ export async function POST(req: NextRequest) {
         "1. NUNCA repita a mesma frase ou estrutura entre as questões.",
         "2. NÃO coloque prefixos mecânicos como '[Pesquisa PRÓ #1] Considerando o tema...' nem textos de orientação genéricos ('pesquise dados, conceitos sociológicos...'). Escreva APENAS A PERGUNTA DIRETA, clara, profunda e diferente em cada item.",
         "3. Deixe o campo \"researchHint\" sempre vazio (\"\") — não exiba textos de orientação repetitivos.",
-        'Retorne EXCLUSIVAMENTE um JSON válido com: { "introText": string, "proQuestions": [{ "sociologicalConcept": string, "prompt": string, "researchHint": "" }], "contraQuestions": [{ "sociologicalConcept": string, "prompt": string, "researchHint": "" }], "jurorQuestions": [{ "sociologicalConcept": string, "prompt": string, "researchHint": "" }], "checklistCriteria": [{ "title": string, "description": string }], "jurorInitialGuide": string }',
+        'Retorne EXCLUSIVAMENTE um JSON válido com: { "introText": string, "proQuestions": [{ "sociologicalConcept": string, "prompt": string, "researchHint": "" }], "contraQuestions": [{ "sociologicalConcept": string, "prompt": string, "researchHint": "" }], "jurorQuestions": [{ "sociologicalConcept": string, "prompt": string, "researchHint": "" }], "checklistCriteria": [{ "title": string, "description": string }], "jurorInitialGuide": string, "proSummaryAI": "Resumo elaborado em 3 parágrafos com o gabarito comentado das 6 questões da Bancada PRÓ", "contraSummaryAI": "Resumo elaborado em 3 parágrafos com o gabarito comentado das 6 questões da Bancada CONTRA", "jurorGuideAI": "Resumo elaborado em 3 parágrafos orientando a análise das 6 questões do Corpo de Jurados" }',
       ]
         .filter(Boolean)
         .join("\n\n");
@@ -386,7 +389,7 @@ export async function POST(req: NextRequest) {
             const cleaned = response.text.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
             const parsed = JSON.parse(cleaned);
             const fallbackCfg = createFallbackDebateConfig(topic, subject, targetQuestionsPerGroup);
-            const debateConfig: DebateConfig = {
+            const debateConfig: any = {
               maxJurors: 3,
               proQuestions:
                 Array.isArray(parsed.proQuestions) && parsed.proQuestions.length > 0
@@ -448,6 +451,9 @@ export async function POST(req: NextRequest) {
                     }))
                   : fallbackCfg.checklistCriteria,
               jurorInitialGuide: parsed.jurorInitialGuide || fallbackCfg.jurorInitialGuide,
+              proSummaryAI: parsed.proSummaryAI || (fallbackCfg as any).proSummaryAI,
+              contraSummaryAI: parsed.contraSummaryAI || (fallbackCfg as any).contraSummaryAI,
+              jurorGuideAI: parsed.jurorGuideAI || parsed.jurorInitialGuide || (fallbackCfg as any).jurorGuideAI,
               participants: [],
               proAnswers: {},
               contraAnswers: {},

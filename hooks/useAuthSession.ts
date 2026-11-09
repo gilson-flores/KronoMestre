@@ -417,8 +417,23 @@ export function useAuthSession({
   const handleLogout = useCallback(
     async (reason?: string) => {
       if (typeof window !== 'undefined') {
-        purgeAllAuthAndTenantCaches();
-        sessionStorage.setItem('explicit_logout', 'true');
+        try {
+          const cronoBackup: Record<string, string> = {};
+          Object.keys(localStorage).forEach((k) => {
+            if (k.startsWith('krono_cronograma_') || k === 'app_theme_mode') {
+              const val = localStorage.getItem(k);
+              if (val !== null) cronoBackup[k] = val;
+            }
+          });
+          purgeAllAuthAndTenantCaches();
+          localStorage.clear();
+          sessionStorage.clear();
+          Object.entries(cronoBackup).forEach(([k, v]) => localStorage.setItem(k, v));
+          sessionStorage.setItem('explicit_logout', 'true');
+          if ('caches' in window) {
+            caches.keys().then((names) => names.forEach((n) => caches.delete(n))).catch(() => {});
+          }
+        } catch (e) {}
       }
 
       try {
@@ -437,7 +452,7 @@ export function useAuthSession({
         showGlobalStatus('error', reason);
       }
 
-      window.location.href = '/';
+      window.location.replace('/?logout=' + Date.now());
     },
     [showGlobalStatus, setStudents, setActivities, setLibrary]
   );

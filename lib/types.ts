@@ -197,6 +197,11 @@ export interface DebateJurorVerdict {
 }
 
 export interface DebateConfig {
+  proSummaryAI?: string;
+  contraSummaryAI?: string;
+  jurorGuideAI?: string;
+  jurorAnswers?: { [key: string]: string };
+  teacherChecklists?: { [key: string]: any };
   maxJurors: number; // Padrão: 3 jurados
   proQuestions: DebateGuidingQuestion[]; // 6 questões dissertativas norteadoras Pró
   contraQuestions: DebateGuidingQuestion[];

@@ -1,5 +1,6 @@
 'use client';
 
+import { DebatePaperlessView } from '@/components/views/DebatePaperlessView';
 import React from 'react';
 import {
   X,
