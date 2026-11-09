@@ -245,15 +245,19 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
     return {
       id: 'debate-live',
       title: titleProp || 'Debate Sociológico Sem Papel',
+      description: '',
+      type: 'Jogo Avaliativo',
       subject: 'Sociologia',
       turma: activeStudent?.turma || 'Geral',
       dueDate: '',
+      deadline: '',
       status: 'active',
+      totalStudents: 0,
       totalSubmissions: 0,
       pendingCorrection: 0,
       submissions: [],
       gameMode: 'debate_paperless',
-    } as Activity;
+    } as unknown as Activity;
   }, [activityProp, fetchedActivity, titleProp, activeStudent?.turma]);
 
   const rosterStudents = useMemo(() => {
@@ -838,7 +842,8 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
           avatarUrl: '',
           xp: 0,
           level: 1,
-        }
+          passwordHash: '',
+        } as StudentUser
       );
     });
 
