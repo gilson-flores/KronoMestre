@@ -47,21 +47,21 @@ const STUDENT_PORTAL_VERSION = '2026.11.11-v3';
 
 // Galeria de Avatares prontos para escolha imediata dentro do Perfil
 const AVATAR_GALLERY_PRESETS = [
-  { id: 'bot-1', label: 'Cyber Bot 1', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Krono1&backgroundColor=1e3a8a' },
+  { id: 'bot-1', label: 'Cyber Bot 1', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Krono1&backgroundColor=064e3b' },
   { id: 'bot-2', label: 'Cyber Bot 2', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Krono2&backgroundColor=ea580c' },
-  { id: 'bot-3', label: 'Cyber Bot 3', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Krono3&backgroundColor=0284c7' },
+  { id: 'bot-3', label: 'Cyber Bot 3', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Krono3&backgroundColor=065f46' },
   { id: 'bot-4', label: 'Cyber Bot 4', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Krono4&backgroundColor=4f46e5' },
-  { id: 'adv-1', label: 'Aventureiro 1', url: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Alex&backgroundColor=1d4ed8' },
+  { id: 'adv-1', label: 'Aventureiro 1', url: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Alex&backgroundColor=115e59' },
   { id: 'adv-2', label: 'Aventureiro 2', url: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Sofia&backgroundColor=0369a1' },
   { id: 'adv-3', label: 'Aventureiro 3', url: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Lucas&backgroundColor=4338ca' },
   { id: 'adv-4', label: 'Aventureiro 4', url: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Maya&backgroundColor=0f766e' },
-  { id: 'avt-1', label: 'Estudante 1', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Davi&backgroundColor=1e40af' },
-  { id: 'avt-2', label: 'Estudante 2', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Clara&backgroundColor=0284c7' },
+  { id: 'avt-1', label: 'Estudante 1', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Davi&backgroundColor=064e3b' },
+  { id: 'avt-2', label: 'Estudante 2', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Clara&backgroundColor=065f46' },
   { id: 'avt-3', label: 'Estudante 3', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Gabriel&backgroundColor=3730a3' },
   { id: 'avt-4', label: 'Estudante 4', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Julia&backgroundColor=0369a1' },
-  { id: 'pix-1', label: 'Pixel Hero 1', url: 'https://api.dicebear.com/7.x/pixel-art/svg?seed=Hero1&backgroundColor=1e3a8a' },
-  { id: 'pix-2', label: 'Pixel Hero 2', url: 'https://api.dicebear.com/7.x/pixel-art/svg?seed=Hero2&backgroundColor=0284c7' },
-  { id: 'fun-1', label: 'Star Vibe 1', url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Smile1&backgroundColor=1d4ed8' },
+  { id: 'pix-1', label: 'Pixel Hero 1', url: 'https://api.dicebear.com/7.x/pixel-art/svg?seed=Hero1&backgroundColor=064e3b' },
+  { id: 'pix-2', label: 'Pixel Hero 2', url: 'https://api.dicebear.com/7.x/pixel-art/svg?seed=Hero2&backgroundColor=065f46' },
+  { id: 'fun-1', label: 'Star Vibe 1', url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Smile1&backgroundColor=115e59' },
   { id: 'fun-2', label: 'Star Vibe 2', url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Cool2&backgroundColor=4338ca' },
 ];
 
@@ -314,8 +314,9 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     if (typeof window === 'undefined') return;
     try {
       const seenVersion = localStorage.getItem('krono_student_seen_version');
-      if (seenVersion !== STUDENT_PORTAL_VERSION) {
-        setShowVersionUpdateBanner(true);
+      if (!seenVersion) {
+        // Primeiro acesso neste navegador: grava a versao atual silenciosamente sem exibir banner falso
+        localStorage.setItem('krono_student_seen_version', STUDENT_PORTAL_VERSION);
       }
     } catch {}
   }, []);
@@ -940,7 +941,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           </button>
 
           <div className="text-center min-w-0 px-2">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-blue-400 block">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/90 block">
               Turma {studentTurmaStd} • {String(executingActivity.type || 'Atividade')}
             </span>
             <h2 className="text-xs sm:text-sm font-bold text-foreground truncate">
@@ -948,7 +949,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             </h2>
           </div>
 
-          <span className="px-2.5 py-1 rounded-md bg-blue-500/15 border border-blue-500/30 text-blue-400 font-mono text-xs font-bold">
+          <span className="px-2.5 py-1 rounded-md bg-emerald-950/60 border border-emerald-800/50 text-emerald-300/90 font-mono text-xs font-bold">
             Val: {executingActivity.maxGrade || 10} pts
           </span>
         </header>
@@ -956,12 +957,12 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         <main className="max-w-2xl mx-auto p-4 space-y-5">
           {/* ESPELHO DA ENTREGA & CORREÇÃO DO PROFESSOR */}
           {myExistingSub && (
-            <section className="p-4 rounded-2xl bg-blue-950/30 border border-blue-500/40 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-500/20 pb-3">
+            <section className="p-4 rounded-2xl bg-emerald-950/35 border border-emerald-800/70 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-800/40 pb-3">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-blue-400 shrink-0" />
+                  <CheckCircle2 className="w-5 h-5 text-emerald-300/90 shrink-0" />
                   <div>
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-blue-300 block">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-200/90 block">
                       Atividade Concluída pelo Aluno
                     </span>
                     <h3 className="text-sm font-bold text-foreground">
@@ -971,10 +972,10 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 </div>
 
                 <div className="text-right">
-                  <span className="text-[10px] font-mono text-blue-300 block">
+                  <span className="text-[10px] font-mono text-emerald-200/90 block">
                     {String(myExistingSub.submittedAt || 'Registrada')}
                   </span>
-                  <span className="px-3 py-1 rounded-lg bg-blue-600 text-white font-mono text-xs font-extrabold inline-block mt-0.5">
+                  <span className="px-3 py-1 rounded-lg bg-emerald-700 text-white font-mono text-xs font-extrabold inline-block mt-0.5">
                     {myExistingSub.status === 'graded' ||
                     (subTotalGrade !== null && subTotalGrade > 0)
                       ? `Nota Final: ${(subTotalGrade ?? 0).toFixed(1)} / ${
@@ -990,20 +991,20 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono">
                   <div className="p-2.5 rounded-xl bg-background/80 border border-border">
                     <span className="text-[10px] text-muted block">Nota Objetivas</span>
-                    <strong className="text-blue-400">
+                    <strong className="text-emerald-300/90">
                       {Number(myExistingSub.objectiveScore || 0).toFixed(2)} pts
                     </strong>
                   </div>
                   <div className="p-2.5 rounded-xl bg-background/80 border border-border">
                     <span className="text-[10px] text-muted block">Nota Dissertativas</span>
-                    <strong className="text-blue-400">
+                    <strong className="text-emerald-300/90">
                       {Number(myExistingSub.essayScore || 0).toFixed(2)} pts
                     </strong>
                   </div>
                   {Number(myExistingSub.extraPoints || 0) > 0 && (
                     <div className="p-2.5 rounded-xl bg-background/80 border border-border">
                       <span className="text-[10px] text-muted block">Pontos Extras</span>
-                      <strong className="text-sky-400">
+                      <strong className="text-emerald-300/80">
                         +{Number(myExistingSub.extraPoints).toFixed(1)} pts
                       </strong>
                     </div>
@@ -1012,7 +1013,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               )}
 
               {myExistingSub.groupMembers && (
-                <div className="text-xs text-blue-200">
+                <div className="text-xs text-emerald-200/80">
                   <strong>Equipe / Grupo:</strong>{' '}
                   {Array.isArray(myExistingSub.groupMembers)
                     ? myExistingSub.groupMembers.join(', ')
@@ -1021,8 +1022,8 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               )}
 
               {myExistingSub.teacherFeedback && (
-                <div className="p-3.5 rounded-xl bg-background/90 border border-blue-500/30 space-y-1">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 block">
+                <div className="p-3.5 rounded-xl bg-background/90 border border-emerald-800/50 space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300/90 block">
                     Parecer / Feedback do Professor:
                   </span>
                   <p className="text-xs sm:text-sm text-foreground whitespace-pre-wrap leading-relaxed">
@@ -1048,7 +1049,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             <section className="p-4 rounded-2xl bg-surface border border-border space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-muted flex items-center gap-1.5">
-                  <BookOpen className="w-3.5 h-3.5 text-blue-400" />
+                  <BookOpen className="w-3.5 h-3.5 text-emerald-300/90" />
                   <span>Orientações & Materiais da Aula</span>
                 </span>
               </div>
@@ -1073,7 +1074,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       href={lnk}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="w-full p-3 rounded-xl bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-300 text-xs font-bold flex items-center justify-between transition-all"
+                      className="w-full p-3 rounded-xl bg-emerald-950/60 hover:bg-emerald-500/25 border border-emerald-800/50 text-emerald-200/90 text-xs font-bold flex items-center justify-between transition-all"
                     >
                       <span className="flex items-center gap-2 truncate">
                         <Link2 className="w-4 h-4 shrink-0" />
@@ -1091,7 +1092,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             Boolean((executingActivity as any).isGroupWork)) && (
             <section className="p-4 rounded-2xl bg-surface border border-border space-y-3">
               <div>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-sky-400 block">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/80 block">
                   Atividade em Equipe • Turma {studentTurmaStd}
                 </span>
                 <h3 className="text-sm font-bold text-foreground">
@@ -1106,7 +1107,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 <select
                   value={classmateDropdownValue}
                   onChange={(e) => setClassmateDropdownValue(e.target.value)}
-                  className="flex-1 bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-foreground focus:outline-none focus:border-blue-500"
+                  className="flex-1 bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-foreground focus:outline-none focus:border-emerald-700"
                 >
                   <option value="">
                     Selecionar colega da Turma {studentTurmaStd} ({eligibleClassmates.length} disponíveis)...
@@ -1129,7 +1130,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       setClassmateDropdownValue('');
                     }
                   }}
-                  className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                  className="px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
                 >
                   <UserPlus className="w-4 h-4" />
                   <span>+ Incluir no Grupo</span>
@@ -1171,7 +1172,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                   className="p-4 rounded-2xl bg-surface border border-border space-y-3"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-mono font-bold text-blue-400">
+                    <span className="text-[11px] font-mono font-bold text-emerald-300/90">
                       Questão {qIdx + 1}
                     </span>
                     <span className="text-[11px] font-mono text-muted">
@@ -1188,7 +1189,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       href={q.librasVideoUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/15 text-sky-300 text-xs font-semibold"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/50 text-emerald-200/80 text-xs font-semibold"
                     >
                       <Video className="w-3.5 h-3.5" />
                       <span>Assistir Vídeo em Libras</span>
@@ -1209,14 +1210,14 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                             }
                             className={`w-full p-3 rounded-xl border text-left text-xs sm:text-sm transition-all flex items-start gap-3 cursor-pointer ${
                               isSelected
-                                ? 'bg-blue-600/20 border-blue-500 text-foreground font-semibold'
+                                ? 'bg-emerald-700/20 border-emerald-700 text-foreground font-semibold'
                                 : 'bg-background border-border text-muted hover:text-foreground'
                             }`}
                           >
                             <span
                               className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
                                 isSelected
-                                  ? 'bg-blue-600 text-white'
+                                  ? 'bg-emerald-700 text-white'
                                   : 'bg-surface border border-border text-muted'
                               }`}
                             >
@@ -1244,7 +1245,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                   className="p-4 rounded-2xl bg-surface border border-border space-y-2.5"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-mono font-bold text-sky-400">
+                    <span className="text-[11px] font-mono font-bold text-emerald-300/80">
                       Dissertativa {eIdx + 1}
                     </span>
                     <span className="text-[11px] font-mono text-muted">
@@ -1261,7 +1262,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       setEssayResponses((prev) => ({ ...prev, [eq.id]: e.target.value }))
                     }
                     placeholder="Digite sua resposta dissertativa com argumentos sociológicos..."
-                    className="w-full bg-background border border-border focus:border-blue-500 rounded-xl p-3 text-xs sm:text-sm text-foreground focus:outline-none leading-relaxed"
+                    className="w-full bg-background border border-border focus:border-emerald-700 rounded-xl p-3 text-xs sm:text-sm text-foreground focus:outline-none leading-relaxed"
                   />
                 </div>
               ))}
@@ -1294,7 +1295,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 value={generalEssayText}
                 onChange={(e) => setGeneralEssayText(e.target.value)}
                 placeholder="Desenvolva aqui sua resposta ou síntese da pesquisa (rascunho salvo automaticamente no aparelho)..."
-                className="w-full bg-background border border-border focus:border-blue-500 rounded-xl p-3.5 text-xs sm:text-sm text-foreground focus:outline-none leading-relaxed"
+                className="w-full bg-background border border-border focus:border-emerald-700 rounded-xl p-3.5 text-xs sm:text-sm text-foreground focus:outline-none leading-relaxed"
               />
             </section>
           )}
@@ -1304,7 +1305,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               type="button"
               disabled={isSubmitting}
               onClick={handleConfirmSubmitActivity}
-              className="w-full py-3.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all"
+              className="w-full py-3.5 px-6 rounded-xl bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>
@@ -1328,7 +1329,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     <div className="min-h-screen bg-background text-foreground pb-20 md:pb-12">
       {/* AVISO DE ATUALIZAÇÃO DE VERSÃO PARA O ALUNO */}
       {showVersionUpdateBanner && (
-        <div className="bg-blue-600 text-white px-4 py-2.5 shadow-md">
+        <div className="bg-emerald-700 text-white px-4 py-2.5 shadow-md">
           <div className="max-w-2xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex items-center gap-2 font-semibold">
               <Sparkles className="w-4 h-4 shrink-0" />
@@ -1340,7 +1341,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               <button
                 type="button"
                 onClick={() => handleDismissOrApplyVersionUpdate(true)}
-                className="px-3 py-1 rounded-lg bg-white text-blue-700 font-bold flex items-center gap-1 cursor-pointer hover:bg-blue-50"
+                className="px-3 py-1 rounded-lg bg-white text-emerald-900 font-bold flex items-center gap-1 cursor-pointer hover:bg-emerald-50"
               >
                 <RefreshCw className="w-3 h-3" />
                 <span>Atualizar Agora</span>
@@ -1348,7 +1349,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               <button
                 type="button"
                 onClick={() => handleDismissOrApplyVersionUpdate(false)}
-                className="px-2 py-1 rounded-lg bg-blue-700 hover:bg-blue-800 text-white/90 cursor-pointer"
+                className="px-2 py-1 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white/90 cursor-pointer"
               >
                 OK
               </button>
@@ -1365,7 +1366,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             <button
               type="button"
               onClick={() => setActiveNav('perfil')}
-              className="relative w-14 h-14 rounded-full ring-2 ring-blue-500/70 bg-zinc-900 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer shadow-md group"
+              className="relative w-14 h-14 rounded-full ring-2 ring-emerald-700/80 bg-zinc-900 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer shadow-md group"
               title="Trocar Meu Avatar / Perfil"
             >
               {activeStudent.avatarUrl ? (
@@ -1375,7 +1376,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                   className="w-full h-full rounded-full object-cover"
                 />
               ) : (
-                <span className="font-mono font-extrabold text-base text-blue-400">
+                <span className="font-mono font-extrabold text-base text-emerald-300/90">
                   {(activeStudent.fullName || 'AL')
                     .trim()
                     .split(/\s+/)
@@ -1390,7 +1391,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             {/* Turma em cima + Nome do Aluno por baixo estendendo até o final */}
             <div className="flex-1 min-w-0 space-y-1.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="px-2.5 py-0.5 rounded-lg bg-blue-500/15 border border-blue-500/35 text-blue-400 font-mono text-xs font-extrabold">
+                <span className="px-2.5 py-0.5 rounded-lg bg-emerald-950/60 border border-emerald-800/60 text-emerald-300/90 font-mono text-xs font-extrabold">
                   Turma {studentTurmaStd}
                 </span>
 
@@ -1418,7 +1419,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                   >
                     <MessageSquare className="w-4 h-4" />
                     {unreadMessagesCount > 0 && (
-                      <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-blue-500 text-white font-mono text-[10px] font-bold flex items-center justify-center shadow-xs">
+                      <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-700 text-white font-mono text-[10px] font-bold flex items-center justify-center shadow-xs">
                         {unreadMessagesCount}
                       </span>
                     )}
@@ -1498,18 +1499,18 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                   onClick={() => setActiveNav(btn.id)}
                   className={`py-2 px-0.5 rounded-xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer ${
                     isSelected
-                      ? 'bg-blue-500/15 text-blue-400 font-bold'
+                      ? 'bg-emerald-950/60 text-emerald-300/90 font-bold'
                       : 'text-muted hover:text-foreground hover:bg-background/60'
                   }`}
                 >
                   <div className="relative flex items-center justify-center">
                     <IconComp
-                      className={`w-4 h-4 sm:w-5 sm:h-5 ${isSelected ? 'text-blue-400' : ''}`}
+                      className={`w-4 h-4 sm:w-5 sm:h-5 ${isSelected ? 'text-emerald-300/90' : ''}`}
                     />
                     {btn.count > 0 && (
                       <span
                         className={`ml-0.5 text-[10px] font-mono font-bold ${
-                          isSelected ? 'text-blue-300' : 'text-muted'
+                          isSelected ? 'text-emerald-200/90' : 'text-muted'
                         }`}
                       >
                         {btn.count}
@@ -1534,9 +1535,9 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       {/* Notificação Toast */}
       {toastMsg && (
         <div className="max-w-2xl mx-auto px-4 pt-3">
-          <div className="p-3 rounded-xl bg-blue-950/90 border border-blue-500/40 text-blue-100 text-xs font-medium flex items-center justify-between">
+          <div className="p-3 rounded-xl bg-emerald-950/90 border border-emerald-800/70 text-emerald-100/90 text-xs font-medium flex items-center justify-between">
             <span>{toastMsg}</span>
-            <button onClick={() => setToastMsg(null)} className="text-blue-300 ml-2">
+            <button onClick={() => setToastMsg(null)} className="text-emerald-200/90 ml-2">
               ✕
             </button>
           </div>
@@ -1552,7 +1553,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           <div className="space-y-3">
             <div className="p-3.5 rounded-2xl bg-surface border border-border flex items-center justify-between gap-2 text-xs">
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-blue-500" />
+                <span className="w-2 h-2 rounded-full bg-emerald-700" />
                 <span className="font-bold text-foreground">
                   {activeNav === 'pending'
                     ? `Atividades Pendentes (${pendingActivities.length})`
@@ -1563,14 +1564,14 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                     : `Todas as Atividades • Turma ${studentTurmaStd} (${studentActivities.length})`}
                 </span>
               </div>
-              <span className="font-mono text-blue-400 font-bold">
+              <span className="font-mono text-emerald-300/90 font-bold">
                 {completedActivities.length} concluída(s)
               </span>
             </div>
 
             {displayedActivities.length === 0 ? (
               <div className="p-10 rounded-2xl bg-surface border border-border text-center space-y-2">
-                <CheckCircle2 className="w-7 h-7 text-blue-400 mx-auto" />
+                <CheckCircle2 className="w-7 h-7 text-emerald-300/90 mx-auto" />
                 <p className="text-sm font-bold text-foreground">
                   Nenhuma atividade listada nesta categoria.
                 </p>
@@ -1608,7 +1609,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                     <article
                       key={act.id}
                       className={`rounded-2xl bg-surface border transition-all overflow-hidden ${
-                        sub ? 'border-blue-500/40' : 'border-border hover:border-zinc-700'
+                        sub ? 'border-emerald-800/70' : 'border-border hover:border-zinc-700'
                       }`}
                     >
                       <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
@@ -1616,9 +1617,9 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                           <div
                             className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
                               sub
-                                ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+                                ? 'bg-emerald-950/60 text-emerald-300/90 border border-emerald-800/50'
                                 : isGame
-                                ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
+                                ? 'bg-emerald-950/50 text-emerald-300/80 border border-emerald-800/50'
                                 : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
                             }`}
                           >
@@ -1654,7 +1655,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                         </div>
 
                         {sub ? (
-                          <span className="px-2.5 py-1 rounded-md bg-blue-500/15 border border-blue-500/35 text-blue-300 font-mono text-[11px] font-bold shrink-0">
+                          <span className="px-2.5 py-1 rounded-md bg-emerald-950/60 border border-emerald-800/60 text-emerald-200/90 font-mono text-[11px] font-bold shrink-0">
                             {hasGrade && totalGrade !== null
                               ? `Nota: ${totalGrade.toFixed(1)}`
                               : '✓ Já Feita'}
@@ -1685,7 +1686,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                                 href={lnk}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="p-2.5 rounded-xl bg-background hover:bg-surface-hover border border-blue-500/30 flex items-center justify-between gap-2 text-xs font-semibold text-blue-400 transition-colors"
+                                className="p-2.5 rounded-xl bg-background hover:bg-surface-hover border border-emerald-800/50 flex items-center justify-between gap-2 text-xs font-semibold text-emerald-300/90 transition-colors"
                               >
                                 <span className="flex items-center gap-2 truncate">
                                   <Link2 className="w-3.5 h-3.5 shrink-0" />
@@ -1700,8 +1701,8 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                         )}
 
                         {sub?.teacherFeedback && (
-                          <div className="p-3 rounded-xl bg-blue-950/25 border border-blue-500/30 text-xs text-blue-100">
-                            <strong className="text-blue-400 block mb-0.5">
+                          <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-800/50 text-xs text-emerald-100/90">
+                            <strong className="text-emerald-300/90 block mb-0.5">
                               Feedback do Professor:
                             </strong>
                             {String(sub.teacherFeedback)}
@@ -1714,13 +1715,13 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                             onClick={() => handleOpenActivity(act)}
                             className={`w-full py-3 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
                               sub
-                                ? 'bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/35 text-blue-300'
-                                : 'bg-blue-600 hover:bg-blue-500 text-white shadow-xs'
+                                ? 'bg-emerald-950/60 hover:bg-emerald-500/25 border border-emerald-800/60 text-emerald-200/90'
+                                : 'bg-emerald-700 hover:bg-emerald-600 text-white shadow-xs'
                             }`}
                           >
                             {sub ? (
                               <>
-                                <CheckCircle2 className="w-4 h-4 text-blue-400" />
+                                <CheckCircle2 className="w-4 h-4 text-emerald-300/90" />
                                 <span>Ver Minha Entrega, Respostas & Correção</span>
                               </>
                             ) : isDebate ? (
@@ -1758,7 +1759,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             <div className="grid grid-cols-3 gap-2.5">
               <div className="p-3.5 rounded-2xl bg-surface border border-border text-center">
                 <span className="text-[10px] font-mono uppercase text-muted block">Média</span>
-                <span className="text-xl font-mono font-bold text-blue-400 mt-0.5 block">
+                <span className="text-xl font-mono font-bold text-emerald-300/90 mt-0.5 block">
                   {averageGrade || '—'}
                 </span>
               </div>
@@ -1770,7 +1771,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               </div>
               <div className="p-3.5 rounded-2xl bg-surface border border-border text-center">
                 <span className="text-[10px] font-mono uppercase text-muted block">Turma</span>
-                <span className="text-xl font-mono font-bold text-sky-400 mt-0.5 block">
+                <span className="text-xl font-mono font-bold text-emerald-300/80 mt-0.5 block">
                   {studentTurmaStd}
                 </span>
               </div>
@@ -1808,7 +1809,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                         <h4 className="text-sm font-bold text-foreground">{act.title}</h4>
                       </div>
                       {sub ? (
-                        <span className="px-3 py-1 rounded-lg bg-blue-500/15 border border-blue-500/35 text-blue-300 font-mono text-xs font-bold">
+                        <span className="px-3 py-1 rounded-lg bg-emerald-950/60 border border-emerald-800/60 text-emerald-200/90 font-mono text-xs font-bold">
                           {hasScore && total !== null
                             ? `${total.toFixed(1)} / 10`
                             : '✓ Entregue'}
@@ -1822,7 +1823,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
                     {sub?.teacherFeedback && (
                       <div className="p-3 rounded-xl bg-background border border-border text-xs text-foreground whitespace-pre-wrap">
-                        <strong className="text-blue-400 block mb-1">
+                        <strong className="text-emerald-300/90 block mb-1">
                           Feedback do Professor:
                         </strong>
                         {String(sub.teacherFeedback)}
@@ -1843,7 +1844,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             {/* Card Principal do Aluno */}
             <div className="p-5 rounded-2xl bg-surface border border-border flex items-center justify-between gap-4">
               <div className="flex items-center gap-3.5 min-w-0">
-                <div className="w-16 h-16 rounded-full ring-2 ring-blue-500 bg-zinc-900 overflow-hidden flex items-center justify-center shrink-0">
+                <div className="w-16 h-16 rounded-full ring-2 ring-emerald-700 bg-zinc-900 overflow-hidden flex items-center justify-center shrink-0">
                   {activeStudent.avatarUrl ? (
                     <img
                       src={activeStudent.avatarUrl}
@@ -1851,7 +1852,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       className="w-full h-full rounded-full object-cover"
                     />
                   ) : (
-                    <span className="font-mono font-extrabold text-lg text-blue-400">
+                    <span className="font-mono font-extrabold text-lg text-emerald-300/90">
                       {(activeStudent.fullName || 'AL')
                         .trim()
                         .split(/\s+/)
@@ -1863,7 +1864,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                   )}
                 </div>
                 <div className="min-w-0 space-y-1">
-                  <span className="px-2.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 font-mono text-xs font-bold inline-block">
+                  <span className="px-2.5 py-0.5 rounded-md bg-emerald-950/60 text-emerald-300/90 font-mono text-xs font-bold inline-block">
                     Turma {studentTurmaStd}
                   </span>
                   <h2 className="text-base sm:text-lg font-bold text-foreground break-words">
@@ -1891,11 +1892,11 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             <section className="p-5 rounded-2xl bg-surface border border-border space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
                 <div>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-blue-400 block">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/90 block">
                     Personalização do Estudante
                   </span>
                   <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <Camera className="w-4 h-4 text-blue-400" />
+                    <Camera className="w-4 h-4 text-emerald-300/90" />
                     <span>Escolher / Trocar Meu Avatar</span>
                   </h3>
                   <p className="text-xs text-muted mt-0.5">
@@ -1903,7 +1904,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                   </p>
                 </div>
 
-                <label className="px-3.5 py-2 rounded-xl bg-background hover:bg-surface-hover border border-border text-xs font-semibold text-blue-400 flex items-center gap-1.5 cursor-pointer self-start sm:self-auto">
+                <label className="px-3.5 py-2 rounded-xl bg-background hover:bg-surface-hover border border-border text-xs font-semibold text-emerald-300/90 flex items-center gap-1.5 cursor-pointer self-start sm:self-auto">
                   <Camera className="w-3.5 h-3.5" />
                   <span>Enviar Foto do Aparelho</span>
                   <input
@@ -1926,7 +1927,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       onClick={() => setSelectedAvatarDraft(preset.url)}
                       className={`relative p-1.5 rounded-2xl border transition-all flex flex-col items-center gap-1 cursor-pointer ${
                         isSelected
-                          ? 'bg-blue-600/20 border-blue-500 ring-2 ring-blue-500/50 scale-105'
+                          ? 'bg-emerald-700/20 border-emerald-700 ring-2 ring-emerald-700/50 scale-105'
                           : 'bg-background border-border hover:border-zinc-700'
                       }`}
                       title={preset.label}
@@ -1939,7 +1940,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                         />
                       </div>
                       {isSelected && (
-                        <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                        <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-emerald-700 text-white flex items-center justify-center shadow-xs">
                           <Check className="w-3 h-3 stroke-[3]" />
                         </span>
                       )}
@@ -1952,7 +1953,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 type="button"
                 disabled={isSavingAvatar}
                 onClick={() => handleSaveNewAvatar()}
-                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm"
+                className="w-full py-3 rounded-xl bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 <span>
@@ -1967,7 +1968,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               className="p-5 rounded-2xl bg-surface border border-border space-y-3"
             >
               <div className="flex items-center gap-2">
-                <KeyRound className="w-4 h-4 text-blue-400" />
+                <KeyRound className="w-4 h-4 text-emerald-300/90" />
                 <h3 className="text-sm font-bold text-foreground">Alterar Minha Senha</h3>
               </div>
               <input
@@ -1987,11 +1988,11 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-foreground"
               />
               {passwordStatus && (
-                <p className="text-xs text-blue-400 font-medium">{passwordStatus}</p>
+                <p className="text-xs text-emerald-300/90 font-medium">{passwordStatus}</p>
               )}
               <button
                 type="submit"
-                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold cursor-pointer"
+                className="w-full py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold cursor-pointer"
               >
                 Salvar Nova Senha
               </button>
@@ -2006,7 +2007,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           <div className="bg-surface border border-border rounded-t-2xl sm:rounded-2xl w-full max-w-md h-[80vh] flex flex-col overflow-hidden shadow-2xl">
             <div className="p-4 border-b border-border flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-mono uppercase text-blue-400 block">
+                <span className="text-[10px] font-mono uppercase text-emerald-300/90 block">
                   Mensagem Direta • Turma {studentTurmaStd}
                 </span>
                 <h3 className="text-sm font-bold text-foreground">
@@ -2036,7 +2037,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       key={msg.id || idx}
                       className={`max-w-[85%] p-3 rounded-2xl text-xs ${
                         isMine
-                          ? 'ml-auto bg-blue-600 text-white font-medium'
+                          ? 'ml-auto bg-emerald-700 text-white font-medium'
                           : 'mr-auto bg-background border border-border text-foreground'
                       }`}
                     >
@@ -2071,7 +2072,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                   }
                 }}
                 placeholder="Escreva uma mensagem..."
-                className="flex-1 bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground focus:outline-none focus:border-blue-500"
+                className="flex-1 bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground focus:outline-none focus:border-emerald-700"
               />
               <button
                 type="button"
@@ -2093,7 +2094,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                     setChatInput('');
                   }
                 }}
-                className="p-2.5 rounded-xl bg-blue-600 text-white cursor-pointer"
+                className="p-2.5 rounded-xl bg-emerald-700 text-white cursor-pointer"
               >
                 <Send className="w-4 h-4" />
               </button>

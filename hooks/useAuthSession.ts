@@ -420,7 +420,15 @@ export function useAuthSession({
         try {
           const cronoBackup: Record<string, string> = {};
           Object.keys(localStorage).forEach((k) => {
-            if (k.startsWith('krono_cronograma_') || k === 'app_theme_mode') {
+            if (
+              k.startsWith('krono_cronograma_') ||
+              k.startsWith('krono_avatar_') ||
+              k.startsWith('krono_read_msgs_') ||
+              k.includes('version') ||
+              k.includes('build') ||
+              k.includes('deploy') ||
+              k === 'app_theme_mode'
+            ) {
               const val = localStorage.getItem(k);
               if (val !== null) cronoBackup[k] = val;
             }
