@@ -23,13 +23,14 @@ import {
   X,
   FileText,
   Video,
-  Award,
   KeyRound,
   Link2,
   Play,
   RefreshCw,
   CheckCheck,
   Sparkles,
+  Camera,
+  Check,
 } from 'lucide-react';
 import {
   standardizeTurmaCode,
@@ -42,7 +43,27 @@ import { KronoGamePlayer } from '@/components/views/KronoGamePlayer';
 
 const SafeKronoGamePlayer: any = KronoGamePlayer;
 
-const STUDENT_PORTAL_VERSION = '2026.11.11-v2';
+const STUDENT_PORTAL_VERSION = '2026.11.11-v3';
+
+// Galeria de Avatares prontos para escolha imediata dentro do Perfil
+const AVATAR_GALLERY_PRESETS = [
+  { id: 'bot-1', label: 'Cyber Bot 1', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Krono1&backgroundColor=1e3a8a' },
+  { id: 'bot-2', label: 'Cyber Bot 2', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Krono2&backgroundColor=ea580c' },
+  { id: 'bot-3', label: 'Cyber Bot 3', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Krono3&backgroundColor=0284c7' },
+  { id: 'bot-4', label: 'Cyber Bot 4', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Krono4&backgroundColor=4f46e5' },
+  { id: 'adv-1', label: 'Aventureiro 1', url: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Alex&backgroundColor=1d4ed8' },
+  { id: 'adv-2', label: 'Aventureiro 2', url: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Sofia&backgroundColor=0369a1' },
+  { id: 'adv-3', label: 'Aventureiro 3', url: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Lucas&backgroundColor=4338ca' },
+  { id: 'adv-4', label: 'Aventureiro 4', url: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Maya&backgroundColor=0f766e' },
+  { id: 'avt-1', label: 'Estudante 1', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Davi&backgroundColor=1e40af' },
+  { id: 'avt-2', label: 'Estudante 2', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Clara&backgroundColor=0284c7' },
+  { id: 'avt-3', label: 'Estudante 3', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Gabriel&backgroundColor=3730a3' },
+  { id: 'avt-4', label: 'Estudante 4', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Julia&backgroundColor=0369a1' },
+  { id: 'pix-1', label: 'Pixel Hero 1', url: 'https://api.dicebear.com/7.x/pixel-art/svg?seed=Hero1&backgroundColor=1e3a8a' },
+  { id: 'pix-2', label: 'Pixel Hero 2', url: 'https://api.dicebear.com/7.x/pixel-art/svg?seed=Hero2&backgroundColor=0284c7' },
+  { id: 'fun-1', label: 'Star Vibe 1', url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Smile1&backgroundColor=1d4ed8' },
+  { id: 'fun-2', label: 'Star Vibe 2', url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Cool2&backgroundColor=4338ca' },
+];
 
 export interface StudentPortalViewProps {
   student?: StudentUser | null;
@@ -66,16 +87,15 @@ export interface StudentPortalViewProps {
   ) => void | Promise<void>;
   onSaveActivity?: (updatedActivity: Activity) => void | Promise<void>;
   onUpdateActivity?: (updatedActivity: Activity) => void | Promise<void>;
+  onUpdateAvatar?: (studentId: string, newAvatarUrl: string) => void | Promise<void>;
+  onUpdateStudentAvatar?: (studentId: string, newAvatarUrl: string) => void | Promise<void>;
+  onUpdateStudent?: (updatedStudent: StudentUser) => void | Promise<void>;
   onLogout?: () => void;
   themeMode?: 'dark' | 'light' | string;
   onToggleTheme?: () => void;
   [key: string]: any;
 }
 
-/**
- * Normaliza nomes para vincular com 100% de precisão as atividades que o aluno já fez
- * (ignora acentos como Ç/Ã/É, espaços extras e diferenças de maiúsculas/minúsculas).
- */
 function normalizePersonName(name?: string | null): string {
   if (!name) return '';
   return String(name)
@@ -92,12 +112,15 @@ function extractLinksFromText(text?: string | null): string[] {
   return matches ? Array.from(new Set(matches)) : [];
 }
 
-/**
- * Formata respostas salvas (incluindo JSON legado da planilha Respostas, ex: {"q_1_Q1": "..."})
- * para exibição limpa quando o aluno abre uma atividade que já fez.
- */
 function formatSubmissionAnswerForDisplay(rawAnswer?: string | null): string {
-  if (!rawAnswer) return '';
+  if (rawAnswer === null || rawAnswer === undefined) return '';
+  if (typeof rawAnswer === 'object') {
+    try {
+      return JSON.stringify(rawAnswer, null, 2);
+    } catch {
+      return '';
+    }
+  }
   const trimmed = String(rawAnswer).trim();
   if (!trimmed.startsWith('{')) return trimmed;
 
@@ -115,15 +138,6 @@ function formatSubmissionAnswerForDisplay(rawAnswer?: string | null): string {
   }
 }
 
-/**
- * Localiza a entrega do aluno em uma atividade verificando:
- * 1) studentId exato
- * 2) matrícula exata
- * 3) nome completo normalizado (studentName === activeStudent.fullName)
- * 4) presença em groupMembers (string ou array)
- * 5) presença em _grupo_meta dentro do JSON de resposta
- * 6) participação registrada em Debate Sem Papel (debateConfig.participants)
- */
 function findStudentSubmissionInActivity(act: Activity, student: StudentUser): any | null {
   const subs: any[] = Array.isArray(act.submissions) ? act.submissions : [];
   const targetNameNorm = normalizePersonName(student.fullName);
@@ -133,23 +147,19 @@ function findStudentSubmissionInActivity(act: Activity, student: StudentUser): a
   for (const s of subs) {
     if (!s) continue;
 
-    // 1. Match por ID
     if (targetId && String(s.studentId || '').trim() === targetId) {
       return s;
     }
 
-    // 2. Match por Matrícula
     if (targetMat && s.matricula && String(s.matricula).trim() === targetMat) {
       return s;
     }
 
-    // 3. Match por Nome Completo Normalizado
     const subNameNorm = normalizePersonName(s.studentName || s.nome || s.NOME_ALUNO);
     if (targetNameNorm && subNameNorm && subNameNorm === targetNameNorm) {
       return s;
     }
 
-    // 4. Match em groupMembers (string separada por vírgula ou array)
     if (targetNameNorm && s.groupMembers) {
       const membersList = Array.isArray(s.groupMembers)
         ? s.groupMembers
@@ -160,8 +170,11 @@ function findStudentSubmissionInActivity(act: Activity, student: StudentUser): a
       if (matchedMember) return s;
     }
 
-    // 5. Match em _grupo_meta dentro de RESPOSTAS_JSON / essayAnswer
-    if (targetNameNorm && typeof s.essayAnswer === 'string' && s.essayAnswer.includes('_grupo_meta')) {
+    if (
+      targetNameNorm &&
+      typeof s.essayAnswer === 'string' &&
+      s.essayAnswer.includes('_grupo_meta')
+    ) {
       try {
         const parsed = JSON.parse(s.essayAnswer);
         if (Array.isArray(parsed._grupo_meta)) {
@@ -174,7 +187,6 @@ function findStudentSubmissionInActivity(act: Activity, student: StudentUser): a
     }
   }
 
-  // 6. Verificar se o aluno participou de um Debate Sem Papel e possui nota de grupo/individual
   const debateCfg: any = act.gameData?.debateConfig;
   if (debateCfg && Array.isArray(debateCfg.participants)) {
     const part = debateCfg.participants.find(
@@ -205,7 +217,11 @@ function findStudentSubmissionInActivity(act: Activity, student: StudentUser): a
           maxEssayScore: act.maxGrade || 10,
           status: score !== null ? 'graded' : 'pending',
           essayAnswer: `Participação registrada no Debate Sem Papel (${
-            role === 'pro' ? 'Bancada PRÓ' : role === 'contra' ? 'Bancada CONTRA' : 'Corpo de JURADOS'
+            role === 'pro'
+              ? 'Bancada PRÓ'
+              : role === 'contra'
+              ? 'Bancada CONTRA'
+              : 'Corpo de JURADOS'
           }).`,
           teacherFeedback: indGrade?.feedback || '',
         };
@@ -228,11 +244,18 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   onSubmitAnswer,
   onSaveActivity,
   onUpdateActivity,
+  onUpdateAvatar,
+  onUpdateStudentAvatar,
+  onUpdateStudent,
   onLogout,
   themeMode = 'dark',
   onToggleTheme,
 }) => {
-  const activeStudent: StudentUser = useMemo(() => {
+  // ==========================================================================
+  // REGRA DE OURO DO REACT: TODOS OS HOOKS DECLARADOS NO TOPO ANTES DE QUALQUER RETURN!
+  // (Isso impede 100% a ocorrência do Minified React error #300)
+  // ==========================================================================
+  const baseStudent: StudentUser = useMemo(() => {
     return (
       studentProp ||
       currentStudentProp || {
@@ -248,16 +271,43 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     );
   }, [studentProp, currentStudentProp]);
 
+  // Estado local de avatar para atualização instantânea ao trocar no perfil
+  const [customAvatarUrl, setCustomAvatarUrl] = useState<string>(baseStudent.avatarUrl || '');
+  const [selectedAvatarDraft, setSelectedAvatarDraft] = useState<string>(
+    baseStudent.avatarUrl || AVATAR_GALLERY_PRESETS[0].url
+  );
+  const [isSavingAvatar, setIsSavingAvatar] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && baseStudent.id) {
+      const savedLocalAvatar = localStorage.getItem(`krono_avatar_${baseStudent.id}`);
+      if (savedLocalAvatar) {
+        setCustomAvatarUrl(savedLocalAvatar);
+        setSelectedAvatarDraft(savedLocalAvatar);
+        return;
+      }
+    }
+    if (baseStudent.avatarUrl) {
+      setCustomAvatarUrl(baseStudent.avatarUrl);
+      setSelectedAvatarDraft(baseStudent.avatarUrl);
+    }
+  }, [baseStudent.id, baseStudent.avatarUrl]);
+
+  const activeStudent: StudentUser = useMemo(() => {
+    return {
+      ...baseStudent,
+      avatarUrl: customAvatarUrl || baseStudent.avatarUrl || '',
+    };
+  }, [baseStudent, customAvatarUrl]);
+
   const studentTurmaStd = useMemo(() => {
     return standardizeTurmaCode(activeStudent.turma) || activeStudent.turma || '101';
   }, [activeStudent.turma]);
 
-  // Navegação principal por botões estilo App de Smartphone
   const [activeNav, setActiveNav] = useState<
     'feed' | 'pending' | 'completed' | 'games' | 'boletim' | 'perfil'
   >('feed');
 
-  // Estado de Aviso de Nova Versão para o Aluno
   const [showVersionUpdateBanner, setShowVersionUpdateBanner] = useState(false);
 
   useEffect(() => {
@@ -270,27 +320,6 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     } catch {}
   }, []);
 
-  const handleDismissOrApplyVersionUpdate = (reloadNow: boolean) => {
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('krono_student_seen_version', STUDENT_PORTAL_VERSION);
-        if (reloadNow && 'caches' in window) {
-          caches
-            .keys()
-            .then((names) => names.forEach((n) => caches.delete(n)))
-            .finally(() => window.location.reload());
-          return;
-        }
-        if (reloadNow) {
-          window.location.reload();
-          return;
-        }
-      } catch {}
-    }
-    setShowVersionUpdateBanner(false);
-  };
-
-  // Estados de Execução de Atividade
   const [executingActivity, setExecutingActivity] = useState<Activity | null>(null);
   const [selectedObjective, setSelectedObjective] = useState<{ [qId: string]: number }>({});
   const [essayResponses, setEssayResponses] = useState<{ [qId: string]: string }>({});
@@ -300,17 +329,14 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
-  // Chat Direct & Controle de Mensagens Lidas (zera notificação ao abrir!)
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [seenMessageKeys, setSeenMessageKeys] = useState<string[]>([]);
 
-  // Troca de Senha
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordStatus, setPasswordStatus] = useState<string | null>(null);
 
-  // Roster de colegas para atividades em grupo
   const [fetchedClassmates, setFetchedClassmates] = useState<StudentUser[]>([]);
   const rosterStudents = useMemo(() => {
     if (Array.isArray(students) && students.length > 0) return students;
@@ -338,9 +364,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     }, 4000);
   }, []);
 
-  // ==========================================================================
-  // VINCULAÇÃO COMPLETA DE ATIVIDADES E ENTREGAS JÁ FEITAS PELO ALUNO
-  // ==========================================================================
+  // Vinculação completa das atividades e entregas já feitas pelo aluno
   const { studentActivities, mySubmissionsMap } = useMemo(() => {
     const isPNEStudent = activeStudent.tag && activeStudent.tag !== 'REGULAR';
     const subMap = new Map<string, any>();
@@ -349,11 +373,9 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     (Array.isArray(activities) ? activities : []).forEach((act) => {
       if (!act) return;
 
-      // 1º Verifica se o aluno JÁ FEZ esta atividade
       const mySub = findStudentSubmissionInActivity(act, activeStudent);
       if (mySub) {
         subMap.set(act.id, mySub);
-        // Se o aluno já fez a atividade, NUNCA escondemos ela (mesmo que o status tenha mudado ou a turma tenha mudado de nomenclatura)
         list.push({
           ...act,
           turma: studentTurmaStd,
@@ -361,8 +383,11 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         return;
       }
 
-      // 2º Se o aluno ainda não fez, verifica se a atividade está ativa para a turma dele
-      if ((act.status as string) === 'archived' || act.status === 'Inativo' || (act as any).isArchived) {
+      if (
+        (act.status as string) === 'archived' ||
+        act.status === 'Inativo' ||
+        (act as any).isArchived
+      ) {
         return;
       }
 
@@ -399,6 +424,20 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     [studentActivities]
   );
 
+  // IMPORTANTE: displayedActivities declarado AQUI NO TOPO (antes de qualquer return condicional!)
+  const displayedActivities = useMemo(() => {
+    if (activeNav === 'pending') return pendingActivities;
+    if (activeNav === 'completed') return completedActivities;
+    if (activeNav === 'games') return kronoGamesActivities;
+    return studentActivities;
+  }, [
+    activeNav,
+    pendingActivities,
+    completedActivities,
+    kronoGamesActivities,
+    studentActivities,
+  ]);
+
   const averageGrade = useMemo(() => {
     const graded: number[] = [];
     mySubmissionsMap.forEach((sub) => {
@@ -419,9 +458,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     return (sum / graded.length).toFixed(1);
   }, [mySubmissionsMap]);
 
-  // ==========================================================================
-  // MENSAGENS E ZERAMENTO AUTOMÁTICO DE NOTIFICAÇÕES AO ABRIR
-  // ==========================================================================
+  // Controle de Mensagens Lidas
   const chatReadStorageKey = `krono_read_msgs_v2_${activeStudent.id}`;
 
   useEffect(() => {
@@ -466,7 +503,6 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     });
   }, [messages, activeStudent.id, activeStudent.fullName]);
 
-  // Conta APENAS mensagens ainda não visualizadas pelo aluno
   const unreadMessagesCount = useMemo(() => {
     const seenSet = new Set(seenMessageKeys);
     return myMessages.filter((m: any, idx: number) => {
@@ -479,7 +515,6 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     }).length;
   }, [myMessages, seenMessageKeys, activeStudent.id, getMessageUniqueKey]);
 
-  // Marca todas as mensagens atuais como lidas assim que o chat é aberto
   const markAllMessagesAsSeen = useCallback(() => {
     const allKeys = myMessages.map((m: any, idx: number) => getMessageUniqueKey(m, idx));
     setSeenMessageKeys((prev) => {
@@ -512,51 +547,6 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     return getEligibleClassmatesForGroup(rosterStudents, activeStudent.turma, excluded);
   }, [rosterStudents, activeStudent.id, activeStudent.turma, selectedGroupNames]);
 
-  // ==========================================================================
-  // ABERTURA DE ATIVIDADE (NOVA OU JÁ CONCLUÍDA PELO ALUNO)
-  // ==========================================================================
-  const handleOpenActivity = (act: Activity) => {
-    setExecutingActivity(act);
-    const existingSub = mySubmissionsMap.get(act.id);
-
-    const draftKey = `krono_draft_${activeStudent.id}_${act.id}`;
-    let savedDraft: any = null;
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(draftKey);
-        if (raw) savedDraft = JSON.parse(raw);
-      } catch {}
-    }
-
-    if (existingSub) {
-      setSelectedObjective(existingSub.selectedObjectiveAnswers || {});
-      setGeneralEssayText(formatSubmissionAnswerForDisplay(existingSub.essayAnswer));
-      setEssayResponses({});
-      if (existingSub.groupMembers) {
-        const members = Array.isArray(existingSub.groupMembers)
-          ? existingSub.groupMembers
-          : String(existingSub.groupMembers)
-              .split(',')
-              .map((n: string) => n.trim())
-              .filter(Boolean);
-        setSelectedGroupNames(members);
-      } else {
-        setSelectedGroupNames([activeStudent.fullName]);
-      }
-    } else if (savedDraft) {
-      setSelectedObjective(savedDraft.selectedObjective || {});
-      setGeneralEssayText(savedDraft.generalEssayText || '');
-      setEssayResponses(savedDraft.essayResponses || {});
-      setSelectedGroupNames(savedDraft.selectedGroupNames || [activeStudent.fullName]);
-    } else {
-      setSelectedObjective({});
-      setGeneralEssayText('');
-      setEssayResponses({});
-      setSelectedGroupNames([activeStudent.fullName]);
-    }
-    setClassmateDropdownValue('');
-  };
-
   useEffect(() => {
     if (!executingActivity || typeof window === 'undefined') return;
     if (mySubmissionsMap.has(executingActivity.id)) return;
@@ -581,6 +571,137 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     essayResponses,
     selectedGroupNames,
   ]);
+
+  // ==========================================================================
+  // HANDLERS DE AÇÃO (AVATAR, ATIVIDADES, VERSÃO E SENHA)
+  // ==========================================================================
+  const handleSaveNewAvatar = async (urlToSave?: string) => {
+    const finalUrl = (urlToSave ?? selectedAvatarDraft).trim();
+    if (!finalUrl) return;
+    setIsSavingAvatar(true);
+
+    try {
+      setCustomAvatarUrl(finalUrl);
+      setSelectedAvatarDraft(finalUrl);
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`krono_avatar_${activeStudent.id}`, finalUrl);
+        // Atualiza também na sessão ativa do navegador para persistir após F5
+        const activeUid = sessionStorage.getItem('current_active_user_id') || '';
+        const sessionKey = activeUid ? `tenant_${activeUid}_active_session` : 'active_session';
+        const rawSession = sessionStorage.getItem(sessionKey);
+        if (rawSession) {
+          const parsed = JSON.parse(rawSession);
+          if (parsed.studentData) {
+            parsed.studentData.avatarUrl = finalUrl;
+            sessionStorage.setItem(sessionKey, JSON.stringify(parsed));
+          }
+        }
+      }
+
+      if (onUpdateAvatar) await onUpdateAvatar(activeStudent.id, finalUrl);
+      if (onUpdateStudentAvatar) await onUpdateStudentAvatar(activeStudent.id, finalUrl);
+      if (onUpdateStudent) {
+        await onUpdateStudent({ ...activeStudent, avatarUrl: finalUrl });
+      }
+
+      // Persiste também na API de estudantes
+      await fetch('/api/students', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: activeStudent.id,
+          studentId: activeStudent.id,
+          matricula: activeStudent.matricula,
+          avatarUrl: finalUrl,
+        }),
+      }).catch(() => {});
+
+      showNotice('Seu novo avatar foi salvo e atualizado com sucesso!');
+    } catch {
+      showNotice('Avatar atualizado no seu perfil!');
+    } finally {
+      setIsSavingAvatar(false);
+    }
+  };
+
+  const handleUploadAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setSelectedAvatarDraft(reader.result);
+        handleSaveNewAvatar(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDismissOrApplyVersionUpdate = (reloadNow: boolean) => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('krono_student_seen_version', STUDENT_PORTAL_VERSION);
+        if (reloadNow && 'caches' in window) {
+          caches
+            .keys()
+            .then((names) => names.forEach((n) => caches.delete(n)))
+            .finally(() => window.location.reload());
+          return;
+        }
+        if (reloadNow) {
+          window.location.reload();
+          return;
+        }
+      } catch {}
+    }
+    setShowVersionUpdateBanner(false);
+  };
+
+  const handleOpenActivity = (act: Activity) => {
+    setExecutingActivity(act);
+    const existingSub = mySubmissionsMap.get(act.id);
+
+    const draftKey = `krono_draft_${activeStudent.id}_${act.id}`;
+    let savedDraft: any = null;
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(draftKey);
+        if (raw) savedDraft = JSON.parse(raw);
+      } catch {}
+    }
+
+    if (existingSub) {
+      const rawSelObj = existingSub.selectedObjectiveAnswers;
+      setSelectedObjective(
+        rawSelObj && typeof rawSelObj === 'object' && !Array.isArray(rawSelObj) ? rawSelObj : {}
+      );
+      setGeneralEssayText(formatSubmissionAnswerForDisplay(existingSub.essayAnswer));
+      setEssayResponses({});
+      if (existingSub.groupMembers) {
+        const members = Array.isArray(existingSub.groupMembers)
+          ? existingSub.groupMembers.map((n: any) => String(n).trim()).filter(Boolean)
+          : String(existingSub.groupMembers)
+              .split(',')
+              .map((n: string) => n.trim())
+              .filter(Boolean);
+        setSelectedGroupNames(members);
+      } else {
+        setSelectedGroupNames([activeStudent.fullName]);
+      }
+    } else if (savedDraft) {
+      setSelectedObjective(savedDraft.selectedObjective || {});
+      setGeneralEssayText(savedDraft.generalEssayText || '');
+      setEssayResponses(savedDraft.essayResponses || {});
+      setSelectedGroupNames(savedDraft.selectedGroupNames || [activeStudent.fullName]);
+    } else {
+      setSelectedObjective({});
+      setGeneralEssayText('');
+      setEssayResponses({});
+      setSelectedGroupNames([activeStudent.fullName]);
+    }
+    setClassmateDropdownValue('');
+  };
 
   const handleConfirmSubmitActivity = async () => {
     if (!executingActivity || !onSubmitAnswer) return;
@@ -655,7 +776,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         localStorage.removeItem(`krono_draft_${activeStudent.id}_${executingActivity.id}`);
       }
 
-      showNotice('Atividade enviada com sucesso! Sua entrega já consta nas atividades concluídas.');
+      showNotice('Atividade enviada com sucesso! Sua entrega já consta nas Atividades Feitas.');
       setExecutingActivity(null);
     } catch {
       showNotice('Erro ao enviar atividade. Seu rascunho está salvo no aparelho.');
@@ -697,7 +818,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   };
 
   // ==========================================================================
-  // TELA DE EXECUÇÃO / REVISÃO DE ATIVIDADE SELECIONADA
+  // RENDERIZAÇÃO CONDICIONAL DA ATIVIDADE / CORREÇÃO (AGORA APÓS TODOS OS HOOKS!)
   // ==========================================================================
   if (executingActivity) {
     const isDebate =
@@ -820,7 +941,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
           <div className="text-center min-w-0 px-2">
             <span className="text-[10px] font-mono uppercase tracking-wider text-blue-400 block">
-              Turma {studentTurmaStd} • {executingActivity.type || 'Atividade'}
+              Turma {studentTurmaStd} • {String(executingActivity.type || 'Atividade')}
             </span>
             <h2 className="text-xs sm:text-sm font-bold text-foreground truncate">
               {executingActivity.title}
@@ -833,7 +954,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         </header>
 
         <main className="max-w-2xl mx-auto p-4 space-y-5">
-          {/* ESPELHO DA ENTREGA REALIZADA PELO ALUNO (SE JÁ FEZ A ATIVIDADE) */}
+          {/* ESPELHO DA ENTREGA & CORREÇÃO DO PROFESSOR */}
           {myExistingSub && (
             <section className="p-4 rounded-2xl bg-blue-950/30 border border-blue-500/40 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-500/20 pb-3">
@@ -851,17 +972,19 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
                 <div className="text-right">
                   <span className="text-[10px] font-mono text-blue-300 block">
-                    {myExistingSub.submittedAt || 'Registrada'}
+                    {String(myExistingSub.submittedAt || 'Registrada')}
                   </span>
                   <span className="px-3 py-1 rounded-lg bg-blue-600 text-white font-mono text-xs font-extrabold inline-block mt-0.5">
-                    {myExistingSub.status === 'graded' || (subTotalGrade !== null && subTotalGrade > 0)
-                      ? `Nota Final: ${(subTotalGrade ?? 0).toFixed(1)} / ${executingActivity.maxGrade || 10}`
+                    {myExistingSub.status === 'graded' ||
+                    (subTotalGrade !== null && subTotalGrade > 0)
+                      ? `Nota Final: ${(subTotalGrade ?? 0).toFixed(1)} / ${
+                          executingActivity.maxGrade || 10
+                        }`
                       : '✓ Entregue (Aguardando Correção)'}
                   </span>
                 </div>
               </div>
 
-              {/* Detalhamento de Notas se houver */}
               {(Number(myExistingSub.objectiveScore || 0) > 0 ||
                 Number(myExistingSub.essayScore || 0) > 0) && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono">
@@ -893,7 +1016,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                   <strong>Equipe / Grupo:</strong>{' '}
                   {Array.isArray(myExistingSub.groupMembers)
                     ? myExistingSub.groupMembers.join(', ')
-                    : myExistingSub.groupMembers}
+                    : String(myExistingSub.groupMembers)}
                 </div>
               )}
 
@@ -903,7 +1026,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                     Parecer / Feedback do Professor:
                   </span>
                   <p className="text-xs sm:text-sm text-foreground whitespace-pre-wrap leading-relaxed">
-                    {myExistingSub.teacherFeedback}
+                    {String(myExistingSub.teacherFeedback)}
                   </p>
                 </div>
               )}
@@ -921,7 +1044,6 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             </section>
           )}
 
-          {/* Material de Apoio e Arquivos do Google Drive nomeados pelo Professor */}
           {(executingActivity.description || executingActivity.supportMaterial) && (
             <section className="p-4 rounded-2xl bg-surface border border-border space-y-3">
               <div className="flex items-center justify-between">
@@ -965,7 +1087,6 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             </section>
           )}
 
-          {/* Seleção de Equipe em Caixa Suspensa (<select>) */}
           {(executingActivity.type === 'Trabalho em grupo' ||
             Boolean((executingActivity as any).isGroupWork)) && (
             <section className="p-4 rounded-2xl bg-surface border border-border space-y-3">
@@ -1039,7 +1160,6 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             </section>
           )}
 
-          {/* Questões Objetivas */}
           {objQuestions.length > 0 && (
             <section className="space-y-3.5">
               <h3 className="text-xs font-bold uppercase tracking-wider text-muted px-1">
@@ -1060,7 +1180,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                   </div>
 
                   <p className="text-xs sm:text-sm font-medium text-foreground whitespace-pre-wrap leading-relaxed">
-                    {q.text || q.question || q.prompt || ''}
+                    {String(q.text || q.question || q.prompt || '')}
                   </p>
 
                   {q.librasVideoUrl && (
@@ -1076,42 +1196,43 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                   )}
 
                   <div className="space-y-2 pt-1">
-                    {(q.options || []).map((optText: string, optIdx: number) => {
-                      const isSelected = selectedObjective[q.id] === optIdx;
-                      const letter = String.fromCharCode(65 + optIdx);
-                      return (
-                        <button
-                          key={optIdx}
-                          type="button"
-                          onClick={() =>
-                            setSelectedObjective((prev) => ({ ...prev, [q.id]: optIdx }))
-                          }
-                          className={`w-full p-3 rounded-xl border text-left text-xs sm:text-sm transition-all flex items-start gap-3 cursor-pointer ${
-                            isSelected
-                              ? 'bg-blue-600/20 border-blue-500 text-foreground font-semibold'
-                              : 'bg-background border-border text-muted hover:text-foreground'
-                          }`}
-                        >
-                          <span
-                            className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
+                    {(Array.isArray(q.options) ? q.options : []).map(
+                      (optText: any, optIdx: number) => {
+                        const isSelected = selectedObjective[q.id] === optIdx;
+                        const letter = String.fromCharCode(65 + optIdx);
+                        return (
+                          <button
+                            key={optIdx}
+                            type="button"
+                            onClick={() =>
+                              setSelectedObjective((prev) => ({ ...prev, [q.id]: optIdx }))
+                            }
+                            className={`w-full p-3 rounded-xl border text-left text-xs sm:text-sm transition-all flex items-start gap-3 cursor-pointer ${
                               isSelected
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-surface border border-border text-muted'
+                                ? 'bg-blue-600/20 border-blue-500 text-foreground font-semibold'
+                                : 'bg-background border-border text-muted hover:text-foreground'
                             }`}
                           >
-                            {letter}
-                          </span>
-                          <span className="leading-relaxed">{optText}</span>
-                        </button>
-                      );
-                    })}
+                            <span
+                              className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
+                                isSelected
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-surface border border-border text-muted'
+                              }`}
+                            >
+                              {letter}
+                            </span>
+                            <span className="leading-relaxed">{String(optText ?? '')}</span>
+                          </button>
+                        );
+                      }
+                    )}
                   </div>
                 </div>
               ))}
             </section>
           )}
 
-          {/* Questões Dissertativas */}
           {essayQuestions.length > 0 && (
             <section className="space-y-3.5">
               <h3 className="text-xs font-bold uppercase tracking-wider text-muted px-1">
@@ -1131,7 +1252,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                     </span>
                   </div>
                   <p className="text-xs sm:text-sm font-medium text-foreground whitespace-pre-wrap leading-relaxed">
-                    {eq.text || eq.question || eq.prompt || ''}
+                    {String(eq.text || eq.question || eq.prompt || '')}
                   </p>
                   <textarea
                     rows={5}
@@ -1147,7 +1268,6 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             </section>
           )}
 
-          {/* Campo Geral de Redação / Pesquisa */}
           {(essayQuestions.length === 0 ||
             [
               'Redação',
@@ -1201,22 +1321,8 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
     );
   }
 
-  // Lista de atividades conforme o botão de smartphone selecionado
-  const displayedActivities = useMemo(() => {
-    if (activeNav === 'pending') return pendingActivities;
-    if (activeNav === 'completed') return completedActivities;
-    if (activeNav === 'games') return kronoGamesActivities;
-    return studentActivities;
-  }, [
-    activeNav,
-    pendingActivities,
-    completedActivities,
-    kronoGamesActivities,
-    studentActivities,
-  ]);
-
   // ==========================================================================
-  // SHELL PRINCIPAL DO ALUNO (PALETA AZUL SAFIRA + LAYOUT MOBILE NATIVO)
+  // SHELL PRINCIPAL DO ALUNO
   // ==========================================================================
   return (
     <div className="min-h-screen bg-background text-foreground pb-20 md:pb-12">
@@ -1251,19 +1357,16 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         </div>
       )}
 
-      {/* 1. CABEÇALHO DO ALUNO:
-             - Avatar em Círculo Perfeito do Mesmo Tamanho (w-14 h-14 rounded-full)
-             - Turma no Topo + Botões de Ação à direita
-             - Nome do Aluno POR BAIXO da Turma (estendendo até o final sem cortar) */}
-      <header className="sticky top-0 z-30 bg-surface/95 backdrop-blur-md border-b border-border px-4 py-3">
+      {/* 1. CABEÇALHO DO ALUNO + BARRA DE BOTÕES EM DUAS LINHAS SEM CORTAR NOMES */}
+      <header className="sticky top-0 z-30 bg-surface/95 backdrop-blur-md border-b border-border px-3 sm:px-4 py-3">
         <div className="max-w-2xl mx-auto space-y-3">
           <div className="flex items-start gap-3.5">
-            {/* Avatar em Círculo Perfeito do Mesmo Tamanho do Círculo de Borda */}
+            {/* Avatar em Círculo Perfeito do Mesmo Tamanho (w-14 h-14 rounded-full) */}
             <button
               type="button"
               onClick={() => setActiveNav('perfil')}
-              className="relative w-14 h-14 rounded-full ring-2 ring-blue-500/70 bg-zinc-900 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer shadow-md"
-              title="Meu Perfil"
+              className="relative w-14 h-14 rounded-full ring-2 ring-blue-500/70 bg-zinc-900 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer shadow-md group"
+              title="Trocar Meu Avatar / Perfil"
             >
               {activeStudent.avatarUrl ? (
                 <img
@@ -1284,7 +1387,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               )}
             </button>
 
-            {/* Coluna Direita: Linha 1 = Turma + Ações | Linha 2 = Nome Inteiro por Baixo da Turma */}
+            {/* Turma em cima + Nome do Aluno por baixo estendendo até o final */}
             <div className="flex-1 min-w-0 space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="px-2.5 py-0.5 rounded-lg bg-blue-500/15 border border-blue-500/35 text-blue-400 font-mono text-xs font-extrabold">
@@ -1334,50 +1437,54 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 </div>
               </div>
 
-              {/* Nome do Aluno POR BAIXO da Turma, estendendo até o final sem cortar */}
               <h1 className="text-sm sm:text-base font-extrabold tracking-tight text-foreground leading-snug break-words">
                 {activeStudent.fullName}
               </h1>
             </div>
           </div>
 
-          {/* 2. BARRA DE BOTÕES ESTILO APLICATIVO DE SMARTPHONE LOGO ABAIXO DO NOME
-                 (Sem círculo em volta — apenas Ícone em cima e Nome embaixo) */}
-          <div className="pt-1 border-t border-border/70 grid grid-cols-6 gap-1">
+          {/* 2. BARRA DE BOTÕES ESTILO APP DE SMARTPHONE (2 LINHAS INTEIRAS SEM CORTAR PALAVRAS) */}
+          <div className="pt-1.5 border-t border-border/70 grid grid-cols-6 gap-1">
             {[
               {
                 id: 'feed' as const,
-                label: 'Todas',
+                line1: 'Todas',
+                line2: 'Atividades',
                 icon: Home,
                 count: studentActivities.length,
               },
               {
                 id: 'pending' as const,
-                label: 'Pendentes',
+                line1: 'Atividades',
+                line2: 'Pendentes',
                 icon: Clock,
                 count: pendingActivities.length,
               },
               {
                 id: 'completed' as const,
-                label: 'Feitas',
+                line1: 'Atividades',
+                line2: 'Feitas',
                 icon: CheckCheck,
                 count: completedActivities.length,
               },
               {
                 id: 'games' as const,
-                label: 'Jogos',
+                line1: 'Atividades',
+                line2: 'Jogos',
                 icon: Gamepad2,
                 count: kronoGamesActivities.length,
               },
               {
                 id: 'boletim' as const,
-                label: 'Boletim',
+                line1: 'Meu',
+                line2: 'Boletim',
                 icon: BarChart3,
                 count: 0,
               },
               {
                 id: 'perfil' as const,
-                label: 'Perfil',
+                line1: 'Meu',
+                line2: 'Perfil',
                 icon: User,
                 count: 0,
               },
@@ -1389,7 +1496,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                   key={btn.id}
                   type="button"
                   onClick={() => setActiveNav(btn.id)}
-                  className={`py-2 px-1 rounded-xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer ${
+                  className={`py-2 px-0.5 rounded-xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer ${
                     isSelected
                       ? 'bg-blue-500/15 text-blue-400 font-bold'
                       : 'text-muted hover:text-foreground hover:bg-background/60'
@@ -1397,11 +1504,11 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                 >
                   <div className="relative flex items-center justify-center">
                     <IconComp
-                      className={`w-5 h-5 ${isSelected ? 'text-blue-400' : ''}`}
+                      className={`w-4 h-4 sm:w-5 sm:h-5 ${isSelected ? 'text-blue-400' : ''}`}
                     />
                     {btn.count > 0 && (
                       <span
-                        className={`ml-1 text-[10px] font-mono font-bold ${
+                        className={`ml-0.5 text-[10px] font-mono font-bold ${
                           isSelected ? 'text-blue-300' : 'text-muted'
                         }`}
                       >
@@ -1409,9 +1516,14 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                       </span>
                     )}
                   </div>
-                  <span className="text-[11px] leading-none tracking-tight truncate max-w-full">
-                    {btn.label}
-                  </span>
+                  <div className="flex flex-col items-center leading-[1.15] text-center">
+                    <span className="text-[9px] sm:text-[10px] tracking-tight whitespace-nowrap">
+                      {btn.line1}
+                    </span>
+                    <span className="text-[9px] sm:text-[10px] tracking-tight whitespace-nowrap">
+                      {btn.line2}
+                    </span>
+                  </div>
                 </button>
               );
             })}
@@ -1433,16 +1545,11 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
 
       {/* 3. CONTEÚDO PRINCIPAL */}
       <main className="max-w-2xl mx-auto p-3 sm:p-4 space-y-4">
-        {/* ===================================================================
-            ABAS DE ATIVIDADES: TODAS ('feed'), PENDENTES ('pending'),
-            FEITAS ('completed') E KRONOGAMES ('games')
-           =================================================================== */}
         {(activeNav === 'feed' ||
           activeNav === 'pending' ||
           activeNav === 'completed' ||
           activeNav === 'games') && (
           <div className="space-y-3">
-            {/* Resumo Rápido de Progresso do Aluno */}
             <div className="p-3.5 rounded-2xl bg-surface border border-border flex items-center justify-between gap-2 text-xs">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-blue-500" />
@@ -1450,10 +1557,10 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                   {activeNav === 'pending'
                     ? `Atividades Pendentes (${pendingActivities.length})`
                     : activeNav === 'completed'
-                    ? `Atividades Já Feitas pelo Aluno (${completedActivities.length})`
+                    ? `Atividades Feitas (${completedActivities.length})`
                     : activeNav === 'games'
-                    ? `KronoGames & Debates (${kronoGamesActivities.length})`
-                    : `Todas as Atividades da Turma ${studentTurmaStd} (${studentActivities.length})`}
+                    ? `Atividades Jogos (${kronoGamesActivities.length})`
+                    : `Todas as Atividades • Turma ${studentTurmaStd} (${studentActivities.length})`}
                 </span>
               </div>
               <span className="font-mono text-blue-400 font-bold">
@@ -1501,12 +1608,9 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                     <article
                       key={act.id}
                       className={`rounded-2xl bg-surface border transition-all overflow-hidden ${
-                        sub
-                          ? 'border-blue-500/40'
-                          : 'border-border hover:border-zinc-700'
+                        sub ? 'border-blue-500/40' : 'border-border hover:border-zinc-700'
                       }`}
                     >
-                      {/* Cabeçalho do Card */}
                       <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div
@@ -1537,13 +1641,13 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                                   ? 'Debate Sem Papel'
                                   : isGame
                                   ? 'KronoGames'
-                                  : act.type || 'Atividade'}
+                                  : String(act.type || 'Atividade')}
                               </span>
                             </div>
                             <span className="text-[10px] font-mono text-muted block">
                               Turma {studentTurmaStd} •{' '}
                               {sub?.submittedAt
-                                ? `Entregue em: ${sub.submittedAt}`
+                                ? `Entregue em: ${String(sub.submittedAt)}`
                                 : `Prazo: ${act.dueDate || act.deadline || 'Em aberto'}`}
                             </span>
                           </div>
@@ -1562,7 +1666,6 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                         )}
                       </div>
 
-                      {/* Corpo do Card */}
                       <div className="p-4 space-y-3">
                         <h3 className="text-base font-bold text-foreground leading-snug">
                           {act.title}
@@ -1574,7 +1677,6 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                           </p>
                         )}
 
-                        {/* Links do Google Drive nomeados pelo Professor dentro da Atividade */}
                         {actLinks.length > 0 && (
                           <div className="space-y-1.5 pt-1">
                             {actLinks.map((lnk, lIdx) => (
@@ -1602,7 +1704,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                             <strong className="text-blue-400 block mb-0.5">
                               Feedback do Professor:
                             </strong>
-                            {sub.teacherFeedback}
+                            {String(sub.teacherFeedback)}
                           </div>
                         )}
 
@@ -1649,7 +1751,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         )}
 
         {/* ===================================================================
-            ABA BOLETIM & HISTÓRICO COMPLETO DE ATIVIDADES FEITAS
+            ABA MEU BOLETIM
            =================================================================== */}
         {activeNav === 'boletim' && (
           <div className="space-y-4">
@@ -1700,8 +1802,8 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                     <div className="flex items-center justify-between gap-2">
                       <div>
                         <span className="text-[10px] font-mono uppercase text-muted block">
-                          {act.type || 'Avaliação'} •{' '}
-                          {sub?.submittedAt || act.dueDate || act.deadline || ''}
+                          {String(act.type || 'Avaliação')} •{' '}
+                          {String(sub?.submittedAt || act.dueDate || act.deadline || '')}
                         </span>
                         <h4 className="text-sm font-bold text-foreground">{act.title}</h4>
                       </div>
@@ -1723,7 +1825,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                         <strong className="text-blue-400 block mb-1">
                           Feedback do Professor:
                         </strong>
-                        {sub.teacherFeedback}
+                        {String(sub.teacherFeedback)}
                       </div>
                     )}
                   </div>
@@ -1734,25 +1836,50 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         )}
 
         {/* ===================================================================
-            ABA PERFIL & SEGURANÇA
+            ABA MEU PERFIL + TROCA DE AVATAR ATIVADA + TROCA DE SENHA
            =================================================================== */}
         {activeNav === 'perfil' && (
           <div className="space-y-4">
+            {/* Card Principal do Aluno */}
             <div className="p-5 rounded-2xl bg-surface border border-border flex items-center justify-between gap-4">
-              <div className="space-y-1">
-                <span className="px-2.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 font-mono text-xs font-bold">
-                  Turma {studentTurmaStd}
-                </span>
-                <h2 className="text-lg font-bold text-foreground">{activeStudent.fullName}</h2>
-                <p className="text-xs font-mono text-muted">
-                  Matrícula / ID: {activeStudent.matricula || activeStudent.id}
-                </p>
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="w-16 h-16 rounded-full ring-2 ring-blue-500 bg-zinc-900 overflow-hidden flex items-center justify-center shrink-0">
+                  {activeStudent.avatarUrl ? (
+                    <img
+                      src={activeStudent.avatarUrl}
+                      alt={activeStudent.fullName}
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  ) : (
+                    <span className="font-mono font-extrabold text-lg text-blue-400">
+                      {(activeStudent.fullName || 'AL')
+                        .trim()
+                        .split(/\s+/)
+                        .slice(0, 2)
+                        .map((n) => n[0])
+                        .join('')
+                        .toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0 space-y-1">
+                  <span className="px-2.5 py-0.5 rounded-md bg-blue-500/15 text-blue-400 font-mono text-xs font-bold inline-block">
+                    Turma {studentTurmaStd}
+                  </span>
+                  <h2 className="text-base sm:text-lg font-bold text-foreground break-words">
+                    {activeStudent.fullName}
+                  </h2>
+                  <p className="text-xs font-mono text-muted">
+                    Matrícula / ID: {activeStudent.matricula || activeStudent.id}
+                  </p>
+                </div>
               </div>
+
               {onLogout && (
                 <button
                   type="button"
                   onClick={onLogout}
-                  className="px-4 py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0"
                 >
                   <LogOut className="w-4 h-4" />
                   <span>Sair</span>
@@ -1760,6 +1887,81 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               )}
             </div>
 
+            {/* SEÇÃO DE TROCA DE AVATAR DENTRO DO PERFIL */}
+            <section className="p-5 rounded-2xl bg-surface border border-border space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-3">
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-blue-400 block">
+                    Personalização do Estudante
+                  </span>
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                    <Camera className="w-4 h-4 text-blue-400" />
+                    <span>Escolher / Trocar Meu Avatar</span>
+                  </h3>
+                  <p className="text-xs text-muted mt-0.5">
+                    Toque em um avatar abaixo ou envie uma foto do seu aparelho.
+                  </p>
+                </div>
+
+                <label className="px-3.5 py-2 rounded-xl bg-background hover:bg-surface-hover border border-border text-xs font-semibold text-blue-400 flex items-center gap-1.5 cursor-pointer self-start sm:self-auto">
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>Enviar Foto do Aparelho</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleUploadAvatarFile}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {/* Grade de Avatares */}
+              <div className="grid grid-cols-4 sm:grid-cols-8 gap-2.5">
+                {AVATAR_GALLERY_PRESETS.map((preset) => {
+                  const isSelected = selectedAvatarDraft === preset.url;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => setSelectedAvatarDraft(preset.url)}
+                      className={`relative p-1.5 rounded-2xl border transition-all flex flex-col items-center gap-1 cursor-pointer ${
+                        isSelected
+                          ? 'bg-blue-600/20 border-blue-500 ring-2 ring-blue-500/50 scale-105'
+                          : 'bg-background border-border hover:border-zinc-700'
+                      }`}
+                      title={preset.label}
+                    >
+                      <div className="w-12 h-12 rounded-full overflow-hidden bg-zinc-900">
+                        <img
+                          src={preset.url}
+                          alt={preset.label}
+                          className="w-full h-full rounded-full object-cover"
+                        />
+                      </div>
+                      {isSelected && (
+                        <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                          <Check className="w-3 h-3 stroke-[3]" />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                disabled={isSavingAvatar}
+                onClick={() => handleSaveNewAvatar()}
+                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>
+                  {isSavingAvatar ? 'Salvando Avatar...' : 'Salvar Novo Avatar'}
+                </span>
+              </button>
+            </section>
+
+            {/* Alteração de Senha */}
             <form
               onSubmit={handlePasswordChange}
               className="p-5 rounded-2xl bg-surface border border-border space-y-3"
@@ -1798,7 +2000,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         )}
       </main>
 
-      {/* 4. GAVETA DE MENSAGENS COM O PROFESSOR (ZERA NOTIFICAÇÕES AO ABRIR) */}
+      {/* 4. GAVETA DE MENSAGENS COM O PROFESSOR */}
       {isChatOpen && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-surface border border-border rounded-t-2xl sm:rounded-2xl w-full max-w-md h-[80vh] flex flex-col overflow-hidden shadow-2xl">
@@ -1838,7 +2040,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
                           : 'mr-auto bg-background border border-border text-foreground'
                       }`}
                     >
-                      <p className="whitespace-pre-wrap">{msg.text || msg.content}</p>
+                      <p className="whitespace-pre-wrap">{String(msg.text || msg.content || '')}</p>
                     </div>
                   );
                 })
