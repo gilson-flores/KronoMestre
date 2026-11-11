@@ -986,39 +986,64 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   // ==========================================================================
   return (
     <div className="min-h-screen bg-background text-foreground pb-20 md:pb-10">
-      {/* 1. TOP STICKY BAR COMPACTA (54px) */}
-      <header className="sticky top-0 z-30 h-14 bg-surface/90 backdrop-blur-md border-b border-border px-4">
-        <div className="max-w-2xl mx-auto h-full flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-foreground text-background flex items-center justify-center font-mono font-bold text-sm shrink-0">
-              K
+      {/* 1. CABEÇALHO COM AVATAR, NOME DO ALUNO E TURMA EM DESTAQUE */}
+      <header className="sticky top-0 z-30 min-h-[74px] sm:min-h-[82px] py-2.5 bg-surface/95 backdrop-blur-md border-b border-border px-4 flex items-center">
+        <div className="max-w-2xl w-full mx-auto flex items-center justify-between gap-3">
+          <div
+            onClick={() => setActiveNav('perfil')}
+            className="flex items-center gap-3.5 min-w-0 cursor-pointer group"
+            title="Abrir meu perfil"
+          >
+            {/* Avatar do Aluno em Destaque */}
+            <div className="relative shrink-0">
+              {activeStudent.avatarUrl ? (
+                <img
+                  src={activeStudent.avatarUrl}
+                  alt={activeStudent.fullName}
+                  className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl object-cover border-2 border-emerald-500/50 shadow-md group-hover:border-emerald-400 transition-all"
+                />
+              ) : (
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-emerald-500/25 via-zinc-800 to-zinc-900 border-2 border-emerald-500/40 text-emerald-300 flex items-center justify-center font-mono font-extrabold text-base sm:text-lg shadow-md group-hover:border-emerald-400 transition-all">
+                  {(activeStudent.fullName || 'AL')
+                    .trim()
+                    .split(/\s+/)
+                    .slice(0, 2)
+                    .map((n) => n[0])
+                    .join('')
+                    .toUpperCase()}
+                </div>
+              )}
+              <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-background" />
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold tracking-tight text-foreground truncate">
-                  KronoMestre
-                </span>
-                <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-mono text-[11px] font-bold shrink-0">
+
+            {/* Nome do Aluno e Turma em Destaque Principal */}
+            <div className="min-w-0 space-y-1">
+              <h1 className="text-sm sm:text-base font-extrabold tracking-tight text-foreground truncate leading-tight">
+                {activeStudent.fullName}
+              </h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/35 text-emerald-400 font-mono text-xs font-extrabold shrink-0">
                   Turma {studentTurmaStd}
                 </span>
+                <span className="text-[10px] font-medium text-muted hidden sm:inline">
+                  • Portal do Aluno
+                </span>
               </div>
-              <p className="text-[11px] text-muted truncate">{activeStudent.fullName}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* Atalho Direto de Repositório no Header */}
             <button
               type="button"
               onClick={() => setActiveNav('repositorio')}
-              className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${
+              className={`px-2.5 py-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${
                 activeNav === 'repositorio'
                   ? 'bg-emerald-500 text-zinc-950 border-emerald-500 font-bold'
                   : 'bg-background hover:bg-surface-hover border-border text-foreground'
               }`}
               title="Abrir Repositório e Links do Google Drive"
             >
-              <FolderOpen className="w-3.5 h-3.5 text-emerald-400" />
+              <FolderOpen className="w-4 h-4 text-emerald-400" />
               <span className="hidden xs:inline">Repositório</span>
               <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px]">
                 {repositoryItems.length}
@@ -1029,7 +1054,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               <button
                 type="button"
                 onClick={onToggleTheme}
-                className="p-2 rounded-lg bg-background hover:bg-surface-hover border border-border text-muted hover:text-foreground cursor-pointer"
+                className="p-2.5 rounded-xl bg-background hover:bg-surface-hover border border-border text-muted hover:text-foreground cursor-pointer"
                 title="Alternar tema Claro / Escuro"
               >
                 {themeMode === 'light' ? (
@@ -1043,7 +1068,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
             <button
               type="button"
               onClick={() => setIsChatOpen(true)}
-              className="relative p-2 rounded-lg bg-background hover:bg-surface-hover border border-border text-muted hover:text-foreground cursor-pointer"
+              className="relative p-2.5 rounded-xl bg-background hover:bg-surface-hover border border-border text-muted hover:text-foreground cursor-pointer"
               title="Direct com o Professor"
             >
               <MessageSquare className="w-4 h-4" />
@@ -1058,7 +1083,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
               <button
                 type="button"
                 onClick={onLogout}
-                className="p-2 rounded-lg bg-background hover:bg-rose-500/15 border border-border text-muted hover:text-rose-400 cursor-pointer"
+                className="p-2.5 rounded-xl bg-background hover:bg-rose-500/15 border border-border text-muted hover:text-rose-400 cursor-pointer"
                 title="Sair da conta"
               >
                 <LogOut className="w-4 h-4" />
@@ -1079,124 +1104,6 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
           </div>
         </div>
       )}
-
-      {/* 2. BARRA DE "STORIES" PEDAGÓGICOS NO TOPO (ESTILO INSTAGRAM MOBILE) */}
-      <section className="border-b border-border bg-surface/50 py-3 px-4 overflow-x-auto no-scrollbar">
-        <div className="max-w-2xl mx-auto flex items-center gap-4">
-          {/* 1º STORY FIXO: REPOSITÓRIO / GOOGLE DRIVE DA TURMA */}
-          <button
-            type="button"
-            onClick={() => setActiveNav('repositorio')}
-            className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer"
-          >
-            <div className="p-0.5 rounded-full bg-gradient-to-tr from-emerald-500 via-teal-400 to-cyan-400">
-              <div className="w-14 h-14 rounded-full bg-background flex flex-col items-center justify-center border-2 border-background group-hover:scale-95 transition-transform">
-                <FolderOpen className="w-5 h-5 text-emerald-400" />
-                <span className="text-[9px] font-mono font-bold text-emerald-300 mt-0.5">
-                  DRIVE
-                </span>
-              </div>
-            </div>
-            <span className="text-[11px] font-semibold text-foreground max-w-[74px] truncate">
-              Repositório
-            </span>
-          </button>
-
-          {/* 2º STORY: ARENA AO VIVO / KRONOGAMES */}
-          <button
-            type="button"
-            onClick={() => setActiveNav('games')}
-            className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer"
-          >
-            <div
-              className={`p-0.5 rounded-full ${
-                kronoGamesActivities.length > 0
-                  ? 'bg-gradient-to-tr from-amber-500 via-orange-500 to-rose-500'
-                  : 'bg-border'
-              }`}
-            >
-              <div className="w-14 h-14 rounded-full bg-background flex flex-col items-center justify-center border-2 border-background group-hover:scale-95 transition-transform">
-                <Gamepad2 className="w-5 h-5 text-amber-400" />
-                <span className="text-[9px] font-mono font-bold text-amber-300 mt-0.5">
-                  {kronoGamesActivities.length} JOGOS
-                </span>
-              </div>
-            </div>
-            <span className="text-[11px] font-medium text-foreground max-w-[74px] truncate">
-              KronoGames
-            </span>
-          </button>
-
-          {/* 3º STORY: PENDENTES DA SEMANA */}
-          <button
-            type="button"
-            onClick={() => {
-              setActiveNav('feed');
-              setFeedFilter('pending');
-            }}
-            className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer"
-          >
-            <div
-              className={`p-0.5 rounded-full ${
-                pendingActivities.length > 0
-                  ? 'bg-gradient-to-tr from-rose-500 to-amber-500'
-                  : 'bg-border'
-              }`}
-            >
-              <div className="w-14 h-14 rounded-full bg-background flex flex-col items-center justify-center border-2 border-background group-hover:scale-95 transition-transform">
-                <Clock className="w-5 h-5 text-rose-400" />
-                <span className="text-[9px] font-mono font-bold text-zinc-300 mt-0.5">
-                  {pendingActivities.length} PEND.
-                </span>
-              </div>
-            </div>
-            <span className="text-[11px] font-medium text-foreground max-w-[74px] truncate">
-              Pendentes
-            </span>
-          </button>
-
-          {/* 4º STORY: BOLETIM & NOTAS */}
-          <button
-            type="button"
-            onClick={() => setActiveNav('boletim')}
-            className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer"
-          >
-            <div className="p-0.5 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-500">
-              <div className="w-14 h-14 rounded-full bg-background flex flex-col items-center justify-center border-2 border-background group-hover:scale-95 transition-transform">
-                <Award className="w-5 h-5 text-cyan-400" />
-                <span className="text-[9px] font-mono font-bold text-cyan-300 mt-0.5">
-                  {averageGrade ? `M: ${averageGrade}` : 'NOTAS'}
-                </span>
-              </div>
-            </div>
-            <span className="text-[11px] font-medium text-foreground max-w-[74px] truncate">
-              Boletim
-            </span>
-          </button>
-
-          {/* STORIES DINÂMICOS PARA CADA ARQUIVO DO REPOSITÓRIO / DRIVE DA TURMA */}
-          {repositoryItems.slice(0, 5).map((item) => (
-            <a
-              key={item.id}
-              href={item.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer"
-              title={`Abrir ${item.title} no Google Drive`}
-            >
-              <div className="p-0.5 rounded-full bg-gradient-to-tr from-emerald-500/80 to-zinc-600">
-                <div className="w-14 h-14 rounded-full bg-background flex flex-col items-center justify-center border-2 border-background group-hover:scale-95 transition-transform">
-                  <Link2 className="w-5 h-5 text-emerald-400" />
-                  <span className="text-[8px] font-mono text-muted mt-0.5">ABRIR ↗</span>
-                </div>
-              </div>
-              <span className="text-[11px] font-medium text-muted group-hover:text-foreground max-w-[76px] truncate">
-                {item.title}
-              </span>
-            </a>
-          ))}
-        </div>
-      </section>
 
       {/* 3. CONTEÚDO PRINCIPAL (MAX-W-2XL CENTRALIZADO COMO INSTAGRAM / THREADS) */}
       <main className="max-w-2xl mx-auto p-3 sm:p-4 space-y-4">
