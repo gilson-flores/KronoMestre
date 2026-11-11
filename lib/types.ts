@@ -34,7 +34,7 @@ export interface StudentUser {
   matricula: string;
   tag?: 'REGULAR' | 'PNE' | 'RAD';
   pneConditions?: string[];
-  passwordHash: string;
+  passwordHash?: string;
   avatarUrl: string;
   pedagogicalNotes?: string;
   secondTeacherId?: string;
@@ -197,30 +197,25 @@ export interface DebateJurorVerdict {
 }
 
 export interface DebateConfig {
-  proSummaryAI?: string;
-  contraSummaryAI?: string;
-  jurorGuideAI?: string;
-  jurorAnswers?: { [key: string]: string };
-  teacherChecklists?: { [key: string]: any };
-  maxJurors: number; // Padrão: 3 jurados
-  proQuestions: DebateGuidingQuestion[]; // 6 questões dissertativas norteadoras Pró
+  proQuestions: DebateGuidingQuestion[];
   contraQuestions: DebateGuidingQuestion[];
-  jurorQuestions?: DebateGuidingQuestion[]; // 6 questões dissertativas norteadoras Contra
-  checklistCriteria: DebateChecklistItem[]; // 6 itens para os 2 checklists (Pró e Contra)
-  jurorInitialGuide: string;
-  // Dados sincronizados de execução da turma
+  jurorQuestions?: DebateGuidingQuestion[];
+  checklistCriteria: DebateChecklistItem[];
+  maxJurors?: number;
+  jurorInitialGuide?: string;
   participants?: DebateParticipant[];
-  proAnswers?: Record<string, string>; // questionId -> resposta dissertativa do grupo Pró
-  contraAnswers?: Record<string, string>; // questionId -> resposta dissertativa do grupo Contra
+  proAnswers?: Record<string, string>;
+  contraAnswers?: Record<string, string>;
+  jurorAnswers?: Record<string, string>;
   proResearchCompleted?: boolean;
   contraResearchCompleted?: boolean;
-  // 3 Resumos gerados pela IA após o término das pesquisas (1 para cada grupo)
   proSummary?: string;
   contraSummary?: string;
   jurorGuideSummary?: string;
-  // Pareceres e checklists enviados pelos 3 jurados na aula do debate
+  proSummaryAI?: string;
+  contraSummaryAI?: string;
+  jurorGuideAI?: string;
   jurorVerdicts?: DebateJurorVerdict[];
-  // Notas atribuídas pelo professor (por grupo ou individuais)
   gradingMode?: 'group' | 'individual';
   groupGrades?: {
     proResearchGrade?: number;
@@ -228,8 +223,13 @@ export interface DebateConfig {
     contraResearchGrade?: number;
     contraPresentationGrade?: number;
     jurorsGrade?: number;
+    pro?: number;
+    contra?: number;
+    juror?: number;
+    [key: string]: number | undefined;
   };
-  individualGrades?: Record<string, { researchGrade: number; presentationGrade: number; finalGrade: number; feedback?: string }>;
+  individualGrades?: Record<string, any>;
+  teacherChecklists?: Record<string, any>;
 }
 
 export interface GameData {
