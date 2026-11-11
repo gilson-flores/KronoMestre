@@ -1,3026 +1,1856 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { StudentUser, TeacherUser, Activity, LibraryFile, ChatMessage, ActivityQuestion, MultipleChoiceQuestion, EssayQuestion } from '@/lib/types';
-import { canStudentAccessActivity, getActivityGradeDistribution, isStudentPNE, isActivityAdapted } from '@/lib/studentUtils';
-import { extractCleanHtml } from '@/lib/adaptationUtils';
-import { scrollToTop } from '@/lib/utils';
-import { MessagesView } from './MessagesView';
-import { ChangePasswordModal } from '@/components/modals/ChangePasswordModal';
-import { KronoGamePlayer } from '@/components/views/KronoGamePlayer';
-import { KRONO_AVATARS, AVATAR_CATEGORIES, AvatarItem } from '@/lib/avatarRegistry';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Activity, StudentUser, TeacherUser } from '@/lib/types';
 import {
-  LogOut,
-  KeyRound,
-  CheckCircle2,
-  FileText,
-  Send,
-  Award,
-  MessageSquare,
-  Clock,
-  BookOpen,
-  FolderDown,
-  Download,
-  ExternalLink,
-  Link2,
-  HardDrive,
-  HelpCircle,
-  AlertCircle,
-  Sparkles,
-  Check,
-  X,
-  RotateCcw,
-  ShieldAlert,
-  CopyX,
-  ClipboardX,
-  Users,
-  ArrowLeft,
-  Eye,
-  FileQuestion,
-  Users2,
-  PenTool,
+  Home,
+  FolderOpen,
   Gamepad2,
-  Star,
-  Trophy,
-  RefreshCw,
-  Maximize2,
-  Minimize2,
-  Smartphone,
-  Bell,
-  BellRing,
-  BellOff,
-  Filter,
-  SlidersHorizontal,
-  Search,
-  ChevronDown,
-  ChevronUp,
+  BarChart3,
+  User,
+  ExternalLink,
+  BookOpen,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  Send,
+  MessageSquare,
+  LogOut,
+  Sun,
+  Moon,
+  Sparkles,
+  ChevronRight,
+  ChevronLeft,
   Lock,
-  AlertTriangle,
-ArrowLeftFromLine } from "lucide-react";
+  Users,
+  UserPlus,
+  X,
+  FileText,
+  Video,
+  Award,
+  Search,
+  KeyRound,
+  Link2,
+  Play,
+} from 'lucide-react';
+import {
+  standardizeTurmaCode,
+  doesItemMatchStudentTurma,
+  getEligibleClassmatesForGroup,
+  isSameStudentTurma,
+} from '@/lib/groupActivityUtils';
+import { isActivityKronoGame, isActivityAdapted } from '@/lib/studentUtils';
+import { DebatePaperlessView } from '@/components/views/DebatePaperlessView';
+import { KronoGamePlayer } from '@/components/views/KronoGamePlayer';
 
-interface StudentPortalViewProps {
-  onReturnToSupervision?: () => void;
-  student: StudentUser;
-  teacher?: TeacherUser;
-  activities: Activity[];
-  libraryFiles?: LibraryFile[];
-  messages?: ChatMessage[];
+const SafeKronoGamePlayer: any = KronoGamePlayer;
+
+export interface StudentPortalViewProps {
+  student?: StudentUser | null;
+  currentStudent?: StudentUser | null;
   students?: StudentUser[];
-  onLogout: () => void;
-  onSubmitAnswer: (
+  allStudents?: StudentUser[];
+  teacher?: TeacherUser | null;
+  activities: Activity[];
+  libraryItems?: any[];
+  messages?: any[];
+  onSendMessage?: (msgData: any, receiverId?: string) => any;
+  onSubmitAnswer?: (
     activityId: string,
     studentId: string,
     essayAnswer: string,
-    objectiveScore: number,
-    maxObjectiveScore: number,
-    maxEssayScore: number,
+    objectiveScore?: number,
+    maxObjectiveScore?: number,
+    maxEssayScore?: number,
     selectedObjectiveAnswers?: { [questionId: string]: number },
     groupMembers?: string
-  ) => void;
-  onSendMessage?: (msg: {
-    threadId: string;
-    senderId: string;
-    senderName: string;
-    senderRole: 'teacher' | 'student';
-    senderAvatar?: string;
-    recipientId: string;
-    recipientName: string;
-    content: string;
-    activityId?: string;
-    activityTitle?: string;
-  }) => void;
-  onMarkThreadAsRead?: (threadId: string, currentRole: 'teacher' | 'student') => void;
-  onUpdateAvatar?: (studentId: string, newAvatarUrl: string) => void;
+  ) => void | Promise<void>;
+  onSaveActivity?: (updatedActivity: Activity) => void | Promise<void>;
+  onUpdateActivity?: (updatedActivity: Activity) => void | Promise<void>;
+  onLogout?: () => void;
+  themeMode?: 'dark' | 'light' | string;
+  onToggleTheme?: () => void;
+  [key: string]: any;
+}
+
+interface NormalizedRepoItem {
+  id: string;
+  title: string;
+  url: string;
+  turma: string;
+  category: string;
+  source: 'library' | 'activity';
+}
+
+const DEFAULT_FALLBACK_LIBRARY: NormalizedRepoItem[] = [
+  {
+    id: 'lib-default-sociologia',
+    title: 'Material didático Sociologia em movimento',
+    url: 'https://drive.google.com/file/d/19-AZO-iB25-ZieEAI4Lm__FIoDwj_ie_/view?usp=drivesdk',
+    turma: 'TODAS',
+    category: 'Livro Didático • Google Drive',
+    source: 'library',
+  },
+];
+
+function extractLinksFromText(text?: string | null): string[] {
+  if (!text) return [];
+  const matches = text.match(/https?:\/\/[^\s)"'<>]+/gi);
+  return matches ? Array.from(new Set(matches)) : [];
 }
 
 export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
-  onReturnToSupervision,
-  student,
-  teacher = {
-    id: 'teacher-1',
-    name: 'Gilson Flores',
-    subject: 'Sociologia',
-    email: '',
-    avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250',
-    school: "EEB Prof. Jandira D'Ávila",
-  },
-  activities,
-  libraryFiles = [],
-  messages = [],
+  student: studentProp,
+  currentStudent: currentStudentProp,
   students = [],
-  onLogout,
-  onSubmitAnswer,
+  allStudents = [],
+  teacher,
+  activities = [],
+  libraryItems: libraryItemsProp = [],
+  messages = [],
   onSendMessage,
-  onMarkThreadAsRead,
-  onUpdateAvatar,
+  onSubmitAnswer,
+  onSaveActivity,
+  onUpdateActivity,
+  onLogout,
+  themeMode = 'dark',
+  onToggleTheme,
 }) => {
-  // Tab state: 'atividades' | 'correcoes' | 'mensagens' | 'arquivos'
-  const [activeTab, setActiveTab] = useState<'atividades' | 'correcoes' | 'mensagens' | 'arquivos'>('atividades');
-  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
-  const [avatarCategoryFilter, setAvatarCategoryFilter] = useState<string>('todos');
-  const [avatarSearchQuery, setAvatarSearchQuery] = useState<string>('');
-
-  const filteredAvatars = useMemo(() => {
-    return KRONO_AVATARS.filter((av) => {
-      const matchesCategory = avatarCategoryFilter === 'todos' || av.category === avatarCategoryFilter;
-      const query = avatarSearchQuery.trim().toLowerCase();
-      const matchesSearch = !query || 
-        av.name.toLowerCase().includes(query) || 
-        av.tagline.toLowerCase().includes(query) ||
-        av.categoryLabel.toLowerCase().includes(query);
-      return matchesCategory && matchesSearch;
-    });
-  }, [avatarCategoryFilter, avatarSearchQuery]);
-
-  // List filter state for students: 'todas' | 'a_fazer' | 'a_corrigir' | 'corrigidas'
-  const [studentFilter, setStudentFilter] = useState<'todas' | 'a_fazer' | 'a_corrigir' | 'corrigidas'>('todas');
-  const [studentSearchQuery, setStudentSearchQuery] = useState<string>('');
-  const [studentTypeFilter, setStudentTypeFilter] = useState<string>('todos');
-  const [isStudentFilterOpen, setIsStudentFilterOpen] = useState<boolean>(false);
-  // Selected Activity for detail/execution view (null = show list view)
-  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
-
-  // Fullscreen / Immersive Mode for PNE Severe Playful Activities
-  const [fullscreenGameActivityId, setFullscreenGameActivityId] = useState<string | null>(null);
-
-  // KronoGames Active Game Activity
-  const [activeKronoGameActivity, setActiveKronoGameActivity] = useState<Activity | null>(null);
-  const [isAchievementsModalOpen, setIsAchievementsModalOpen] = useState<boolean>(false);
-  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState<boolean>(false);
-
-  // Interactive student answers per activity com persistência de rascunhos no dispositivo
-  const [essayInputs, setEssayInputs] = useState<{ [activityId: string]: string }>(() => {
-    if (typeof window !== 'undefined' && student?.id) {
-      try {
-        const saved = localStorage.getItem(`krono_drafts_${student.id}`);
-        if (saved) return JSON.parse(saved);
-      } catch (e) {}
-    }
-    return {};
-  });
-
-  const handleEssayChange = (actId: string, val: string) => {
-    setEssayInputs((prev) => {
-      const next = { ...prev, [actId]: val };
-      if (typeof window !== 'undefined' && student?.id) {
-        try {
-          localStorage.setItem(`krono_drafts_${student.id}`, JSON.stringify(next));
-        } catch (e) {}
+  const activeStudent: StudentUser = useMemo(() => {
+    return (
+      studentProp ||
+      currentStudentProp || {
+        id: 'student-guest',
+        fullName: 'Estudante',
+        matricula: '0000',
+        turma: '201',
+        tag: 'REGULAR',
+        avatarUrl: '',
+        xp: 100,
+        level: 1,
       }
-      return next;
-    });
-  };
-
-  // objectiveInputs[activityId][questionId] -> optionIndex (0, 1, 2, 3) com persistência local de rascunhos
-  const [objectiveInputs, setObjectiveInputs] = useState<{ [activityId: string]: { [questionId: string]: number } }>(() => {
-    if (typeof window !== 'undefined' && student?.id) {
-      try {
-        const saved = localStorage.getItem(`krono_obj_drafts_${student.id}`);
-        if (saved) return JSON.parse(saved);
-      } catch (e) {}
-    }
-    return {};
-  });
-
-  // Modal de confirmação caso o aluno tente enviar com questões em branco
-  const [unansweredConfirmData, setUnansweredConfirmData] = useState<{
-    activity: Activity;
-    unansweredCount: number;
-    totalCount: number;
-  } | null>(null);
-  
-  // Group selection state for group activities
-  const [groupSelections, setGroupSelections] = useState<{ [activityId: string]: string[] }>({});
-  const [customMemberInput, setCustomMemberInput] = useState<{ [activityId: string]: string }>({});
-
-  // Filter classmates in the same turma for group selection
-  const classmates = useMemo(() => {
-    return students.filter(
-      (s) => s.turma === student.turma && s.id !== student.id
     );
-  }, [students, student.turma, student.id]);
+  }, [studentProp, currentStudentProp]);
 
-  // Check if current logged-in student has PNE status
-  const isCurrentStudentPNE = useMemo(() => isStudentPNE(student), [student]);
+  // Turma padronizada ("201" ou "2002")
+  const studentTurmaStd = useMemo(() => {
+    return standardizeTurmaCode(activeStudent.turma) || activeStudent.turma || '201';
+  }, [activeStudent.turma]);
 
-  // Filter activities authorized for this student
-  // "Mostre as atividades adaptadas somente para alunos PNE."
-  // Filter activities authorized for this student
-  // "Aluno PNE não vê atividade de aluno regular, só adaptações, 2 professor também só vê PNE."
-    const authorizedActivities = useMemo(() => {
-    const isExpired = (deadlineStr?: string): boolean => {
-      if (!deadlineStr || typeof deadlineStr !== "string") return false;
-      const clean = deadlineStr.trim();
-      if (!clean || clean.toLowerCase() === "sem prazo") return false;
-      const timeMatch = clean.match(/(\d{1,2}):(\d{2})/);
-      const hours = timeMatch ? parseInt(timeMatch[1], 10) : 23;
-      const minutes = timeMatch ? parseInt(timeMatch[2], 10) : 59;
-      const brMatch = clean.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-      if (brMatch) {
-        const exp = new Date(parseInt(brMatch[3], 10), parseInt(brMatch[2], 10) - 1, parseInt(brMatch[1], 10), hours, minutes, 59, 999);
-        return new Date().getTime() > exp.getTime();
-      }
-      const isoMatch = clean.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if (isoMatch) {
-        const exp = new Date(parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10) - 1, parseInt(isoMatch[3], 10), hours, minutes, 59, 999);
-        return new Date().getTime() > exp.getTime();
-      }
-      return false;
-    };
+  // Abas principais da Bottom Bar (InstaFlow + Linear)
+  const [activeNav, setActiveNav] = useState<
+    'feed' | 'repositorio' | 'games' | 'boletim' | 'perfil'
+  >('feed');
+  const [feedFilter, setFeedFilter] = useState<'all' | 'pending' | 'games' | 'completed'>('all');
+  const [repoSearch, setRepoSearch] = useState('');
 
-    return activities.filter((a) => {
-      const hasStudentSub = a.submissions?.some(
-        (sub) =>
-          sub.studentId === student.id ||
-          (Boolean(student.matricula) && sub.matricula === student.matricula) ||
-          sub.studentName?.toLowerCase() === student.fullName?.toLowerCase()
-      );
-      if (!hasStudentSub && (a.status === "Inativo" || a.status === "Prazo Encerrado" || isExpired(a.deadline))) {
-        return false;
-      }
-      // 1. Turma permission check
-      if (!canStudentAccessActivity(a.turma, student.turma)) {
-        return false;
-      }
+  // Estados de Execução de Atividade / Jogo / Chat / Troca de Senha
+  const [executingActivity, setExecutingActivity] = useState<Activity | null>(null);
+  const [selectedObjective, setSelectedObjective] = useState<{ [qId: string]: number }>({});
+  const [essayResponses, setEssayResponses] = useState<{ [qId: string]: string }>({});
+  const [generalEssayText, setGeneralEssayText] = useState<string>('');
+  const [selectedGroupNames, setSelectedGroupNames] = useState<string[]>([]);
+  const [classmateDropdownValue, setClassmateDropdownValue] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
-      // 2. Trava de Recuperação Paralela
-      const isRecoveryAct = Boolean(
-        a.isRecovery || a.type === "Recuperação Paralela" || a.recoveryFromId
-      );
-      if (isRecoveryAct) {
-        const isManuallyAuthorized = Boolean(
-          a.authorizedRecoveryStudentIds?.includes(student.id) ||
-            (student.matricula && a.authorizedRecoveryStudentIds?.includes(student.matricula)) ||
-            student.authorizedRecoveryActivityIds?.includes(a.id)
-        );
+  // Chat Direct Drawer & Troca de Senha
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordStatus, setPasswordStatus] = useState<string | null>(null);
 
-        if (!isManuallyAuthorized) {
-          const parentAct =
-            activities.find((p) => p.id === a.recoveryFromId) ||
-            activities.find(
-              (p) =>
-                !p.isRecovery &&
-                p.type !== "Recuperação Paralela" &&
-                p.turma === a.turma &&
-                p.id !== a.id
-            );
-          const parentSub = parentAct?.submissions?.find(
-            (s) =>
-              s.studentId === student.id ||
-              (Boolean(student.matricula) && s.matricula === student.matricula) ||
-              s.studentName?.toLowerCase() === student.fullName?.toLowerCase()
-          );
+  // Roster de colegas para atividades em grupo
+  const [fetchedClassmates, setFetchedClassmates] = useState<StudentUser[]>([]);
+  const rosterStudents = useMemo(() => {
+    if (Array.isArray(students) && students.length > 0) return students;
+    if (Array.isArray(allStudents) && allStudents.length > 0) return allStudents;
+    return fetchedClassmates;
+  }, [students, allStudents, fetchedClassmates]);
 
-          if (parentSub) {
-            const parentGrade =
-              (Number(parentSub.objectiveScore) || 0) +
-              (Number(parentSub.essayScore) || 0) +
-              (Number(parentSub.extraPoints) || 0);
-            if (parentGrade >= 6.0) {
-              return false;
-            }
-          }
-        }
-      }
-
-      const isActAdapted = isActivityAdapted(a);
-
-      // 3. Roteamento PNE
-      if (isCurrentStudentPNE) {
-        const isStudentIncludedInActivity = (actToCheck: any) => {
-          if (!actToCheck || !actToCheck.includedPneStudentIds || actToCheck.includedPneStudentIds.length === 0) return false;
-          const ids = actToCheck.includedPneStudentIds;
-          return (
-            ids.includes(student.id) ||
-            (Boolean(student.matricula) && ids.includes(student.matricula)) ||
-            (Boolean(student.fullName) && ids.includes(student.fullName))
-          );
-        };
-
-        if (isActAdapted) {
-          // Se for adaptada, o aluno so ve se estiver na lista de alvos do Construtor
-          return isStudentIncludedInActivity(a);
-        } else {
-          // Se for a prova regular, um aluno PNE (ex: TDAH) ve normalmente. 
-          // A EXCECAO eh se houver uma prova adaptada exclusiva amarrada a essa substituindo a dele.
-          const hasExclusiveAdaptation = activities.some((otherAct) => {
-            return (
-              isActivityAdapted(otherAct) &&
-              (otherAct.adaptedFromId === a.id || otherAct.linkedActivityId === a.id) &&
-              otherAct.isStandaloneAdaptation === false &&
-              (otherAct.includedPneStudentIds?.includes(student.id) || otherAct.includedPneStudentIds?.includes(student.matricula) || otherAct.includedPneStudentIds?.includes(student.fullName))
-            );
-          });
-
-          if (hasExclusiveAdaptation) {
-            return false;
-          }
-          return true;
-        }
-      }
-
-      // 4. Aluno regular jamais ve adaptacoes
-      return !isActAdapted;
-    });
-  }, [activities, student.turma, student.id, student.matricula, student.fullName, student.authorizedRecoveryActivityIds, isCurrentStudentPNE]);
-
-  // Métricas pedagógicas e de progresso do aluno no portal
-  const studentMetrics = useMemo(() => {
-    let completed = 0;
-    let pendingCorrection = 0;
-    let pendingTodo = 0;
-    let totalScore = 0;
-    let gradedCount = 0;
-
-    authorizedActivities.forEach((act) => {
-      const sub = act.submissions?.find(
-        (s) =>
-          s.studentId === student.id ||
-          (Boolean(student.matricula) && s.matricula === student.matricula) ||
-          s.studentName?.toLowerCase() === student.fullName?.toLowerCase()
-      );
-
-      if (!sub) {
-        pendingTodo++;
-      } else if (sub.status === 'graded') {
-        completed++;
-        const obj = Number(sub.objectiveScore) || 0;
-        const ess = Number(sub.essayScore) || 0;
-        const ext = Number(sub.extraPoints) || 0;
-        totalScore += (obj + ess + ext);
-        gradedCount++;
-      } else if (sub.status === 'pending') {
-        pendingCorrection++;
-      } else if (sub.status === 'returned') {
-        pendingTodo++;
-      }
-    });
-
-    const averageGrade = gradedCount > 0 ? (totalScore / gradedCount).toFixed(1) : '-';
-    const total = authorizedActivities.length;
-    const progressPercent = total > 0 ? Math.round(((completed + pendingCorrection) / total) * 100) : 0;
-
-    return {
-      completed,
-      pendingCorrection,
-      pendingTodo,
-      averageGrade,
-      progressPercent,
-      total,
-    };
-  }, [authorizedActivities, student.id, student.matricula, student.fullName]);
-
-  // Helper para formatar apenas "Redação AV1", "Simulado AV2", "RP1"
-  const getShortActivityTitle = (act: Activity) => {
-    const isRec = Boolean(act.isRecovery || act.type === 'Recuperação Paralela' || act.recoveryFromId);
-    if (isRec) {
-      const recList = authorizedActivities.filter(
-        (a) => a.isRecovery || a.type === 'Recuperação Paralela' || Boolean(a.recoveryFromId)
-      );
-      const idx = recList.findIndex((a) => a.id === act.id);
-      return `RP${idx >= 0 ? idx + 1 : 1}`;
-    }
-    const regList = authorizedActivities.filter(
-      (a) => !a.isRecovery && a.type !== 'Recuperação Paralela' && !a.recoveryFromId
-    );
-    const idx = regList.findIndex((a) => a.id === act.id);
-    const num = idx >= 0 ? idx + 1 : 1;
-    const mode =
-      act.isGameActivity || act.gameData || act.type === 'Jogo Avaliativo'
-        ? 'KronoGame'
-        : act.type || 'Avaliação';
-    return `${mode} AV${num}`;
-  };
-
-  /// MODO PLATINA: 15 Missões Trimestrais (Baseado em 3 AVs e 3 RPs reais)
-  const studentAchievements = useMemo(() => {
-    let avsDelivered = 0;
-    let rpsDelivered = 0;
-    let highestGrade = 0;
-    let highestEssay = 0;
-    let hasGroupWork = false;
-    let perfectObjective = false;
-    let essayOver100Chars = false;
-    let firstAvWithMoreThan6 = false;
-
-    const totalActiveActs = authorizedActivities.length;
-    let deliveredActiveActs = 0;
-    let sumGrades = 0;
-    let gradedCount = 0;
-    let noReturned = true;
-
-    authorizedActivities.forEach(act => {
-      const isRp = Boolean(act.isRecovery || act.type === 'Recuperação Paralela' || act.recoveryFromId);
-      const sub = act.submissions?.find(s => s.studentId === student.id || s.matricula === student.matricula);
-
-      if (sub && sub.status === 'returned') noReturned = false;
-
-      if (sub && (sub.status === 'pending' || sub.status === 'graded')) {
-        deliveredActiveActs++;
-        if (isRp) rpsDelivered++;
-        else avsDelivered++;
-
-        if (sub.groupMembers || act.isGameActivity || act.playfulGameHtml) hasGroupWork = true;
-        if (sub.essayAnswer && sub.essayAnswer.length > 80) essayOver100Chars = true;
-        if (sub.maxObjectiveScore > 0 && sub.objectiveScore === sub.maxObjectiveScore) perfectObjective = true;
-
-        if (sub.status === 'graded') {
-          const total = (Number(sub.objectiveScore)||0) + (Number(sub.essayScore)||0) + (Number(sub.extraPoints)||0);
-          if (total > highestGrade) highestGrade = total;
-          if ((Number(sub.essayScore)||0) > highestEssay) highestEssay = Number(sub.essayScore)||0;
-
-          sumGrades += total;
-          gradedCount++;
-
-          if (!isRp && total >= 6.0) firstAvWithMoreThan6 = true;
-        }
-      }
-    });
-
-    const avg = gradedCount > 0 ? (sumGrades / gradedCount) : 0;
-    const allCompleted = totalActiveActs > 0 && deliveredActiveActs >= totalActiveActs;
-
-    // Lógica de Dificuldade Média (Justa, contando atividades enviadas e não totais no portal)
-    const m1 = deliveredActiveActs >= 1;
-    const m2 = deliveredActiveActs > 0 && noReturned; 
-    const m3 = firstAvWithMoreThan6; 
-    const m4 = rpsDelivered >= 1 || highestGrade >= 8.0; // Fez RP ou não precisou (nota boa)
-    const m5 = hasGroupWork; 
-    const m6 = avsDelivered >= 2;
-    const m7 = essayOver100Chars;
-    const m8 = perfectObjective;
-    const m9 = rpsDelivered >= 2 || (gradedCount >= 2 && avg >= 8.0);
-    const m10 = avsDelivered >= 3;
-    const m11 = highestEssay >= 8.0;
-    const m12 = allCompleted && totalActiveActs >= 3;
-    const m13 = highestGrade >= 9.5;
-    const m14 = avg >= 7.0 && gradedCount >= 3;
-    const m15 = m1 && m2 && m3 && m4 && m5 && m6 && m7 && m8 && m9 && m10 && m11 && m12 && m13 && m14;
-
-    return [
-      { id: 'p1', title: 'O Despertar', desc: 'Entregou a 1ª atividade do trimestre.', iconEmoji: '🚀', unlocked: m1, category: 'Bronze' },
-      { id: 'p2', title: 'Avanço Perfeito', desc: 'Atividades entregues sem nenhuma devolução pelo professor.', iconEmoji: '🛡️', unlocked: m2, category: 'Bronze' },
-      { id: 'p3', title: 'Primeiro Sangue', desc: 'Tirou nota igual ou maior que 6.0 em uma avaliação formal (AV).', iconEmoji: '⚔️', unlocked: m3, category: 'Bronze' },
-      { id: 'p4', title: 'Fênix ou Intocável', desc: 'Fez uma Recuperação (RP) ou tirou mais de 8.0 na AV e não precisou.', iconEmoji: '🦅', unlocked: m4, category: 'Prata' },
-      { id: 'p5', title: 'Aliança Coletiva', desc: 'Participou de um Trabalho em Grupo ou de um KronoGame.', iconEmoji: '🤝', unlocked: m5, category: 'Prata' },
-      { id: 'p6', title: 'Metade do Caminho', desc: 'Entregou pelo menos 2 avaliações formais (AVs).', iconEmoji: '⚡', unlocked: m6, category: 'Prata' },
-      { id: 'p7', title: 'Escriba Aprendiz', desc: 'Desenvolveu bem uma resposta dissertativa (mais de 80 caracteres).', iconEmoji: '✍️', unlocked: m7, category: 'Ouro' },
-      { id: 'p8', title: 'Mira Certeira', desc: 'Gabaritou 100% da parte objetiva de uma atividade.', iconEmoji: '🎯', unlocked: m8, category: 'Ouro' },
-      { id: 'p9', title: 'Redenção ou Domínio', desc: 'Entregou 2 RPs ou manteve Média Geral >= 8.0.', iconEmoji: '⚖️', unlocked: m9, category: 'Ouro' },
-      { id: 'p10', title: 'A Trinca', desc: 'Entregou 3 avaliações formais (AVs) do trimestre.', iconEmoji: '📚', unlocked: m10, category: 'Diamante' },
-      { id: 'p11', title: 'Escriba Mestre', desc: 'Tirou nota >= 8.0 na parte dissertativa de uma atividade.', iconEmoji: '📜', unlocked: m11, category: 'Diamante' },
-      { id: 'p12', title: 'Inabalável', desc: '100% de engajamento: Entregou TODAS as atividades ativas.', iconEmoji: '🛡️', unlocked: m12, category: 'Diamante' },
-      { id: 'p13', title: 'Mente Brilhante', desc: 'Alcançou nota quase máxima (>= 9.5) em qualquer atividade.', iconEmoji: '💡', unlocked: m13, category: 'Lendário' },
-      { id: 'p14', title: 'Consistência', desc: 'Média geral do portal >= 7.0 com pelo menos 3 atividades avaliadas.', iconEmoji: '📈', unlocked: m14, category: 'Lendário' },
-      { id: 'p15', title: 'Lenda Sociológica', desc: 'Completou todas as 14 missões anteriores. Você platinou o game!', iconEmoji: '👑', unlocked: m15, category: 'PLATINA' },
-    ];
-  }, [authorizedActivities, student.id, student.matricula]);
-
-  // Próxima atividade pendente com prazo mais urgente para alerta amigável
-  const nextUrgentActivity = useMemo(() => {
-    const pendingList = authorizedActivities.filter((act) => {
-      const sub = act.submissions?.find((s) => s.studentId === student.id || s.matricula === student.matricula);
-      return !sub || sub.status === 'returned';
-    });
-    if (pendingList.length === 0) return null;
-    return pendingList[0];
-  }, [authorizedActivities, student.id, student.matricula]);
-
-  // Toast / Submission feedback
-  const [submissionSuccessMsg, setSubmissionSuccessMsg] = useState<string | null>(null);
-
-  // Playful Game Scores from iframe postMessage: { [activityId: string]: { score: number; maxScore: number; grade: number } }
-  const [playfulScores, setPlayfulScores] = useState<{ [activityId: string]: { score: number; maxScore: number; grade: number } }>({});
+  // Itens da Biblioteca buscados da API + prop
+  const [fetchedLibrary, setFetchedLibrary] = useState<any[]>([]);
 
   useEffect(() => {
-    const handleGameMessage = (event: MessageEvent) => {
-      if (event.data && event.data.type === 'PLAYFUL_GAME_COMPLETED') {
-        const { score = 10, maxScore = 10, finalGrade, activityId } = event.data;
-        const calcGrade = finalGrade !== undefined ? Number(finalGrade) : (Number(score) / (Number(maxScore) || 1)) * 10;
-        
-        // Find which playful activity this applies to
-        const act = authorizedActivities.find(
-          (a) => (activityId && a.id === activityId) || (selectedActivityId && a.id === selectedActivityId) || (fullscreenGameActivityId && a.id === fullscreenGameActivityId) || a.playfulGameHtml || a.adaptationType === 'severe_playful'
-        );
-
-        if (act) {
-          const maxG = act.maxGrade || Number(maxScore) || 10;
-          const recordedScore = Number(calcGrade.toFixed(1));
-
-          setPlayfulScores((prev) => ({
-            ...prev,
-            [act.id]: { score: Number(score), maxScore: Number(maxScore), grade: recordedScore },
-          }));
-
-          // Finalizar e enviar para persistência no banco e fila de correção
-          onSubmitAnswer(
-            act.id,
-            student.id,
-            '🎮 Atividade Lúdica Interativa concluída com sucesso no jogo educacional.',
-            recordedScore,
-            maxG,
-            0,
-            {},
-            undefined
-          );
-
-          setSubmissionSuccessMsg(`🎉 Atividade Finalizada e Enviada! Nota conquistada: ${recordedScore} / ${maxG} pts.`);
-          scrollToTop();
-          setTimeout(() => setSubmissionSuccessMsg(null), 6000);
-
-          // Fechar a atividade e retornar à lista inicial com filtros
-          setSelectedActivityId(null);
-          setFullscreenGameActivityId(null);
-          setStudentFilter('a_corrigir');
-          setActiveTab('atividades');
+    fetch('/api/library')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && Array.isArray(d.items)) {
+          setFetchedLibrary(d.items);
+        } else if (Array.isArray(d)) {
+          setFetchedLibrary(d);
         }
-      }
-    };
+      })
+      .catch(() => {});
 
-    window.addEventListener('message', handleGameMessage);
-    return () => window.removeEventListener('message', handleGameMessage);
-  }, [authorizedActivities, selectedActivityId, fullscreenGameActivityId, student.id, onSubmitAnswer]);
+    if ((!students || students.length === 0) && (!allStudents || allStudents.length === 0)) {
+      fetch('/api/students')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d && Array.isArray(d.students)) {
+            setFetchedClassmates(d.students);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [students, allStudents]);
 
-  // Anti-Cola Focus Lock Warning State per activity: { [activityId: string]: number }
-  const [focusWarnings, setFocusWarnings] = useState<{ [activityId: string]: number }>({});
-  // Security Modal Notification State: { activityTitle: string; warningCount: number; isAutoSubmitted?: boolean } | null
-  const [securityNotice, setSecurityNotice] = useState<{ activityTitle: string; warningCount: number; isAutoSubmitted?: boolean } | null>(null);
-  // Security Toast Message for blocked Copy/Paste actions
-  const [securityToast, setSecurityToast] = useState<string | null>(null);
-
-  const [isScreenshotShieldActive, setIsScreenshotShieldActive] = useState(false);
-
-  const showSecurityToast = (msg: string) => {
-    setSecurityToast(msg);
+  const showNotice = useCallback((msg: string) => {
+    setToastMsg(msg);
     setTimeout(() => {
-      setSecurityToast((current) => (current === msg ? null : current));
+      setToastMsg((prev) => (prev === msg ? null : prev));
     }, 4000);
-  };
-
-  // Trava Anti-Print de Tela (PrintScreen, Win+Shift+S, Cmd+Shift+3/4/5 e Ctrl+P)
-  useEffect(() => {
-    if (!selectedActivityId) return;
-
-    const triggerScreenshotBlock = (reason: string) => {
-      setIsScreenshotShieldActive(true);
-      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-        navigator.clipboard.writeText('🚫 Captura de tela bloqueada pelo sistema KronoMestre.').catch(() => {});
-      }
-      showSecurityToast(`🚫 ${reason}`);
-      setTimeout(() => {
-        setIsScreenshotShieldActive(false);
-      }, 3500);
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const isPrintScreen = e.key === 'PrintScreen' || e.keyCode === 44;
-      const isMacShot = e.metaKey && e.shiftKey && ['3', '4', '5', 's', 'S'].includes(e.key);
-      const isWinSnip = (e.metaKey || e.ctrlKey) && e.shiftKey && ['s', 'S'].includes(e.key);
-      const isCtrlP = (e.ctrlKey || e.metaKey) && ['p', 'P'].includes(e.key);
-
-      if (isPrintScreen || isMacShot || isWinSnip || isCtrlP) {
-        e.preventDefault();
-        e.stopPropagation();
-        triggerScreenshotBlock('Captura ou impressão de tela bloqueada! A tentativa foi registrada.');
-      }
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'PrintScreen' || e.keyCode === 44) {
-        e.preventDefault();
-        triggerScreenshotBlock('Print de tela bloqueado! Área de transferência limpa pelo sistema.');
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown, true);
-    window.addEventListener('keyup', handleKeyUp, true);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown, true);
-      window.removeEventListener('keyup', handleKeyUp, true);
-    };
-  }, [selectedActivityId]);
-
-  // Split into "A Fazer" and "Entregues/Corrigidas"
-  const pendingActivities = useMemo(() => {
-    return authorizedActivities.filter((act) => {
-      const sub = act.submissions.find(
-        (s) => s.studentId === student.id || s.studentName === student.fullName
-      );
-      return !sub || sub.status === 'returned' || sub.status === 'draft';
-    });
-  }, [authorizedActivities, student.id, student.fullName]);
-
-  const submittedActivities = useMemo(() => {
-    return authorizedActivities.filter((act) => {
-      const sub = act.submissions.find(
-        (s) => s.studentId === student.id || s.studentName === student.fullName
-      );
-      return sub && sub.status !== 'returned' && sub.status !== 'draft';
-    });
-  }, [authorizedActivities, student.id, student.fullName]);
-
-  const toCorrectActivities = useMemo(() => {
-    return authorizedActivities.filter((act) => {
-      const sub = act.submissions.find(
-        (s) => s.studentId === student.id || s.studentName === student.fullName
-      );
-      return sub && sub.status === 'pending';
-    });
-  }, [authorizedActivities, student.id, student.fullName]);
-
-  const gradedActivities = useMemo(() => {
-    return authorizedActivities.filter((act) => {
-      const sub = act.submissions.find(
-        (s) => s.studentId === student.id || s.studentName === student.fullName
-      );
-      return sub && sub.status === 'graded';
-    });
-  }, [authorizedActivities, student.id, student.fullName]);
-
-  // Filtered activities list for Student Portal based on current filter
-  const filteredStudentActivities = useMemo(() => {
-    return authorizedActivities.filter((act) => {
-      // 1. Busca textual
-      if (studentSearchQuery.trim()) {
-        const q = studentSearchQuery.toLowerCase().trim();
-        const matchesTitle = act.title?.toLowerCase().includes(q);
-        const matchesSubject = act.subject?.toLowerCase().includes(q);
-        const matchesTopic = act.topic?.toLowerCase().includes(q);
-        if (!matchesTitle && !matchesSubject && !matchesTopic) return false;
-      }
-
-      // 2. Filtro por tipo
-      if (studentTypeFilter !== 'todos') {
-        if (studentTypeFilter === 'kronogames') {
-          if (!act.isGameActivity && !act.gameData && act.type !== 'Jogo Avaliativo') return false;
-        } else if (act.type?.toLowerCase() !== studentTypeFilter.toLowerCase()) {
-          return false;
-        }
-      }
-
-      // 3. Filtro por situação de entrega
-      const sub = act.submissions.find(
-        (s) => s.studentId === student.id || s.studentName === student.fullName
-      );
-      if (studentFilter === 'a_fazer') {
-        return !sub || sub.status === 'returned' || sub.status === 'draft';
-      }
-      if (studentFilter === 'a_corrigir') {
-        return sub && sub.status === 'pending';
-      }
-      if (studentFilter === 'corrigidas') {
-        return sub && sub.status === 'graded';
-      }
-      return true; // 'todas'
-    });
-  }, [authorizedActivities, student.id, student.fullName, studentFilter, studentSearchQuery, studentTypeFilter]);
-
-  const activeStudentFiltersCount = useMemo(() => {
-    let count = 0;
-    if (studentSearchQuery.trim()) count++;
-    if (studentTypeFilter !== 'todos') count++;
-    if (studentFilter !== 'todas') count++;
-    return count;
-  }, [studentSearchQuery, studentTypeFilter, studentFilter]);
-
-  const handleClearStudentFilters = () => {
-    setStudentSearchQuery('');
-    setStudentTypeFilter('todos');
-    setStudentFilter('todas');
-  };
-
-  // Filter library files for this student's turma
-  const studentLibraryFiles = useMemo(() => {
-    return libraryFiles.filter((file) =>
-      !file.turma || file.turma === 'branco' || file.turma === 'Todas' || canStudentAccessActivity(file.turma, student.turma)
-    );
-  }, [libraryFiles, student.turma]);
-
-  const handleSelectOption = (activityId: string, questionId: string, optionIndex: number) => {
-    setObjectiveInputs((prev) => {
-      const next = {
-        ...prev,
-        [activityId]: {
-          ...(prev[activityId] || {}),
-          [questionId]: optionIndex,
-        },
-      };
-      if (typeof window !== 'undefined' && student?.id) {
-        try {
-          localStorage.setItem(`krono_obj_drafts_${student.id}`, JSON.stringify(next));
-        } catch (e) {}
-      }
-      return next;
-    });
-  };
-
-  const handleFinishKronoGame = (score: number, groupMembersStr?: string) => {
-    if (!activeKronoGameActivity) return;
-    const act = activeKronoGameActivity;
-    const maxScore = act.maxGrade || 10;
-
-    onSubmitAnswer(
-      act.id,
-      student.id,
-      '🎮 KronoGames: Partida avaliativa concluída com sucesso no motor de jogos.',
-      score,
-      maxScore,
-      0,
-      {},
-      groupMembersStr
-    );
-
-    setSubmissionSuccessMsg(
-      `🎉 Parabéns! Sua equipe concluiu o desafio KronoGames conquistando nota ${score.toFixed(1)} / ${maxScore.toFixed(1)} pts!`
-    );
-    scrollToTop();
-    setTimeout(() => setSubmissionSuccessMsg(null), 7000);
-
-    setActiveKronoGameActivity(null);
-    setSelectedActivityId(null);
-    setStudentFilter('corrigidas');
-    setActiveTab('atividades');
-  };
-
-  const handleSubmit = (act: Activity, isAutoSubmit: boolean = false, bypassUnansweredCheck: boolean = false) => {
-    // 1. Playful Game submission (Síndromes Severas)
-    if (act.playfulGameHtml || act.adaptationType === 'severe_playful') {
-      const gameData = playfulScores[act.id];
-      const maxScore = act.maxGrade || 10;
-      const finalScore = gameData ? gameData.grade : maxScore;
-
-      onSubmitAnswer(
-        act.id,
-        student.id,
-        '🎮 Atividade Lúdica Interativa concluída com sucesso no jogo educacional.',
-        Number(finalScore.toFixed(1)),
-        maxScore,
-        0,
-        {},
-        undefined
-      );
-
-      setSubmissionSuccessMsg(`🎉 Parabéns! Você concluiu a atividade lúdica e conquistou ${finalScore.toFixed(1)} / ${maxScore} pts!`);
-      scrollToTop();
-      setTimeout(() => setSubmissionSuccessMsg(null), 6000);
-
-      // Fechar visualização da atividade e retornar à lista inicial com filtros
-      setFocusWarnings((prev) => ({ ...prev, [act.id]: 0 }));
-      setSelectedActivityId(null);
-      setFullscreenGameActivityId(null);
-      setStudentFilter('a_corrigir');
-      setActiveTab('atividades');
-      return;
-    }
-
-    const distribution = getActivityGradeDistribution(act);
-    const questions = act.questions || [];
-    const objectiveQuestions = questions.filter((q) => q.type === 'multiple_choice') as (ActivityQuestion & MultipleChoiceQuestion)[];
-    const essayQuestions = questions.filter((q) => q.type === 'essay') as (ActivityQuestion & EssayQuestion)[];
-
-    const existingSub = act.submissions.find(
-      (s) => s.studentId === student.id || s.studentName === student.fullName
-    );
-    const essayText = essayInputs[act.id] !== undefined
-      ? essayInputs[act.id]
-      : (existingSub?.essayAnswer || '');
-
-    // If there are essay questions, require text (unless it's an auto-submission by Anti-Cola focus lock)
-    if (!isAutoSubmit && essayQuestions.length > 0 && !essayText.trim()) {
-      showSecurityToast('⚠️ Por favor, escreva sua resposta dissertativa antes de enviar a atividade.');
-      return;
-    }
-
-    // Calculate objective score immediately (sai na hora)
-    let correctCount = 0;
-    const studentChoices = objectiveInputs[act.id] || {};
-
-    // Checagem amigável de questões objetivas não assinaladas (evita envio em branco por engano)
-    const unansweredCount = objectiveQuestions.filter((q) => studentChoices[q.id] === undefined).length;
-    if (!isAutoSubmit && !bypassUnansweredCheck && objectiveQuestions.length > 0 && unansweredCount > 0) {
-      setUnansweredConfirmData({
-        activity: act,
-        unansweredCount,
-        totalCount: objectiveQuestions.length,
-      });
-      return;
-    }
-
-    objectiveQuestions.forEach((q) => {
-      const chosen = studentChoices[q.id];
-      if (chosen !== undefined && chosen === q.correctOptionIndex) {
-        correctCount += 1;
-      }
-    });
-
-    let calculatedObjectiveScore = 0;
-    if (objectiveQuestions.length > 0) {
-      calculatedObjectiveScore = (correctCount / objectiveQuestions.length) * distribution.maxObjectiveGrade;
-    } else if (distribution.hasObjective) {
-      calculatedObjectiveScore = distribution.maxObjectiveGrade;
-    }
-
-    // Compute group members if allowGroupWork is true
-    let groupMembersStr: string | undefined = undefined;
-    if (act.allowGroupWork) {
-      const selected = groupSelections[act.id] || [];
-      const customText = (customMemberInput[act.id] || '').trim();
-      const allMembers = [...selected];
-      if (customText) {
-        customText.split(',').forEach((n) => {
-          const trimmed = n.trim();
-          if (trimmed && !allMembers.includes(trimmed)) {
-            allMembers.push(trimmed);
-          }
-        });
-      }
-      if (allMembers.length > 0) {
-        groupMembersStr = allMembers.join(', ');
-      }
-    }
-
-    // Submit to parent
-    onSubmitAnswer(
-      act.id,
-      student.id,
-      essayText,
-      Number(calculatedObjectiveScore.toFixed(1)),
-      Number(distribution.maxObjectiveGrade.toFixed(1)),
-      Number(distribution.maxEssayGrade.toFixed(1)),
-      studentChoices,
-      groupMembersStr
-    );
-
-    const msg = isAutoSubmit
-      ? `🚨 PROVA ENTREGUE AUTOMATICAMENTE! Atingido o limite de 4 avisos de desvio de foco.`
-      : objectiveQuestions.length > 0
-      ? `Atividade enviada! Nota objetiva calculada na hora: ${calculatedObjectiveScore.toFixed(1)} / ${distribution.maxObjectiveGrade.toFixed(1)} pts. A parte dissertativa foi enviada para correção.`
-      : `Atividade enviada com sucesso! Acompanhe a correção na aba "Correções".`;
-
-    setSubmissionSuccessMsg(msg);
-    scrollToTop();
-    setTimeout(() => setSubmissionSuccessMsg(null), 6000);
-
-    // Reset focus warnings for this activity on submit
-    setFocusWarnings((prev) => ({ ...prev, [act.id]: 0 }));
-
-    // Limpa os rascunhos salvos desta atividade após entrega (dissertativo e objetivos)
-    if (typeof window !== 'undefined' && student?.id) {
-      try {
-        const saved = localStorage.getItem(`krono_drafts_${student.id}`);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          delete parsed[act.id];
-          localStorage.setItem(`krono_drafts_${student.id}`, JSON.stringify(parsed));
-        }
-        const savedObj = localStorage.getItem(`krono_obj_drafts_${student.id}`);
-        if (savedObj) {
-          const parsedObj = JSON.parse(savedObj);
-          delete parsedObj[act.id];
-          localStorage.setItem(`krono_obj_drafts_${student.id}`, JSON.stringify(parsedObj));
-        }
-      } catch (e) {}
-    }
-
-    // Close detail view and switch to "A Corrigir" list filter
-    setSelectedActivityId(null);
-    setFullscreenGameActivityId(null);
-    setUnansweredConfirmData(null);
-    setStudentFilter('a_corrigir');
-    setActiveTab('atividades');
-  };
-
-  const handleOpenActivity = (actId: string) => {
-    setSelectedActivityId(actId);
-    scrollToTop();
-    // Reset focus warnings for this activity when starting/resuming it
-    setFocusWarnings((prev) => ({ ...prev, [actId]: 0 }));
-  };
-
-  // Effect: Trava de Foco (Avisos de mudança de tela e auto-entrega no 4º aviso)
-  useEffect(() => {
-    // Only monitor focus lock if student has actively opened a specific activity in detail view
-    if (!selectedActivityId || activeTab !== 'atividades') return;
-
-    const currentAct = activities.find((a) => a.id === selectedActivityId);
-    if (!currentAct || !currentAct.securityFocusLock) return;
-
-    // Check if student already submitted and it's not returned
-    const sub = currentAct.submissions?.find(
-      (s) => s.studentId === student.id || s.studentName === student.fullName
-    );
-    if (sub && sub.status !== 'returned' && sub.status !== 'draft') return;
-
-    let isTriggeredInTurn = false;
-
-    const handleFocusLoss = () => {
-      if (isTriggeredInTurn) return;
-      isTriggeredInTurn = true;
-      setTimeout(() => {
-        isTriggeredInTurn = false;
-      }, 1000);
-
-      setFocusWarnings((prev) => {
-        const currentCount = prev[currentAct.id] || 0;
-        if (currentCount >= 4) return prev; // Already auto-submitted, avoid re-triggering
-
-        const nextCount = currentCount + 1;
-
-        if (nextCount >= 4) {
-          // Auto-entrega no 4º aviso!
-          setTimeout(() => {
-            handleSubmit(currentAct, true);
-          }, 100);
-          setSecurityNotice({
-            activityTitle: currentAct.title,
-            warningCount: 4,
-            isAutoSubmitted: true,
-          });
-        } else {
-          setSecurityNotice({
-            activityTitle: currentAct.title,
-            warningCount: nextCount,
-            isAutoSubmitted: false,
-          });
-        }
-
-        return { ...prev, [currentAct.id]: nextCount };
-      });
-    };
-
-    const onVisibilityChange = () => {
-      if (document.hidden) {
-        handleFocusLoss();
-      }
-    };
-
-    const onWindowBlur = () => {
-      handleFocusLoss();
-    };
-
-    window.addEventListener('blur', onWindowBlur);
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
-    return () => {
-      window.removeEventListener('blur', onWindowBlur);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-    };
-  }, [selectedActivityId, activities, activeTab, student.id, student.fullName]);
-
-  // Presença desativada para poupar cota de gravação/leitura do Firestore
-  useEffect(() => {
-    // O heartbeat e o interval de 4 minutos foram desligados para evitar o Quota Exceeded.
   }, []);
 
-  return (
-    <div className="min-h-screen bg-background text-foreground p-3 sm:p-8 max-w-5xl mx-auto space-y-6 sm:space-y-8 animate-fadeIn">
-      {/* Top Banner */}
-      <div className="glass-panel p-4 sm:p-8 rounded-3xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-6 shadow-xl">
-        <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0">
-          <div className="relative group cursor-pointer shrink-0" onClick={() => setIsAvatarModalOpen(true)}>
-            <img
-              src={student.avatarUrl}
-              alt={student.fullName}
-              className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-primary shadow-md transition-all group-hover:brightness-50"
+  // ==========================================================================
+  // FILTRAGEM RIGOROSA DE ATIVIDADES DA TURMA DO ALUNO
+  // ==========================================================================
+  const studentActivities = useMemo(() => {
+    const isPNEStudent = activeStudent.tag && activeStudent.tag !== 'REGULAR';
+
+    return activities
+      .filter((act) => {
+        if ((act.status as string) === 'archived' || act.status === 'Inativo' || (act as any).isArchived) return false;
+        const rawTurma = (act as any)._originalTurmaScope || act.turma || 'TODAS';
+        if (!doesItemMatchStudentTurma(rawTurma, activeStudent.turma)) return false;
+
+        // Se for atividade adaptada (AEE), mostra apenas para alunos PNE (ou se foi atribuída a ele)
+        if (isActivityAdapted(act) && !isPNEStudent) {
+          const hasSub = (act.submissions || []).some((s) => s.studentId === activeStudent.id);
+          if (!hasSub) return false;
+        }
+        return true;
+      })
+      .map((act) => ({
+        ...act,
+        // Exibe apenas a turma padronizada do aluno ("201" ou "2002")
+        turma: studentTurmaStd,
+      }));
+  }, [activities, activeStudent, studentTurmaStd]);
+
+  // Mapa de submissões do próprio aluno
+  const mySubmissionsMap = useMemo(() => {
+    const map = new Map<string, any>();
+    studentActivities.forEach((act) => {
+      const sub = (act.submissions || []).find(
+        (s) =>
+          s.studentId === activeStudent.id ||
+          (Boolean(activeStudent.matricula) && s.matricula === activeStudent.matricula) ||
+          (s.groupMembers &&
+            s.groupMembers
+              .toLowerCase()
+              .split(',')
+              .map((n: string) => n.trim())
+              .includes((activeStudent.fullName || '').toLowerCase().trim()))
+      );
+      if (sub) map.set(act.id, sub);
+    });
+    return map;
+  }, [studentActivities, activeStudent]);
+
+  // ==========================================================================
+  // REPOSITÓRIO UNIFICADO DA TURMA (BIBLIOTECA + LINKS EXTRAÍDOS DAS AULAS)
+  // ==========================================================================
+  const repositoryItems: NormalizedRepoItem[] = useMemo(() => {
+    const combinedRaw = [
+      ...(Array.isArray(libraryItemsProp) ? libraryItemsProp : []),
+      ...(Array.isArray(fetchedLibrary) ? fetchedLibrary : []),
+    ];
+
+    const seenUrls = new Set<string>();
+    const list: NormalizedRepoItem[] = [];
+
+    combinedRaw.forEach((raw, idx) => {
+      if (!raw) return;
+      const url = String(
+        raw.url || raw.link || raw.LINK || raw.driveUrl || raw.href || ''
+      ).trim();
+      if (!url) return;
+
+      const itemTurma = String(
+        raw.turma || raw.turmas || raw.TURMAS || raw.targetTurma || 'TODAS'
+      ).trim();
+
+      if (!doesItemMatchStudentTurma(itemTurma, activeStudent.turma)) return;
+
+      const key = url.toLowerCase();
+      if (seenUrls.has(key)) return;
+      seenUrls.add(key);
+
+      list.push({
+        id: String(raw.id || `repo-lib-${idx}`),
+        title: String(
+          raw.title || raw.titulo || raw.TITULO || raw.name || 'Material Didático da Turma'
+        ).trim(),
+        url,
+        turma: itemTurma.toUpperCase() === 'TODAS' ? `Turma ${studentTurmaStd}` : studentTurmaStd,
+        category: String(raw.category || raw.type || 'Google Drive • Repositório').trim(),
+        source: 'library',
+      });
+    });
+
+    // Extrai também links de apoio colados dentro das atividades da turma
+    studentActivities.forEach((act) => {
+      const links = [
+        ...extractLinksFromText(act.supportMaterial),
+        ...extractLinksFromText(act.description),
+        ...extractLinksFromText((act as any).driveUrl),
+      ];
+      links.forEach((lnk, lIdx) => {
+        const key = lnk.toLowerCase();
+        if (seenUrls.has(key)) return;
+        seenUrls.add(key);
+        list.push({
+          id: `repo-act-${act.id}-${lIdx}`,
+          title: `Anexo da Aula: ${act.title}`,
+          url: lnk,
+          turma: `Turma ${studentTurmaStd}`,
+          category: 'Material de Aula / Atividade',
+          source: 'activity',
+        });
+      });
+    });
+
+    if (list.length === 0) {
+      return DEFAULT_FALLBACK_LIBRARY.map((d) => ({
+        ...d,
+        turma: `Turma ${studentTurmaStd}`,
+      }));
+    }
+
+    return list;
+  }, [libraryItemsProp, fetchedLibrary, activeStudent.turma, studentTurmaStd, studentActivities]);
+
+  const filteredRepoItems = useMemo(() => {
+    if (!repoSearch.trim()) return repositoryItems;
+    const q = repoSearch.toLowerCase();
+    return repositoryItems.filter(
+      (it) => it.title.toLowerCase().includes(q) || it.category.toLowerCase().includes(q)
+    );
+  }, [repositoryItems, repoSearch]);
+
+  // Métricas rápidas do estudante
+  const pendingActivities = useMemo(
+    () => studentActivities.filter((a) => !mySubmissionsMap.has(a.id)),
+    [studentActivities, mySubmissionsMap]
+  );
+
+  const kronoGamesActivities = useMemo(
+    () => studentActivities.filter((a) => isActivityKronoGame(a)),
+    [studentActivities]
+  );
+
+  const completedActivities = useMemo(
+    () => studentActivities.filter((a) => mySubmissionsMap.has(a.id)),
+    [studentActivities, mySubmissionsMap]
+  );
+
+  const averageGrade = useMemo(() => {
+    const graded: number[] = [];
+    mySubmissionsMap.forEach((sub) => {
+      if (sub.status === 'graded') {
+        const total =
+          Number(sub.objectiveScore || 0) +
+          Number(sub.essayScore || 0) +
+          Number(sub.extraPoints || 0);
+        graded.push(Math.min(10, total));
+      }
+    });
+    if (graded.length === 0) return null;
+    const sum = graded.reduce((a, b) => a + b, 0);
+    return (sum / graded.length).toFixed(1);
+  }, [mySubmissionsMap]);
+
+  // Lista filtrada do Feed
+  const displayedFeedActivities = useMemo(() => {
+    if (feedFilter === 'pending') return pendingActivities;
+    if (feedFilter === 'games') return kronoGamesActivities;
+    if (feedFilter === 'completed') return completedActivities;
+    return studentActivities;
+  }, [
+    feedFilter,
+    pendingActivities,
+    kronoGamesActivities,
+    completedActivities,
+    studentActivities,
+  ]);
+
+  // Colegas da mesma turma para seleção em caixa suspensa (<select>) nas atividades em grupo
+  const eligibleClassmates = useMemo(() => {
+    const excluded = new Set<string>([activeStudent.id]);
+    rosterStudents.forEach((s) => {
+      if (selectedGroupNames.includes(s.fullName)) excluded.add(s.id);
+    });
+    return getEligibleClassmatesForGroup(rosterStudents, activeStudent.turma, excluded);
+  }, [rosterStudents, activeStudent.id, activeStudent.turma, selectedGroupNames]);
+
+  // ==========================================================================
+  // ABERTURA E EXECUÇÃO DE ATIVIDADE (FORMAL, GRUPO OU KRONOGAMES)
+  // ==========================================================================
+  const handleOpenActivity = (act: Activity) => {
+    setExecutingActivity(act);
+    const existingSub = mySubmissionsMap.get(act.id);
+
+    // Carregar rascunho salvo no celular ou submissão anterior
+    const draftKey = `krono_draft_${activeStudent.id}_${act.id}`;
+    let savedDraft: any = null;
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(draftKey);
+        if (raw) savedDraft = JSON.parse(raw);
+      } catch (e) {}
+    }
+
+    if (existingSub) {
+      setSelectedObjective(existingSub.selectedObjectiveAnswers || {});
+      setGeneralEssayText(existingSub.essayAnswer || '');
+      setEssayResponses({});
+      if (existingSub.groupMembers) {
+        setSelectedGroupNames(
+          existingSub.groupMembers
+            .split(',')
+            .map((n: string) => n.trim())
+            .filter(Boolean)
+        );
+      } else {
+        setSelectedGroupNames([activeStudent.fullName]);
+      }
+    } else if (savedDraft) {
+      setSelectedObjective(savedDraft.selectedObjective || {});
+      setGeneralEssayText(savedDraft.generalEssayText || '');
+      setEssayResponses(savedDraft.essayResponses || {});
+      setSelectedGroupNames(savedDraft.selectedGroupNames || [activeStudent.fullName]);
+    } else {
+      setSelectedObjective({});
+      setGeneralEssayText('');
+      setEssayResponses({});
+      setSelectedGroupNames([activeStudent.fullName]);
+    }
+    setClassmateDropdownValue('');
+  };
+
+  // Auto-save de rascunho no celular enquanto o aluno digita
+  useEffect(() => {
+    if (!executingActivity || typeof window === 'undefined') return;
+    if (mySubmissionsMap.has(executingActivity.id)) return;
+    const draftKey = `krono_draft_${activeStudent.id}_${executingActivity.id}`;
+    try {
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({
+          selectedObjective,
+          generalEssayText,
+          essayResponses,
+          selectedGroupNames,
+        })
+      );
+    } catch (e) {}
+  }, [
+    executingActivity,
+    activeStudent.id,
+    mySubmissionsMap,
+    selectedObjective,
+    generalEssayText,
+    essayResponses,
+    selectedGroupNames,
+  ]);
+
+  const handleConfirmSubmitActivity = async () => {
+    if (!executingActivity || !onSubmitAnswer) return;
+    setIsSubmitting(true);
+
+    try {
+      const rawQuestions: any[] = Array.isArray(executingActivity.questions) ? executingActivity.questions : [];
+      const objQuestions: any[] = rawQuestions.filter((q: any) => q.type !== 'essay');
+      const essayQuestions: any[] = [
+        ...(Array.isArray((executingActivity as any).essayQuestions) ? (executingActivity as any).essayQuestions : []),
+        ...rawQuestions.filter((q: any) => q.type === 'essay'),
+      ];
+
+      let objectiveScore = 0;
+      let maxObjectiveScore = 0;
+
+      objQuestions.forEach((q) => {
+        const pts = Number(q.points || 1);
+        maxObjectiveScore += pts;
+        const chosenIdx = selectedObjective[q.id];
+        const correctIdx = q.correctOptionIndex ?? q.correctAnswer ?? 0;
+        if (chosenIdx !== undefined && chosenIdx === correctIdx) {
+          objectiveScore += pts;
+        }
+      });
+
+      let maxEssayScore = 0;
+      if (essayQuestions.length > 0) {
+        essayQuestions.forEach((eq) => {
+          maxEssayScore += Number(eq.points || 2);
+        });
+      } else if (objQuestions.length === 0) {
+        maxEssayScore = Number(executingActivity.maxGrade || 10);
+      }
+
+      let compiledEssay = generalEssayText.trim();
+      if (essayQuestions.length > 0) {
+        const parts = essayQuestions.map((eq, i) => {
+          const resp = (essayResponses[eq.id] || '').trim();
+          return `[Questão Dissertativa ${i + 1}]: ${eq.text || eq.question || eq.prompt || ''}\nResposta: ${resp || '(Em branco)'}`;
+        });
+        compiledEssay = [parts.join('\n\n'), compiledEssay].filter(Boolean).join('\n\n');
+      }
+
+      const groupCsv =
+        (executingActivity.type === 'Trabalho em grupo' || Boolean((executingActivity as any).isGroupWork)) && selectedGroupNames.length > 0
+          ? Array.from(new Set([activeStudent.fullName, ...selectedGroupNames])).join(', ')
+          : undefined;
+
+      await onSubmitAnswer(
+        executingActivity.id,
+        activeStudent.id,
+        compiledEssay,
+        Math.round(objectiveScore * 100) / 100,
+        Math.round(maxObjectiveScore * 100) / 100,
+        Math.round(maxEssayScore * 100) / 100,
+        selectedObjective,
+        groupCsv
+      );
+
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(`krono_draft_${activeStudent.id}_${executingActivity.id}`);
+      }
+
+      showNotice('Atividade enviada com sucesso! Sua participação foi registrada.');
+      setExecutingActivity(null);
+    } catch (e) {
+      showNotice('Erro ao enviar atividade. Seu rascunho está salvo no aparelho.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword.trim() || newPassword.trim().length < 4) {
+      setPasswordStatus('A nova senha deve ter pelo menos 4 caracteres.');
+      return;
+    }
+    if (newPassword.trim() !== confirmPassword.trim()) {
+      setPasswordStatus('A confirmação de senha não confere.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: activeStudent.id,
+          role: 'student',
+          newPassword: newPassword.trim(),
+        }),
+      });
+      if (res.ok) {
+        setPasswordStatus('Senha atualizada com sucesso!');
+        setNewPassword('');
+        setConfirmPassword('');
+      } else {
+        setPasswordStatus('Não foi possível alterar a senha agora.');
+      }
+    } catch {
+      setPasswordStatus('Erro de conexão ao atualizar senha.');
+    }
+  };
+
+  // Mensagens do aluno com o professor
+  const myMessages = useMemo(() => {
+    return (Array.isArray(messages) ? messages : []).filter(
+      (m: any) =>
+        m.senderId === activeStudent.id ||
+        m.receiverId === activeStudent.id ||
+        m.studentId === activeStudent.id
+    );
+  }, [messages, activeStudent.id]);
+
+  // ==========================================================================
+  // SE O ALUNO ESTIVER EXECUTANDO UM KRONOGAME OU ATIVIDADE EM TELA CHEIA
+  // ==========================================================================
+  if (executingActivity) {
+    const isDebate =
+      executingActivity.gameMode === 'debate_paperless' ||
+      Boolean(executingActivity.gameData?.debateConfig);
+    const isGame = isActivityKronoGame(executingActivity);
+    const myExistingSub = mySubmissionsMap.get(executingActivity.id);
+
+    if (isDebate) {
+      return (
+        <div className="min-h-screen bg-[#09090B] text-zinc-100 p-3 sm:p-6">
+          <div className="max-w-5xl mx-auto space-y-4">
+            <button
+              type="button"
+              onClick={() => setExecutingActivity(null)}
+              className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-zinc-200 flex items-center gap-1.5 cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Voltar ao Feed da Turma {studentTurmaStd}</span>
+            </button>
+
+            <DebatePaperlessView
+              activity={executingActivity}
+              debateConfig={executingActivity.gameData?.debateConfig}
+              student={activeStudent}
+              currentStudent={activeStudent}
+              students={rosterStudents}
+              allStudents={rosterStudents}
+              role="student"
+              isTeacher={false}
+              onSaveActivity={onSaveActivity}
+              onUpdateActivity={onUpdateActivity}
+              onSubmitAnswer={onSubmitAnswer}
+              onClose={() => setExecutingActivity(null)}
             />
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <PenTool className="w-5 h-5 text-foreground" />
-            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-              <span className="text-[10px] sm:text-xs font-bold text-primary uppercase tracking-wider bg-primary/10 px-2.5 py-0.5 rounded-full border border-primary/20">
-                Portal do Aluno
-              </span>
-              <span className="text-[11px] sm:text-xs font-semibold text-muted">{teacher?.subject || 'Disciplinas'}</span>
-            </div>
-            <h1 className="text-xl sm:text-3xl font-extrabold text-foreground mt-1 truncate">
-              {student.fullName}
-            </h1>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-muted mt-1.5">
-              <span className="bg-[#171f33] px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full border border-border text-foreground font-semibold text-[11px] sm:text-xs">
-                Turma: {student.turma}
-              </span>
-              <span className="text-[11px] sm:text-xs">Matrícula: {student.matricula}</span>
-              {student.tag && (
-                <span className="bg-primary/20 text-primary px-2 py-0.5 rounded-md font-bold text-[10px]">
-                  {student.tag}
+        </div>
+      );
+    }
+
+    if (isGame && executingActivity.gameData) {
+      return (
+        <div className="min-h-screen bg-[#09090B] text-zinc-100 p-3 sm:p-6">
+          <div className="max-w-4xl mx-auto space-y-4">
+            <button
+              type="button"
+              onClick={() => setExecutingActivity(null)}
+              className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-semibold text-zinc-200 flex items-center gap-1.5 cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Voltar ao Feed da Turma {studentTurmaStd}</span>
+            </button>
+
+            <SafeKronoGamePlayer
+              activity={executingActivity}
+              gameData={executingActivity.gameData}
+              gameMode={executingActivity.gameMode || 'classic'}
+              title={executingActivity.title}
+              student={activeStudent}
+              currentStudent={activeStudent}
+              students={rosterStudents}
+              onClose={() => setExecutingActivity(null)}
+              onFinishGame={async (score: number, groupCsv?: string) => {
+                if (onSubmitAnswer) {
+                  await onSubmitAnswer(
+                    executingActivity.id,
+                    activeStudent.id,
+                    `[KronoGames • ${executingActivity.title}] Missão concluída com pontuação ${score}.`,
+                    score,
+                    executingActivity.maxGrade || 10,
+                    0,
+                    {},
+                    groupCsv
+                  );
+                }
+                showNotice('Jogo concluído e pontuação registrada!');
+                setExecutingActivity(null);
+              }}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    // EXECUÇÃO DE ATIVIDADE FORMAL / PROVA / PESQUISA / REDAÇÃO / AEE
+    const rawQuestions: any[] = Array.isArray(executingActivity.questions) ? executingActivity.questions : [];
+      const objQuestions: any[] = rawQuestions.filter((q: any) => q.type !== 'essay');
+    const essayQuestions: any[] = [
+        ...(Array.isArray((executingActivity as any).essayQuestions) ? (executingActivity as any).essayQuestions : []),
+        ...rawQuestions.filter((q: any) => q.type === 'essay'),
+      ];
+    const embeddedLinks = [
+      ...extractLinksFromText(executingActivity.supportMaterial),
+      ...extractLinksFromText(executingActivity.description),
+    ];
+
+    return (
+      <div className="min-h-screen bg-background text-foreground pb-24">
+        {/* Topbar fixa da Avaliação */}
+        <header className="sticky top-0 z-30 h-14 bg-surface/95 backdrop-blur-md border-b border-border px-4 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setExecutingActivity(null)}
+            className="px-3 py-1.5 rounded-lg bg-background border border-border text-xs font-semibold text-foreground flex items-center gap-1.5 cursor-pointer"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span>Voltar</span>
+          </button>
+
+          <div className="text-center min-w-0 px-2">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 block">
+              Turma {studentTurmaStd} • {executingActivity.type || 'Avaliação'}
+            </span>
+            <h2 className="text-xs sm:text-sm font-bold text-foreground truncate">
+              {executingActivity.title}
+            </h2>
+          </div>
+
+          <span className="px-2.5 py-1 rounded-md bg-emerald-500/15 text-emerald-400 font-mono text-xs font-bold">
+            Val: {executingActivity.maxGrade || 10} pts
+          </span>
+        </header>
+
+        <main className="max-w-2xl mx-auto p-4 space-y-5">
+          {/* Orientações + Links Diretos do Drive se houver */}
+          {(executingActivity.description || executingActivity.supportMaterial) && (
+            <section className="p-4 rounded-2xl bg-surface border border-border space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Material de Apoio & Orientações</span>
                 </span>
+              </div>
+
+              {executingActivity.description && (
+                <p className="text-xs sm:text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+                  {executingActivity.description}
+                </p>
               )}
-            </div>
-          </div>
-        </div>
 
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto shrink-0">
-        <button
-          type="button"
-          onClick={() => setIsChangePasswordOpen(true)}
-          className="w-full sm:w-auto justify-center py-2.5 px-5 min-h-[44px] min-w-[44px] bg-[#171f33] hover:bg-slate-700 text-slate-200 rounded-full text-xs font-bold border border-border flex items-center gap-2 transition-all cursor-pointer shrink-0"
-        >
-          <KeyRound className="w-4 h-4 shrink-0" />
-          <span>Alterar senha</span>
-        </button>
-        <button
-          onClick={() => {
-            if (student?.id && student?.ownerTeacherId) {
-              fetch('/api/students/heartbeat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  studentId: student.id,
-                  ownerTeacherId: student.ownerTeacherId,
-                  action: 'offline',
-                }),
-              }).catch(() => {});
-            }
-            onLogout();
-          }}
-          className="w-full sm:w-auto justify-center py-2.5 px-5 min-h-[44px] min-w-[44px] bg-[#171f33] hover:bg-rose-100 text-rose-600 hover:text-rose-200 rounded-full text-xs font-bold border border-border flex items-center gap-2 transition-all cursor-pointer shrink-0"
-        >
-          <LogOut className="w-4 h-4 shrink-0" />
-          <span>Sair da Conta</span>
-        </button>
-        </div>
-      </div>
-
-      {/* Painel de Rendimento & Conquistas Pedagógicas do Estudante */}
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
-          <div className="bg-surface p-3.5 sm:p-4 rounded-2xl border border-border text-left shadow-sm">
-            <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">
-              A Fazer
-            </span>
-            <div className="flex items-baseline gap-1.5 mt-1">
-              <span className="text-xl sm:text-2xl font-black text-amber-500">{studentMetrics.pendingTodo}</span>
-              <span className="text-[10px] text-muted">missões</span>
-            </div>
-          </div>
-
-          <div className="bg-surface p-3.5 sm:p-4 rounded-2xl border border-border text-left shadow-sm">
-            <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">
-              Em Correção
-            </span>
-            <div className="flex items-baseline gap-1.5 mt-1">
-              <span className="text-xl sm:text-2xl font-black text-primary">{studentMetrics.pendingCorrection}</span>
-              <span className="text-[10px] text-muted">enviadas</span>
-            </div>
-          </div>
-
-          <div className="bg-surface p-3.5 sm:p-4 rounded-2xl border border-border text-left shadow-sm">
-            <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">
-              Concluídas
-            </span>
-            <div className="flex items-baseline gap-1.5 mt-1">
-              <span className="text-xl sm:text-2xl font-black text-emerald-500">{studentMetrics.completed}</span>
-              <span className="text-[10px] text-muted">avaliadas</span>
-            </div>
-          </div>
-
-          <div className="bg-surface p-3.5 sm:p-4 rounded-2xl border border-border text-left shadow-sm">
-            <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">
-              Média Geral
-            </span>
-            <div className="flex items-baseline gap-1.5 mt-1">
-              <span className="text-xl sm:text-2xl font-black text-foreground">{studentMetrics.averageGrade}</span>
-              <span className="text-[10px] text-muted">/ 10.0</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Barra de Progresso do Modo Platina & Conquistas */}
-        <div className="space-y-2.5">
-          {(() => {
-            const unlockedCount = studentAchievements.filter((a) => a.unlocked).length;
-            const totalAchievements = studentAchievements.length || 15;
-            const achievementsPercent = Math.round((unlockedCount / totalAchievements) * 100);
-
-            return (
-              <div className="bg-surface/80 p-3 sm:px-4 sm:py-3 rounded-2xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                <div className="flex items-center justify-between sm:justify-start gap-2 text-muted font-medium">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <Trophy className="w-4 h-4 text-amber-400 shrink-0" />
-                    <span className="truncate">Progresso Platina:</span>
-                    <strong className="text-foreground shrink-0">
-                      {unlockedCount} de {totalAchievements} ({achievementsPercent}%)
-                    </strong>
-                    <span className="hidden md:inline text-[11px] text-muted">
-                      • Entregas: {studentMetrics.completed + studentMetrics.pendingCorrection}/{studentMetrics.total}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsAchievementsModalOpen(true)}
-                    className="sm:hidden px-2.5 py-1 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/30 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition active:scale-95 shrink-0"
-                  >
-                    <span>🏆 Conquistas ({unlockedCount}/{totalAchievements})</span>
-                  </button>
+              {executingActivity.supportMaterial && (
+                <div className="p-3.5 rounded-xl bg-background border border-border text-xs sm:text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+                  {executingActivity.supportMaterial}
                 </div>
+              )}
 
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 flex-1 sm:w-52">
-                    <div className="flex-1 h-2.5 bg-background rounded-full overflow-hidden border border-border relative">
-                      <div
-                        className="absolute top-0 bottom-0 w-[2px] bg-amber-400/70 z-10"
-                        style={{ left: "75%" }}
-                        title="Meta 75%: +1.0 na Pior Nota"
-                      />
-                      <div
-                        className="h-full bg-gradient-to-r from-amber-500 via-primary to-emerald-400 transition-all duration-500 rounded-full"
-                        style={{ width: `${achievementsPercent}%` }}
-                      />
-                    </div>
-                    <span className="font-mono font-bold text-xs text-amber-400 shrink-0">
-                      {achievementsPercent}%
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsAchievementsModalOpen(true)}
-                    className="hidden sm:flex px-3 py-1 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/30 text-xs font-bold items-center gap-1.5 cursor-pointer transition active:scale-95 shrink-0"
-                  >
-                    <span>🏆 Conquistas ({unlockedCount}/{totalAchievements})</span>
-                  </button>
+              {embeddedLinks.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  {embeddedLinks.map((lnk, idx) => (
+                    <a
+                      key={idx}
+                      href={lnk}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full p-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center justify-between transition-all"
+                    >
+                      <span className="flex items-center gap-2 truncate">
+                        <FolderOpen className="w-4 h-4 shrink-0" />
+                        <span className="truncate">Abrir Material / Arquivo no Google Drive</span>
+                      </span>
+                      <ExternalLink className="w-4 h-4 shrink-0" />
+                    </a>
+                  ))}
                 </div>
-              </div>
-            );
-          })()}
+              )}
+            </section>
+          )}
 
-          {/* Alerta Amigável da Próxima Missão Prioritária */}
-          {nextUrgentActivity && (
-            <div className="bg-primary/10 border border-primary/25 rounded-2xl p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-fadeIn shadow-sm">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span className="w-8 h-8 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center text-primary shrink-0 text-sm">
-                  ⏰
+          {/* SE FOR ATIVIDADE EM GRUPO: CAIXA DE SELEÇÃO SUSPENSA (<select>) DA TURMA */}
+          {(executingActivity.type === 'Trabalho em grupo' || Boolean((executingActivity as any).isGroupWork)) && (
+            <section className="p-4 rounded-2xl bg-surface border border-border space-y-3">
+              <div>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-400 block">
+                  Atividade em Equipe • Turma {studentTurmaStd}
                 </span>
-                <div className="min-w-0">
-                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-primary block">
-                    Próxima Missão a Entregar
-                  </span>
-                  <p className="font-bold text-foreground truncate mt-0.5">
-                    {nextUrgentActivity.title}
-                  </p>
-                  <span className="text-[11px] text-muted">
-                    Prazo registrado: <strong className="text-foreground">{nextUrgentActivity.deadline || 'Em andamento'}</strong>
-                  </span>
-                </div>
+                <h3 className="text-sm font-bold text-foreground">
+                  Selecione os Integrantes do seu Grupo
+                </h3>
+                <p className="text-xs text-muted">
+                  Escolha seus colegas na lista suspensa abaixo para que todos recebam a entrega e a nota.
+                </p>
               </div>
 
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                  value={classmateDropdownValue}
+                  onChange={(e) => setClassmateDropdownValue(e.target.value)}
+                  className="flex-1 bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-foreground focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="">
+                    Selecionar colega da Turma {studentTurmaStd} ({eligibleClassmates.length} disponíveis)...
+                  </option>
+                  {eligibleClassmates.map((c) => (
+                    <option key={c.id} value={c.fullName}>
+                      {c.fullName}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!classmateDropdownValue}
+                  onClick={() => {
+                    if (
+                      classmateDropdownValue &&
+                      !selectedGroupNames.includes(classmateDropdownValue)
+                    ) {
+                      setSelectedGroupNames((prev) => [...prev, classmateDropdownValue]);
+                      setClassmateDropdownValue('');
+                    }
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-zinc-950 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>+ Incluir no Grupo</span>
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
+                {selectedGroupNames.map((name) => (
+                  <span
+                    key={name}
+                    className="px-3 py-1 rounded-lg bg-background border border-border text-xs font-semibold text-foreground flex items-center gap-2"
+                  >
+                    <span>{name}</span>
+                    {name !== activeStudent.fullName && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedGroupNames((prev) => prev.filter((n) => n !== name))
+                        }
+                        className="text-muted hover:text-rose-400 cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* QUESTÕES OBJETIVAS */}
+          {objQuestions.length > 0 && (
+            <section className="space-y-3.5">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted px-1">
+                Questões Objetivas ({objQuestions.length})
+              </h3>
+              {objQuestions.map((q, qIdx) => (
+                <div
+                  key={q.id || qIdx}
+                  className="p-4 rounded-2xl bg-surface border border-border space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-mono font-bold text-emerald-400">
+                      Questão {qIdx + 1}
+                    </span>
+                    <span className="text-[11px] font-mono text-muted">
+                      {q.points || 1} pt(s)
+                    </span>
+                  </div>
+
+                  <p className="text-xs sm:text-sm font-medium text-foreground whitespace-pre-wrap leading-relaxed">
+                    {q.text || q.question || q.prompt || ''}
+                  </p>
+
+                  {q.librasVideoUrl && (
+                    <a
+                      href={q.librasVideoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/15 text-cyan-300 text-xs font-semibold"
+                    >
+                      <Video className="w-3.5 h-3.5" />
+                      <span>Assistir Vídeo em Libras</span>
+                    </a>
+                  )}
+
+                  <div className="space-y-2 pt-1">
+                    {(q.options || []).map((optText: string, optIdx: number) => {
+                      const isSelected = selectedObjective[q.id] === optIdx;
+                      const letter = String.fromCharCode(65 + optIdx);
+                      return (
+                        <button
+                          key={optIdx}
+                          type="button"
+                          onClick={() =>
+                            setSelectedObjective((prev) => ({ ...prev, [q.id]: optIdx }))
+                          }
+                          className={`w-full p-3 rounded-xl border text-left text-xs sm:text-sm transition-all flex items-start gap-3 cursor-pointer ${
+                            isSelected
+                              ? 'bg-emerald-500/15 border-emerald-500 text-foreground font-semibold'
+                              : 'bg-background border-border text-muted hover:text-foreground'
+                          }`}
+                        >
+                          <span
+                            className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
+                              isSelected
+                                ? 'bg-emerald-500 text-zinc-950'
+                                : 'bg-surface border border-border text-muted'
+                            }`}
+                          >
+                            {letter}
+                          </span>
+                          <span className="leading-relaxed">{optText}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </section>
+          )}
+
+          {/* QUESTÕES DISSERTATIVAS ESPECÍFICAS */}
+          {essayQuestions.length > 0 && (
+            <section className="space-y-3.5">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted px-1">
+                Questões Dissertativas ({essayQuestions.length})
+              </h3>
+              {essayQuestions.map((eq, eIdx) => (
+                <div
+                  key={eq.id || eIdx}
+                  className="p-4 rounded-2xl bg-surface border border-border space-y-2.5"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-mono font-bold text-cyan-400">
+                      Dissertativa {eIdx + 1}
+                    </span>
+                    <span className="text-[11px] font-mono text-muted">
+                      {eq.points || 2} pt(s)
+                    </span>
+                  </div>
+                  <p className="text-xs sm:text-sm font-medium text-foreground whitespace-pre-wrap leading-relaxed">
+                    {eq.text}
+                  </p>
+                  <textarea
+                    rows={5}
+                    value={essayResponses[eq.id] || ''}
+                    onChange={(e) =>
+                      setEssayResponses((prev) => ({ ...prev, [eq.id]: e.target.value }))
+                    }
+                    placeholder="Digite sua resposta dissertativa com argumentos sociológicos..."
+                    className="w-full bg-background border border-border focus:border-emerald-500 rounded-xl p-3 text-xs sm:text-sm text-foreground focus:outline-none leading-relaxed"
+                  />
+                </div>
+              ))}
+            </section>
+          )}
+
+          {/* CAMPO DISSERTATIVO GERAL / REDAÇÃO / TRABALHO DE PESQUISA */}
+          {(essayQuestions.length === 0 ||
+            ['Redação', 'Trabalho', 'Trabalho em grupo', 'Projeto de pesquisa', 'Dinâmica', 'Recuperação Paralela'].includes(String(executingActivity.type || '')) ||
+            objQuestions.length === 0) && (
+            <section className="p-4 rounded-2xl bg-surface border border-border space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-foreground">
+                  {String(executingActivity.type || '') === 'Redação'
+                    ? 'Texto da Redação:'
+                    : 'Resposta Dissertativa / Desenvolvimento da Pesquisa:'}
+                </label>
+                <span className="text-[11px] font-mono text-muted">
+                  {generalEssayText.trim().split(/\s+/).filter(Boolean).length} palavras
+                </span>
+              </div>
+              <textarea
+                rows={8}
+                value={generalEssayText}
+                onChange={(e) => setGeneralEssayText(e.target.value)}
+                placeholder="Desenvolva aqui sua resposta ou síntese da pesquisa (rascunho salvo automaticamente no aparelho)..."
+                className="w-full bg-background border border-border focus:border-emerald-500 rounded-xl p-3.5 text-xs sm:text-sm text-foreground focus:outline-none leading-relaxed"
+              />
+            </section>
+          )}
+
+          {/* Feedback do Professor caso já tenha sido corrigida */}
+          {myExistingSub?.teacherFeedback && (
+            <section className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/40 space-y-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 block">
+                Parecer Pedagógico do Professor:
+              </span>
+              <p className="text-xs sm:text-sm text-emerald-100 whitespace-pre-wrap leading-relaxed">
+                {myExistingSub.teacherFeedback}
+              </p>
+            </section>
+          )}
+
+          {/* Botão de Envio de Alta Conversão */}
+          <div className="pt-2">
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={handleConfirmSubmitActivity}
+              className="w-full py-3.5 px-6 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-zinc-950 font-bold text-sm flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>
+                {isSubmitting
+                  ? 'Enviando Respostas...'
+                  : myExistingSub
+                  ? 'Atualizar Entrega da Atividade'
+                  : 'Finalizar e Enviar Atividade'}
+              </span>
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // ==========================================================================
+  // SHELL PRINCIPAL DA ÁREA DO ALUNO (INSTAFLOW EDU + LINEAR / APPLE)
+  // ==========================================================================
+  return (
+    <div className="min-h-screen bg-background text-foreground pb-20 md:pb-10">
+      {/* 1. TOP STICKY BAR COMPACTA (54px) */}
+      <header className="sticky top-0 z-30 h-14 bg-surface/90 backdrop-blur-md border-b border-border px-4">
+        <div className="max-w-2xl mx-auto h-full flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-foreground text-background flex items-center justify-center font-mono font-bold text-sm shrink-0">
+              K
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold tracking-tight text-foreground truncate">
+                  KronoMestre
+                </span>
+                <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-mono text-[11px] font-bold shrink-0">
+                  Turma {studentTurmaStd}
+                </span>
+              </div>
+              <p className="text-[11px] text-muted truncate">{activeStudent.fullName}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Atalho Direto de Repositório no Header */}
+            <button
+              type="button"
+              onClick={() => setActiveNav('repositorio')}
+              className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-all ${
+                activeNav === 'repositorio'
+                  ? 'bg-emerald-500 text-zinc-950 border-emerald-500 font-bold'
+                  : 'bg-background hover:bg-surface-hover border-border text-foreground'
+              }`}
+              title="Abrir Repositório e Links do Google Drive"
+            >
+              <FolderOpen className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden xs:inline">Repositório</span>
+              <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px]">
+                {repositoryItems.length}
+              </span>
+            </button>
+
+            {onToggleTheme && (
               <button
                 type="button"
-                onClick={() => handleOpenActivity(nextUrgentActivity.id)}
-                className="py-2 px-4 rounded-xl bg-primary hover:bg-primary-hover text-white font-bold text-xs transition cursor-pointer self-start sm:self-center shrink-0 shadow-md shadow-primary/20 active:scale-95"
+                onClick={onToggleTheme}
+                className="p-2 rounded-lg bg-background hover:bg-surface-hover border border-border text-muted hover:text-foreground cursor-pointer"
+                title="Alternar tema Claro / Escuro"
               >
-                Fazer Agora
+                {themeMode === 'light' ? (
+                  <Moon className="w-4 h-4" />
+                ) : (
+                  <Sun className="w-4 h-4" />
+                )}
               </button>
-            </div>
-          )}
-        </div>
-      </div>
+            )}
 
-      {/* Toast Banner on Submission */}
-      {submissionSuccessMsg && (
-        <div className="p-4 bg-primary/20 border border-primary/40 rounded-2xl text-xs text-primary font-bold flex items-center gap-3 shadow-lg animate-fadeIn">
-          <CheckCircle2 className="w-5 h-5 shrink-0" />
-          <span>{submissionSuccessMsg}</span>
+            <button
+              type="button"
+              onClick={() => setIsChatOpen(true)}
+              className="relative p-2 rounded-lg bg-background hover:bg-surface-hover border border-border text-muted hover:text-foreground cursor-pointer"
+              title="Direct com o Professor"
+            >
+              <MessageSquare className="w-4 h-4" />
+              {myMessages.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 text-zinc-950 font-mono text-[10px] font-bold flex items-center justify-center">
+                  {myMessages.length}
+                </span>
+              )}
+            </button>
+
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="p-2 rounded-lg bg-background hover:bg-rose-500/15 border border-border text-muted hover:text-rose-400 cursor-pointer"
+                title="Sair da conta"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Notificação Toast */}
+      {toastMsg && (
+        <div className="max-w-2xl mx-auto px-4 pt-3">
+          <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 text-xs font-medium flex items-center justify-between">
+            <span>{toastMsg}</span>
+            <button onClick={() => setToastMsg(null)} className="text-emerald-400 ml-2">
+              ✕
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Main Abas Navigation */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-surface p-1.5 rounded-2xl border border-border shadow-inner">
-        <button
-          onClick={() => {
-            setActiveTab('atividades');
-            setSelectedActivityId(null);
-          }}
-          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] min-w-[44px] active:scale-95 ${
-            activeTab === 'atividades'
-              ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
-              : 'text-muted hover:text-foreground hover:bg-surface-hover'
-          }`}
-        >
-          <FileText className="w-4 h-4 shrink-0" />
-          <span>Atividades e Missões</span>
-          {authorizedActivities.length > 0 && (
-            <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 ${
-                activeTab === 'atividades'
-                  ? 'bg-[#003919] text-primary'
-                  : 'bg-[#171f33] text-foreground border border-border'
-              }`}
-            >
-              {authorizedActivities.length}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveTab('mensagens');
-            if (onMarkThreadAsRead) {
-              onMarkThreadAsRead(student.id, 'student');
-            }
-          }}
-          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] min-w-[44px] active:scale-95 ${
-            activeTab === 'mensagens'
-              ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
-              : 'text-muted hover:text-foreground hover:bg-surface-hover'
-          }`}
-        >
-          <MessageSquare className="w-4 h-4 shrink-0" />
-          <span>Mensagens com o Professor</span>
-          {messages.filter(m => (m.threadId === student.id || m.recipientId === student.id) && m.senderRole === 'teacher' && !m.read).length > 0 && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 bg-primary text-white">
-              {messages.filter(m => (m.threadId === student.id || m.recipientId === student.id) && m.senderRole === 'teacher' && !m.read).length}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('arquivos')}
-          className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[44px] min-w-[44px] active:scale-95 ${
-            activeTab === 'arquivos'
-              ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
-              : 'text-muted hover:text-foreground hover:bg-surface-hover'
-          }`}
-        >
-          <FolderDown className="w-4 h-4 shrink-0" />
-          <span>Arquivos (Drive)</span>
-          {studentLibraryFiles.length > 0 && (
-            <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 ${
-                activeTab === 'arquivos'
-                  ? 'bg-[#003919] text-primary'
-                  : 'bg-[#171f33] text-muted'
-              }`}
-            >
-              {studentLibraryFiles.length}
-            </span>
-          )}
-        </button>
-      </div>
-
-      {/* TAB: ATIVIDADES E CORREÇÕES (LIST & FILTER SYSTEM) */}
-      {activeTab === 'atividades' && (
-        <div className="space-y-6">
-          {/* Sub-filter bar for Student Activities com Botão de Acesso a Filtros */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-            {/* Quick status tabs */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-surface rounded-2xl border border-border shadow-inner flex-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setStudentFilter('todas');
-                  setSelectedActivityId(null);
-                }}
-                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
-                  studentFilter === 'todas'
-                    ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
-                    : 'text-muted hover:text-foreground hover:bg-surface-hover'
-                }`}
-              >
-                <BookOpen className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">Todas</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${studentFilter === 'todas' ? 'bg-[#003919] text-primary' : 'bg-black/30 text-foreground'}`}>
-                  {authorizedActivities.length}
+      {/* 2. BARRA DE "STORIES" PEDAGÓGICOS NO TOPO (ESTILO INSTAGRAM MOBILE) */}
+      <section className="border-b border-border bg-surface/50 py-3 px-4 overflow-x-auto no-scrollbar">
+        <div className="max-w-2xl mx-auto flex items-center gap-4">
+          {/* 1º STORY FIXO: REPOSITÓRIO / GOOGLE DRIVE DA TURMA */}
+          <button
+            type="button"
+            onClick={() => setActiveNav('repositorio')}
+            className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer"
+          >
+            <div className="p-0.5 rounded-full bg-gradient-to-tr from-emerald-500 via-teal-400 to-cyan-400">
+              <div className="w-14 h-14 rounded-full bg-background flex flex-col items-center justify-center border-2 border-background group-hover:scale-95 transition-transform">
+                <FolderOpen className="w-5 h-5 text-emerald-400" />
+                <span className="text-[9px] font-mono font-bold text-emerald-300 mt-0.5">
+                  DRIVE
                 </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setStudentFilter('a_fazer');
-                  setSelectedActivityId(null);
-                }}
-                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
-                  studentFilter === 'a_fazer'
-                    ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
-                    : 'text-muted hover:text-foreground hover:bg-surface-hover'
-                }`}
-              >
-                <FileQuestion className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">A Fazer</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${studentFilter === 'a_fazer' ? 'bg-[#003919] text-primary' : 'bg-black/30 text-foreground'}`}>
-                  {pendingActivities.length}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setStudentFilter('a_corrigir');
-                  setSelectedActivityId(null);
-                }}
-                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
-                  studentFilter === 'a_corrigir'
-                    ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
-                    : 'text-muted hover:text-foreground hover:bg-surface-hover'
-                }`}
-              >
-                <Clock className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">A Corrigir</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${studentFilter === 'a_corrigir' ? 'bg-[#003919] text-primary' : 'bg-black/30 text-foreground'}`}>
-                  {toCorrectActivities.length}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setStudentFilter('corrigidas');
-                  setSelectedActivityId(null);
-                }}
-                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
-                  studentFilter === 'corrigidas'
-                    ? 'bg-gradient-to-r from-[#4ade80] to-[#22c55e] text-white shadow-md font-extrabold'
-                    : 'text-muted hover:text-foreground hover:bg-surface-hover'
-                }`}
-              >
-                <Award className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">Corrigidas</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${studentFilter === 'corrigidas' ? 'bg-[#003919] text-primary' : 'bg-black/30 text-foreground'}`}>
-                  {gradedActivities.length}
-                </span>
-              </button>
+              </div>
             </div>
+            <span className="text-[11px] font-semibold text-foreground max-w-[74px] truncate">
+              Repositório
+            </span>
+          </button>
 
-            {/* BOTÃO DE ACESSO A FILTROS (ALUNO) */}
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => setIsStudentFilterOpen((prev) => !prev)}
-                className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer border min-h-[44px] ${
-                  isStudentFilterOpen || activeStudentFiltersCount > 0
-                    ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20'
-                    : 'bg-surface hover:bg-surface-hover text-foreground border-border'
-                }`}
-              >
-                <SlidersHorizontal className="w-4 h-4 shrink-0" />
-                <span>Filtros</span>
-                {activeStudentFiltersCount > 0 && (
-                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-white/20 text-white">
-                    {activeStudentFiltersCount}
+          {/* 2º STORY: ARENA AO VIVO / KRONOGAMES */}
+          <button
+            type="button"
+            onClick={() => setActiveNav('games')}
+            className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer"
+          >
+            <div
+              className={`p-0.5 rounded-full ${
+                kronoGamesActivities.length > 0
+                  ? 'bg-gradient-to-tr from-amber-500 via-orange-500 to-rose-500'
+                  : 'bg-border'
+              }`}
+            >
+              <div className="w-14 h-14 rounded-full bg-background flex flex-col items-center justify-center border-2 border-background group-hover:scale-95 transition-transform">
+                <Gamepad2 className="w-5 h-5 text-amber-400" />
+                <span className="text-[9px] font-mono font-bold text-amber-300 mt-0.5">
+                  {kronoGamesActivities.length} JOGOS
+                </span>
+              </div>
+            </div>
+            <span className="text-[11px] font-medium text-foreground max-w-[74px] truncate">
+              KronoGames
+            </span>
+          </button>
+
+          {/* 3º STORY: PENDENTES DA SEMANA */}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveNav('feed');
+              setFeedFilter('pending');
+            }}
+            className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer"
+          >
+            <div
+              className={`p-0.5 rounded-full ${
+                pendingActivities.length > 0
+                  ? 'bg-gradient-to-tr from-rose-500 to-amber-500'
+                  : 'bg-border'
+              }`}
+            >
+              <div className="w-14 h-14 rounded-full bg-background flex flex-col items-center justify-center border-2 border-background group-hover:scale-95 transition-transform">
+                <Clock className="w-5 h-5 text-rose-400" />
+                <span className="text-[9px] font-mono font-bold text-zinc-300 mt-0.5">
+                  {pendingActivities.length} PEND.
+                </span>
+              </div>
+            </div>
+            <span className="text-[11px] font-medium text-foreground max-w-[74px] truncate">
+              Pendentes
+            </span>
+          </button>
+
+          {/* 4º STORY: BOLETIM & NOTAS */}
+          <button
+            type="button"
+            onClick={() => setActiveNav('boletim')}
+            className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer"
+          >
+            <div className="p-0.5 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-500">
+              <div className="w-14 h-14 rounded-full bg-background flex flex-col items-center justify-center border-2 border-background group-hover:scale-95 transition-transform">
+                <Award className="w-5 h-5 text-cyan-400" />
+                <span className="text-[9px] font-mono font-bold text-cyan-300 mt-0.5">
+                  {averageGrade ? `M: ${averageGrade}` : 'NOTAS'}
+                </span>
+              </div>
+            </div>
+            <span className="text-[11px] font-medium text-foreground max-w-[74px] truncate">
+              Boletim
+            </span>
+          </button>
+
+          {/* STORIES DINÂMICOS PARA CADA ARQUIVO DO REPOSITÓRIO / DRIVE DA TURMA */}
+          {repositoryItems.slice(0, 5).map((item) => (
+            <a
+              key={item.id}
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-col items-center gap-1.5 shrink-0 group cursor-pointer"
+              title={`Abrir ${item.title} no Google Drive`}
+            >
+              <div className="p-0.5 rounded-full bg-gradient-to-tr from-emerald-500/80 to-zinc-600">
+                <div className="w-14 h-14 rounded-full bg-background flex flex-col items-center justify-center border-2 border-background group-hover:scale-95 transition-transform">
+                  <Link2 className="w-5 h-5 text-emerald-400" />
+                  <span className="text-[8px] font-mono text-muted mt-0.5">ABRIR ↗</span>
+                </div>
+              </div>
+              <span className="text-[11px] font-medium text-muted group-hover:text-foreground max-w-[76px] truncate">
+                {item.title}
+              </span>
+            </a>
+          ))}
+        </div>
+      </section>
+
+      {/* 3. CONTEÚDO PRINCIPAL (MAX-W-2XL CENTRALIZADO COMO INSTAGRAM / THREADS) */}
+      <main className="max-w-2xl mx-auto p-3 sm:p-4 space-y-4">
+        {/* ===================================================================
+            ABA 1: FEED PRINCIPAL DE ATIVIDADES + BANNER FIXO DO REPOSITÓRIO
+           =================================================================== */}
+        {activeNav === 'feed' && (
+          <div className="space-y-4">
+            {/* Banner Fixo de Acesso Rápido ao Repositório no Topo do Feed */}
+            <div className="p-3.5 rounded-2xl bg-surface border border-border flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                  <FolderOpen className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 block">
+                    Repositório Oficial • Turma {studentTurmaStd}
                   </span>
-                )}
-                {isStudentFilterOpen ? (
-                  <ChevronUp className="w-3.5 h-3.5 shrink-0 opacity-80" />
-                ) : (
-                  <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-80" />
-                )}
-              </button>
-
-              {activeStudentFiltersCount > 0 && (
-                <button
-                  type="button"
-                  onClick={handleClearStudentFilters}
-                  className="px-3 py-2.5 rounded-2xl text-xs font-bold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 transition-all flex items-center justify-center gap-1 cursor-pointer min-h-[44px]"
-                  title="Limpar todos os filtros"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Limpar</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* PAINEL REFINADO DE FILTROS DO ALUNO (EXPANSÍVEL PELO BOTÃO) */}
-          {isStudentFilterOpen && (
-            <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-primary/30 bg-surface/95 backdrop-blur-md shadow-xl space-y-3.5 animate-fadeIn">
-              <div className="flex items-center justify-between border-b border-border pb-2.5">
-                <span className="text-xs font-black uppercase tracking-wider text-primary flex items-center gap-1.5">
-                  <SlidersHorizontal className="w-3.5 h-3.5" />
-                  <span>Filtros e Busca de Missões</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setIsStudentFilterOpen(false)}
-                  className="text-text-muted hover:text-foreground p-1 rounded-lg cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                  <h3 className="text-xs sm:text-sm font-bold text-foreground truncate">
+                    {repositoryItems[0]?.title || 'Material Didático & Slides da Turma'}
+                  </h3>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Busca rápida */}
-                <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
-                  <input
-                    type="text"
-                    value={studentSearchQuery}
-                    onChange={(e) => setStudentSearchQuery(e.target.value)}
-                    placeholder="Buscar atividade por título ou disciplina..."
-                    className="w-full pl-10 pr-9 py-2.5 rounded-2xl bg-background border border-border text-foreground placeholder-muted text-xs focus:outline-none focus:border-primary"
-                  />
-                  {studentSearchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setStudentSearchQuery('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground cursor-pointer"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Filtro por Tipo */}
-                <div>
-                  <select
-                    value={studentTypeFilter}
-                    onChange={(e) => setStudentTypeFilter(e.target.value)}
-                    className="w-full py-2.5 px-3 rounded-2xl bg-background border border-border text-foreground text-xs focus:outline-none focus:border-primary cursor-pointer font-medium"
+              <div className="flex items-center gap-2 shrink-0">
+                {repositoryItems[0]?.url && (
+                  <a
+                    href={repositoryItems[0].url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold flex items-center gap-1.5 transition-all"
                   >
-                    <option value="todos">Todos os Formatos</option>
-                    <option value="kronogames">🎮 KronoGames (Jogos Avaliativos)</option>
-                    <option value="Avaliação">Avaliações Formais</option>
-                    <option value="Redação">Redações</option>
-                    <option value="Simulado">Simulados / Treinamentos</option>
-                    <option value="Dinâmica">Dinâmicas / Trabalhos</option>
-                  </select>
-                </div>
+                    <span>Abrir Drive</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
+                {repositoryItems.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveNav('repositorio')}
+                    className="px-2.5 py-2 rounded-xl bg-background border border-border text-xs font-semibold text-foreground cursor-pointer"
+                  >
+                    +{repositoryItems.length - 1}
+                  </button>
+                )}
               </div>
+            </div>
 
-              {/* Footer do painel */}
-              <div className="flex items-center justify-between pt-2 border-t border-border text-xs text-muted">
-                <span>
-                  Exibindo <strong>{filteredStudentActivities.length}</strong> de <strong>{authorizedActivities.length}</strong> missões.
-                </span>
+            {/* Segmented Control Minimalista estilo Linear / iOS */}
+            <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-surface border border-border">
+              {[
+                { id: 'all' as const, label: 'Todas', count: studentActivities.length },
+                { id: 'pending' as const, label: 'Pendentes', count: pendingActivities.length },
+                { id: 'games' as const, label: 'KronoGames', count: kronoGamesActivities.length },
+                { id: 'completed' as const, label: 'Feitas', count: completedActivities.length },
+              ].map((tab) => (
                 <button
+                  key={tab.id}
                   type="button"
-                  onClick={() => setIsStudentFilterOpen(false)}
-                  className="px-3.5 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary font-bold rounded-xl text-xs transition-all cursor-pointer"
+                  onClick={() => setFeedFilter(tab.id)}
+                  className={`py-2 px-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    feedFilter === tab.id
+                      ? 'bg-foreground text-background font-bold shadow-xs'
+                      : 'text-muted hover:text-foreground'
+                  }`}
                 >
-                  Fechar
+                  <span className="truncate">{tab.label}</span>
+                  <span className="font-mono text-[10px] opacity-80">({tab.count})</span>
                 </button>
-              </div>
+              ))}
             </div>
-          )}
 
-          {/* LIST VIEW (when no activity is selected) */}
-          {selectedActivityId === null && (
-            <div className="space-y-4">
-              {filteredStudentActivities.length === 0 ? (
-                <div className="glass-panel p-12 text-center rounded-3xl border border-border text-muted space-y-3 shadow-xl">
-                  <div className="w-16 h-16 bg-primary/10 border border-primary/30 rounded-2xl flex items-center justify-center mx-auto text-primary text-2xl font-black">
-                    🍃
-                  </div>
-                  <p className="text-base font-extrabold text-foreground">Nenhuma Missão Encontrada neste Filtro!</p>
-                  <p className="text-xs text-muted max-w-md mx-auto leading-relaxed">
-                    Você não possui atividades nesta categoria no momento. Alterne os filtros acima para visualizar suas missões pendentes, enviadas ou corrigidas.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-4">
-                  {filteredStudentActivities.map((act) => {
-                    const sub = act.submissions.find(
-                      (s) => s.studentId === student.id || s.studentName === student.fullName
-                    );
-                    const isPending = !sub || sub.status === 'returned' || sub.status === 'draft';
-                    const isToCorrect = sub && sub.status === 'pending';
-                    const isGraded = sub && sub.status === 'graded';
-                    const totalScore = sub && isGraded ? (sub.objectiveScore || 0) + (sub.essayScore || 0) : null;
-
-                    return (
-                      <div
-                        key={act.id}
-                        className="glass-panel p-4 sm:p-6 rounded-2xl border border-border hover:border-primary/40 transition-all space-y-3 sm:space-y-4 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                      >
-                        <div className="space-y-2 max-w-2xl min-w-0">
-                          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                            <span className="text-[10px] sm:text-[11px] font-bold bg-primary/20 text-primary px-2.5 sm:px-3 py-0.5 rounded-full border border-primary/30">
-                              {act.isGameActivity || act.gameData || act.type === 'Jogo Avaliativo'
-                                ? '🎮 KronoGames'
-                                : act.type === 'Simulado'
-                                ? 'Treinamento Tático'
-                                : act.type === 'Redação'
-                                ? 'Redação'
-                                : act.type === 'Dinâmica'
-                                ? 'Treino em Equipe'
-                                : act.type === 'Trabalho em grupo'
-                                ? 'Trabalho em Grupo'
-                                : act.type === 'Projeto de pesquisa'
-                                ? 'Projeto de Pesquisa'
-                                : 'Exame'}
-                            </span>
-
-                            <span className="text-[10px] sm:text-[11px] font-bold text-amber-600 flex items-center gap-1.5 bg-surface px-2.5 sm:px-3 py-0.5 rounded-full border border-amber-500/30">
-                              <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                              <span>Prazo: {act.deadline || 'Sem data'}</span>
-                            </span>
-
-                            {isPending && (
-                              <span className="text-[10px] sm:text-[11px] font-extrabold bg-amber-100 text-amber-600 px-2.5 sm:px-3 py-0.5 rounded-full border border-amber-200">
-                                📜 Pendente (A Fazer)
-                              </span>
-                            )}
-                            {isToCorrect && (
-                              <span className="text-[10px] sm:text-[11px] font-extrabold bg-sky-500/20 text-sky-300 px-2.5 sm:px-3 py-0.5 rounded-full border border-sky-500/40">
-                                ⏳ A Corrigir pelo Professor
-                              </span>
-                            )}
-                            {isGraded && (
-                              <span className="text-[10px] sm:text-[11px] font-extrabold bg-emerald-100 text-emerald-600 px-2.5 sm:px-3 py-0.5 rounded-full border border-emerald-200">
-                                ✅ Corrigida ({totalScore !== null ? totalScore.toFixed(1) : 0}/10)
-                              </span>
-                            )}
-                          </div>
-
-                          <h3 className="text-base sm:text-lg font-black text-foreground tracking-tight">
-                            {getShortActivityTitle(act)}
-                          </h3>
-                        </div>
-
-                        <div className="shrink-0 pt-1 sm:pt-0 w-full sm:w-auto">
-                          <button
-                            onClick={() => {
-                              if (act.isGameActivity || act.gameData || act.type === 'Jogo Avaliativo') {
-                                if (isPending) {
-                                  setActiveKronoGameActivity(act);
-                                } else {
-                                  handleOpenActivity(act.id);
-                                }
-                              } else if (act.playfulGameHtml || act.adaptationType === 'severe_playful') {
-                                setFullscreenGameActivityId(act.id);
-                              } else {
-                                handleOpenActivity(act.id);
-                              }
-                            }}
-                            className="w-full sm:w-auto py-3 px-6 min-h-[44px] min-w-[44px] bg-primary hover:bg-primary-hover text-white font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-primary/20 active:scale-95"
-                          >
-                            {isPending ? (
-                              <>
-                                <Gamepad2 className="w-4 h-4" />
-                                <span>
-                                  {act.isGameActivity || act.gameData || act.type === 'Jogo Avaliativo'
-                                    ? 'Jogar KronoGame 🎮'
-                                    : 'Fazer Atividade'}
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                <Eye className="w-4 h-4" />
-                                <span>Ver Nota / Detalhes</span>
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* DETAIL VIEW EM JANELA MODAL DEDICADA (TELA CHEIA NO CELULAR E PC) */}
-          {selectedActivityId !== null && (
-            <div className="fixed inset-0 z-50 bg-background overflow-y-auto p-3 sm:p-6 md:p-8 animate-fadeIn">
-              <div className="max-w-4xl mx-auto space-y-6 pb-12">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-surface rounded-2xl border border-border shadow-md">
-                <button
-                  onClick={() => setSelectedActivityId(null)}
-                  className="py-2.5 px-4 min-h-[44px] min-w-[44px] bg-surface-hover hover:bg-white/20 text-foreground font-bold text-xs rounded-xl flex items-center gap-2 transition-all cursor-pointer border border-border active:scale-95 shrink-0 w-fit"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span>Voltar para Lista</span>
-                </button>
-                <div className="text-left sm:text-right min-w-0">
-                  <span className="text-[10px] uppercase tracking-wider text-muted font-semibold block">
-                    Atividade Selecionada
-                  </span>
-                  <span className="text-sm font-bold text-foreground truncate block">
-                    {authorizedActivities.find((a) => a.id === selectedActivityId)?.title}
-                  </span>
-                </div>
+            {/* Lista de Posts de Atividades (Edge-to-Edge no Mobile) */}
+            {displayedFeedActivities.length === 0 ? (
+              <div className="p-10 rounded-2xl bg-surface border border-border text-center space-y-2">
+                <CheckCircle2 className="w-7 h-7 text-emerald-400 mx-auto" />
+                <p className="text-sm font-bold text-foreground">
+                  Nenhuma atividade neste filtro para a Turma {studentTurmaStd}.
+                </p>
+                <p className="text-xs text-muted">
+                  Consulte o Repositório da turma ou altere o filtro acima.
+                </p>
               </div>
-
-              {(() => {
-                const act = authorizedActivities.find((a) => a.id === selectedActivityId);
-                if (!act) return null;
-
-                const sub = act.submissions.find(
-                  (s) => s.studentId === student.id || s.studentName === student.fullName
-                );
-
-                const isPendingOrReturned = !sub || sub.status === 'returned' || sub.status === 'draft';
-
-                if (isPendingOrReturned) {
-                  const distribution = getActivityGradeDistribution(act);
-                  const questions = act.questions || [];
-                  const objectiveQuestions = questions.filter((q) => q.type === 'multiple_choice') as (ActivityQuestion & MultipleChoiceQuestion)[];
-                  const essayQuestions = questions.filter((q) => q.type === 'essay') as (ActivityQuestion & EssayQuestion)[];
+            ) : (
+              <div className="space-y-3">
+                {displayedFeedActivities.map((act) => {
+                  const sub = mySubmissionsMap.get(act.id);
+                  const isGame = isActivityKronoGame(act);
+                  const isDebate =
+                    act.gameMode === 'debate_paperless' ||
+                    Boolean(act.gameData?.debateConfig);
+                  const actLinks = [
+                    ...extractLinksFromText(act.supportMaterial),
+                    ...extractLinksFromText(act.description),
+                  ];
+                  const totalGrade = sub
+                    ? Math.min(
+                        10,
+                        Number(sub.objectiveScore || 0) +
+                          Number(sub.essayScore || 0) +
+                          Number(sub.extraPoints || 0)
+                      )
+                    : null;
 
                   return (
-                    <div
+                    <article
                       key={act.id}
-                      className={`glass-panel p-6 sm:p-8 rounded-3xl border border-border space-y-6 shadow-xl relative overflow-hidden ${
-                        act.securityBlockCopyStatement ? 'select-none' : ''
-                      }`}
-                      onCopy={(e) => {
-                        if (act.securityBlockCopyStatement) {
-                          e.preventDefault();
-                          showSecurityToast('❌ Cópia e seleção de texto bloqueadas para esta atividade pelo professor.');
-                        }
-                      }}
-                      onCut={(e) => {
-                        if (act.securityBlockCopyStatement) {
-                          e.preventDefault();
-                          showSecurityToast('❌ Recortar texto bloqueado nesta atividade.');
-                        }
-                      }}
-                      onContextMenu={(e) => {
-                        if (act.securityBlockCopyStatement) {
-                          e.preventDefault();
-                          showSecurityToast('❌ Menu de contexto (botão direito) desabilitado por trava de segurança.');
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (act.securityBlockCopyStatement) {
-                          if ((e.ctrlKey || e.metaKey) && ['c', 'C', 'x', 'X', 'a', 'A', 'u', 'U'].includes(e.key)) {
-                            e.preventDefault();
-                            showSecurityToast('❌ Atalho de cópia/seleção bloqueado para esta atividade.');
-                          }
-                        }
-                      }}
+                      className="rounded-2xl bg-surface border border-border hover:border-zinc-700 transition-all overflow-hidden"
                     >
-                    {/* Banner if activity was returned for re-do */}
-                    {sub && sub.status === 'returned' && (
-                      <div className="bg-amber-100 border border-amber-200 p-4 rounded-2xl text-xs text-amber-200 flex items-start gap-3 shadow-lg">
-                        <RotateCcw className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                        <div className="space-y-1">
-                          <p className="font-extrabold text-amber-600 text-sm">
-                            ⚠️ Atividade Devolvida pelo Professor para Refazer!
-                          </p>
-                          {sub.teacherFeedback ? (
-                            <p className="text-foreground">
-                              <strong>Orientações / Observações do Professor:</strong> &ldquo;{sub.teacherFeedback}&rdquo;
-                            </p>
-                          ) : (
-                            <p className="text-muted">
-                              Ajuste suas respostas e envie o pergaminho novamente para nova avaliação.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Activity Top Bar */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2">
-                          <span className="text-[10px] sm:text-[11px] font-extrabold bg-primary/20 text-primary px-2.5 sm:px-3 py-1 rounded-full border border-primary/30 uppercase tracking-wide">
-                            {act.type === 'Simulado'
-                              ? 'Treinamento Tático (Simulado)'
-                              : act.type === 'Redação'
-                              ? 'Pergaminho de Redação'
-                              : act.type === 'Dinâmica'
-                              ? 'Treino em Equipe (Dinâmica)'
-                              : act.type === 'Trabalho em grupo'
-                              ? 'Trabalho em Grupo'
-                              : act.type === 'Projeto de pesquisa'
-                              ? 'Projeto de Pesquisa'
-                              : 'Exame (Avaliação)'}
-                          </span>
-
-                          {/* Subtle Highlighted Deadline Badge */}
-                          <span className="text-[10px] sm:text-[11px] font-bold text-amber-600 flex items-center gap-1.5 bg-surface px-2.5 sm:px-3.5 py-1 rounded-full border border-amber-500/30 shadow-sm">
-                            <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                            <span>Prazo Limite: {act.deadline || 'Sem data'}</span>
-                          </span>
-
-                          {/* Subtle Status Badge */}
-                          {sub && sub.status === 'returned' ? (
-                            <span
-                              className={`text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full border ${
-                                sub.returnCount === 3
-                                  ? 'bg-rose-100 text-rose-600 border-rose-200'
-                                  : sub.returnCount === 2
-                                  ? 'bg-orange-600/20 text-orange-200 border-orange-500/40'
-                                  : 'bg-orange-500/20 text-orange-300 border-orange-500/30'
-                              }`}
-                            >
-                              {sub.returnCount
-                                ? `↩️ Devolvida ${sub.returnCount}x`
-                                : '↩️ Devolvida 1x'}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] sm:text-[11px] font-bold text-amber-600 bg-amber-500/15 px-2.5 sm:px-3 py-1 rounded-full border border-amber-500/30">
-                              📜 Pendente (A Fazer)
-                            </span>
-                          )}
-
-                          <span className="text-[10px] sm:text-[11px] font-bold text-foreground bg-[#171f33] px-2.5 sm:px-3 py-1 rounded-full border border-border">
-                            Nota Máxima: {distribution.maxGrade.toFixed(1)} pts
-                          </span>
-
-                          {objectiveQuestions.length > 0 && (
-                            <span className={`text-[10px] sm:text-[11px] font-bold px-2.5 sm:px-3 py-1 rounded-full border ${
-                              Object.keys(objectiveInputs[act.id] || {}).length === objectiveQuestions.length
-                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                                : 'bg-primary/20 text-primary border-primary/30'
-                            }`}>
-                              📝 {Object.keys(objectiveInputs[act.id] || {}).length} de {objectiveQuestions.length} respondidas
-                            </span>
-                          )}
-
-                          {act.isAdapted && (
-                            <span className="text-[10px] sm:text-[11px] font-bold text-amber-600 bg-amber-100 px-2.5 sm:px-3 py-1 rounded-full border border-amber-500/30">
-                              ✨ Adaptada PNE
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="text-xl sm:text-2xl font-black text-foreground break-words">{act.title}</h3>
-                      </div>
-                    </div>
-
-                    {/* Cortina Preta Instantânea quando o aluno tenta tirar Print da Tela */}
-                    {isScreenshotShieldActive && (
-                      <div className="fixed inset-0 z-[9999] bg-black flex flex-col items-center justify-center p-6 text-center select-none">
-                        <ShieldAlert className="w-16 h-16 text-rose-500 mb-4 animate-bounce" />
-                        <h2 className="text-xl sm:text-2xl font-black text-white">
-                          🚫 CAPTURA DE TELA BLOQUEADA!
-                        </h2>
-                        <p className="text-xs sm:text-sm text-zinc-300 max-w-md mt-2">
-                          O sistema Anti-Cola KronoMestre bloqueou a tentativa de Print Screen e limpou a sua área de transferência. Foque na sua avaliação!
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Security Active Banner (Apenas para atividades convencionais) */}
-                    {!(act.playfulGameHtml || act.adaptationType === 'severe_playful') && (act.securityFocusLock || act.securityBlockCopyStatement || act.securityBlockPasteEssay) && (
-                      <div className="bg-[#171f33] p-3.5 rounded-2xl border border-amber-500/30 flex flex-wrap items-center gap-2.5 text-xs text-amber-200 shadow-md">
-                        <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
-                        <span className="font-bold text-foreground">Seguranças Anti-Cola Ativas:</span>
-                        {act.securityFocusLock && (
-                          <span className="bg-amber-100 text-amber-600 px-2.5 py-0.5 rounded-full border border-amber-500/30 font-semibold text-[11px] flex items-center gap-1">
-                            🛡️ Trava de Foco (Avisos: {focusWarnings[act.id] || 0}/4)
-                          </span>
-                        )}
-                        {act.securityBlockCopyStatement && (
-                          <span className="bg-rose-100 text-rose-600 px-2.5 py-0.5 rounded-full border border-rose-500/30 font-semibold text-[11px] flex items-center gap-1">
-                            <CopyX className="w-3 h-3 text-rose-400" />
-                            <span>Sem Cópia</span>
-                          </span>
-                        )}
-                        {act.securityBlockPasteEssay && (
-                          <span className="bg-purple-100 text-purple-600 px-2.5 py-0.5 rounded-full border border-purple-500/30 font-semibold text-[11px] flex items-center gap-1">
-                            <ClipboardX className="w-3 h-3 text-purple-400" />
-                            <span>Sem Cola</span>
-                          </span>
-                        )}
-                        <span className="bg-cyan-100 text-cyan-700 px-2.5 py-0.5 rounded-full border border-cyan-500/30 font-semibold text-[11px] flex items-center gap-1">
-                          <span>📸 Anti-Print Ativo</span>
-                        </span>
-                      </div>
-                    )}
-
-                    {/* BANNER ESPECIAL DE JOGO AVALIATIVO (KRONOGAMES) */}
-                    {(act.isGameActivity || act.gameData || act.type === 'Jogo Avaliativo') && (
-                      <div className="bg-gradient-to-r from-amber-500/20 via-primary/20 to-purple-500/20 border-2 border-amber-500/40 p-6 rounded-3xl space-y-4 shadow-xl">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <Gamepad2 className="w-6 h-6 text-amber-400 animate-pulse" />
-                              <span className="text-xs font-black uppercase tracking-wider text-amber-400">
-                                KronoGames • Desafio Gamificado
+                      {/* Cabeçalho do Post */}
+                      <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
+                              isGame
+                                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                                : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                            }`}
+                          >
+                            {isGame ? <Gamepad2 className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-foreground truncate">
+                                {act.subject || 'Sociologia'}
+                              </span>
+                              <span className="text-muted">•</span>
+                              <span className="text-[11px] font-medium text-muted truncate">
+                                {isDebate
+                                  ? 'Debate Sem Papel'
+                                  : isGame
+                                  ? 'KronoGames'
+                                  : act.type || 'Atividade Formal'}
                               </span>
                             </div>
-                            <h4 className="text-lg sm:text-xl font-black text-foreground">
-                              {act.title}
-                            </h4>
-                            <p className="text-xs text-muted max-w-xl">
-                              {act.gameData?.introText || act.description || 'Participe deste desafio interativo com fases dinâmicas e correção 100% automática!'}
-                            </p>
+                            <span className="text-[10px] font-mono text-muted block">
+                              Turma {studentTurmaStd} • Prazo: {act.dueDate || act.deadline || 'Em aberto'}
+                            </span>
                           </div>
-
-                          <button
-                            type="button"
-                            onClick={() => setActiveKronoGameActivity(act)}
-                            className="px-6 py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white font-black text-sm rounded-2xl shadow-xl shadow-amber-500/25 flex items-center justify-center gap-2.5 transition-all cursor-pointer active:scale-95 shrink-0"
-                          >
-                            <Gamepad2 className="w-5 h-5" />
-                            <span>Entrar no Jogo Agora 🚀</span>
-                          </button>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-amber-500/20 text-[11px] font-bold text-muted">
-                          <span className="flex items-center gap-1.5 text-amber-300">
-                            🏆 Fases: {act.gameData?.stages?.length || 6} Rodadas
+                        {/* Status Badge */}
+                        {sub ? (
+                          <span className="px-2.5 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-mono text-[11px] font-bold shrink-0">
+                            {sub.status === 'graded' && totalGrade !== null
+                              ? `Nota: ${totalGrade.toFixed(1)}`
+                              : '✓ Entregue'}
                           </span>
-                          <span>•</span>
-                          <span className="flex items-center gap-1.5 text-primary">
-                            ⚡ Modo: {act.executionContext === 'classroom_group' ? 'Sala de Aula (Dupla/Grupo)' : 'Individual (Casa)'}
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono text-[11px] font-bold shrink-0">
+                            Pendente
                           </span>
-                          <span>•</span>
-                          <span className="flex items-center gap-1.5 text-emerald-300">
-                            💯 Correção Instantânea (0 a 10 pts)
-                          </span>
-                        </div>
+                        )}
                       </div>
-                    )}
 
-                    {/* Grade Distribution Rule Banner (Apenas para atividades convencionais com questões) */}
-                    {!(act.playfulGameHtml || act.adaptationType === 'severe_playful') && (
-                      <div className="bg-surface p-4 rounded-2xl border border-primary/30 flex items-start gap-3 text-xs text-foreground">
-                        <Sparkles className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-bold text-foreground">
-                            Regra de Pontuação da Atividade:
-                          </p>
-                          <p className="text-muted mt-0.5">
-                            {distribution.distributionLabel}.
-                          </p>
-                          <p className="text-[11px] text-primary font-semibold mt-1">
-                            ⚡ As questões objetivas têm correção automática instantânea ao enviar. A parte dissertativa é corrigida pelo professor.
-                          </p>
-                        </div>
-                      </div>
-                    )}
+                      {/* Corpo do Post */}
+                      <div className="p-4 space-y-3">
+                        <h3 className="text-base font-bold text-foreground leading-snug">
+                          {act.title}
+                        </h3>
 
-                    {/* Description / Statement / Support Material (Para atividades convencionais) */}
-                    {!(act.playfulGameHtml || act.adaptationType === 'severe_playful') && (
-                      <div
-                        className={`space-y-4 ${act.securityBlockCopyStatement ? 'select-none' : ''}`}
-                        onCopy={(e) => {
-                          if (act.securityBlockCopyStatement) {
-                            e.preventDefault();
-                            showSecurityToast('❌ Cópia de enunciados e textos bloqueada para esta atividade.');
-                          }
-                        }}
-                        onCut={(e) => {
-                          if (act.securityBlockCopyStatement) {
-                            e.preventDefault();
-                            showSecurityToast('❌ Ação de recortar bloqueada nesta atividade.');
-                          }
-                        }}
-                        onContextMenu={(e) => {
-                          if (act.securityBlockCopyStatement) {
-                            e.preventDefault();
-                            showSecurityToast('❌ Menu de contexto (botão direito) bloqueado nesta atividade.');
-                          }
-                        }}
-                      >
-                        <div>
-                          <h4 className="text-xs font-bold text-muted uppercase tracking-wider mb-1">
-                            Orientações do Professor:
-                          </h4>
-                          <p className="text-xs text-foreground leading-relaxed bg-[#171f33]/60 p-4 rounded-2xl border border-border">
+                        {act.description && (
+                          <p className="text-xs sm:text-sm text-muted line-clamp-3 whitespace-pre-wrap leading-relaxed">
                             {act.description}
                           </p>
-                        </div>
-
-                        {act.supportMaterial && (
-                          <div className="bg-[#171f33] p-4 rounded-2xl border border-border space-y-2">
-                            <h5 className="text-xs font-bold text-[#c0c1ff] flex items-center gap-1.5">
-                              <BookOpen className="w-4 h-4 text-primary" />
-                              <span>Texto de Apoio / Leitura Obrigatória:</span>
-                            </h5>
-                            <div className="text-xs text-muted leading-relaxed space-y-1.5">
-                              {act.supportMaterial.split('\n').map((line, i) => {
-                                const urlMatch = line.match(/(https?:\/\/[^\s]+)/g);
-                                if (urlMatch) {
-                                  const parts = line.split(/(https?:\/\/[^\s]+)/g);
-                                  return (
-                                    <p key={i} className="whitespace-pre-wrap flex flex-wrap items-center gap-1.5 my-1">
-                                      {parts.map((part, pIdx) => {
-                                        if (part.match(/^https?:\/\//i)) {
-                                          return (
-                                            <a
-                                              key={pIdx}
-                                              href={part}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="inline-flex items-center gap-1.5 px-3 py-1 min-h-[44px] min-w-[44px] bg-primary/20 hover:bg-primary/30 border border-primary/40 text-primary font-bold rounded-xl text-xs transition-all underline cursor-pointer shadow-sm active:scale-95 my-0.5"
-                                            >
-                                              <Link2 className="w-3.5 h-3.5 shrink-0" />
-                                              <span className="truncate max-w-xs">{part}</span>
-                                              <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-                                            </a>
-                                          );
-                                        }
-                                        return <span key={pIdx}>{part}</span>;
-                                      })}
-                                    </p>
-                                  );
-                                }
-                                return <p key={i} className="whitespace-pre-wrap">{line}</p>;
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* JOGO LÚDICO INTERATIVO (CASOS SEVEROS PNE) - IMERSIVO, LIMPO E RESPONSIVO */}
-                    {(act.playfulGameHtml || act.adaptationType === 'severe_playful') && (
-                      <div className="space-y-4">
-                        {/* Enunciado Limpo e direto */}
-                        {act.description && (
-                          <div className="bg-surface p-3.5 sm:p-4 rounded-2xl border border-amber-500/20 text-xs sm:text-sm text-foreground leading-relaxed flex items-center gap-2">
-                            <span className="font-bold text-amber-400 shrink-0">🎯 Enunciado:</span>
-                            <span>{act.description}</span>
-                          </div>
                         )}
 
-                        <div className="flex flex-wrap items-center justify-between gap-3 bg-surface/80 p-3 rounded-2xl border border-amber-500/30">
-                          <div className="flex items-center gap-2">
-                            <Gamepad2 className="w-5 h-5 text-amber-400" />
-                            <span className="font-bold text-sm text-foreground">{act.title}</span>
-                          </div>
-
-                          <div className="flex items-center gap-2.5">
-                            {playfulScores[act.id] ? (
-                              <span className="px-3 py-1.5 bg-primary/20 text-primary font-bold text-xs rounded-full border border-primary/30 flex items-center gap-1.5 shadow-sm">
-                                <Star className="w-4 h-4 fill-[#4ade80]" />
-                                Conquistado: {playfulScores[act.id].grade} / {act.maxGrade || 10} pts
-                              </span>
-                            ) : (
-                              <span className="px-3 py-1.5 bg-amber-100 text-amber-600 font-bold text-xs rounded-full border border-amber-500/30 flex items-center gap-1">
-                                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                                <span>Responda na tela</span>
-                              </span>
-                            )}
-
-                            {/* Botão de Tela Cheia / Modo Imersivo */}
-                            <button
-                              type="button"
-                              onClick={() => setFullscreenGameActivityId(act.id)}
-                              className="px-3.5 py-1.5 min-h-[44px] min-w-[44px] bg-[#171f33] hover:bg-[#202b44] text-foreground hover:text-amber-600 font-bold text-xs rounded-full border border-border transition-all flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95"
-                              title="Expandir para tela cheia"
-                            >
-                              <Maximize2 className="w-3.5 h-3.5 text-amber-400" />
-                              <span className="hidden sm:inline">Tela Cheia</span>
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Container do Jogo Responsivo */}
-                        <div className="w-full h-[65vh] sm:h-[75vh] min-h-[480px] sm:min-h-[560px] rounded-3xl overflow-hidden border-2 border-amber-200 shadow-2xl bg-black relative">
-                          <iframe
-                            srcDoc={act.playfulGameHtml || '<div style="color:white;padding:20px;font-family:sans-serif;text-align:center;">Carregando jogo interativo...</div>'}
-                            title={`Jogo Lúdico - ${act.title}`}
-                            className="w-full h-full border-0 block"
-                            allow="autoplay; fullscreen"
-                            sandbox="allow-scripts allow-modals"
-                          />
-                        </div>
-
-                        {/* Modal Imersivo em Tela Cheia quando acionado */}
-                        {fullscreenGameActivityId === act.id && (
-                          <div className="fixed inset-0 z-50 bg-[#060a14] p-2 sm:p-4 flex flex-col justify-between animate-fadeIn">
-                            {/* Barra Superior Imersiva */}
-                            <div className="flex items-center justify-between pb-2 mb-2 border-b border-border px-2">
-                              <div className="flex items-center gap-3">
-                                <button
-                                  type="button"
-                                  onClick={() => setFullscreenGameActivityId(null)}
-                                  className="px-4 py-2 min-h-[44px] min-w-[44px] bg-[#171f33] hover:bg-[#222c42] text-foreground font-bold text-xs sm:text-sm rounded-full border border-border transition-all flex items-center gap-2 cursor-pointer shadow"
-                                >
-                                  <Minimize2 className="w-4 h-4 text-amber-400" />
-                                  <span>Sair da Tela Cheia</span>
-                                </button>
-                                <span className="font-black text-foreground text-sm sm:text-base hidden sm:inline">{act.title}</span>
-                              </div>
-
-                              <div className="flex items-center gap-3">
-                                {playfulScores[act.id] && (
-                                  <span className="px-3 py-1 bg-primary/20 text-primary font-bold text-xs rounded-full border border-primary/30 flex items-center gap-1.5">
-                                    <Star className="w-4 h-4 fill-[#4ade80]" />
-                                    {playfulScores[act.id].grade} / {act.maxGrade || 10} pts
-                                  </span>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setFullscreenGameActivityId(null);
-                                    handleSubmit(act);
-                                  }}
-                                  className="px-5 py-2 min-h-[44px] min-w-[44px] bg-primary hover:bg-primary-hover text-white font-black text-xs sm:text-sm rounded-full transition-all shadow-lg shadow-primary/20 cursor-pointer flex items-center gap-2"
-                                >
-                                  <Gamepad2 className="w-4 h-4 stroke-[2.5]" />
-                                  <span>Concluir e Enviar Nota 🚀</span>
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Iframe em Tela Cheia */}
-                            <div className="flex-1 w-full rounded-2xl overflow-hidden border-2 border-amber-200 bg-black shadow-2xl relative">
-                              <iframe
-                                srcDoc={act.playfulGameHtml || '<div style="color:white;padding:20px;font-family:sans-serif;text-align:center;">Carregando jogo interativo...</div>'}
-                                title={`Jogo Lúdico Fullscreen - ${act.title}`}
-                                className="w-full h-full border-0 block"
-                                allow="autoplay; fullscreen"
-                                sandbox="allow-scripts allow-modals"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* PARTE 1: QUESTÕES OBJETIVAS */}
-                    {objectiveQuestions.length > 0 && !(act.playfulGameHtml || act.adaptationType === 'severe_playful') && (
-                      <div className="space-y-4 pt-2 border-t border-border">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h4 className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-2">
-                            <HelpCircle className="w-4 h-4 text-primary shrink-0" />
-                            <span>Parte 1: Questões Objetivas (Múltipla Escolha)</span>
-                          </h4>
-                          <span className="text-[11px] sm:text-xs font-bold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full border border-primary/20 shrink-0">
-                            Vale {distribution.maxObjectiveGrade.toFixed(1)} pts
-                          </span>
-                        </div>
-
-                        <div className="space-y-4 sm:space-y-6">
-                          {objectiveQuestions.map((q, qIndex) => {
-                            const studentChoices = objectiveInputs[act.id] || {};
-                            const currentChoice = studentChoices[q.id];
-
-                            return (
-                              <div
-                                key={q.id || qIndex}
-                                className="bg-surface p-4 sm:p-5 rounded-2xl border border-border space-y-3"
+                        {/* Card de Anexo / Link do Drive Incorporado se houver */}
+                        {actLinks.length > 0 && (
+                          <div className="space-y-1.5 pt-1">
+                            {actLinks.map((lnk, lIdx) => (
+                              <a
+                                key={lIdx}
+                                href={lnk}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-2.5 rounded-xl bg-background hover:bg-surface-hover border border-border flex items-center justify-between gap-2 text-xs font-semibold text-emerald-400 transition-colors"
                               >
-                                <p className="text-xs font-bold text-foreground leading-relaxed break-words">
-                                  Questão {qIndex + 1}: <span className="font-normal text-foreground">{q.statement}</span>
-                                </p>
-
-                                <div className="space-y-2 pt-1">
-                                  {q.options.map((optText, optIdx) => {
-                                    const letters = ['A', 'B', 'C', 'D'];
-                                    const isSelected = currentChoice === optIdx;
-
-                                    return (
-                                      <button
-                                        key={optIdx}
-                                        type="button"
-                                        onClick={() => handleSelectOption(act.id, q.id, optIdx)}
-                                        className={`w-full text-left p-3 sm:p-3.5 min-h-[44px] min-w-[44px] rounded-xl text-xs transition-all flex items-start gap-2.5 sm:gap-3 border cursor-pointer active:scale-[0.99] ${
-                                          isSelected
-                                            ? 'bg-primary/20 border-primary text-foreground font-bold'
-                                            : 'bg-[#171f33] border-border text-muted hover:bg-surface-hover hover:text-foreground'
-                                        }`}
-                                      >
-                                        <span
-                                          className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold mt-0.5 ${
-                                            isSelected
-                                              ? 'bg-primary text-white'
-                                              : 'bg-surface-hover text-foreground'
-                                          }`}
-                                        >
-                                          {letters[optIdx]}
-                                        </span>
-                                        <span className="leading-relaxed break-words flex-1">{optText}</span>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* PARTE 2: QUESTÃO DISSERTATIVA (ESTILO CADERNO UNIVERSITÁRIO COM ESPIRAL) */}
-                    {(essayQuestions.length > 0 || distribution.hasEssay) && (
-                      <div className="space-y-5 pt-6 mt-4 border-t-2 border-dashed border-border">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h4 className="text-sm sm:text-base font-black text-foreground flex items-center gap-2">
-                            <FileText className="w-5 h-5 text-amber-500 shrink-0" />
-                            <span>Folha de Redação Oficial</span>
-                          </h4>
-                          <span className="text-[11px] sm:text-xs font-black text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20 shrink-0 shadow-sm">
-                            Valor: {distribution.maxEssayGrade.toFixed(1)} pts
-                          </span>
-                        </div>
-
-                        {essayQuestions.map((eq, eqIdx) => (
-                          <div
-                            key={eq.id || eqIdx}
-                            className={`bg-surface p-4 sm:p-5 rounded-xl border-l-4 border-l-amber-500 shadow-md ${act.securityBlockCopyStatement ? 'select-none' : ''}`}
-                            onCopy={(e) => {
-                              if (act.securityBlockCopyStatement) {
-                                e.preventDefault();
-                                showSecurityToast('❌ Cópia de enunciados bloqueada nesta atividade.');
-                              }
-                            }}
-                          >
-                            <p className="text-sm font-semibold text-foreground leading-relaxed break-words font-serif">
-                              {eq.statement}
-                            </p>
-                          </div>
-                        ))}
-
-                        {/* CADERNO UNIVERSITÁRIO (100% CSS PURO - SEM ALTERAR DADOS DO REACT) */}
-                        <div className="relative mt-4 shadow-2xl rounded-r-2xl rounded-l-lg overflow-hidden bg-[#fdfbf7] border border-slate-300">
-                          {/* Coluna do Espiral com Furos Realistas */}
-                          <div className="absolute left-0 top-0 bottom-0 w-10 sm:w-14 border-r-2 border-rose-400/60 bg-[#fdfbf7] flex flex-col justify-evenly items-center py-4 z-10 pointer-events-none shadow-[inset_-2px_0_4px_rgba(0,0,0,0.05)]">
-                            {Array.from({ length: 12 }).map((_, i) => (
-                              <div key={i} className="w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-[#0b0f19] shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] opacity-90 relative">
-                                <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-0.5 bg-slate-400/30 rounded-full" />
-                              </div>
+                                <span className="flex items-center gap-2 truncate">
+                                  <Link2 className="w-3.5 h-3.5 shrink-0" />
+                                  <span className="truncate">
+                                    Material / Link Anexo da Aula (Abrir no Drive)
+                                  </span>
+                                </span>
+                                <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                              </a>
                             ))}
                           </div>
-
-                          <div className="pl-12 sm:pl-16 pr-3 sm:pr-6 py-1 relative z-0">
-                            <div className="flex flex-wrap items-center justify-between gap-2 mb-2 pt-2">
-                              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                                Sua Resposta na Folha:
-                              </label>
-                              {act.securityBlockPasteEssay && (
-                                <span className="text-[10px] text-purple-600 font-bold bg-purple-100 px-2.5 py-0.5 rounded-full border border-purple-300 flex items-center gap-1 shrink-0">
-                                  <ClipboardX className="w-3 h-3" />
-                                  <span>Cola (Ctrl+V) Bloqueada</span>
-                                </span>
-                              )}
-                            </div>
-
-                            <textarea
-                              rows={14}
-                              value={essayInputs[act.id] !== undefined ? essayInputs[act.id] : (sub?.essayAnswer || '')}
-                              onChange={(e) => handleEssayChange(act.id, e.target.value)}
-                              onPaste={(e) => {
-                                if (act.securityBlockPasteEssay) {
-                                  e.preventDefault();
-                                  showSecurityToast('❌ Ação de colar (Ctrl+V) bloqueada para respostas dissertativas.');
-                                }
-                              }}
-                              onDrop={(e) => {
-                                if (act.securityBlockPasteEssay) {
-                                  e.preventDefault();
-                                  showSecurityToast('❌ Arrastar textos bloqueado para respostas dissertativas.');
-                                }
-                              }}
-                              onKeyDown={(e) => {
-                                if (act.securityBlockPasteEssay) {
-                                  if ((e.ctrlKey || e.metaKey) && ['v', 'V'].includes(e.key)) {
-                                    e.preventDefault();
-                                    showSecurityToast('❌ Atalho de colar (Ctrl+V) bloqueado para respostas dissertativas.');
-                                  }
-                                }
-                              }}
-                              placeholder={
-                                act.securityBlockPasteEssay
-                                  ? "Escreva à mão aqui (colar texto desabilitado pelo professor)..."
-                                  : "Comece a escrever sua redação com as próprias palavras..."
-                              }
-                              className="w-full h-full min-h-[350px] bg-transparent text-slate-900 text-[15px] sm:text-[16px] focus:outline-none resize-y py-[2px] font-medium"
-                              style={{
-                                backgroundImage: 'linear-gradient(transparent 31px, #94a3b8 31px)',
-                                backgroundSize: '100% 32px',
-                                lineHeight: '32px',
-                                textDecoration: 'none'
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* TRABALHO EM GRUPO - SELEÇÃO DE INTEGRANTES */}
-                    {act.allowGroupWork && (
-                      <div className="bg-surface p-4 sm:p-5 rounded-2xl border border-purple-500/30 space-y-3 sm:space-y-3.5 shadow-lg">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h4 className="text-xs font-bold text-purple-600 uppercase tracking-wider flex items-center gap-2">
-                            <Users className="w-4 h-4 text-purple-400 shrink-0" />
-                            <span>Trabalho em Grupo — Colegas da Equipe:</span>
-                          </h4>
-                          <span className="text-[10px] sm:text-[11px] font-bold text-purple-600 bg-purple-500/10 border border-purple-500/20 px-2 sm:px-2.5 py-0.5 rounded-full shrink-0">
-                            Turma {student.turma}
-                          </span>
-                        </div>
-
-                        {/* Lista interativa de colegas da turma */}
-                        {classmates.length > 0 ? (
-                          <div className="space-y-2">
-                            <p className="text-[11px] text-muted">
-                              Marque os colegas de classe que fizeram o trabalho com você:
-                            </p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1">
-                              {classmates.map((cls) => {
-                                const isSelected = (groupSelections[act.id] || []).includes(cls.fullName);
-                                return (
-                                  <button
-                                    key={cls.id}
-                                    type="button"
-                                    onClick={() => {
-                                      setGroupSelections((prev) => {
-                                        const current = prev[act.id] || [];
-                                        if (current.includes(cls.fullName)) {
-                                          return { ...prev, [act.id]: current.filter((n) => n !== cls.fullName) };
-                                        } else {
-                                          return { ...prev, [act.id]: [...current, cls.fullName] };
-                                        }
-                                      });
-                                    }}
-                                    className={`px-3 py-2 min-h-[44px] min-w-[44px] rounded-xl text-xs font-semibold flex items-center justify-between transition-all cursor-pointer border ${
-                                      isSelected
-                                        ? 'bg-purple-600/30 border-purple-400 text-purple-200 shadow-md'
-                                        : 'bg-background border-border text-muted hover:text-foreground hover:border-border'
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-2 truncate">
-                                      <div className={`w-2 h-2 rounded-full shrink-0 ${isSelected ? 'bg-purple-400' : 'bg-white/20'}`} />
-                                      <span className="truncate">{cls.fullName}</span>
-                                    </div>
-                                    {isSelected ? (
-                                      <Check className="w-4 h-4 text-purple-600 shrink-0" />
-                                    ) : (
-                                      <span className="text-[10px] text-foreground/40">+ Adicionar</span>
-                                    )}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ) : (
-                          <p className="text-xs text-muted italic">
-                            Nenhum outro aluno cadastrado na turma {student.turma}. Digite os nomes dos integrantes abaixo:
-                          </p>
                         )}
 
-                        {/* Input para nomes manuais/complementares */}
-                        <div>
-                          <label className="block text-[11px] font-semibold text-muted mb-1">
-                            Outros integrantes (se não constarem na lista acima, separe por vírgula):
-                          </label>
-                          <input
-                            type="text"
-                            value={customMemberInput[act.id] || ''}
-                            onChange={(e) =>
-                              setCustomMemberInput((prev) => ({ ...prev, [act.id]: e.target.value }))
-                            }
-                            placeholder="Ex: João Pedro, Camila Santos"
-                            className="w-full bg-background border border-border rounded-xl px-3.5 py-2 text-xs text-foreground placeholder-[#869486] focus:outline-none focus:border-purple-400"
-                          />
-                        </div>
-
-                        {/* Resumo da Equipe Confirmada */}
-                        <div className="bg-purple-500/10 p-3 rounded-xl border border-purple-500/20 text-xs text-purple-200 flex items-center gap-2">
-                          <Users className="w-4 h-4 text-purple-400 shrink-0" />
-                          <span>
-                            <strong>Integrantes da Entrega:</strong> {student.fullName} (Você)
-                            {(groupSelections[act.id] || []).length > 0 && `, ${(groupSelections[act.id] || []).join(', ')}`}
-                            {(customMemberInput[act.id] || '').trim() && `, ${customMemberInput[act.id].trim()}`}
-                          </span>
+                        {/* Rodapé de Ação Principal */}
+                        <div className="pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenActivity(act)}
+                            className={`w-full py-3 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                              sub
+                                ? 'bg-background hover:bg-surface-hover border border-border text-foreground'
+                                : isGame
+                                ? 'bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-xs'
+                                : 'bg-foreground hover:opacity-90 text-background shadow-xs'
+                            }`}
+                          >
+                            {sub ? (
+                              <>
+                                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                                <span>Ver Minha Entrega & Feedback</span>
+                              </>
+                            ) : isDebate ? (
+                              <>
+                                <Users className="w-4 h-4" />
+                                <span>Entrar na Bancada • Debate Sem Papel</span>
+                              </>
+                            ) : isGame ? (
+                              <>
+                                <Play className="w-4 h-4 fill-current" />
+                                <span>Jogar Agora • KronoGames</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>Iniciar / Responder Atividade</span>
+                                <ChevronRight className="w-4 h-4" />
+                              </>
+                            )}
+                          </button>
                         </div>
                       </div>
-                    )}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
-                    {/* SUBMIT BUTTON */}
-                    <div className="pt-4 border-t border-border flex justify-end">
-                      <button
-                        onClick={() => handleSubmit(act)}
-                        className={`w-full sm:w-auto py-3.5 px-6 sm:px-8 min-h-[44px] min-w-[44px] font-black rounded-full text-xs flex items-center justify-center gap-2 transition-all shadow-xl cursor-pointer active:scale-95 ${
-                          (act.playfulGameHtml || act.adaptationType === 'severe_playful')
-                            ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-amber-400/20'
-                            : 'bg-primary hover:bg-primary-hover text-white shadow-primary/20'
-                        }`}
-                      >
-                        {(act.playfulGameHtml || act.adaptationType === 'severe_playful') ? (
-                          <>
-                            <Gamepad2 className="w-4 h-4 stroke-[2.5] shrink-0" />
-                            <span className="text-center">Concluir Jogo e Enviar Nota 🚀</span>
-                          </>
-                        ) : (
-                          <>
-                            <Send className="w-4 h-4 stroke-[2.5] shrink-0" />
-                            <span className="text-center">Enviar Resposta da Atividade</span>
-                          </>
-                        )}
-                      </button>
+        {/* ===================================================================
+            ABA 2: REPOSITÓRIO & GOOGLE DRIVE DA TURMA
+           =================================================================== */}
+        {activeNav === 'repositorio' && (
+          <div className="space-y-4">
+            <div className="p-4 rounded-2xl bg-surface border border-border space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 block">
+                    Biblioteca Digital & Anexos • Turma {studentTurmaStd}
+                  </span>
+                  <h2 className="text-lg font-bold text-foreground">
+                    Repositório de Materiais e Links do Drive
+                  </h2>
+                </div>
+                <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 font-mono text-xs font-bold">
+                  {filteredRepoItems.length} arquivo(s)
+                </span>
+              </div>
+
+              <div className="relative">
+                <Search className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={repoSearch}
+                  onChange={(e) => setRepoSearch(e.target.value)}
+                  placeholder="Buscar apostila, livro, slide ou link da aula..."
+                  className="w-full bg-background border border-border rounded-xl pl-10 pr-4 py-2.5 text-xs sm:text-sm text-foreground focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2.5">
+              {filteredRepoItems.map((item) => (
+                <a
+                  key={item.id}
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-4 rounded-2xl bg-surface hover:bg-surface-hover border border-border hover:border-emerald-500/40 flex items-center justify-between gap-3 transition-all group"
+                >
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div className="w-11 h-11 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                      <FolderOpen className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400 block">
+                        {item.category} • {item.turma}
+                      </span>
+                      <h3 className="text-sm font-bold text-foreground group-hover:text-emerald-300 transition-colors truncate">
+                        {item.title}
+                      </h3>
+                      <span className="text-[11px] text-muted truncate block font-mono">
+                        {item.url}
+                      </span>
                     </div>
                   </div>
-                );
-              } else {
-                const distribution = getActivityGradeDistribution(act);
-                const isGraded = sub.status === 'graded';
-                const objectiveScore = distribution.hasObjective ? (sub.objectiveScore || 0) : 0;
-                const totalScore = objectiveScore + (sub.essayScore || 0) + (sub.extraPoints || 0);
+
+                  <span className="px-3 py-2 rounded-xl bg-emerald-500 text-zinc-950 text-xs font-bold flex items-center gap-1.5 shrink-0">
+                    <span>Abrir</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ===================================================================
+            ABA 3: ARENA KRONOGAMES & DEBATE SEM PAPEL
+           =================================================================== */}
+        {activeNav === 'games' && (
+          <div className="space-y-4">
+            <div className="p-4 rounded-2xl bg-surface border border-border">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-amber-400 block">
+                Dinâmicas de Sala & Casa • Turma {studentTurmaStd}
+              </span>
+              <h2 className="text-lg font-bold text-foreground">
+                Arena KronoGames & Debates
+              </h2>
+              <p className="text-xs text-muted mt-0.5">
+                Participe dos debates sem papel e desafios interativos liberados para a sua turma.
+              </p>
+            </div>
+
+            {kronoGamesActivities.length === 0 ? (
+              <div className="p-10 rounded-2xl bg-surface border border-border text-center space-y-2">
+                <Gamepad2 className="w-7 h-7 text-amber-400 mx-auto" />
+                <p className="text-sm font-bold text-foreground">
+                  Nenhum KronoGame ativo no momento para a Turma {studentTurmaStd}.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {kronoGamesActivities.map((act) => (
+                  <div
+                    key={act.id}
+                    className="p-4 rounded-2xl bg-surface border border-border space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="px-2.5 py-0.5 rounded-md bg-amber-500/15 text-amber-300 font-mono text-[10px] font-bold uppercase">
+                        {act.gameMode === 'debate_paperless'
+                          ? '🎙️ Debate Sem Papel'
+                          : '⚡ Desafio Interativo'}
+                      </span>
+                      <span className="text-xs font-mono text-muted">
+                        Turma {studentTurmaStd}
+                      </span>
+                    </div>
+                    <h3 className="text-base font-bold text-foreground">{act.title}</h3>
+                    {act.description && (
+                      <p className="text-xs text-muted line-clamp-2">{act.description}</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleOpenActivity(act)}
+                      className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Play className="w-4 h-4 fill-current" />
+                      <span>Entrar Agora</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ===================================================================
+            ABA 4: BOLETIM, NOTAS & FEEDBACKS DO PROFESSOR
+           =================================================================== */}
+        {activeNav === 'boletim' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-2.5">
+              <div className="p-3.5 rounded-2xl bg-surface border border-border text-center">
+                <span className="text-[10px] font-mono uppercase text-muted block">Média</span>
+                <span className="text-xl font-mono font-bold text-emerald-400 mt-0.5 block">
+                  {averageGrade || '—'}
+                </span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-surface border border-border text-center">
+                <span className="text-[10px] font-mono uppercase text-muted block">Entregues</span>
+                <span className="text-xl font-mono font-bold text-foreground mt-0.5 block">
+                  {completedActivities.length}/{studentActivities.length}
+                </span>
+              </div>
+              <div className="p-3.5 rounded-2xl bg-surface border border-border text-center">
+                <span className="text-[10px] font-mono uppercase text-muted block">Turma</span>
+                <span className="text-xl font-mono font-bold text-cyan-400 mt-0.5 block">
+                  {studentTurmaStd}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {studentActivities.map((act) => {
+                const sub = mySubmissionsMap.get(act.id);
+                const total = sub
+                  ? Math.min(
+                      10,
+                      Number(sub.objectiveScore || 0) +
+                        Number(sub.essayScore || 0) +
+                        Number(sub.extraPoints || 0)
+                    )
+                  : null;
 
                 return (
                   <div
                     key={act.id}
-                    className="glass-panel p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-border space-y-4 sm:space-y-6 shadow-xl"
+                    className="p-4 rounded-2xl bg-surface border border-border space-y-2.5"
                   >
-                    {/* Header */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2">
-                          <span className="text-[10px] sm:text-[11px] font-bold bg-primary/20 text-primary px-2.5 sm:px-3 py-0.5 rounded-full border border-primary/30">
-                            {act.type === 'Simulado'
-                              ? 'Treinamento Tático'
-                              : act.type === 'Redação'
-                              ? 'Redação'
-                              : act.type === 'Dinâmica'
-                              ? 'Treino em Equipe'
-                              : act.type === 'Trabalho em grupo'
-                              ? 'Trabalho em Grupo'
-                              : act.type === 'Projeto de pesquisa'
-                              ? 'Projeto de Pesquisa'
-                              : 'Exame'}
-                          </span>
-
-                          {/* Subtle Highlighted Deadline Badge */}
-                          <span className="text-[10px] sm:text-[11px] font-bold text-amber-600 flex items-center gap-1.5 bg-surface px-2.5 sm:px-3 py-0.5 rounded-full border border-amber-500/30">
-                            <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                            <span>Prazo Limite: {act.deadline || 'Sem data'}</span>
-                          </span>
-
-                          {/* Status Badge */}
-                          {sub.status === 'graded' ? (
-                            <span className="text-[10px] sm:text-[11px] font-bold text-emerald-600 bg-emerald-100 px-2.5 sm:px-3 py-0.5 rounded-full border border-emerald-200">
-                              ✅ Corrigida pelo Professor
-                            </span>
-                          ) : sub.status === 'pending' ? (
-                            <span className="text-[10px] sm:text-[11px] font-bold text-sky-300 bg-sky-500/20 px-2.5 sm:px-3 py-0.5 rounded-full border border-sky-500/40">
-                              ⏳ A Corrigir pelo Professor
-                            </span>
-                          ) : (
-                            <span className="text-[10px] sm:text-[11px] font-bold text-orange-300 bg-orange-500/20 px-2.5 sm:px-3 py-0.5 rounded-full border border-orange-500/40">
-                              ↩️ Devolvida {sub.returnCount ? `${sub.returnCount}x` : '1x'}
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="text-xl sm:text-2xl font-bold text-foreground break-words">{act.title}</h3>
-                      </div>
-
-                      <div className="bg-surface px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl border border-primary/30 text-center shrink-0 w-full sm:w-auto">
-                        <span className="text-[10px] font-bold text-muted block uppercase tracking-wider">
-                          Sua Nota Final
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <span className="text-[10px] font-mono uppercase text-muted block">
+                          {act.type || 'Avaliação'} • {sub?.submittedAt || act.dueDate || act.deadline || ''}
                         </span>
-                        <span className="text-xl sm:text-2xl font-black text-primary">
-                          {totalScore.toFixed(1)} <span className="text-xs sm:text-sm font-normal text-muted">/ {distribution.maxGrade.toFixed(1)}</span>
-                        </span>
+                        <h4 className="text-sm font-bold text-foreground">{act.title}</h4>
                       </div>
+                      {sub ? (
+                        <span className="px-3 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-mono text-xs font-bold">
+                          {sub.status === 'graded' && total !== null
+                            ? `${total.toFixed(1)} / 10`
+                            : 'Em Correção'}
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-border text-muted font-mono text-xs">
+                          Não entregue
+                        </span>
+                      )}
                     </div>
 
-                    {/* Grade Detailed Breakdown */}
-                    {(() => {
-                      const hasObjectiveQuestions = (act.questions || []).some((q) => q.type === 'multiple_choice');
-                      const isRedacao = (act.type as string).toLowerCase() === 'redacao';
-                      const showObjectiveSection = hasObjectiveQuestions && !isRedacao && distribution.hasObjective && sub.maxObjectiveScore > 0;
-
-                      return (
-                        <div className={`grid grid-cols-1 ${showObjectiveSection ? 'sm:grid-cols-2' : ''} gap-4`}>
-                          {/* Objective Score (Saiu na Hora) */}
-                          {showObjectiveSection && (
-                            <div className="bg-surface p-4 rounded-2xl border border-border space-y-1">
-                              {Number(sub.maxObjectiveScore) > 0 && (
-<div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-primary flex items-center gap-1.5">
-                                  <CheckCircle2 className="w-4 h-4" />
-                                  <span>Parte Objetiva (Automática):</span>
-                                </span>
-                                <span className="text-sm font-black text-foreground">
-                                  {sub.objectiveScore.toFixed(1)} / {sub.maxObjectiveScore.toFixed(1)} pts
-                                </span>
-                              </div>
-)}
-                              <p className="text-[11px] text-muted">
-                                ⚡ Nota calculada instantaneamente no momento do envio.
-                              </p>
-                            </div>
-                          )}
-
-                          {/* Essay Score (Aguardando ou Corrigida) */}
-                      <div className="bg-surface p-4 rounded-2xl border border-border space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-[#c0c1ff] flex items-center gap-1.5">
-                            <FileText className="w-4 h-4" />
-                            <span>Parte Dissertativa:</span>
-                          </span>
-                          {isGraded || sub.essayScore !== undefined ? (
-                            <span className="text-sm font-black text-foreground">
-                              {(sub.essayScore || 0).toFixed(1)} / {distribution.maxEssayGrade.toFixed(1)} pts
-                            </span>
-                          ) : (
-                            <span className="text-[11px] font-bold bg-amber-100 text-amber-600 px-2.5 py-0.5 rounded-full border border-amber-500/30">
-                              Aguardando Professor
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-muted">
-                          {isGraded
-                            ? 'Correção realizada e finalizada pelo professor.'
-                            : 'A resposta foi enviada e aguarda a avaliação final do professor.'}
-                        </p>
+                    {sub?.teacherFeedback && (
+                      <div className="p-3 rounded-xl bg-background border border-border text-xs text-foreground whitespace-pre-wrap">
+                        <strong className="text-emerald-400 block mb-1">
+                          Feedback do Professor:
+                        </strong>
+                        {sub.teacherFeedback}
                       </div>
-                    </div>
-                      );
-                    })()}
-
-                    {/* Group Members display */}
-                    {sub.groupMembers && (
-                      <div className="bg-purple-500/10 p-3.5 rounded-2xl border border-purple-500/30 text-xs text-purple-200 flex items-center gap-2">
-                        <Users className="w-4 h-4 text-purple-400 shrink-0" />
-                        <span>
-                          <strong>Membros do Grupo:</strong> {sub.groupMembers}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Student Essay Response display */}
-                    {sub.essayAnswer && (
-                      <div className="bg-[#171f33] p-4 rounded-2xl border border-border space-y-1">
-                        <span className="text-xs font-bold text-muted block">
-                          Sua Resposta Enviada:
-                        </span>
-                        <p className="text-xs text-foreground italic leading-relaxed whitespace-pre-wrap">
-                          &ldquo;{sub.essayAnswer}&rdquo;
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Teacher Feedback */}
-                    {sub.teacherFeedback ? (
-                      <div className="bg-surface p-5 rounded-2xl border border-primary/30 space-y-2">
-                        <span className="text-xs font-bold text-primary flex items-center gap-2">
-                          <MessageSquare className="w-4 h-4" />
-                          <span>Feedback e Diagnóstico do Professor:</span>
-                        </span>
-                        <p className="text-xs text-foreground leading-relaxed">
-                          {sub.teacherFeedback}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-muted italic bg-[#171f33]/40 p-3 rounded-xl border border-border">
-                        O professor ainda não publicou parecer textual adicional para esta entrega.
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-            })()}
-              </div>
-            </div>
-          )}
-      </div>
-    )}
-
-      {/* TAB: MENSAGENS COM A PROFESSORA */}
-      {activeTab === 'mensagens' && (
-        <MessagesView
-          currentUserRole="student"
-          teacher={teacher}
-          student={student}
-          students={students}
-          activities={activities}
-          messages={messages}
-          onSendMessage={(msg) => {
-            if (onSendMessage) {
-              onSendMessage(msg);
-            }
-          }}
-          onMarkThreadAsRead={onMarkThreadAsRead}
-        />
-      )}
-
-      {/* TAB 3: ARQUIVOS */}
-      {activeTab === 'arquivos' && (
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-2">
-              <FolderDown className="w-5 h-5 text-primary" />
-              <span>Arquivos e Materiais Didáticos</span>
-            </h2>
-            <p className="text-xs text-muted mt-0.5">
-              Baixe as apostilas, apresentações e documentos disponibilizados pelo professor no Google Drive
-            </p>
-          </div>
-
-          {/* CARD DA PASTA PRINCIPAL DO GOOGLE DRIVE */}
-          {teacher?.driveFolderUrl?.trim() && (
-            <div className="glass-panel p-6 rounded-3xl border border-primary/40 bg-gradient-to-br from-surface via-surface to-background space-y-4 shadow-xl relative overflow-hidden">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-12 h-12 rounded-2xl bg-primary/15 border border-primary/30 text-primary flex items-center justify-center shrink-0 shadow-lg shadow-[#4ade80]/10">
-                    <HardDrive className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-foreground leading-snug">Pasta de Arquivos no Google Drive</h3>
-                    <p className="text-xs text-muted mt-0.5">
-                      Acesse a pasta oficial do Google Drive com todos os materiais e documentos da disciplina
-                    </p>
-                  </div>
-                </div>
-
-                <a
-                  href={teacher.driveFolderUrl.trim()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="py-3.5 px-6 bg-gradient-to-r from-[#4ade80] to-[#22c55e] hover:from-[#6bfb9a] hover:to-[#4ade80] text-white font-black rounded-2xl text-xs sm:text-sm transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2.5 shrink-0 cursor-pointer min-h-[48px] w-full sm:w-auto active:scale-95"
-                  title="Abrir Pasta do Google Drive"
-                >
-                  <ExternalLink className="w-4 h-4 stroke-[2.5]" />
-                  <span>Acessar Pasta do Drive</span>
-                </a>
-              </div>
-            </div>
-          )}
-
-          {studentLibraryFiles.length === 0 && !teacher?.driveFolderUrl?.trim() ? (
-            <div className="glass-panel p-12 text-center rounded-3xl border border-border text-muted space-y-3 shadow-xl">
-              <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center mx-auto text-amber-400 text-2xl font-black">
-                🌀
-              </div>
-              <p className="text-base font-extrabold text-foreground">Biblioteca sem Arquivos!</p>
-              <p className="text-xs text-muted max-w-md mx-auto leading-relaxed">
-                Nenhum documento ou pasta do Google Drive foi disponibilizado para sua turma ainda. Fique atento aos novos lançamentos do professor!
-              </p>
-            </div>
-          ) : studentLibraryFiles.length > 0 ? (
-            <div className="space-y-3">
-              <h3 className="text-sm font-bold text-foreground flex items-center gap-2 pt-2">
-                <FileText className="w-4 h-4 text-primary" />
-                <span>Documentos e Apostilas Específicas</span>
-              </h3>
-              {studentLibraryFiles.map((file) => {
-                const driveUrl = file.driveUrl || teacher?.driveFolderUrl?.trim();
-
-                return (
-                  <div
-                    key={file.id}
-                    className="glass-panel p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 glass-panel-hover"
-                  >
-                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                      <div className="w-10 h-10 rounded-2xl bg-[#171f33] border border-border text-primary flex items-center justify-center shrink-0">
-                        <FileText className="w-5 h-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="text-sm sm:text-base font-bold text-foreground break-words">{file.title}</h3>
-                        {file.category && (
-                          <span className="text-[11px] font-semibold text-muted block mt-0.5">
-                            {file.category}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {driveUrl ? (
-                      <a
-                        href={driveUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="py-2.5 px-6 min-h-[44px] min-w-[44px] bg-primary hover:bg-primary-hover text-white font-extrabold rounded-xl sm:rounded-full text-xs transition-all shadow-md flex items-center justify-center gap-2 shrink-0 cursor-pointer w-full sm:w-auto active:scale-95"
-                        title="Baixar arquivo"
-                      >
-                        <Download className="w-4 h-4 stroke-[2.5] shrink-0" />
-                        <span>Baixar</span>
-                      </a>
-                    ) : (
-                      <span className="text-xs text-[#869486]">Sem link</span>
                     )}
                   </div>
                 );
               })}
             </div>
-          ) : null}
-        </div>
-      )}
-
-      {/* Security Toast Notification */}
-      {securityToast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-rose-950/90 text-rose-100 border border-rose-500/50 p-4 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 animate-fadeIn max-w-md">
-          <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0" />
-          <p className="text-xs font-semibold">{securityToast}</p>
-          <button
-            onClick={() => setSecurityToast(null)}
-            className="ml-auto text-rose-600 hover:text-foreground p-1 min-h-[44px] min-w-[44px] flex items-center justify-center"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {/* Modal/Janela em Tela Cheia para Atividade Lúdica PNE (Preenche a tela inteira, borda discreta, botão voltar e botão enviar) */}
-      {fullscreenGameActivityId && (() => {
-        const act = activities.find((a) => a.id === fullscreenGameActivityId);
-        if (!act) return null;
-
-        return (
-          <div className="fixed inset-0 z-50 w-screen h-screen bg-[#070d19] flex flex-col p-2 sm:p-4 animate-fadeIn">
-            {/* Barra de Ações Superior */}
-            <div className="flex items-center justify-between gap-3 pb-2.5 px-2 border-b border-border">
-              <button
-                type="button"
-                onClick={() => setFullscreenGameActivityId(null)}
-                className="px-4 py-2.5 min-h-[44px] min-w-[44px] bg-[#171f33] hover:bg-[#222c42] text-foreground font-bold text-xs sm:text-sm rounded-xl border border-border transition-all flex items-center gap-2 cursor-pointer shadow active:scale-95 shrink-0"
-              >
-                <ArrowLeft className="w-4 h-4 text-amber-400" />
-                <span>Voltar</span>
-              </button>
-
-              <div className="flex items-center gap-2 min-w-0">
-                <Gamepad2 className="w-5 h-5 text-amber-400 shrink-0" />
-                <span className="font-extrabold text-foreground text-sm sm:text-base truncate max-w-xs sm:max-w-md">
-                  {act.title}
-                </span>
-                {playfulScores[act.id] && (
-                  <span className="px-3 py-1 bg-primary/20 text-primary font-bold text-xs rounded-full border border-primary/30 hidden sm:flex items-center gap-1.5 shrink-0">
-                    <Star className="w-3.5 h-3.5 fill-[#4ade80]" />
-                    {playfulScores[act.id].grade} / {act.maxGrade || 10} pts
-                  </span>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setFullscreenGameActivityId(null);
-                  handleSubmit(act);
-                }}
-                className="px-5 py-2.5 min-h-[44px] min-w-[44px] bg-primary hover:bg-primary-hover text-white font-black text-xs sm:text-sm rounded-xl transition-all shadow-lg shadow-primary/20 cursor-pointer flex items-center gap-2 active:scale-95 shrink-0"
-              >
-                <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
-                <span>Enviar Atividade</span>
-              </button>
-            </div>
-
-            {/* Container do Jogo em Tela Inteira com Borda Discreta */}
-            <div className="flex-1 w-full rounded-2xl overflow-hidden border border-border bg-black shadow-2xl relative mt-2">
-              <iframe
-                srcDoc={
-                  act.playfulGameHtml
-                    ? extractCleanHtml(act.playfulGameHtml)
-                    : '<div style="color:white;padding:20px;font-family:sans-serif;text-align:center;">Carregando jogo interativo...</div>'
-                }
-                title={`Jogo Lúdico Fullscreen - ${act.title}`}
-                className="w-full h-full border-0 block"
-                allow="autoplay; fullscreen"
-                sandbox="allow-scripts allow-modals"
-              />
-            </div>
           </div>
-        );
-      })()}
+        )}
 
-      {/* Anti-Cola Focus Lock Warning / Auto-Submit Modal */}
-      {securityNotice && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-surface border border-amber-200 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5 text-center relative">
-            <div className={`w-16 h-16 rounded-2xl mx-auto flex items-center justify-center border shadow-lg ${
-              securityNotice.isAutoSubmitted
-                ? 'bg-rose-100 text-rose-400 border-rose-200'
-                : 'bg-amber-100 text-amber-400 border-amber-200'
-            }`}>
-              <ShieldAlert className="w-8 h-8" />
-            </div>
-
-            <div className="space-y-2">
-              <h3 className={`text-xl font-extrabold ${
-                securityNotice.isAutoSubmitted ? 'text-rose-400' : 'text-amber-400'
-              }`}>
-                {securityNotice.isAutoSubmitted
-                  ? '🚨 PROVA ENTREGUE AUTOMATICAMENTE'
-                  : `⚠️ AVISO DE TRAVA DE FOCO (${securityNotice.warningCount}/4)`}
-              </h3>
-              <p className="text-xs text-foreground font-medium">
-                Atividade: <span className="font-bold text-primary">{securityNotice.activityTitle}</span>
-              </p>
-            </div>
-
-            <div className="bg-surface p-4 rounded-2xl border border-border text-xs text-muted text-left leading-relaxed space-y-2">
-              {securityNotice.isAutoSubmitted ? (
-                <>
-                  <p className="text-rose-600 font-bold">
-                    Você atingiu o limite de 4 avisos por sair da tela / mudar de aba durante a realização da atividade.
-                  </p>
-                  <p>
-                    A prova foi finalizada e enviada para o professor com o progresso preenchido até o momento.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-amber-600 font-bold">
-                    Aviso {securityNotice.warningCount} de 4: O sistema detectou que você mudou de aba, janela ou aplicativo!
-                  </p>
-                  <p>
-                    Para garantir a integridade da avaliação, permaneça nesta página. No <strong className="text-foreground">4º aviso</strong>, sua atividade será entregue automaticamente do jeito que está!
-                  </p>
-                </>
+        {/* ===================================================================
+            ABA 5: PERFIL, SEGURANÇA (TROCA DE SENHA) E SAIR
+           =================================================================== */}
+        {activeNav === 'perfil' && (
+          <div className="space-y-4">
+            <div className="p-5 rounded-2xl bg-surface border border-border flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 font-mono text-xs font-bold">
+                  Turma {studentTurmaStd}
+                </span>
+                <h2 className="text-lg font-bold text-foreground">{activeStudent.fullName}</h2>
+                <p className="text-xs font-mono text-muted">
+                  Matrícula / ID: {activeStudent.matricula || activeStudent.id}
+                </p>
+              </div>
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="px-4 py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sair</span>
+                </button>
               )}
             </div>
 
-            <button
-              onClick={() => setSecurityNotice(null)}
-              className={`w-full py-3 px-6 min-h-[44px] min-w-[44px] font-extrabold rounded-full text-xs transition-all shadow-md cursor-pointer ${
-                securityNotice.isAutoSubmitted
-                  ? 'bg-rose-500 hover:bg-rose-600 text-foreground'
-                  : 'bg-amber-400 hover:bg-amber-300 text-slate-950'
-              }`}
+            <form
+              onSubmit={handlePasswordChange}
+              className="p-5 rounded-2xl bg-surface border border-border space-y-3"
             >
-              {securityNotice.isAutoSubmitted ? 'Entendido (Ver Correções)' : 'Entendido, Voltar para a Prova'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Avatar Selection Modal */}
-      {isAvatarModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
-          <div className="bg-surface border border-border rounded-3xl p-5 sm:p-7 max-w-3xl w-full shadow-2xl space-y-5 relative max-h-[92vh] flex flex-col">
-            <button
-              onClick={() => setIsAvatarModalOpen(false)}
-              className="absolute top-4 right-4 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-muted hover:text-foreground bg-surface hover:bg-rose-500/20 rounded-full transition-colors cursor-pointer border border-border"
-              aria-label="Fechar"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  52 Avatares Exclusivos
-                </span>
-                <span className="text-xs text-muted">RPG • Vikings • Feras • Cômicos</span>
+              <div className="flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-sm font-bold text-foreground">Alterar Minha Senha</h3>
               </div>
-              <h2 className="text-xl sm:text-2xl font-black text-foreground flex items-center gap-2 mt-1">
-                <Sparkles className="w-6 h-6 text-amber-400" />
-                Escolha seu Personagem
-              </h2>
-              <p className="text-xs sm:text-sm text-muted mt-0.5">
-                Personalize o seu perfil de estudante com um avatar que represente sua personalidade e jornada!
-              </p>
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Nova senha (mín. 4 caracteres)"
+                className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-foreground"
+              />
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirmar nova senha"
+                className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-foreground"
+              />
+              {passwordStatus && (
+                <p className="text-xs text-emerald-400 font-medium">{passwordStatus}</p>
+              )}
+              <button
+                type="submit"
+                className="w-full py-2.5 rounded-xl bg-foreground text-background text-xs font-bold cursor-pointer"
+              >
+                Salvar Nova Senha
+              </button>
+            </form>
+          </div>
+        )}
+      </main>
+
+      {/* 4. GAVETA DE DIRECT / CHAT COM O PROFESSOR */}
+      {isChatOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-surface border border-border rounded-t-2xl sm:rounded-2xl w-full max-w-md h-[80vh] flex flex-col overflow-hidden shadow-2xl">
+            <div className="p-4 border-b border-border flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-mono uppercase text-emerald-400 block">
+                  Mensagem Direta • Turma {studentTurmaStd}
+                </span>
+                <h3 className="text-sm font-bold text-foreground">
+                  Falar com {teacher?.name || 'Professor Gilson'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsChatOpen(false)}
+                className="p-1.5 rounded-lg bg-background text-muted hover:text-foreground cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            {/* Categorias & Busca */}
-            <div className="space-y-3 pt-1">
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                {AVATAR_CATEGORIES.map((cat) => {
-                  const isActive = avatarCategoryFilter === cat.id;
-                  const count = cat.id === 'todos' 
-                    ? KRONO_AVATARS.length 
-                    : KRONO_AVATARS.filter((a) => a.category === cat.id).length;
+            <div className="flex-1 p-4 overflow-y-auto space-y-2.5">
+              {myMessages.length === 0 ? (
+                <p className="text-xs text-muted text-center py-10">
+                  Envie sua dúvida diretamente ao professor.
+                </p>
+              ) : (
+                myMessages.map((msg: any, idx: number) => {
+                  const isMine = msg.senderId === activeStudent.id || msg.senderRole === 'student';
                   return (
-                    <button
-                      key={cat.id}
-                      onClick={() => setAvatarCategoryFilter(cat.id)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border active:scale-95 ${
-                        isActive
-                          ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 ring-1 ring-primary/40'
-                          : 'bg-surface hover:bg-surface-hover text-muted hover:text-foreground border-border'
+                    <div
+                      key={msg.id || idx}
+                      className={`max-w-[85%] p-3 rounded-2xl text-xs ${
+                        isMine
+                          ? 'ml-auto bg-emerald-500 text-zinc-950 font-medium'
+                          : 'mr-auto bg-background border border-border text-foreground'
                       }`}
                     >
-                      <span>{cat.emoji}</span>
-                      <span>{cat.label}</span>
-                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${isActive ? 'bg-white/20 text-white' : 'bg-surface-hover text-muted'}`}>
-                        {count}
-                      </span>
-                    </button>
+                      <p className="whitespace-pre-wrap">{msg.text || msg.content}</p>
+                    </div>
                   );
-                })}
-              </div>
-
-              {/* Input de Busca */}
-              <div className="relative">
-                <input
-                  type="text"
-                  value={avatarSearchQuery}
-                  onChange={(e) => setAvatarSearchQuery(e.target.value)}
-                  placeholder="Buscar por herói, viking, fera mística, mago, robô ou criatura..."
-                  className="w-full bg-[#171f33] border border-border rounded-xl px-4 py-2.5 text-xs sm:text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-primary transition-colors"
-                />
-                {avatarSearchQuery && (
-                  <button
-                    onClick={() => setAvatarSearchQuery('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted hover:text-foreground"
-                  >
-                    Limpar
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Grid dos Avatares */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
-              {filteredAvatars.length === 0 ? (
-                <div className="p-8 text-center text-muted border border-dashed border-border rounded-2xl">
-                  Nenhum personagem encontrado para essa busca. Tente outro termo!
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-3.5">
-                  {filteredAvatars.map((av) => {
-                    const isSelected = student.avatarUrl === av.url;
-                    return (
-                      <button
-                        key={av.id}
-                        onClick={() => {
-                          if (onUpdateAvatar) onUpdateAvatar(student.id, av.url);
-                          setIsAvatarModalOpen(false);
-                        }}
-                        className={`group p-3 rounded-2xl border transition-all text-left flex flex-col justify-between gap-2 cursor-pointer relative ${
-                          isSelected
-                            ? 'bg-primary/15 border-primary shadow-lg shadow-primary/10 ring-2 ring-primary/50'
-                            : 'bg-surface/90 hover:bg-surface-hover border-border hover:border-primary/40'
-                        }`}
-                        title={av.tagline}
-                      >
-                        <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[#101726] flex items-center justify-center p-2 border border-border/50">
-                          <img
-                            src={av.url}
-                            alt={av.name}
-                            loading="lazy"
-                            decoding="async"
-                            className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-200"
-                          />
-                          {isSelected && (
-                            <div className="absolute top-1.5 right-1.5 bg-primary text-white p-1 rounded-full border-2 border-[#0e172a] shadow-md">
-                              <Check className="w-3 h-3 stroke-[3]" />
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="min-w-0 w-full space-y-1">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-surface border border-border text-primary uppercase tracking-wider truncate">
-                              {av.categoryLabel}
-                            </span>
-                          </div>
-                          <h4 className="text-xs font-bold text-foreground truncate group-hover:text-primary transition-colors">
-                            {av.name}
-                          </h4>
-                          <p className="text-[11px] text-muted line-clamp-2 leading-tight">
-                            {av.tagline}
-                          </p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                })
               )}
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* KronoGames Inclusive Engine Player Modal */}
-      {activeKronoGameActivity && (
-        <KronoGamePlayer
-          activity={activeKronoGameActivity}
-          student={student}
-          allStudents={students}
-          onFinishGame={handleFinishKronoGame}
-          onClose={() => setActiveKronoGameActivity(null)}
-        />
-      )}
-
-      {/* Modal do MODO PLATINA (Substitui Galeria Antiga) */}
-      {isAchievementsModalOpen && teacher?.isPlatinumModeEnabled !== false && (
-        <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fadeIn">
-          <div className="bg-[#0b0f19] border border-[#1e293b] rounded-3xl p-0 max-w-2xl w-full shadow-2xl relative max-h-[92vh] flex flex-col overflow-hidden">
-            {/* Header Platina */}
-            <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 p-6 border-b border-[#1e293b] relative">
-              <button
-                onClick={() => setIsAchievementsModalOpen(false)}
-                className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white bg-black/20 hover:bg-rose-500/50 rounded-full transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              
-              <div className="flex items-center gap-2 flex-wrap mb-2">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-gradient-to-r from-slate-400 to-slate-200 text-slate-900 shadow-sm">
-                  Modo Platina Ativado
-                </span>
-                <span className="text-xs text-slate-400">Trimestre Atual</span>
-              </div>
-              <h2 className="text-2xl font-black text-white flex items-center gap-2">
-                <Trophy className="w-6 h-6 text-slate-300" />
-                Jornada de Missões
-              </h2>
-              <p className="text-sm text-slate-400 mt-1">
-                Complete as 15 missões principais (AVs e RPs) para platinar a disciplina e ganhar recompensas na média!
-              </p>
-            </div>
-
-            {/* Painel de Recompensas de Nível */}
-            <div className="p-5 bg-slate-900/50 border-b border-[#1e293b] flex flex-col gap-4">
-              {(() => {
-                const unlocked = studentAchievements.filter(a => a.unlocked).length;
-                const percent = Math.round((unlocked / 15) * 100);
-                return (
-                  <>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-3 bg-black rounded-full overflow-hidden border border-[#1e293b] shadow-inner">
-                        <div
-                          className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all duration-1000 relative overflow-hidden"
-                          style={{ width: `${percent}%` }}
-                        >
-                          <div className="absolute inset-0 bg-white/20 w-full animate-pulse" />
-                        </div>
-                      </div>
-                      <span className="text-sm font-black text-cyan-400">{unlocked}/15</span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className={`p-3 rounded-xl border flex flex-col justify-center items-center text-center transition-all ${unlocked >= 11 ? 'bg-amber-500/20 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.2)]' : 'bg-black/40 border-[#1e293b] opacity-60'}`}>
-                        <span className={`text-[10px] font-black uppercase tracking-wider ${unlocked >= 11 ? 'text-amber-400' : 'text-slate-500'}`}>Desbloqueio Nível Ouro (75%)</span>
-                        <span className={`text-sm font-bold mt-1 ${unlocked >= 11 ? 'text-white' : 'text-slate-400'}`}>+1.0 na Pior Nota</span>
-                        {unlocked >= 11 && <span className="text-[10px] bg-amber-500 text-black px-2 py-0.5 rounded-full font-bold mt-2">Disponível!</span>}
-                      </div>
-                      <div className={`p-3 rounded-xl border flex flex-col justify-center items-center text-center transition-all ${unlocked === 15 ? 'bg-cyan-500/20 border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.3)]' : 'bg-black/40 border-[#1e293b] opacity-60'}`}>
-                        <span className={`text-[10px] font-black uppercase tracking-wider ${unlocked === 15 ? 'text-cyan-400' : 'text-slate-500'}`}>Desbloqueio Platina (100%)</span>
-                        <span className={`text-sm font-bold mt-1 ${unlocked === 15 ? 'text-white' : 'text-slate-400'}`}>+1.0 na Média Geral</span>
-                        {unlocked === 15 && <span className="text-[10px] bg-cyan-500 text-black px-2 py-0.5 rounded-full font-bold mt-2">Conquistado!</span>}
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-
-            {/* Lista das Missões / Conquistas */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-3 bg-[#0b0f19]">
-              {studentAchievements.map((ach) => (
-                <div
-                  key={ach.id}
-                  className={`p-4 rounded-2xl border transition-all flex items-start gap-3.5 sm:gap-4 ${
-                    ach.unlocked
-                      ? 'bg-slate-800/80 border-slate-600 shadow-md'
-                      : 'bg-black/20 border-[#1e293b]'
-                  }`}
-                >
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shrink-0 border ${
-                    ach.unlocked
-                      ? 'bg-gradient-to-br from-slate-700 to-slate-800 border-slate-500 shadow-sm'
-                      : 'bg-black border-[#1e293b] grayscale opacity-50'
-                  }`}>
-                    {ach.iconEmoji}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <span className={`text-[10px] font-black uppercase tracking-wider ${ach.unlocked ? 'text-cyan-400' : 'text-slate-500'}`}>
-                        {ach.category}
-                      </span>
-                      {ach.unlocked ? (
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 flex items-center gap-1">
-                          <Check className="w-3 h-3 stroke-[3]" />
-                          <span>Concluída</span>
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-black text-slate-500 border border-[#1e293b] flex items-center gap-1">
-                          <Lock className="w-3 h-3" />
-                          <span>Bloqueada</span>
-                        </span>
-                      )}
-                    </div>
-                    <h4 className={`text-sm font-extrabold mt-0.5 ${ach.unlocked ? 'text-white' : 'text-slate-400'}`}>{ach.title}</h4>
-                    <p className={`text-xs leading-relaxed mt-0.5 ${ach.unlocked ? 'text-slate-300' : 'text-slate-500'}`}>{ach.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Confirmação de Questões Objetivas em Branco */}
-      {unansweredConfirmData && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-surface border border-amber-500/40 rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl space-y-4 text-center">
-            <div className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center bg-amber-500/20 border border-amber-500/40 text-amber-300">
-              <AlertTriangle className="w-7 h-7" />
-            </div>
-
-            <div className="space-y-1">
-              <h3 className="text-lg font-black text-foreground">
-                Questões em Branco Detectadas
-              </h3>
-              <p className="text-xs text-muted">
-                Você ainda possui <strong className="text-amber-400">{unansweredConfirmData.unansweredCount} de {unansweredConfirmData.totalCount} questões</strong> sem resposta marcada nesta avaliação.
-              </p>
-            </div>
-
-            <div className="bg-[#171f33] p-3.5 rounded-2xl border border-border text-xs text-muted text-left leading-relaxed">
-              Questões deixadas em branco não pontuam na nota objetiva calculada na hora. Recomendamos revisar e marcar todas antes de concluir.
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
-              <button
-                type="button"
-                onClick={() => setUnansweredConfirmData(null)}
-                className="py-2.5 px-4 min-h-[44px] bg-primary hover:bg-primary-hover text-white font-extrabold rounded-xl text-xs transition cursor-pointer active:scale-95 shadow-md shadow-primary/20"
-              >
-                Revisar Questões ✏️
-              </button>
+            <div className="p-3 border-t border-border flex items-center gap-2">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && chatInput.trim() && onSendMessage) {
+                    onSendMessage({
+                      threadId: activeStudent.id,
+                      senderId: activeStudent.id,
+                      senderName: activeStudent.fullName,
+                      senderRole: 'student',
+                      senderAvatar: activeStudent.avatarUrl,
+                      recipientId: teacher?.id || 'teacher',
+                      recipientName: teacher?.name || 'Professor Gilson',
+                      content: chatInput.trim(),
+                    }, teacher?.id);
+                    setChatInput('');
+                  }
+                }}
+                placeholder="Escreva uma mensagem..."
+                className="flex-1 bg-background border border-border rounded-xl px-3.5 py-2.5 text-xs text-foreground focus:outline-none"
+              />
               <button
                 type="button"
                 onClick={() => {
-                  const act = unansweredConfirmData.activity;
-                  setUnansweredConfirmData(null);
-                  handleSubmit(act, false, true);
+                  if (chatInput.trim() && onSendMessage) {
+                    onSendMessage({
+                      threadId: activeStudent.id,
+                      senderId: activeStudent.id,
+                      senderName: activeStudent.fullName,
+                      senderRole: 'student',
+                      senderAvatar: activeStudent.avatarUrl,
+                      recipientId: teacher?.id || 'teacher',
+                      recipientName: teacher?.name || 'Professor Gilson',
+                      content: chatInput.trim(),
+                    }, teacher?.id);
+                    setChatInput('');
+                  }
                 }}
-                className="py-2.5 px-4 min-h-[44px] bg-[#171f33] hover:bg-[#202b44] text-muted hover:text-foreground font-bold rounded-xl text-xs border border-border transition cursor-pointer active:scale-95"
+                className="p-2.5 rounded-xl bg-emerald-500 text-zinc-950 cursor-pointer"
               >
-                Enviar Mesmo Assim
+                <Send className="w-4 h-4" />
               </button>
             </div>
           </div>
         </div>
       )}
-    
-      <ChangePasswordModal isOpen={isChangePasswordOpen} onClose={() => setIsChangePasswordOpen(false)} />
+
+      {/* 5. BOTTOM TAB BAR FIXA NA ZONA DO POLEGAR (ESTILO INSTAGRAM / LINEAR MOBILE) */}
+      <nav className="fixed bottom-0 inset-x-0 z-30 h-14 bg-surface/95 backdrop-blur-md border-t border-border px-2">
+        <div className="max-w-2xl mx-auto h-full grid grid-cols-5 items-center">
+          {[
+            { id: 'feed' as const, label: 'Feed', icon: Home, badge: pendingActivities.length },
+            {
+              id: 'repositorio' as const,
+              label: 'Repositório',
+              icon: FolderOpen,
+              badge: repositoryItems.length,
+            },
+            {
+              id: 'games' as const,
+              label: 'KronoGames',
+              icon: Gamepad2,
+              badge: kronoGamesActivities.length,
+            },
+            { id: 'boletim' as const, label: 'Boletim', icon: BarChart3, badge: 0 },
+            { id: 'perfil' as const, label: 'Perfil', icon: User, badge: 0 },
+          ].map((item) => {
+            const IconComp = item.icon;
+            const isActive = activeNav === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setActiveNav(item.id)}
+                className={`relative h-full flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-colors ${
+                  isActive ? 'text-foreground font-bold' : 'text-muted hover:text-foreground'
+                }`}
+              >
+                <div className="relative">
+                  <IconComp
+                    className={`w-5 h-5 ${
+                      isActive && item.id === 'repositorio'
+                        ? 'text-emerald-400'
+                        : isActive
+                        ? 'text-foreground'
+                        : ''
+                    }`}
+                  />
+                  {item.badge > 0 && (
+                    <span className="absolute -top-1.5 -right-2.5 px-1 min-w-[16px] h-4 rounded-full bg-emerald-500 text-zinc-950 font-mono text-[9px] font-bold flex items-center justify-center">
+                      {item.badge}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[10px] tracking-tight">{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 };
