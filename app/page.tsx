@@ -610,20 +610,6 @@ export default function Home() {
     return currentTab;
   }, [role, currentTab]);
 
-  const targetPresenceStudents =
-    role === 'second_teacher' ? visibleStudentsForRole : activeStudents;
-
-  const presenceSignature = useMemo(() => {
-    if (role === 'student') return 'student_self';
-    if (!Array.isArray(targetPresenceStudents) || targetPresenceStudents.length === 0)
-      return 'empty';
-
-    return targetPresenceStudents
-      .filter((s) => s.isOnline === true && s.lastActiveAt)
-      .map((s) => `${s.id}:${s.lastActiveAt}`)
-      .join('|');
-  }, [role, targetPresenceStudents]);
-
   useEffect(() => {
     if (activeTeacherTab !== 'arquivos') return;
     if (library.length > 0) return;
