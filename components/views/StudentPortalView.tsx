@@ -97,6 +97,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   onLogout,
   themeMode = 'dark',
   onToggleTheme,
+  updateAvailable = false,
 }) => {
   // ==========================================================================
   // REGRA DE OURO DO REACT: TODOS OS HOOKS DECLARADOS NO TOPO ANTES DE QUALQUER RETURN!
@@ -156,6 +157,9 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   >('feed');
 
   const [showVersionUpdateBanner, setShowVersionUpdateBanner] = useState(false);
+  useEffect(() => {
+    if (updateAvailable) setShowVersionUpdateBanner(true);
+  }, [updateAvailable]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

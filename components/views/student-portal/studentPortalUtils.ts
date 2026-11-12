@@ -3,24 +3,16 @@ import { Activity, StudentUser } from "@/lib/types";
 export const STUDENT_PORTAL_VERSION = '2026.11.11-v3';
 
 // Galeria de Avatares prontos para escolha imediata dentro do Perfil
-export const AVATAR_GALLERY_PRESETS = [
-  { id: 'bot-1', label: 'Cyber Bot 1', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Krono1&backgroundColor=064e3b' },
-  { id: 'bot-2', label: 'Cyber Bot 2', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Krono2&backgroundColor=ea580c' },
-  { id: 'bot-3', label: 'Cyber Bot 3', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Krono3&backgroundColor=065f46' },
-  { id: 'bot-4', label: 'Cyber Bot 4', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Krono4&backgroundColor=4f46e5' },
-  { id: 'adv-1', label: 'Aventureiro 1', url: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Alex&backgroundColor=115e59' },
-  { id: 'adv-2', label: 'Aventureiro 2', url: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Sofia&backgroundColor=0369a1' },
-  { id: 'adv-3', label: 'Aventureiro 3', url: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Lucas&backgroundColor=4338ca' },
-  { id: 'adv-4', label: 'Aventureiro 4', url: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Maya&backgroundColor=0f766e' },
-  { id: 'avt-1', label: 'Estudante 1', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Davi&backgroundColor=064e3b' },
-  { id: 'avt-2', label: 'Estudante 2', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Clara&backgroundColor=065f46' },
-  { id: 'avt-3', label: 'Estudante 3', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Gabriel&backgroundColor=3730a3' },
-  { id: 'avt-4', label: 'Estudante 4', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Julia&backgroundColor=0369a1' },
-  { id: 'pix-1', label: 'Pixel Hero 1', url: 'https://api.dicebear.com/7.x/pixel-art/svg?seed=Hero1&backgroundColor=064e3b' },
-  { id: 'pix-2', label: 'Pixel Hero 2', url: 'https://api.dicebear.com/7.x/pixel-art/svg?seed=Hero2&backgroundColor=065f46' },
-  { id: 'fun-1', label: 'Star Vibe 1', url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Smile1&backgroundColor=115e59' },
-  { id: 'fun-2', label: 'Star Vibe 2', url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Cool2&backgroundColor=4338ca' },
-];
+import { KRONO_AVATARS, AVATAR_CATEGORIES } from "@/lib/avatarRegistry";
+export { AVATAR_CATEGORIES };
+export const AVATAR_GALLERY_PRESETS = KRONO_AVATARS.map((a) => ({
+  id: a.id,
+  label: a.name,
+  category: a.category,
+  categoryLabel: a.categoryLabel,
+  tagline: a.tagline,
+  url: a.url,
+}));
 
 export function normalizePersonName(name?: string | null): string {
   if (!name) return '';
