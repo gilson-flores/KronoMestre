@@ -1,6 +1,6 @@
+'use client';
 import { SecondTeachersActivitiesTab } from "@/components/views/second-teachers/SecondTeachersActivitiesTab";
 import { SecondTeachersRosterAndModals } from "@/components/views/second-teachers/SecondTeachersRosterAndModals";
-'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {

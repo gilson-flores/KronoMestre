@@ -1,5 +1,5 @@
-import { NewActivityModalBody } from "@/components/parts/NewActivityModalBody";
 'use client';
+import { NewActivityModalBody } from "@/components/parts/NewActivityModalBody";
 
 import React, { useState } from 'react';
 import {

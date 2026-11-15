@@ -1,6 +1,6 @@
+'use client';
 import { GradingSubmissionCardBody } from "@/components/parts/GradingSubmissionCardBody";
 import { GradingViewMainBody } from "@/components/parts/GradingViewMainBody";
-'use client';
 
 import React, { useState, useEffect } from 'react';
 import {

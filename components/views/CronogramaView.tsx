@@ -1,6 +1,6 @@
+'use client';
 import { CronogramaTabHoje } from "@/components/views/cronograma/CronogramaTabHoje";
 import { CronogramaTabHorario } from "@/components/views/cronograma/CronogramaTabHorario";
-'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {

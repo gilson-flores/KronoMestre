@@ -1,5 +1,5 @@
-import { RcoPdfReportModalBody } from "@/components/parts/RcoPdfReportModalBody";
 'use client';
+import { RcoPdfReportModalBody } from "@/components/parts/RcoPdfReportModalBody";
 
 import React, { useState, useMemo } from 'react';
 import {

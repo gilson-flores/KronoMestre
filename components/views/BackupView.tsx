@@ -1,5 +1,5 @@
-import { BackupViewModals } from "@/components/parts/BackupViewModals";
 'use client';
+import { BackupViewModals } from "@/components/parts/BackupViewModals";
 
 import React, { useState, useMemo } from 'react';
 import {

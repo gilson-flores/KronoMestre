@@ -1,5 +1,5 @@
-import { GradingViewMainBody } from "@/components/parts/GradingViewMainBody";
 'use client';
+import { GradingViewMainBody } from "@/components/parts/GradingViewMainBody";
 
 import React, { useState, useEffect } from 'react';
 import {

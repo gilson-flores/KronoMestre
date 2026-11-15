@@ -1,5 +1,5 @@
-import { TeacherWorkspaceBody } from "@/components/views/TeacherWorkspaceBody";
 'use client';
+import { TeacherWorkspaceBody } from "@/components/views/TeacherWorkspaceBody";
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {

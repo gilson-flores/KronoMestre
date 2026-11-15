@@ -1,5 +1,5 @@
-import { SecondTeacherPortalBody } from "@/components/parts/SecondTeacherPortalBody";
 'use client';
+import { SecondTeacherPortalBody } from "@/components/parts/SecondTeacherPortalBody";
 import { AdaptedActivitiesView } from '@/components/views/AdaptedActivitiesView';
 
 

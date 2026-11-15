@@ -1,5 +1,5 @@
-import { DashboardCentralBody } from "@/components/parts/DashboardCentralBody";
 'use client';
+import { DashboardCentralBody } from "@/components/parts/DashboardCentralBody";
 
 import React, { useState, useMemo } from 'react';
 import {

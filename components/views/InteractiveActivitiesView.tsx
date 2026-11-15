@@ -1,5 +1,5 @@
-import { InteractiveCreatorBody } from "@/components/parts/InteractiveCreatorBody";
 'use client';
+import { InteractiveCreatorBody } from "@/components/parts/InteractiveCreatorBody";
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {

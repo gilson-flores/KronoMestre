@@ -1,6 +1,6 @@
+'use client';
 import { DebateTeacherCockpit } from "@/components/views/debate/DebateTeacherCockpit";
 import { DebateStudentBenchView } from "@/components/views/debate/DebateStudentBenchView";
-'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Activity, StudentUser, TeacherUser } from '@/lib/types';

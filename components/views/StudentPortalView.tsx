@@ -1,7 +1,7 @@
+'use client';
 import { StudentActivityExecutionView } from "@/components/views/student-portal/StudentActivityExecutionView";
 import { StudentMainAndDrawer } from "@/components/views/student-portal/StudentMainAndDrawer";
 import { StudentHeaderNav } from "@/components/views/student-portal/StudentHeaderNav";
-'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Activity, StudentUser, TeacherUser } from '@/lib/types';
