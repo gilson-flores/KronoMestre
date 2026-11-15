@@ -598,7 +598,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         const parts = essayQuestions.map((eq: any, i: number) => {
           const resp = (essayResponses[eq.id] || '').trim();
           return `[Questão Dissertativa ${i + 1}]: ${
-            eq.text || eq.question || eq.prompt || ''
+            eq.statement || eq.text || eq.question || eq.prompt || ''
           }\nResposta: ${resp || '(Em branco)'}`;
         });
         compiledEssay = [parts.join('\n\n'), compiledEssay].filter(Boolean).join('\n\n');
