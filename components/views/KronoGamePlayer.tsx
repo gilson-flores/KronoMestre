@@ -24,7 +24,8 @@ import {
   Award
 } from 'lucide-react';
 import { Activity, StudentUser, GameStage, GameData, GameMode } from '@/lib/types';
-import { isStudentPNE, isSevereCondition } from '@/lib/studentUtils';
+import { isStudentPNE, isSevereCondition, isActivityAdapted } from '@/lib/studentUtils';
+import { PlayfulPolymorphicStageView } from '@/components/parts/PlayfulPolymorphicStageView';
 
 interface KronoGamePlayerProps {
   activity: Activity;
@@ -130,13 +131,17 @@ export const KronoGamePlayer: React.FC<KronoGamePlayerProps> = ({
   }, [allStudents, student.id, student.turma]);
 
   // Check if team has PNE members
+  const isDedicatedAeeActivity = useMemo(() => isActivityAdapted(activity) || (activity as any).activityDomain === 'adapted_aee', [activity]);
   const teamHasPne = useMemo(() => {
+    if (isDedicatedAeeActivity) return true;
     if (isStudentPNE(student)) return true;
     return selectedGroupMembers.some((m) => isStudentPNE(m));
   }, [student, selectedGroupMembers]);
 
   // Check if team has severe conditions
   const teamHasSeverePne = useMemo(() => {
+    if (isDedicatedAeeActivity && activity.adaptationType === 'severe_playful') return true;
+    if (isDedicatedAeeActivity && activity.adaptationType === 'mild_moderate') return false;
     const checkConds = (s: StudentUser) => {
       const conds = s.pneConditions || [];
       return conds.some((c) => isSevereCondition(c));
@@ -149,6 +154,7 @@ export const KronoGamePlayer: React.FC<KronoGamePlayerProps> = ({
   const [currentStageIndex, setCurrentStageIndex] = useState(0);
   const [selectedOptionIndex, setSelectedOptionIndex] = useState<number | null>(null);
   const [selectedSevereCardIndex, setSelectedSevereCardIndex] = useState<number | null>(null);
+  const [severeStageOutcome, setSevereStageOutcome] = useState<{ isCorrect: boolean; feedback: string } | null>(null);
   const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
   const [stageResults, setStageResults] = useState<boolean[]>([]);
   const [showClue, setShowClue] = useState(false);
@@ -193,9 +199,13 @@ export const KronoGamePlayer: React.FC<KronoGamePlayerProps> = ({
     let isCorrect = false;
 
     if (viewPneMode && teamHasSeverePne && currentStage.pneSevereStage) {
-      if (selectedSevereCardIndex === null) return;
-      const card = currentStage.pneSevereStage.visualCards[selectedSevereCardIndex];
-      isCorrect = Boolean(card?.isCorrect);
+      if (!severeStageOutcome && selectedSevereCardIndex === null) return;
+      if (severeStageOutcome) {
+        isCorrect = severeStageOutcome.isCorrect;
+      } else if (selectedSevereCardIndex !== null) {
+        const card = currentStage.pneSevereStage.visualCards[selectedSevereCardIndex];
+        isCorrect = Boolean(card?.isCorrect);
+      }
     } else if (viewPneMode && currentStage.pneMildStage) {
       if (selectedOptionIndex === null) return;
       const opt = currentStage.pneMildStage.options[selectedOptionIndex];
@@ -220,6 +230,7 @@ export const KronoGamePlayer: React.FC<KronoGamePlayerProps> = ({
     setIsAnswerRevealed(false);
     setSelectedOptionIndex(null);
     setSelectedSevereCardIndex(null);
+    setSevereStageOutcome(null);
     setShowClue(false);
 
     if (currentStageIndex + 1 < stages.length) {
@@ -534,43 +545,25 @@ export const KronoGamePlayer: React.FC<KronoGamePlayerProps> = ({
                     : currentStage.scenario}
                 </p>
 
-                {/* OPTIONS: Severe Playful Cards Mode */}
+                {/* OPTIONS: Severe Playful Polymorphic Mode */}
                 {viewPneMode && teamHasSeverePne && currentStage.pneSevereStage ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                    {currentStage.pneSevereStage.visualCards.map((card, cIdx) => {
-                      const isSelected = selectedSevereCardIndex === cIdx;
-                      let cardStyle = 'bg-surface hover:bg-surface-hover border-border text-foreground';
-
-                      if (isAnswerRevealed) {
-                        if (card.isCorrect) {
-                          cardStyle = 'bg-emerald-500/15 border-emerald-500 text-emerald-400 ring-2 ring-emerald-500/30';
-                        } else if (isSelected && !card.isCorrect) {
-                          cardStyle = 'bg-rose-500/15 border-rose-500 text-rose-400';
-                        } else {
-                          cardStyle = 'opacity-40 border-border text-muted';
-                        }
-                      } else if (isSelected) {
-                        cardStyle = 'bg-primary/15 border-primary text-primary ring-2 ring-primary/40';
-                      }
-
-                      return (
-                        <button
-                          key={cIdx}
-                          type="button"
-                          disabled={isAnswerRevealed}
-                          onClick={() => handleSelectSevereCard(cIdx)}
-                          className={`p-4 rounded-2xl border text-center flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${cardStyle}`}
-                        >
-                          <span className="text-4xl sm:text-5xl drop-shadow-sm">{card.iconEmoji}</span>
-                          <span className="text-xs sm:text-sm font-extrabold">{card.label}</span>
-                          {isAnswerRevealed && isSelected && (
-                            <span className="text-[11px] font-medium mt-1">
-                              {card.feedback}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
+                  <div className="space-y-3 pt-2">
+                    <PlayfulPolymorphicStageView
+                      stageId={currentStage.id || `stage-${currentStageIndex}`}
+                      severeStage={currentStage.pneSevereStage}
+                      disabled={isAnswerRevealed}
+                      isAnswerRevealed={isAnswerRevealed}
+                      onSelectResult={(ok, fb) => {
+                        if (soundEnabled) playSound('click');
+                        setSelectedSevereCardIndex(0);
+                        setSevereStageOutcome({ isCorrect: ok, feedback: fb });
+                      }}
+                    />
+                    {isAnswerRevealed && severeStageOutcome && (
+                      <div className={`p-3.5 rounded-2xl border text-center text-xs font-bold ${severeStageOutcome.isCorrect ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300' : 'bg-amber-500/15 border-amber-500/40 text-amber-300'}`}>
+                        {severeStageOutcome.feedback}
+                      </div>
+                    )}
                   </div>
                 ) : viewPneMode && currentStage.pneMildStage ? (
                   /* OPTIONS: Mild Stage Mode (2 Options) */

@@ -60,6 +60,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [newDriveUrl, setNewDriveUrl] = useState('');
   const [selectedFileName, setSelectedFileName] = useState('');
   const [selectedFileSize, setSelectedFileSize] = useState('1 MB');
+  const [selectedMarkdownContent, setSelectedMarkdownContent] = useState<string>('');
   const [uploadSuccessMsg, setUploadSuccessMsg] = useState('');
   const [fileToDelete, setFileToDelete] = useState<LibraryFile | null>(null);
 
@@ -147,6 +148,14 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       setNewTitle(nameWithoutExt);
     }
 
+    if (file.name.endsWith('.md') || file.name.endsWith('.txt') || file.name.endsWith('.markdown')) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const text = typeof ev.target?.result === 'string' ? ev.target.result : '';
+        setSelectedMarkdownContent(text.slice(0, 120000));
+      };
+      reader.readAsText(file);
+    }
     const sizeInMB = file.size / (1024 * 1024);
     if (sizeInMB >= 1) {
       setSelectedFileSize(`${sizeInMB.toFixed(1)} MB`);
@@ -161,7 +170,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     if (!newTitle.trim()) return;
 
     const submittedUrl = newDriveUrl.trim();
-    if (!submittedUrl) {
+    if (!submittedUrl && !selectedMarkdownContent) {
       alert('Por favor, cole o Link do Google Drive ou Repositório Externo do material no campo correspondente.');
       return;
     }
@@ -186,7 +195,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       targetAudience,
       fileSize: selectedFileSize || '1 MB',
       updatedAt: new Date().toLocaleDateString('pt-BR'),
-      driveUrl: submittedUrl,
+      driveUrl: submittedUrl || '#md-local',
+      markdownContent: selectedMarkdownContent || undefined,
+      isTextbookMd: Boolean(selectedMarkdownContent) || /sociologia em movimento/i.test(newTitle),
     };
 
     if (onAddFile) {
@@ -312,7 +323,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 ref={fileInputRef}
                 onChange={handleFileChange}
                 className="hidden"
-                accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rar,.txt"
+                accept=".md,.markdown,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rar,.txt"
               />
               <FileUp className="w-8 h-8 text-primary mx-auto opacity-80" />
               <div>

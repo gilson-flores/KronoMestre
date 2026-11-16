@@ -72,6 +72,7 @@ export const TeacherWorkspaceBody: React.FC<any> = (props) => {
 
           {activeTeacherTab === 'atividades_interativas' && role !== 'second_teacher' && (
             <InteractiveActivitiesView
+              libraryFiles={library}
               activities={activeActivities}
               students={visibleStudentsForRole}
               teacher={teacher}
@@ -91,6 +92,7 @@ export const TeacherWorkspaceBody: React.FC<any> = (props) => {
 
           {activeTeacherTab === 'atividades_adaptadas' && (
             <AdaptedActivitiesView
+              libraryFiles={library}
               onEditActivity={handleSaveEditedActivity}
               activities={activeActivities}
               students={visibleStudentsForRole}

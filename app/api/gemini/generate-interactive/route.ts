@@ -185,40 +185,156 @@ function generateFallbackInteractiveData(payload: RequestPayload): GameData {
     };
   }
 
-  if (isAee && isOnlyPlayful) {
-    const playfulThemes = [
-      { title: "Convivência na Escola", emojiOk: "🤝", labelOk: "Incluir e dialogar com o colega", emojiNo1: "🚫", labelNo1: "Isolar o colega", emojiNo2: "🗯️", labelNo2: "Desrespeitar o grupo" },
-      { title: "Atitude Cidadã", emojiOk: "🟢", labelOk: "Ouvir com empatia e respeito", emojiNo1: "🔴", labelNo1: "Interromper com gritos", emojiNo2: "🟡", labelNo2: "Ignorar quem precisa" },
-      { title: "Espaço Coletivo", emojiOk: "🏛️", labelOk: "Preservar o bem público", emojiNo1: "🗑️", labelNo1: "Degradar o patrimônio", emojiNo2: "⛔", labelNo2: "Bloquear o acesso" },
-      { title: "Decisão em Comunidade", emojiOk: "🌱", labelOk: "Cooperar para o bem comum", emojiNo1: "⚡", labelNo1: "Agir com egoísmo", emojiNo2: "🙈", labelNo2: "Omitir ajuda" },
-      { title: "Diversidade e Respeito", emojiOk: "💙", labelOk: "Valorizar as diferenças", emojiNo1: "❌", labelNo1: "Praticar preconceito", emojiNo2: "🧱", labelNo2: "Excluir do grupo" },
-      { title: "Construção Democrática", emojiOk: "🏆", labelOk: "Resolver conflitos pelo diálogo", emojiNo1: "🛑", labelNo1: "Recusar o diálogo", emojiNo2: "💢", labelNo2: "Impor pela força" },
+  if (isAee) {
+    const polymorphicStages = [
+      {
+        title: "Identificação Visual no Cotidiano",
+        subMechanic: "visual_cards" as const,
+        prompt: `Observando o capítulo sobre "${topic}", qual imagem representa uma prática de cidadania, respeito cultural e convivência coletiva?`,
+        mildQ: `Segundo o livro didático de Sociologia sobre "${topic}", como os padrões sociais e culturais influenciam a convivência em sociedade?`,
+        visualCards: [
+          { iconEmoji: "🤝", label: "Diálogo e respeito à diversidade cultural", isCorrect: true, feedback: "Muito bem! A Sociologia valoriza o respeito às diferenças e a cidadania." },
+          { iconEmoji: "🚫", label: "Exclusão e preconceito social", isCorrect: false, feedback: "Observe o cartão que mostra inclusão e respeito coletivo." },
+          { iconEmoji: "🙈", label: "Ignorar os direitos coletivos", isCorrect: false, feedback: "Procure o cartão que fortalece a vida em comunidade." },
+        ],
+      },
+      {
+        title: "Conexão de Conceitos do Livro",
+        subMechanic: "word_match" as const,
+        prompt: `Ligue cada conceito estudado em "${topic}" ao seu exemplo prático no dia a dia:`,
+        mildQ: `Ao diferenciar o conhecimento científico do senso comum no estudo de "${topic}", qual é o papel do estranhamento sociológico?`,
+        wordPairs: [
+          { left: "Olhar Sociológico", right: "Estranhar e desnaturalizar costumes cotidianos", iconEmoji: "🔎" },
+          { left: "Cultura e Sociedade", right: "Saberes, normas e práticas construídas coletivamente", iconEmoji: "🏛️" },
+          { left: "Cidadania Ativa", right: "Participar e defender direitos fundamentais", iconEmoji: "⚖️" },
+        ],
+        visualCards: [
+          { iconEmoji: "🔎", label: "Estranhar e desnaturalizar a realidade", isCorrect: true, feedback: "Correto!" },
+          { iconEmoji: "❌", label: "Aceitar tudo sem questionar", isCorrect: false, feedback: "Tente novamente!" },
+          { iconEmoji: "⏳", label: "Ignorar a história social", isCorrect: false, feedback: "Tente novamente!" },
+        ],
+      },
+      {
+        title: "Classificador Sociológico em Caixas",
+        subMechanic: "category_sort" as const,
+        prompt: `Classifique cada situação abaixo na caixa correta sobre "${topic}":`,
+        mildQ: `Considerando as instituições sociais e a socialização abordadas em "${topic}", qual exemplo demonstra cooperação e inclusão social?`,
+        categories: ["Prática Inclusiva e Cidadã", "Desigualdade ou Preconceito"] as [string, string],
+        categoryItems: [
+          { label: "Valorizar saberes tradicionais e científicos na escola", iconEmoji: "📚", categoryIndex: 0 as const },
+          { label: "Julgar outra cultura como inferior (etnocentrismo)", iconEmoji: "⚠️", categoryIndex: 1 as const },
+          { label: "Garantir acesso igualitário a direitos sociais", iconEmoji: "🏥", categoryIndex: 0 as const },
+          { label: "Negar oportunidades por origem ou condição social", iconEmoji: "🚫", categoryIndex: 1 as const },
+        ],
+        visualCards: [
+          { iconEmoji: "📚", label: "Valorizar saberes e direitos", isCorrect: true, feedback: "Correto!" },
+          { iconEmoji: "⚠️", label: "Praticar etnocentrismo", isCorrect: false, feedback: "Tente novamente!" },
+          { iconEmoji: "🚫", label: "Negar direitos", isCorrect: false, feedback: "Tente novamente!" },
+        ],
+      },
+      {
+        title: "Completar Ideia Central com Blocos",
+        subMechanic: "sentence_chips" as const,
+        prompt: `Toque no bloco que completa corretamente a síntese do livro sobre "${topic}":`,
+        mildQ: `De acordo com o capítulo estudado sobre "${topic}", por que os fenômenos sociais não devem ser vistos como imutáveis?`,
+        sentenceBlank: {
+          iconEmoji: "🧩",
+          sentenceWithBlank: `Para a Sociologia, os fenômenos ligados a "${topic}" são construções _____ que podem ser transformadas pela ação humana.`,
+          correctChip: "históricas e sociais",
+          distractorChips: ["naturais e fixas", "isoladas e imutáveis"],
+        },
+        visualCards: [
+          { iconEmoji: "🧩", label: "Construções históricas e sociais", isCorrect: true, feedback: "Correto!" },
+          { iconEmoji: "🪨", label: "Regras fixas da natureza", isCorrect: false, feedback: "Tente novamente!" },
+          { iconEmoji: "🔒", label: "Fatos impossíveis de mudar", isCorrect: false, feedback: "Tente novamente!" },
+        ],
+      },
+      {
+        title: "Leitura de Cena Social",
+        subMechanic: "visual_cards" as const,
+        prompt: `Qual cartão representa uma solução democrática para os desafios de "${topic}"?`,
+        mildQ: `Como as políticas públicas e os movimentos sociais contribuem para enfrentar desigualdades ligadas a "${topic}"?`,
+        visualCards: [
+          { iconEmoji: "🌱", label: "Políticas públicas, educação e participação", isCorrect: true, feedback: "Excelente! A participação democrática transforma a realidade." },
+          { iconEmoji: "🧱", label: "Manter barreiras e segregação", isCorrect: false, feedback: "Escolha a alternativa que promove justiça social." },
+          { iconEmoji: "🔇", label: "Silenciar grupos vulnerabilizados", isCorrect: false, feedback: "Na democracia, todas as vozes devem ser respeitadas." },
+        ],
+      },
+      {
+        title: "Síntese Prática do Capítulo",
+        subMechanic: "sentence_chips" as const,
+        prompt: `Complete a conclusão sociológica sobre "${topic}" tocando no bloco correto:`,
+        mildQ: `Qual conclusão sintetiza a importância de estudar "${topic}" no Ensino Médio?`,
+        sentenceBlank: {
+          iconEmoji: "🏆",
+          sentenceWithBlank: `O estudo sociológico de "${topic}" fortalece a consciência crítica e a defesa dos _____ na vida em sociedade.`,
+          correctChip: "direitos humanos",
+          distractorChips: ["privilégios exclusivos", "preconceitos cotidianos"],
+        },
+        visualCards: [
+          { iconEmoji: "🏆", label: "Defesa dos direitos humanos", isCorrect: true, feedback: "Parabéns! Você concluiu a trilha com sucesso!" },
+          { iconEmoji: "❌", label: "Defesa de privilégios", isCorrect: false, feedback: "Tente novamente!" },
+          { iconEmoji: "⛔", label: "Reprodução de preconceitos", isCorrect: false, feedback: "Tente novamente!" },
+        ],
+      },
     ];
 
     return {
-      introText: applyUppercaseIfNeeded(`Atividade Lúdica Interativa sobre "${topic}".`, isUpper),
-      stages: playfulThemes.slice(0, stageCount).map((item, idx) => ({
+      introText: applyUppercaseIfNeeded(`Trilha Inclusiva (Proficiente + Lúdica Polimórfica) baseada no livro Sociologia em Movimento sobre "${topic}".`, isUpper),
+      stages: polymorphicStages.slice(0, stageCount).map((item, idx) => ({
         id: `stage-${idx + 1}`,
-        title: applyUppercaseIfNeeded(`Etapa ${idx + 1}: ${item.title}`, isUpper),
-        scenario: applyUppercaseIfNeeded(`Analisando "${topic}" no cotidiano: qual escolha demonstra cidadania e respeito coletivo?`, isUpper),
-        clue: "",
+        title: applyUppercaseIfNeeded(`Fase ${idx + 1}: ${item.title}`, isUpper),
+        scenario: applyUppercaseIfNeeded(item.mildQ, isUpper),
+        clue: applyUppercaseIfNeeded("Consulte os conceitos-chave destacados no capítulo do Livro Didático.", isUpper),
         options: [
-          { text: applyUppercaseIfNeeded(item.labelOk, isUpper), isCorrect: true, pointsWeight: 10, feedback: applyUppercaseIfNeeded("Excelente escolha cidadã!", isUpper), iconEmoji: item.emojiOk },
-          { text: applyUppercaseIfNeeded(item.labelNo1, isUpper), isCorrect: false, pointsWeight: 0, feedback: applyUppercaseIfNeeded("Observe o cartão que promove respeito coletivo.", isUpper), iconEmoji: item.emojiNo1 },
+          { text: applyUppercaseIfNeeded(`Analisar "${topic}" como construção histórica e social que impacta a cidadania coletiva.`, isUpper), isCorrect: true, pointsWeight: 10, feedback: applyUppercaseIfNeeded("Correto! Fundamentação sociológica precisa.", isUpper), iconEmoji: "✅" },
+          { text: applyUppercaseIfNeeded("Explicar o fenômeno apenas por opiniões individuais isoladas da sociedade.", isUpper), isCorrect: false, pointsWeight: 0, feedback: applyUppercaseIfNeeded("Lembre-se: a Sociologia analisa as relações coletivas e históricas.", isUpper), iconEmoji: "❌" },
+          { text: applyUppercaseIfNeeded("Considerar as desigualdades e regras sociais como fatos biológicos imutáveis.", isUpper), isCorrect: false, pointsWeight: 0, feedback: applyUppercaseIfNeeded("A desnaturalização mostra que a sociedade é fruto da ação humana.", isUpper), iconEmoji: "⚠️" },
         ],
-        pneSevereStage: {
-          playfulPrompt: applyUppercaseIfNeeded(`Toque no cartão correto sobre "${topic}":`, isUpper),
-          visualCards: [
-            { iconEmoji: item.emojiOk, label: applyUppercaseIfNeeded(item.labelOk, isUpper), isCorrect: true, feedback: applyUppercaseIfNeeded("Muito bem! Escolha correta!", isUpper) },
-            { iconEmoji: item.emojiNo1, label: applyUppercaseIfNeeded(item.labelNo1, isUpper), isCorrect: false, feedback: applyUppercaseIfNeeded("Tente o cartão que mostra cooperação!", isUpper) },
-            { iconEmoji: item.emojiNo2, label: applyUppercaseIfNeeded(item.labelNo2, isUpper), isCorrect: false, feedback: applyUppercaseIfNeeded("Escolha a atitude que ajuda o coletivo!", isUpper) },
+        pneMildStage: {
+          scenario: applyUppercaseIfNeeded(item.mildQ, isUpper),
+          options: [
+            { text: applyUppercaseIfNeeded(`Compreender "${topic}" a partir das relações sociais, históricas e dos direitos coletivos estudados no capítulo.`, isUpper), isCorrect: true, feedback: applyUppercaseIfNeeded("Correto! Resposta alinhada ao livro Sociologia em Movimento.", isUpper) },
+            { text: applyUppercaseIfNeeded("Aceitar o senso comum sem investigar as causas sociais do fenômeno.", isUpper), isCorrect: false, feedback: applyUppercaseIfNeeded("Revise o conceito central: a Sociologia questiona e desnaturaliza o senso comum.", isUpper) },
+            { text: applyUppercaseIfNeeded("Tratar a vida em sociedade como algo isolado da cultura e da história.", isUpper), isCorrect: false, feedback: applyUppercaseIfNeeded("Indivíduo, cultura e sociedade estão sempre conectados.", isUpper) },
           ],
+        },
+        pneSevereStage: {
+          subMechanic: item.subMechanic,
+          playfulPrompt: applyUppercaseIfNeeded(item.prompt, isUpper),
+          visualCards: item.visualCards.map((c) => ({
+            iconEmoji: c.iconEmoji,
+            label: applyUppercaseIfNeeded(c.label, isUpper),
+            isCorrect: c.isCorrect,
+            feedback: applyUppercaseIfNeeded(c.feedback, isUpper),
+          })),
+          wordPairs: item.wordPairs?.map((p) => ({
+            left: applyUppercaseIfNeeded(p.left, isUpper),
+            right: applyUppercaseIfNeeded(p.right, isUpper),
+            iconEmoji: p.iconEmoji,
+          })),
+          categories: item.categories
+            ? [applyUppercaseIfNeeded(item.categories[0], isUpper), applyUppercaseIfNeeded(item.categories[1], isUpper)]
+            : undefined,
+          categoryItems: item.categoryItems?.map((ci) => ({
+            label: applyUppercaseIfNeeded(ci.label, isUpper),
+            iconEmoji: ci.iconEmoji,
+            categoryIndex: ci.categoryIndex,
+          })),
+          sentenceBlank: item.sentenceBlank
+            ? {
+                iconEmoji: item.sentenceBlank.iconEmoji,
+                sentenceWithBlank: applyUppercaseIfNeeded(item.sentenceBlank.sentenceWithBlank, isUpper),
+                correctChip: applyUppercaseIfNeeded(item.sentenceBlank.correctChip, isUpper),
+                distractorChips: item.sentenceBlank.distractorChips.map((d) => applyUppercaseIfNeeded(d, isUpper)),
+              }
+            : undefined,
         },
       })),
     };
   }
 
-  if (isAee && !isOnlyPlayful) {
+  if (false && isAee && !isOnlyPlayful) {
     const mildQuestions = [
       { axis: "Cotidiano Escolar", q: `Como o conceito de "${topic}" pode ser observado nas relações dentro da escola?` },
       { axis: "Direitos e Deveres", q: `Qual atitude respeita os direitos coletivos ao lidarmos com "${topic}" na comunidade?` },
@@ -309,25 +425,25 @@ export async function POST(req: NextRequest) {
       const targetStages = Math.max(1, Math.min(10, questionCount || 6));
 
       const aeePrompt = [
-        isOnlyPlayful
-          ? "Você é um Especialista em Educação Especial Inclusiva (AEE - Laudos Severos / Comunicação Visual)."
-          : "Você é um Especialista em Educação Especial Inclusiva (AEE - Laudos Leves/Moderados, TDAH, Dislexia, TEA Nível 1/2).",
+        "Você é um Especialista em Educação Especial Inclusiva (AEE) e Professor de Sociologia do Ensino Médio.",
         `SEMENTE DE ORIGINALIDADE: ${creativeSeed}`,
         `TEMA CENTRAL: "${topic}" (${subject}) | TÍTULO: "${title}"`,
-        `QUANTIDADE DE ETAPAS: Gere EXATAMENTE ${targetStages} etapas COMPLETAMENTE DISTINTAS entre si.`,
-        customPrompt.trim()
-          ? `⚡ DIRETRIZ SOBERANA / PROMPT DO PROFESSOR (OBRIGATÓRIO SEGUIR FIELMENTE):\n"""\n${customPrompt.trim()}\n"""`
-          : "⚡ DIRETRIZ: Crie situações inéditas, criativas, variadas e diretamente ligadas ao tema.",
+        `QUANTIDADE DE FASES: Gere EXATAMENTE ${targetStages} fases completas. Em CADA fase, preencha SIMULTANEAMENTE a versão Proficiente ("pneMildStage") E a versão Lúdica Polimórfica ("pneSevereStage").`,
         supportMaterial.trim()
-          ? `📚 MATERIAL DE APOIO / TEXTO BASE DO ALUNO (USE COMO FONTE DE CONTEÚDO):\n"""\n${supportMaterial.trim()}\n"""`
+          ? `🔒 CERCA EPISTEMOLÓGICA OBRIGATÓRIA — LIVRO DIDÁTICO (.MD DA ÁREA DE ARQUIVOS):\nVocê está ESTRITAMENTE PRESO aos conceitos, autores, exemplos e definições contidos no recorte abaixo do livro "Sociologia em Movimento". NÃO invente teorias fora deste material:\n"""\n${supportMaterial.trim()}\n"""`
+          : "⚡ Crie situações concretas, cotidianas e diretamente ligadas ao tema de Sociologia.",
+        customPrompt.trim()
+          ? `⚡ DIRETRIZ COMPLEMENTAR DO PROFESSOR:\n"""\n${customPrompt.trim()}\n"""`
           : "",
-        "REGRAS ANTI-REPETIÇÃO:",
-        "- PROIBIDO repetir a mesma estrutura de frase ou o mesmo texto de orientação nas etapas.",
-        "- Cada etapa deve explorar um ângulo, cena ou caso concreto diferente do tema.",
+        "REGRAS OBRIGATÓRIAS DE VARIEDADE LÚDICA (PROIBIDO ENGESSAR):",
+        "Alterne o campo 'subMechanic' de 'pneSevereStage' entre as fases para criar uma experiência rica e variada:",
+        "- Fase 1 e Fase 5: use subMechanic = 'visual_cards' (identificar cenas/imagens ilustradas com emojis e exemplos do livro).",
+        "- Fase 2: use subMechanic = 'word_match' (ligar 3 conceitos do livro na coluna 'left' aos seus significados/exemplos na coluna 'right' em 'wordPairs').",
+        "- Fase 3: use subMechanic = 'category_sort' (separar 4 exemplos em 'categoryItems' dentro de 2 caixas conceituais definidas em 'categories': [Caixa A, Caixa B]).",
+        "- Fase 4 e Fase 6: use subMechanic = 'sentence_chips' (frase curta do livro com lacuna '_____' em 'sentenceWithBlank', a palavra certa em 'correctChip' e 2 distratores em 'distractorChips').",
+        "Na trilha Proficiente ('pneMildStage'), use frases curtas na ordem direta e 3 alternativas claras (1 correta e 2 incorretas plausíveis sem pegadinhas).",
         `- Caixa Alta: ${isUppercase ? "SIM, ESCREVA TODOS OS TEXTOS EM LETRAS MAIÚSCULAS" : "Escrita normal"}.`,
-        isOnlyPlayful
-          ? 'Retorne EXCLUSIVAMENTE um JSON válido: { "introText": string, "stages": [ { "id": "stage-1", "title": string, "scenario": string, "clue": "", "options": [ { "text": string, "isCorrect": true, "pointsWeight": 10, "feedback": string, "iconEmoji": string }, { "text": string, "isCorrect": false, "pointsWeight": 0, "feedback": string, "iconEmoji": string } ], "pneSevereStage": { "playfulPrompt": string, "visualCards": [ { "iconEmoji": string, "label": string, "isCorrect": true, "feedback": string }, { "iconEmoji": string, "label": string, "isCorrect": false, "feedback": string }, { "iconEmoji": string, "label": string, "isCorrect": false, "feedback": string } ] } } ] }'
-          : 'Retorne EXCLUSIVAMENTE um JSON válido: { "introText": string, "stages": [ { "id": "stage-1", "title": string, "scenario": string, "clue": "", "options": [ { "text": string, "isCorrect": true, "pointsWeight": 10, "feedback": string, "iconEmoji": "✅" }, { "text": string, "isCorrect": false, "pointsWeight": 0, "feedback": string, "iconEmoji": "❌" } ], "pneMildStage": { "scenario": string, "options": [ { "text": string, "isCorrect": true, "feedback": string }, { "text": string, "isCorrect": false, "feedback": string } ] } } ] }',
+        'Retorne EXCLUSIVAMENTE um JSON válido no formato: { "introText": string, "stages": [ { "id": "stage-1", "title": string, "scenario": string, "clue": string, "options": [ { "text": string, "isCorrect": true, "pointsWeight": 10, "feedback": string, "iconEmoji": "✅" }, { "text": string, "isCorrect": false, "pointsWeight": 0, "feedback": string, "iconEmoji": "❌" }, { "text": string, "isCorrect": false, "pointsWeight": 0, "feedback": string, "iconEmoji": "⚠️" } ], "pneMildStage": { "scenario": string, "options": [ { "text": string, "isCorrect": true, "feedback": string }, { "text": string, "isCorrect": false, "feedback": string }, { "text": string, "isCorrect": false, "feedback": string } ] }, "pneSevereStage": { "subMechanic": "visual_cards" | "word_match" | "category_sort" | "sentence_chips", "playfulPrompt": string, "visualCards": [ { "iconEmoji": string, "label": string, "isCorrect": true, "feedback": string }, { "iconEmoji": string, "label": string, "isCorrect": false, "feedback": string }, { "iconEmoji": string, "label": string, "isCorrect": false, "feedback": string } ], "wordPairs": [ { "left": string, "right": string, "iconEmoji": "🔗" } ], "categories": [string, string], "categoryItems": [ { "label": string, "iconEmoji": string, "categoryIndex": 0 } ], "sentenceBlank": { "iconEmoji": "🧩", "sentenceWithBlank": "Texto com _____ aqui", "correctChip": string, "distractorChips": [string, string] } } } ] }',
       ]
         .filter(Boolean)
         .join("\n\n");

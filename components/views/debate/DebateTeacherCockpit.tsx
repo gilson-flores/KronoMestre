@@ -183,7 +183,7 @@ export const DebateTeacherCockpit: React.FC<any> = (props) => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 pt-2">
                   {DEBATE_TIMER_PRESETS.map((preset) => (
                     <button
                       key={preset.id}
@@ -216,7 +216,7 @@ export const DebateTeacherCockpit: React.FC<any> = (props) => {
                   [
                     {
                       roleKey: 'pro' as GroupRole,
-                      title: '🟢 Bancada Favorável (PRÓ)',
+                      title: '🏛️ Bancada dos Girondinos',
                       subtitle: '6 Questões + Resumo Elaborado Pró',
                       members: proMembers,
                       borderClass: 'border-emerald-500/40',
@@ -224,7 +224,7 @@ export const DebateTeacherCockpit: React.FC<any> = (props) => {
                     },
                     {
                       roleKey: 'contra' as GroupRole,
-                      title: '🔴 Bancada Opositora (CONTRA)',
+                      title: '🔥 Bancada dos Jacobinos',
                       subtitle: '6 Questões + Resumo Elaborado Contra',
                       members: contraMembers,
                       borderClass: 'border-rose-500/40',
@@ -232,7 +232,7 @@ export const DebateTeacherCockpit: React.FC<any> = (props) => {
                     },
                     {
                       roleKey: 'juror' as GroupRole,
-                      title: '⚖️ Corpo de Jurados (Análise)',
+                      title: '⚖️ Júri de Analistas (Julgamento)',
                       subtitle: `Até ${localConfig.maxJurors || 3} jurados • 6 Questões + Dossiê`,
                       members: jurorMembers,
                       borderClass: 'border-amber-500/40',
@@ -320,9 +320,9 @@ export const DebateTeacherCockpit: React.FC<any> = (props) => {
                                   className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-[10px] font-bold text-slate-200 focus:outline-none"
                                   title="Mover aluno para outro grupo"
                                 >
-                                  <option value="pro">🟢 Pró</option>
-                                  <option value="contra">🔴 Contra</option>
-                                  <option value="juror">⚖️ Jurado</option>
+                                  <option value="pro">🏛️ Girondinos</option>
+                                  <option value="contra">🔥 Jacobinos</option>
+                                  <option value="juror">⚖️ Júri Analista</option>
                                 </select>
 
                                 <button
@@ -394,21 +394,21 @@ export const DebateTeacherCockpit: React.FC<any> = (props) => {
                   [
                     {
                       roleKey: 'pro' as GroupRole,
-                      title: '🟢 BANCADA PRÓ (6 Perguntas + Resumo Elaborado)',
+                      title: '🏛️ BANCADA DOS GIRONDINOS (6 Perguntas + Resumo Elaborado)',
                       summaryField: 'proSummaryAI' as const,
                       questions: localConfig.proQuestions,
                       borderClass: 'border-emerald-500/40',
                     },
                     {
                       roleKey: 'contra' as GroupRole,
-                      title: '🔴 BANCADA CONTRA (6 Perguntas + Resumo Elaborado)',
+                      title: '🔥 BANCADA DOS JACOBINOS (6 Perguntas + Resumo Elaborado)',
                       summaryField: 'contraSummaryAI' as const,
                       questions: localConfig.contraQuestions,
                       borderClass: 'border-rose-500/40',
                     },
                     {
                       roleKey: 'juror' as GroupRole,
-                      title: '⚖️ CORPO DE JURADOS (6 Perguntas + Dossiê Elaborado)',
+                      title: '⚖️ JÚRI DE ANALISTAS (6 Perguntas + Dossiê Elaborado)',
                       summaryField: 'jurorGuideAI' as const,
                       questions: localConfig.jurorQuestions,
                       borderClass: 'border-amber-500/40',
@@ -477,17 +477,17 @@ export const DebateTeacherCockpit: React.FC<any> = (props) => {
                 [
                   {
                     roleKey: 'pro' as GroupRole,
-                    title: '🟢 Checklist • Bancada PRÓ',
+                    title: '🏛️ Checklist • Girondinos',
                     members: proMembers,
                   },
                   {
                     roleKey: 'contra' as GroupRole,
-                    title: '🔴 Checklist • Bancada CONTRA',
+                    title: '🔥 Checklist • Jacobinos',
                     members: contraMembers,
                   },
                   {
                     roleKey: 'juror' as GroupRole,
-                    title: '⚖️ Checklist • Corpo de JURADOS',
+                    title: '⚖️ Checklist • Júri de Analistas',
                     members: jurorMembers,
                   },
                 ] as const

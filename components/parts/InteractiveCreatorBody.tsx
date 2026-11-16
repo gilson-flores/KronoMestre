@@ -40,9 +40,13 @@ import {
 } from '@/lib/types';
 import { getOriginalTurmas, getTurmaLabel, isActivityAdapted, getLinkableActivitiesWithLabels } from '@/lib/studentUtils';
 import { KronoIcon } from '@/components/ui/KronoIcon';
+import { SOCIOLOGIA_EM_MOVIMENTO_CHAPTERS, getTextbookMarkdownSlice } from '@/lib/textbookMarkdownIndex';
 import { TurmaFilterDropdown } from '@/components/TurmaFilterDropdown';
 
 export const InteractiveCreatorBody: React.FC<any> = (props) => {
+  const [selectedBookChapter, setSelectedBookChapter] = useState('cap_1');
+  const [quickPasteText, setQuickPasteText] = useState('');
+  const [showQuickPaste, setShowQuickPaste] = useState(false);
   const { activities, students, turmasList, MODE_DEFAULT_GUIDELINES, handleSelectGameMode, handleGenerateGame, handlePublishGame, internalTab, setInternalTab, targetTurmas, setTargetTurmas, gameTitle, setGameTitle, gameTopic, setGameTopic, gameMaterial, setGameMaterial, selectedGameMode, deadline, setDeadline, bindingMode, setBindingMode, linkedFormalActivityId, setLinkedFormalActivityId, isGenerating, stagedGameData, setStagedGameData, isReviewOpen, setIsReviewOpen } = props;
   return (
     <>
@@ -162,7 +166,7 @@ export const InteractiveCreatorBody: React.FC<any> = (props) => {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2 font-black text-xs sm:text-sm text-rose-300">
                         <Users className="w-4 h-4 text-rose-400" />
-                        <span>🎙️ Debate Sociológico Sem Papel (6 Questões Pró + 6 Contra + 3 Resumos IA + 3 Jurados com 2 Checklists)</span>
+                        <span>🎙️ Debate Convenção Francesa: Girondinos vs. Jacobinos + Júri de Analistas (2 Aulas)</span>
                       </div>
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-400/30 font-bold">
                         100% Digital • Projetor & QR Code
@@ -269,6 +273,150 @@ export const InteractiveCreatorBody: React.FC<any> = (props) => {
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400"
                 />
               </div>
+            </div>
+
+            {/* Fonte do Livro Didático (.MD da Área de Arquivos) + Colagem Rápida */}
+            <div className="p-4 rounded-2xl bg-slate-800/80 border border-cyan-500/30 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-black uppercase text-cyan-300">
+                  📚 Livro Didático (.MD na Área de Arquivos) & Colagem Rápida
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowQuickPaste(!showQuickPaste)}
+                  className="px-3 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-300 text-[11px] font-black cursor-pointer"
+                >
+                  {showQuickPaste ? 'Fechar Colagem Rápida' : '⚡ Abrir Colagem Rápida de Questões'}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <select
+                  value={selectedBookChapter}
+                  onChange={(e) => {
+                    const chId = e.target.value;
+                    setSelectedBookChapter(chId);
+                    const slice = getTextbookMarkdownSlice(chId);
+                    setGameMaterial(slice.markdownSlice);
+                    const chObj = SOCIOLOGIA_EM_MOVIMENTO_CHAPTERS.find((c) => c.id === chId);
+                    if (chObj && !gameTopic.trim()) setGameTopic(chObj.title);
+                  }}
+                  className="sm:col-span-2 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400"
+                >
+                  {SOCIOLOGIA_EM_MOVIMENTO_CHAPTERS.map((ch) => (
+                    <option key={ch.id} value={ch.id}>
+                      {ch.title} ({ch.pages})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const slice = getTextbookMarkdownSlice(selectedBookChapter);
+                    setGameMaterial(slice.markdownSlice);
+                  }}
+                  className="px-3 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/40 text-cyan-200 text-xs font-black cursor-pointer"
+                >
+                  Carregar Capítulo (.MD)
+                </button>
+              </div>
+
+              {showQuickPaste && (
+                <div className="p-3 rounded-xl bg-slate-950 border border-amber-500/40 space-y-2">
+                  <p className="text-[11px] text-amber-300 font-bold">
+                    Cole 1 pergunta por linha para preencher automaticamente as fases ou bancadas (Girondinos, Jacobinos e Júri):
+                  </p>
+                  <textarea
+                    rows={4}
+                    value={quickPasteText}
+                    onChange={(e) => setQuickPasteText(e.target.value)}
+                    placeholder="Linha 1: Primeira pergunta...
+Linha 2: Segunda pergunta..."
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const lines = quickPasteText
+                        .split('\n')
+                        .map((l) => l.replace(/^\d+[\.)\-]\s*/, '').trim())
+                        .filter(Boolean);
+                      if (lines.length === 0) return;
+                      if (selectedGameMode === 'debate_paperless') {
+                        const third = Math.max(1, Math.ceil(lines.length / 3));
+                        const proLines = lines.slice(0, third);
+                        const contraLines = lines.slice(third, third * 2);
+                        const jurorLines = lines.slice(third * 2);
+                        setStagedGameData({
+                          introText: `Debate Convenção Francesa (Girondinos vs. Jacobinos): ${gameTopic || 'Sociologia'}`,
+                          stages: [],
+                          debateConfig: {
+                            maxJurors: 3,
+                            proQuestions: (proLines.length ? proLines : lines).map((p, i) => ({
+                              id: `pro_q_${i + 1}`,
+                              number: i + 1,
+                              side: 'pro',
+                              sociologicalConcept: `Tese Girondina #${i + 1}`,
+                              prompt: p,
+                              researchHint: '',
+                            })),
+                            contraQuestions: (contraLines.length ? contraLines : lines).map((p, i) => ({
+                              id: `contra_q_${i + 1}`,
+                              number: i + 1,
+                              side: 'contra',
+                              sociologicalConcept: `Tese Jacobina #${i + 1}`,
+                              prompt: p,
+                              researchHint: '',
+                            })),
+                            jurorQuestions: (jurorLines.length ? jurorLines : lines).map((p, i) => ({
+                              id: `juror_q_${i + 1}`,
+                              number: i + 1,
+                              side: 'juror',
+                              sociologicalConcept: `Análise do Júri #${i + 1}`,
+                              prompt: p,
+                              researchHint: '',
+                            })),
+                            checklistCriteria: [
+                              { id: 'crit_1', number: 1, title: 'Domínio Conceitual e Histórico', description: 'Mobilizou conceitos do livro didático sem cair no senso comum.' },
+                              { id: 'crit_2', number: 2, title: 'Consistência na Exposição', description: 'Apresentou tese clara dentro do tempo de Exposição.' },
+                              { id: 'crit_3', number: 3, title: 'Poder de Réplica e Tréplica', description: 'Refutou diretamente os argumentos da facção adversária.' },
+                              { id: 'crit_4', number: 4, title: 'Evidências do Relatório (Aula 1)', description: 'Sustentou a fala nos dados pesquisados no relatório.' },
+                            ],
+                            jurorInitialGuide: 'Avaliem Girondinos e Jacobinos durante a Exposição, Réplica e Tréplica.',
+                            proSummaryAI: '',
+                            contraSummaryAI: '',
+                            jurorGuideAI: '',
+                            participants: [],
+                            proAnswers: {},
+                            contraAnswers: {},
+                            jurorVerdicts: [],
+                          },
+                        });
+                      } else {
+                        setStagedGameData({
+                          introText: `Missão Autoral: ${gameTopic || 'Sociologia'}`,
+                          stages: lines.map((p, i) => ({
+                            id: `stage-${i + 1}`,
+                            title: `Fase ${i + 1}`,
+                            scenario: p,
+                            clue: 'Consulte o livro Sociologia em Movimento.',
+                            options: [
+                              { text: 'Alternativa correta (edite abaixo)', isCorrect: true, pointsWeight: 10, feedback: 'Correto!', iconEmoji: '🎯' },
+                              { text: 'Distrator 1 (edite abaixo)', isCorrect: false, pointsWeight: 0, feedback: 'Revise o conceito.', iconEmoji: '❌' },
+                              { text: 'Distrator 2 (edite abaixo)', isCorrect: false, pointsWeight: 0, feedback: 'Revise o conceito.', iconEmoji: '⚠️' },
+                            ],
+                          })),
+                        });
+                      }
+                      setIsReviewOpen(true);
+                      setShowQuickPaste(false);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-amber-500 text-slate-950 font-black text-xs cursor-pointer"
+                  >
+                    Aplicar Colagem Rápida & Abrir Revisão
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Material de Apoio */}
@@ -379,7 +527,7 @@ export const InteractiveCreatorBody: React.FC<any> = (props) => {
                 className="flex-1 py-3.5 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-slate-950 font-black text-sm rounded-2xl transition-all shadow-[0_0_25px_rgba(6,182,212,0.4)] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 <Sparkles className="w-5 h-5 fill-current" />
-                <span>{isGenerating ? 'Criando Jogo Inédito Baseado no seu Roteiro...' : 'Gerar Atividade Completa com IA (Baseada no Roteiro) ✨'}</span>
+                <span>{isGenerating ? 'Gerando Estudo de Caso e Critérios do Júri...' : selectedGameMode === 'debate_paperless' ? 'Gerar Critérios do Júri & Perguntas Sugeridas (Opcional) ✨' : 'Gerar Estudos de Caso do Jogo com IA (Preso ao Livro .MD) ✨'}</span>
               </button>
 
               <button
@@ -453,11 +601,11 @@ export const InteractiveCreatorBody: React.FC<any> = (props) => {
               {/* Fases ou 18 Questões do Debate */}
               {selectedGameMode === 'debate_paperless' && stagedGameData.debateConfig ? (
                 <div className="space-y-6 max-h-[540px] overflow-y-auto pr-1">
-                  {/* BLOCO 1: QUESTÕES LIVRES TIME PRÓ */}
+                  {/* BLOCO 1: QUESTÕES LIVRES BANCADA DOS GIRONDINOS */}
                   <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/40 space-y-3">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-black text-emerald-400 uppercase">
-                        📘 Grupo 1: Perguntas Norteadoras • TIME PRÓ ({(stagedGameData.debateConfig?.proQuestions || []).length} pergunta(s))
+                        📘 Grupo 1: Perguntas Norteadoras • BANCADA DOS GIRONDINOS ({(stagedGameData.debateConfig?.proQuestions || []).length} pergunta(s))
                       </h4>
                       <button
                         type="button"
@@ -482,14 +630,14 @@ export const InteractiveCreatorBody: React.FC<any> = (props) => {
                         }}
                         className="px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-emerald-300 text-[11px] font-black cursor-pointer"
                       >
-                        + Adicionar Pergunta Pró
+                        + Adicionar Pergunta Girondinos
                       </button>
                     </div>
                     {(stagedGameData.debateConfig?.proQuestions || []).map((q: any, idx: any) => (
                       <div key={q.id || idx} className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-black text-emerald-300">
-                            Pergunta Pró #{idx + 1}
+                            Pergunta Girondinos #{idx + 1}
                           </span>
                           {stagedGameData.debateConfig!.proQuestions.length > 1 && (
                             <button
@@ -511,7 +659,7 @@ export const InteractiveCreatorBody: React.FC<any> = (props) => {
                         </div>
                         <textarea
                           value={q.prompt}
-                          placeholder="Digite aqui a pergunta norteadora de pesquisa para o Time Pró..."
+                          placeholder="Digite aqui a pergunta norteadora de pesquisa para o Girondinos..."
                           onChange={(e: any) => {
                             const nextPro = [...stagedGameData.debateConfig!.proQuestions];
                             nextPro[idx] = { ...nextPro[idx], prompt: e.target.value };
@@ -527,11 +675,11 @@ export const InteractiveCreatorBody: React.FC<any> = (props) => {
                     ))}
                   </div>
 
-                  {/* BLOCO 2: QUESTÕES LIVRES TIME CONTRA */}
+                  {/* BLOCO 2: QUESTÕES LIVRES BANCADA DOS JACOBINOS */}
                   <div className="p-4 rounded-2xl bg-rose-950/20 border border-rose-500/40 space-y-3">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-black text-rose-400 uppercase">
-                        📕 Grupo 2: Perguntas Norteadoras • TIME CONTRA ({(stagedGameData.debateConfig?.contraQuestions || []).length} pergunta(s))
+                        📕 Grupo 2: Perguntas Norteadoras • BANCADA DOS JACOBINOS ({(stagedGameData.debateConfig?.contraQuestions || []).length} pergunta(s))
                       </h4>
                       <button
                         type="button"
@@ -556,14 +704,14 @@ export const InteractiveCreatorBody: React.FC<any> = (props) => {
                         }}
                         className="px-3 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/50 text-rose-300 text-[11px] font-black cursor-pointer"
                       >
-                        + Adicionar Pergunta Contra
+                        + Adicionar Pergunta Jacobinos
                       </button>
                     </div>
                     {(stagedGameData.debateConfig?.contraQuestions || []).map((q: any, idx: any) => (
                       <div key={q.id || idx} className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-black text-rose-300">
-                            Pergunta Contra #{idx + 1}
+                            Pergunta Jacobinos #{idx + 1}
                           </span>
                           {stagedGameData.debateConfig!.contraQuestions.length > 1 && (
                             <button
@@ -585,7 +733,7 @@ export const InteractiveCreatorBody: React.FC<any> = (props) => {
                         </div>
                         <textarea
                           value={q.prompt}
-                          placeholder="Digite aqui a pergunta norteadora de pesquisa para o Time Contra..."
+                          placeholder="Digite aqui a pergunta norteadora de pesquisa para o Jacobinos..."
                           onChange={(e: any) => {
                             const nextContra = [...stagedGameData.debateConfig!.contraQuestions];
                             nextContra[idx] = { ...nextContra[idx], prompt: e.target.value };
@@ -601,11 +749,11 @@ export const InteractiveCreatorBody: React.FC<any> = (props) => {
                     ))}
                   </div>
 
-                  {/* BLOCO 3: QUESTÕES LIVRES CORPO DE JURADOS */}
+                  {/* BLOCO 3: QUESTÕES LIVRES CORPO DE JÚRI DE ANALISTAS */}
                   <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-500/40 space-y-3">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-black text-amber-400 uppercase">
-                        ⚖️ Grupo 3: Perguntas Norteadoras • JURADOS ({((stagedGameData.debateConfig?.jurorQuestions || []) || []).length} pergunta(s))
+                        ⚖️ Grupo 3: Perguntas Norteadoras • JÚRI DE ANALISTAS ({((stagedGameData.debateConfig?.jurorQuestions || []) || []).length} pergunta(s))
                       </h4>
                       <button
                         type="button"

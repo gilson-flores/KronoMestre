@@ -55,7 +55,7 @@ export const StudentActivityExecutionView: React.FC<any> = (props) => {
   const isDebate =
     executingActivity.gameMode === 'debate_paperless' ||
     Boolean(executingActivity.gameData?.debateConfig);
-  const isGame = isActivityKronoGame(executingActivity);
+  const isGame = isActivityKronoGame(executingActivity) || Boolean(executingActivity.gameData && Array.isArray(executingActivity.gameData.stages) && executingActivity.gameData.stages.length > 0);
   const myExistingSub = mySubmissionsMap.get(executingActivity.id);
 
   if (isDebate) {

@@ -21,10 +21,10 @@ export const DebateStudentBenchView: React.FC<any> = (props) => {
 
           const myRoleTitle =
             myRole === 'pro'
-              ? '🟢 Bancada Favorável (PRÓ)'
+              ? '🏛️ Bancada dos Girondinos'
               : myRole === 'contra'
-              ? '🔴 Bancada Opositora (CONTRA)'
-              : '⚖️ Corpo de Jurados (Análise Imparcial)';
+              ? '🔥 Bancada dos Jacobinos'
+              : '⚖️ Júri de Analistas (Julgamento & Veredito)';
 
           return (
             <div className="space-y-6">
@@ -57,9 +57,9 @@ export const DebateStudentBenchView: React.FC<any> = (props) => {
                       onChange={(e) => setSimulatedStudentRole(e.target.value as GroupRole)}
                       className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs font-bold text-cyan-300"
                     >
-                      <option value="pro">🟢 Bancada PRÓ</option>
-                      <option value="contra">🔴 Bancada CONTRA</option>
-                      <option value="juror">⚖️ Corpo de JURADOS</option>
+                      <option value="pro">🏛️ Girondinos</option>
+                      <option value="contra">🔥 Jacobinos</option>
+                      <option value="juror">⚖️ Júri de Analistas</option>
                     </select>
                   </div>
                 )}
@@ -101,7 +101,7 @@ export const DebateStudentBenchView: React.FC<any> = (props) => {
                         <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 text-xs font-black">
                           {proMembers.length} integrante(s) na Turma {currentTurmaScope}
                         </span>
-                        <h4 className="text-base font-black text-white mt-3">🟢 Bancada PRÓ</h4>
+                        <h4 className="text-base font-black text-white mt-3">🏛️ Bancada dos Girondinos</h4>
                         <p className="text-xs text-slate-300 mt-1">
                           Responde às 6 perguntas favoráveis e defende a tese no Grande Debate.
                         </p>
@@ -120,7 +120,7 @@ export const DebateStudentBenchView: React.FC<any> = (props) => {
                         }
                         className="w-full py-3 rounded-2xl bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs cursor-pointer"
                       >
-                        Ingressar na Bancada PRÓ
+                        Ingressar nos Girondinos
                       </button>
                     </div>
 
@@ -129,7 +129,7 @@ export const DebateStudentBenchView: React.FC<any> = (props) => {
                         <span className="px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 text-xs font-black">
                           {contraMembers.length} integrante(s) na Turma {currentTurmaScope}
                         </span>
-                        <h4 className="text-base font-black text-white mt-3">🔴 Bancada CONTRA</h4>
+                        <h4 className="text-base font-black text-white mt-3">🔥 Bancada dos Jacobinos</h4>
                         <p className="text-xs text-slate-300 mt-1">
                           Responde às 6 perguntas críticas e sustenta o contraponto no Grande Debate.
                         </p>
@@ -148,7 +148,7 @@ export const DebateStudentBenchView: React.FC<any> = (props) => {
                         }
                         className="w-full py-3 rounded-2xl bg-rose-500 hover:bg-rose-400 text-white font-black text-xs cursor-pointer"
                       >
-                        Ingressar na Bancada CONTRA
+                        Ingressar nos Jacobinos
                       </button>
                     </div>
 
@@ -157,7 +157,7 @@ export const DebateStudentBenchView: React.FC<any> = (props) => {
                         <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 text-xs font-black">
                           {jurorMembers.length}/{localConfig.maxJurors || 3} Jurados na Turma {currentTurmaScope}
                         </span>
-                        <h4 className="text-base font-black text-white mt-3">⚖️ Corpo de Jurados</h4>
+                        <h4 className="text-base font-black text-white mt-3">⚖️ Júri de Analistas</h4>
                         <p className="text-xs text-slate-300 mt-1">
                           Responde às 6 questões de análise e julga o Grande Debate com 2 Checklists.
                         </p>
@@ -179,7 +179,7 @@ export const DebateStudentBenchView: React.FC<any> = (props) => {
                       >
                         {jurorMembers.length >= (localConfig.maxJurors || 3)
                           ? 'Vagas de Jurados Preenchidas'
-                          : 'Ingressar nos Jurados'}
+                          : 'Ingressar no Júri de Analistas'}
                       </button>
                     </div>
                   </div>
@@ -192,17 +192,17 @@ export const DebateStudentBenchView: React.FC<any> = (props) => {
                     {[
                       {
                         step: 1 as const,
-                        title: 'Passo 1: Equipe & 6 Questões',
+                        title: 'Aula 1 (Parte A): Bancada & Pesquisa',
                         desc: 'Seleção do grupo e 6 perguntas com espaço de resposta',
                       },
                       {
                         step: 2 as const,
-                        title: 'Passo 2: Resumo Elaborado',
+                        title: 'Aula 1 (Parte B): Relatório Oficial',
                         desc: 'Resumo elaborado de respostas e dossiê da sua bancada',
                       },
                       {
                         step: 3 as const,
-                        title: 'Passo 3: O Grande Debate',
+                        title: 'Aula 2: Grande Debate & Júri',
                         desc:
                           myRole === 'juror'
                             ? 'Checklists oficiais de julgamento e veredito'
@@ -416,7 +416,7 @@ export const DebateStudentBenchView: React.FC<any> = (props) => {
                           onClick={() => setStudentStep(3)}
                           className="px-6 py-3 rounded-2xl bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs flex items-center gap-2 cursor-pointer"
                         >
-                          <span>Ir para o Passo 3: O Grande Debate</span>
+                          <span>{myRole === 'juror' ? 'Concluir Relatório e Liberar Checklist de Julgamento (Aula 2)' : 'Ir para a Aula 2: O Grande Debate (Exposição, Réplica e Tréplica)'}</span>
                           <ArrowRight className="w-4 h-4" />
                         </button>
                       </div>
@@ -439,7 +439,7 @@ export const DebateStudentBenchView: React.FC<any> = (props) => {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="p-4 rounded-2xl bg-slate-950 border border-emerald-500/30 space-y-3">
                               <h4 className="text-xs font-black uppercase text-emerald-400">
-                                Checklist 1 • Avaliar Bancada PRÓ
+                                Checklist 1 • Avaliar Girondinos (Exposição, Réplica e Tréplica)
                               </h4>
                               {localConfig.checklistCriteria.map((c: any) => (
                                 <label
@@ -471,7 +471,7 @@ export const DebateStudentBenchView: React.FC<any> = (props) => {
 
                             <div className="p-4 rounded-2xl bg-slate-950 border border-rose-500/30 space-y-3">
                               <h4 className="text-xs font-black uppercase text-rose-400">
-                                Checklist 2 • Avaliar Bancada CONTRA
+                                Checklist 2 • Avaliar Jacobinos (Exposição, Réplica e Tréplica)
                               </h4>
                               {localConfig.checklistCriteria.map((c: any) => (
                                 <label
@@ -504,7 +504,7 @@ export const DebateStudentBenchView: React.FC<any> = (props) => {
 
                           <div className="space-y-1.5">
                             <label className="text-xs font-bold text-slate-300 block">
-                              Veredito Fundamentado do Corpo de Jurados:
+                              Placar do Checklist: Girondinos ({Object.values(jurorChecklistPro || {}).filter(Boolean).length} pts) vs. Jacobinos ({Object.values(jurorChecklistContra || {}).filter(Boolean).length} pts) — {Object.values(jurorChecklistPro || {}).filter(Boolean).length > Object.values(jurorChecklistContra || {}).filter(Boolean).length ? '🏆 Vitória dos Girondinos' : Object.values(jurorChecklistContra || {}).filter(Boolean).length > Object.values(jurorChecklistPro || {}).filter(Boolean).length ? '🏆 Vitória dos Jacobinos' : '⚖️ Empate Técnico'} • Justificativa dos Analistas:
                             </label>
                             <textarea
                               rows={3}

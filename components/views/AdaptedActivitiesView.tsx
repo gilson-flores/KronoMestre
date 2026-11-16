@@ -25,6 +25,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import {
+  LibraryFile,
   Activity,
   StudentUser,
   TeacherUser,
@@ -32,6 +33,12 @@ import {
   AeePromptSettings,
   GameData,
 } from '@/lib/types';
+import {
+  SOCIOLOGIA_EM_MOVIMENTO_CHAPTERS,
+  findTextbookInLibrary,
+  getTextbookMarkdownSlice,
+} from '@/lib/textbookMarkdownIndex';
+import { PlayfulPolymorphicStageView } from '@/components/parts/PlayfulPolymorphicStageView';
 import {
   isStudentPNE,
   isActivityAdapted,
@@ -41,6 +48,7 @@ import {
 } from '@/lib/studentUtils';
 
 interface AdaptedActivitiesViewProps {
+  libraryFiles?: LibraryFile[];
   onOpenNewActivityModal?: () => void;
   activities: Activity[];
   students: StudentUser[];
@@ -66,6 +74,7 @@ export function formatShortActivityName(act: Activity, allList: Activity[]): str
 }
 
 export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
+  libraryFiles = [],
   activities = [],
   students = [],
   teacher,
@@ -108,6 +117,13 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
   const [aeeMaterial, setAeeMaterial] = useState('');
   const [aeeDeadline, setAeeDeadline] = useState(getDefaultAeeDeadlineString);
   const [selectedMechanic, setSelectedMechanic] = useState<AeeMechanic>('visual_cards');
+  const [generationTrackMode, setGenerationTrackMode] = useState<'both' | 'playful_only' | 'proficient_only'>('both');
+  const [selectedChapterId, setSelectedChapterId] = useState<string>('cap_1');
+  const detectedTextbook = useMemo(() => findTextbookInLibrary(libraryFiles), [libraryFiles]);
+  const currentChapterSlice = useMemo(
+    () => getTextbookMarkdownSlice(selectedChapterId, detectedTextbook),
+    [selectedChapterId, detectedTextbook]
+  );
   const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>([]);
   
   const [promptSettings, setPromptSettings] = useState<AeePromptSettings>({
@@ -170,12 +186,10 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
 
   useEffect(() => {
     const autoSelectedIds = pneStudentsInTurma.filter((st) => {
+      if (generationTrackMode === 'both') return true;
       const hasSevere = st.pneConditions?.some(isSevereCondition);
-      if (selectedMechanic === 'visual_cards' || selectedMechanic === 'social_story') {
-        return hasSevere;
-      } else {
-        return !hasSevere;
-      }
+      if (generationTrackMode === 'playful_only') return hasSevere;
+      return !hasSevere;
     }).map((st) => st.id);
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -186,7 +200,16 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
     } else {
       setPromptSettings((prev) => ({ ...prev, uppercaseText: false }));
     }
-  }, [selectedMechanic, pneStudentsInTurma]);
+  }, [selectedMechanic, generationTrackMode, pneStudentsInTurma]);
+
+  useEffect(() => {
+    setAeeMaterial(currentChapterSlice.markdownSlice);
+    if (!aeeTopic.trim()) {
+      const ch = SOCIOLOGIA_EM_MOVIMENTO_CHAPTERS.find((c) => c.id === selectedChapterId);
+      if (ch && ch.topics[0]) setAeeTopic(ch.topics[0]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedChapterId, currentChapterSlice.markdownSlice]);
 
   const handleToggleStudentTarget = (studentId: string) => {
     setSelectedTargetIds((prev) => 
@@ -241,48 +264,123 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
     const existingAct = editingActivityId ? (activities || []).find((a) => a.id === editingActivityId) : undefined;
     const cleanTitle = aeeTopic.trim() || 'Atividade Adaptada';
 
-    const newActivity: Activity = {
-      ...(existingAct || {}),
-      id: editingActivityId || `aee_${Date.now()}`,
-      title: cleanTitle.startsWith('[AEE') ? cleanTitle : `[AEE Inclusiva] ${cleanTitle}`,
-      subject: teacher?.subject || 'Educação Especial',
-      turma: 'AEE_EXCLUSIVO',
-      deadline: aeeDeadline,
-      description: generatedGameData?.introText || existingAct?.description || 'Atividade adaptada exclusiva para os alunos PNE selecionados.',
-      supportMaterial: aeeMaterial || '',
-      type: 'Jogo Avaliativo' as any,
-      status: existingAct?.status || 'Ativo',
-      maxGrade: existingAct?.maxGrade || 10,
-      allowGroupWork: false,
-      isAdapted: true,
-      activityDomain: 'adapted_aee' as any,
-      isStandaloneAdaptation: bindingMode === 'standalone',
-      adaptedFromId: bindingMode === 'linked' ? linkedParentId : undefined,
-      adaptationType: (selectedMechanic === 'visual_cards' || selectedMechanic === 'social_story') ? 'severe_playful' : 'mild_moderate',
-      adaptationReason: `Direcionado exclusivamente para ${selectedTargetIds.length} aluno(s) PNE`,
-      aeeMechanic: selectedMechanic,
-      aeePromptSettings: promptSettings,
-      isGameActivity: false,
-      gameData: generatedGameData || existingAct?.gameData,
-      submissions: existingAct?.submissions || [],
-      totalSubmissions: existingAct?.totalSubmissions || 0,
-      totalStudents: selectedTargetIds.length,
-      pendingCorrection: existingAct?.pendingCorrection || 0,
-      includedPneStudentIds: selectedTargetIds,
-    };
+    if (!editingActivityId && generationTrackMode === 'both') {
+      const severeStudents = pneStudentsInTurma
+        .filter((s) => selectedTargetIds.includes(s.id) && s.pneConditions?.some(isSevereCondition))
+        .map((s) => s.id);
+      const mildStudents = pneStudentsInTurma
+        .filter((s) => selectedTargetIds.includes(s.id) && !s.pneConditions?.some(isSevereCondition))
+        .map((s) => s.id);
 
-    if (editingActivityId && onEditActivity) {
-      await onEditActivity(newActivity);
-      setSuccessBanner('✨ Atividade Adaptada atualizada com sucesso!');
+      const finalSevereTargets = severeStudents.length > 0 ? severeStudents : selectedTargetIds;
+      const finalMildTargets = mildStudents.length > 0 ? mildStudents : selectedTargetIds;
+      const nowTs = Date.now();
+
+      const proficientActivity: Activity = {
+        id: `aee_prof_${nowTs}`,
+        title: cleanTitle.startsWith('[AEE') ? cleanTitle : `[AEE Proficiente] ${cleanTitle}`,
+        subject: teacher?.subject || 'Sociologia',
+        turma: 'AEE_EXCLUSIVO',
+        deadline: aeeDeadline,
+        description: `Trilha Proficiente (Redução Cognitiva) baseada no livro Sociologia em Movimento (${currentChapterSlice.chapterTitle}).`,
+        supportMaterial: aeeMaterial || '',
+        type: 'Jogo Avaliativo' as any,
+        status: 'Ativo',
+        maxGrade: 10,
+        allowGroupWork: false,
+        isAdapted: true,
+        activityDomain: 'adapted_aee' as any,
+        isStandaloneAdaptation: bindingMode === 'standalone',
+        adaptedFromId: bindingMode === 'linked' ? linkedParentId : undefined,
+        adaptationType: 'mild_moderate',
+        adaptationReason: `Trilha Proficiente direcionada para ${finalMildTargets.length} aluno(s) PNE`,
+        aeeMechanic: 'binary_trail',
+        aeePromptSettings: { ...promptSettings, uppercaseText: false },
+        isGameActivity: true,
+        gameData: generatedGameData!,
+        submissions: [],
+        totalSubmissions: 0,
+        totalStudents: finalMildTargets.length,
+        pendingCorrection: 0,
+        includedPneStudentIds: finalMildTargets,
+      };
+
+      const playfulActivity: Activity = {
+        id: `aee_lud_${nowTs + 1}`,
+        title: cleanTitle.startsWith('[AEE') ? cleanTitle : `[AEE Lúdica] ${cleanTitle}`,
+        subject: teacher?.subject || 'Sociologia',
+        turma: 'AEE_EXCLUSIVO',
+        deadline: aeeDeadline,
+        description: `Trilha Lúdica/Concreta Polimórfica (Ligar Palavras, Caixas, Cenas e Blocos) baseada em ${currentChapterSlice.chapterTitle}.`,
+        supportMaterial: aeeMaterial || '',
+        type: 'Jogo Avaliativo' as any,
+        status: 'Ativo',
+        maxGrade: 10,
+        allowGroupWork: false,
+        isAdapted: true,
+        activityDomain: 'adapted_aee' as any,
+        isStandaloneAdaptation: bindingMode === 'standalone',
+        adaptedFromId: bindingMode === 'linked' ? linkedParentId : undefined,
+        adaptationType: 'severe_playful',
+        adaptationReason: `Trilha Lúdica Polimórfica direcionada para ${finalSevereTargets.length} aluno(s) PNE`,
+        aeeMechanic: 'visual_cards',
+        aeePromptSettings: promptSettings,
+        isGameActivity: true,
+        gameData: generatedGameData!,
+        submissions: [],
+        totalSubmissions: 0,
+        totalStudents: finalSevereTargets.length,
+        pendingCorrection: 0,
+        includedPneStudentIds: finalSevereTargets,
+      };
+
+      await onSaveCreatedActivity(proficientActivity);
+      await onSaveCreatedActivity(playfulActivity);
+      setSuccessBanner('✨ Par Duplo publicado com sucesso: 1 Atividade Proficiente + 1 Atividade Lúdica Polimórfica!');
     } else {
-      await onSaveCreatedActivity(newActivity);
-      setSuccessBanner(`✨ Atividade Inclusiva publicada com sucesso para ${selectedTargetIds.length} aluno(s) PNE!`);
+      const isPlayful = generationTrackMode === 'playful_only' || selectedMechanic === 'visual_cards';
+      const newActivity: Activity = {
+        ...(existingAct || {}),
+        id: editingActivityId || `aee_${Date.now()}`,
+        title: cleanTitle.startsWith('[AEE') ? cleanTitle : `[AEE ${isPlayful ? 'Lúdica' : 'Proficiente'}] ${cleanTitle}`,
+        subject: teacher?.subject || 'Sociologia',
+        turma: 'AEE_EXCLUSIVO',
+        deadline: aeeDeadline,
+        description: generatedGameData?.introText || existingAct?.description || 'Atividade adaptada exclusiva para os alunos PNE selecionados.',
+        supportMaterial: aeeMaterial || '',
+        type: 'Jogo Avaliativo' as any,
+        status: existingAct?.status || 'Ativo',
+        maxGrade: existingAct?.maxGrade || 10,
+        allowGroupWork: false,
+        isAdapted: true,
+        activityDomain: 'adapted_aee' as any,
+        isStandaloneAdaptation: bindingMode === 'standalone',
+        adaptedFromId: bindingMode === 'linked' ? linkedParentId : undefined,
+        adaptationType: isPlayful ? 'severe_playful' : 'mild_moderate',
+        adaptationReason: `Direcionado exclusivamente para ${selectedTargetIds.length} aluno(s) PNE`,
+        aeeMechanic: isPlayful ? 'visual_cards' : 'binary_trail',
+        aeePromptSettings: promptSettings,
+        isGameActivity: true,
+        gameData: generatedGameData || existingAct?.gameData,
+        submissions: existingAct?.submissions || [],
+        totalSubmissions: existingAct?.totalSubmissions || 0,
+        totalStudents: selectedTargetIds.length,
+        pendingCorrection: existingAct?.pendingCorrection || 0,
+        includedPneStudentIds: selectedTargetIds,
+      };
+
+      if (editingActivityId && onEditActivity) {
+        await onEditActivity(newActivity);
+        setSuccessBanner('✨ Atividade Adaptada atualizada com sucesso!');
+      } else {
+        await onSaveCreatedActivity(newActivity);
+        setSuccessBanner(`✨ Atividade Inclusiva publicada com sucesso para ${selectedTargetIds.length} aluno(s) PNE!`);
+      }
     }
 
     setEditingActivityId(null);
     setGeneratedGameData(null);
     setAeeTopic('');
-    setAeeMaterial('');
     setActiveMenuTab('bank');
     setTimeout(() => setSuccessBanner(null), 5000);
   };
@@ -417,48 +515,148 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               <label className="text-xs font-bold text-foreground block uppercase tracking-wider">
-                1. Selecione a Mecânica Pedagógica Inclusiva:
+                1. Modo de Geração das Trilhas AEE:
               </label>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <button
                   type="button"
-                  onClick={() => setSelectedMechanic('visual_cards')}
+                  onClick={() => {
+                    setGenerationTrackMode('both');
+                    setSelectedMechanic('visual_cards');
+                  }}
                   className={`p-3.5 rounded-2xl border text-left space-y-1 transition-all cursor-pointer ${
-                    selectedMechanic === 'visual_cards'
+                    generationTrackMode === 'both'
+                      ? 'bg-emerald-500/20 border-emerald-400 ring-2 ring-emerald-400/30'
+                      : 'bg-background hover:bg-surface-hover border-border'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 font-bold text-xs sm:text-sm text-emerald-400">
+                    <span>⚡ Dupla: Proficiente + Lúdica</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500 text-slate-950 font-black">Recomendado</span>
+                  </div>
+                  <p className="text-[11px] text-muted leading-snug">
+                    Gera e publica simultaneamente 1 versão Proficiente e 1 versão Lúdica Polimórfica (ligar palavras, caixas, cenas e blocos).
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGenerationTrackMode('playful_only');
+                    setSelectedMechanic('visual_cards');
+                  }}
+                  className={`p-3.5 rounded-2xl border text-left space-y-1 transition-all cursor-pointer ${
+                    generationTrackMode === 'playful_only'
                       ? 'bg-amber-500/20 border-amber-400 ring-2 ring-amber-400/30'
                       : 'bg-background hover:bg-surface-hover border-border'
                   }`}
                 >
-                  <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-amber-400">
-                    <span>🎨 Somente Atividade Lúdica (Visual & Criativa)</span>
-                    <span className="text-[10px] px-2 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-extrabold">Laudos Severos</span>
+                  <div className="flex items-center justify-between gap-2 font-bold text-xs sm:text-sm text-amber-400">
+                    <span>🎨 Somente Lúdica/Concreta</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-extrabold">Polimórfica</span>
                   </div>
                   <p className="text-[11px] text-muted leading-snug">
-                    Cria exclusivamente dinâmicas lúdicas variadas (histórias sociais, associações visuais, missões ilustradas) para laudos severos.
+                    Mistura ligar palavras, classificar em caixas, identificar imagens/cenas e completar frases com blocos tocáveis.
                   </p>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setSelectedMechanic('binary_trail')}
+                  onClick={() => {
+                    setGenerationTrackMode('proficient_only');
+                    setSelectedMechanic('binary_trail');
+                  }}
                   className={`p-3.5 rounded-2xl border text-left space-y-1 transition-all cursor-pointer ${
-                    selectedMechanic === 'binary_trail'
+                    generationTrackMode === 'proficient_only'
                       ? 'bg-primary/20 border-primary ring-2 ring-primary/30'
                       : 'bg-background hover:bg-surface-hover border-border'
                   }`}
                 >
-                  <div className="flex items-center gap-2 font-bold text-xs sm:text-sm text-primary">
-                    <span>📘 Somente Atividade Proficiente (Redução Cognitiva)</span>
-                    <span className="text-[10px] px-2 py-0.2 rounded-full bg-primary/20 text-primary font-extrabold">Leve / Moderado</span>
+                  <div className="flex items-center justify-between gap-2 font-bold text-xs sm:text-sm text-primary">
+                    <span>📘 Somente Proficiente</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary font-extrabold">Leve / Moderado</span>
                   </div>
                   <p className="text-[11px] text-muted leading-snug">
-                    Cria exclusivamente desafios adaptados objetivos (estudos de caso práticos, dilemas diretos) para laudos leves/moderados.
+                    Textos diretos ancorados no livro didático com redução cognitiva e alternativas objetivas claras.
                   </p>
                 </button>
               </div>
+            </div>
+
+            {/* FONTE EXCLUSIVA DA ÁREA DE ARQUIVOS: LIVRO DIDÁTICO EM .MD (SEM PLANO DE AULA) */}
+            <div className="p-4 rounded-2xl bg-cyan-950/20 border border-cyan-500/30 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <FolderOpen className="w-4 h-4 text-cyan-400" />
+                  <span className="text-xs font-black uppercase tracking-wider text-cyan-300">
+                    Fonte da Área de Arquivos: Livro Didático (.MD)
+                  </span>
+                </div>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                  ⚡ Economia de 95% de Tokens • Sem vínculo com Plano de Aula
+                </span>
+              </div>
+
+              <p className="text-[11px] text-muted leading-relaxed">
+                Arquivo vinculado na Biblioteca: <strong className="text-foreground">{currentChapterSlice.sourceTitle}</strong>. Selecione o capítulo e clique em um subtópico para recortar apenas o Markdown necessário:
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-muted block mb-1">Capítulo do Livro (Sociologia em Movimento):</label>
+                  <select
+                    value={selectedChapterId}
+                    onChange={(e) => {
+                      const nextId = e.target.value;
+                      setSelectedChapterId(nextId);
+                      const ch = SOCIOLOGIA_EM_MOVIMENTO_CHAPTERS.find((c) => c.id === nextId);
+                      if (ch && ch.topics[0]) setAeeTopic(ch.topics[0]);
+                    }}
+                    className="w-full bg-background border border-border rounded-xl px-3 py-2 text-xs font-bold text-foreground focus:outline-none focus:border-cyan-400 cursor-pointer"
+                  >
+                    {SOCIOLOGIA_EM_MOVIMENTO_CHAPTERS.map((ch) => (
+                      <option key={ch.id} value={ch.id}>
+                        Unid. {ch.unitNumber} • {ch.title} ({ch.pages})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-muted block mb-1">Atalhos de Subtópicos do Capítulo:</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(SOCIOLOGIA_EM_MOVIMENTO_CHAPTERS.find((c) => c.id === selectedChapterId)?.topics || []).map((tp, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setAeeTopic(tp)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                          aeeTopic === tp
+                            ? 'bg-cyan-500 text-slate-950 border-cyan-400'
+                            : 'bg-background hover:bg-surface-hover text-muted border-border'
+                        }`}
+                      >
+                        {tp}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <details className="text-xs">
+                <summary className="cursor-pointer font-bold text-cyan-400 hover:underline select-none">
+                  Ver / editar recorte em Markdown (.md) extraído do capítulo ({aeeMaterial.length} caracteres)
+                </summary>
+                <textarea
+                  rows={4}
+                  value={aeeMaterial}
+                  onChange={(e) => setAeeMaterial(e.target.value)}
+                  className="w-full mt-2 bg-background border border-border rounded-xl p-3 text-[11px] font-mono text-foreground focus:outline-none focus:border-cyan-400"
+                />
+              </details>
             </div>
 
             <div className="space-y-2">
@@ -845,36 +1043,19 @@ export const AdaptedActivitiesView: React.FC<AdaptedActivitiesViewProps> = ({
                   )}
                 </div>
 
-                {/* MODO 1: CARTÕES VISUAIS LÚDICOS (LAUDOS SEVEROS) */}
-                {simViewMode === 'severe' && (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-                    {visualCards.map((card, idx) => {
-                      const isSelected = simSelectedOption === idx;
-                      return (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => {
-                            setSimSelectedOption(idx);
-                            setSimFeedback({ text: card.feedback, isCorrect: card.isCorrect });
-                          }}
-                          className={`p-6 rounded-3xl border-2 flex flex-col items-center justify-center gap-3 text-center transition-all cursor-pointer active:scale-95 ${
-                            isSelected
-                              ? card.isCorrect
-                                ? 'bg-emerald-500/20 border-emerald-400 shadow-lg shadow-emerald-500/10'
-                                : 'bg-rose-500/20 border-rose-400'
-                              : 'bg-background hover:bg-surface-hover border-border hover:border-amber-400/50'
-                          }`}
-                        >
-                          <span className="text-5xl sm:text-6xl select-none">{card.iconEmoji}</span>
-                          <span className="text-sm sm:text-base font-black text-foreground">{card.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                {/* MODO 1: DINÂMICA LÚDICA POLIMÓRFICA (LIGAR PALAVRAS, CAIXAS, FRASES E CARTÕES) */}
+                {simViewMode === 'severe' && currentStage.pneSevereStage && (
+                  <PlayfulPolymorphicStageView
+                    stageId={currentStage.id || `sim-${simStageIndex}`}
+                    severeStage={currentStage.pneSevereStage}
+                    onSelectResult={(isOk, fbText) => {
+                      setSimSelectedOption(0);
+                      setSimFeedback({ text: fbText, isCorrect: isOk });
+                    }}
+                  />
                 )}
 
-                {/* MODO 2: TRILHA GUIADA DE 2 ESCOLHAS (LEVE / MODERADO) */}
+                {/* MODO 2: TRILHA GUIADA PROFICIENTE (LEVE / MODERADO) */}
                 {simViewMode === 'mild' && (
                   <div className="space-y-3 max-w-xl mx-auto pt-2">
                     {mildOptions.map((opt, idx) => {

@@ -99,12 +99,15 @@ export const DEFAULT_TEACHER_CRITERIA = [
 ];
 
 export const DEBATE_TIMER_PRESETS = [
-  { id: 'exp_pro', label: '🎙️ Exposição Inicial • PRÓ', seconds: 180 },
-  { id: 'exp_contra', label: '⚡ Exposição Inicial • CONTRA', seconds: 180 },
-  { id: 'rep_pro', label: '🔄 Réplica • PRÓ', seconds: 120 },
-  { id: 'rep_contra', label: '🛡️ Réplica • CONTRA', seconds: 120 },
-  { id: 'sabatina_juror', label: '⚖️ Perguntas dos Jurados', seconds: 120 },
-  { id: 'final', label: '🏁 Considerações Finais', seconds: 90 },
+  { id: 'aula1_grupos', label: '👥 Aula 1 • Escolha de Grupos', seconds: 300 },
+  { id: 'aula1_pesquisa', label: '🔎 Aula 1 • Pesquisa & Relatório', seconds: 1500 },
+  { id: 'exp_pro', label: '🏛️ Aula 2 • Exposição Girondinos', seconds: 180 },
+  { id: 'exp_contra', label: '🔥 Aula 2 • Exposição Jacobinos', seconds: 180 },
+  { id: 'rep_pro', label: '🔄 Aula 2 • Réplica Girondinos', seconds: 120 },
+  { id: 'rep_contra', label: '⚡ Aula 2 • Réplica Jacobinos', seconds: 120 },
+  { id: 'trep_pro', label: '🛡️ Aula 2 • Tréplica Girondinos', seconds: 90 },
+  { id: 'trep_contra', label: '⚔️ Aula 2 • Tréplica Jacobinos', seconds: 90 },
+  { id: 'sabatina_juror', label: '⚖️ Aula 2 • Júri de Analistas', seconds: 120 },
 ];
 
 /**
@@ -125,7 +128,7 @@ export function ensureSixQuestions(
     { concept: 'Evidências e Dados da Realidade Brasileira', q: `Que dados empíricos, leis ou exemplos práticos demonstram os impactos positivos de "${cleanTopic}" no Brasil contemporâneo?` },
     { concept: 'Inclusão e Redução de Desigualdades', q: `De que maneira a defesa de "${cleanTopic}" atua na superação de desigualdades históricas e na inclusão de grupos vulnerabilizados?` },
     { concept: 'Participação Política e Mudança Cultural', q: `Como "${cleanTopic}" estimula a consciência crítica e novas práticas de responsabilidade coletiva nas escolas e comunidades?` },
-    { concept: 'Tese Central e Proposta Sociológica (PRÓ)', q: `Qual é o argumento sociológico definitivo da Bancada PRÓ para rebater as críticas e defender a consolidação de "${cleanTopic}"?` },
+    { concept: 'Tese Central e Proposta Sociológica (PRÓ)', q: `Qual é o argumento sociológico definitivo da Bancada dos Girondinos para rebater as críticas e defender a consolidação de "${cleanTopic}"?` },
   ];
 
   const contraDefaults = [
@@ -134,15 +137,15 @@ export function ensureSixQuestions(
     { concept: 'Efeitos Colaterais e Exclusão Social', q: `Quais dados empíricos ou situações cotidianas revelam limitações, exclusões ou efeitos colaterais na aplicação atual de "${cleanTopic}"?` },
     { concept: 'Crítica Institucional e Burocrática', q: `Por que as instituições atuais encontram barreiras estruturais para efetivar "${cleanTopic}" de forma igualitária entre as classes sociais?` },
     { concept: 'Ideologia e Discurso Dominante', q: `De que modo a abordagem superficial de "${cleanTopic}" pode mascarar problemas estruturais mais profundos da sociedade?` },
-    { concept: 'Tese Crítica de Refutação (CONTRA)', q: `Qual reformulação estrutural a Bancada CONTRA propõe para enfrentar as falhas reais identificadas em "${cleanTopic}"?` },
+    { concept: 'Tese Crítica de Refutação (CONTRA)', q: `Qual reformulação estrutural a Bancada dos Jacobinos propõe para enfrentar as falhas reais identificadas em "${cleanTopic}"?` },
   ];
 
   const jurorDefaults = [
     { concept: 'Auditoria de Conceitos Sociológicos', q: `Quais conceitos e autores clássicos ou contemporâneos da Sociologia são indispensáveis para avaliar as teses sobre "${cleanTopic}"?` },
-    { concept: 'Verificação de Fatos e Dados Empíricos', q: `Que evidências concretas e dados da realidade brasileira devem ser exigidos tanto da Bancada PRÓ quanto da Bancada CONTRA?` },
-    { concept: 'Superação do Senso Comum', q: `Quais argumentos rasos ou falácias do senso comum sobre "${cleanTopic}" o Corpo de Jurados deve identificar e penalizar?` },
+    { concept: 'Verificação de Fatos e Dados Empíricos', q: `Que evidências concretas e dados da realidade brasileira devem ser exigidos tanto da Bancada dos Girondinos quanto da Bancada dos Jacobinos?` },
+    { concept: 'Superação do Senso Comum', q: `Quais argumentos rasos ou falácias do senso comum sobre "${cleanTopic}" o Júri de Analistas deve identificar e penalizar?` },
     { concept: 'Equilíbrio entre Teoria e Prática', q: `Como avaliar se as propostas defendidas pelas duas bancadas sobre "${cleanTopic}" possuem viabilidade social e constitucional?` },
-    { concept: 'Pergunta de Confronto Direto (Sabatina)', q: `Qual pergunta incisiva o Corpo de Jurados fará durante o Grande Debate para testar a consistência das duas bancadas?` },
+    { concept: 'Pergunta de Confronto Direto (Sabatina)', q: `Qual pergunta incisiva o Júri de Analistas fará durante o Grande Debate para testar a consistência das duas bancadas?` },
     { concept: 'Critério Decisivo de Veredito Imparcial', q: `Qual é o dilema ético e sociológico central de "${cleanTopic}" que definirá a bancada vencedora na avaliação dos jurados?` },
   ];
 
@@ -166,9 +169,9 @@ export function ensureSixQuestions(
 export function buildDefaultElaborateSummaries(topicTitle: string) {
   const cleanTopic = (topicTitle || 'Sociedade e Cidadania').trim();
   return {
-    proSummaryAI: `📘 RESUMO ELABORADO DE RESPOSTAS — BANCADA PRÓ (${cleanTopic.toUpperCase()}):\n\n1. Fundamentação Histórica e Cidadã: A análise sociológica favorável demonstra que "${cleanTopic}" constitui um pilar para a consolidação dos direitos civis, políticos e sociais (T.H. Marshall), promovendo maior integração e justiça social.\n\n2. Coesão Social e Efetividade Democrática: Sob a perspectiva das instituições sociais (Durkheim e Habermas), a proteção e o aperfeiçoamento das políticas ligadas a "${cleanTopic}" fortalecem o espaço público democrático e reduzem desigualdades históricas.\n\n3. Diretriz Estratégica para as 6 Respostas e Debate: A equipe deve articular conceitos sociológicos com dados empíricos da realidade brasileira, demonstrando que os desafios existentes exigem ampliação e investimento público, jamais retrocesso.`,
-    contraSummaryAI: `📕 RESUMO ELABORADO DE RESPOSTAS — BANCADA CONTRA (${cleanTopic.toUpperCase()}):\n\n1. Contradições Estruturais e Cidadania de Papel: A leitura sociológica crítica evidencia a distância entre a promessa formal de "${cleanTopic}" e as condições materiais reais da população brasileira (Gilberto Dimenstein / Karl Marx).\n\n2. Assimetrias de Poder e Reprodução Social: A partir de Max Weber, Pierre Bourdieu e Michel Foucault, observa-se como estruturas burocráticas e interesses hegemônicos limitam o alcance prático do tema e reproduzem privilégios.\n\n3. Diretriz Estratégica para as 6 Respostas e Debate: A bancada deve problematizar os efeitos colaterais e os limites institucionais atuais, exigindo transformações estruturais profundas com base em indicadores sociais reais.`,
-    jurorGuideAI: `⚖️ DOSSIÊ E RESUMO ELABORADO DE ANÁLISE — CORPO DE JURADOS (${cleanTopic.toUpperCase()}):\n\n1. Parâmetro de Rigor Sociológico: O Corpo de Jurados deve verificar se as duas bancadas responderam às 6 questões utilizando conceitos da Sociologia (fato social, ação social, ideologia, estratificação, poder e cidadania) em vez de opiniões do senso comum.\n\n2. Confronto de Evidências e Coerência: Avaliar qual equipe sustentou sua tese com fatos históricos, dados estatísticos e exemplos concretos da sociedade brasileira sem incorrer em contradições.\n\n3. Julgamento no Grande Debate: Utilizar os 2 Checklists oficiais (Pró e Contra) para pontuar a clareza de exposição, a capacidade de réplica direta, o respeito ao Timer e a ética democrática.`,
+    proSummaryAI: `📘 RESUMO ELABORADO DE RESPOSTAS — BANCADA DOS GIRONDINOS (${cleanTopic.toUpperCase()}):\n\n1. Fundamentação Histórica e Cidadã: A análise sociológica favorável demonstra que "${cleanTopic}" constitui um pilar para a consolidação dos direitos civis, políticos e sociais (T.H. Marshall), promovendo maior integração e justiça social.\n\n2. Coesão Social e Efetividade Democrática: Sob a perspectiva das instituições sociais (Durkheim e Habermas), a proteção e o aperfeiçoamento das políticas ligadas a "${cleanTopic}" fortalecem o espaço público democrático e reduzem desigualdades históricas.\n\n3. Diretriz Estratégica para as 6 Respostas e Debate: A equipe deve articular conceitos sociológicos com dados empíricos da realidade brasileira, demonstrando que os desafios existentes exigem ampliação e investimento público, jamais retrocesso.`,
+    contraSummaryAI: `📕 RESUMO ELABORADO DE RESPOSTAS — BANCADA DOS JACOBINOS (${cleanTopic.toUpperCase()}):\n\n1. Contradições Estruturais e Cidadania de Papel: A leitura sociológica crítica evidencia a distância entre a promessa formal de "${cleanTopic}" e as condições materiais reais da população brasileira (Gilberto Dimenstein / Karl Marx).\n\n2. Assimetrias de Poder e Reprodução Social: A partir de Max Weber, Pierre Bourdieu e Michel Foucault, observa-se como estruturas burocráticas e interesses hegemônicos limitam o alcance prático do tema e reproduzem privilégios.\n\n3. Diretriz Estratégica para as 6 Respostas e Debate: A bancada deve problematizar os efeitos colaterais e os limites institucionais atuais, exigindo transformações estruturais profundas com base em indicadores sociais reais.`,
+    jurorGuideAI: `⚖️ DOSSIÊ E RESUMO ELABORADO DE ANÁLISE — JÚRI DE ANALISTAS (${cleanTopic.toUpperCase()}):\n\n1. Parâmetro de Rigor Sociológico: O Júri de Analistas deve verificar se as duas bancadas responderam às 6 questões utilizando conceitos da Sociologia (fato social, ação social, ideologia, estratificação, poder e cidadania) em vez de opiniões do senso comum.\n\n2. Confronto de Evidências e Coerência: Avaliar qual equipe sustentou sua tese com fatos históricos, dados estatísticos e exemplos concretos da sociedade brasileira sem incorrer em contradições.\n\n3. Julgamento no Grande Debate: Utilizar os 2 Checklists oficiais (Pró e Contra) para pontuar a clareza de exposição, a capacidade de réplica direta, o respeito ao Timer e a ética democrática.`,
   };
 }
 

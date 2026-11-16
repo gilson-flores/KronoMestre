@@ -44,6 +44,7 @@ import { KronoIcon } from '@/components/ui/KronoIcon';
 import { TurmaFilterDropdown } from '@/components/TurmaFilterDropdown';
 
 interface InteractiveActivitiesViewProps {
+  libraryFiles?: any[];
   activities: Activity[];
   students: StudentUser[];
   teacher: TeacherUser;

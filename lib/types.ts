@@ -144,9 +144,35 @@ export interface GameSevereCard {
   feedback: string;
 }
 
+export type PlayfulSubMechanic = 'visual_cards' | 'word_match' | 'category_sort' | 'sentence_chips';
+
+export interface PlayfulWordPair {
+  left: string;
+  right: string;
+  iconEmoji?: string;
+}
+
+export interface PlayfulCategoryItem {
+  label: string;
+  iconEmoji: string;
+  categoryIndex: 0 | 1;
+}
+
+export interface PlayfulSentenceBlank {
+  sentenceWithBlank: string;
+  correctChip: string;
+  distractorChips: string[];
+  iconEmoji?: string;
+}
+
 export interface GameSevereStage {
+  subMechanic?: PlayfulSubMechanic;
   playfulPrompt: string;
   visualCards: GameSevereCard[];
+  wordPairs?: PlayfulWordPair[];
+  categories?: [string, string];
+  categoryItems?: PlayfulCategoryItem[];
+  sentenceBlank?: PlayfulSentenceBlank;
 }
 
 export interface GameStage {
@@ -337,6 +363,8 @@ export interface ScheduleItem {
 }
 
 export interface LibraryFile {
+  markdownContent?: string;
+  isTextbookMd?: boolean;
   targetAudience?: 'all_turmas' | 'second_teacher' | 'specific_turmas';
   id: string;
   title: string;
