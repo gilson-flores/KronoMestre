@@ -42,7 +42,7 @@ export const StudentHeaderNav: React.FC<any> = (props) => {
         </div>
       )}
 
-      {/* 1. CABEÇALHO DO ALUNO + BARRA DE BOTÕES ESTILIZADA */}
+      {/* 1. CABEÇALHO DO ALUNO + BARRA DE BOTÕES UNIFICADA COM DESIGN SYSTEM */}
       <header className="sticky top-0 z-30 bg-surface/95 backdrop-blur-md border-b border-border px-3 sm:px-4 py-3">
         <div className="max-w-2xl mx-auto space-y-3">
           <div className="flex items-start gap-3.5">
@@ -128,7 +128,7 @@ export const StudentHeaderNav: React.FC<any> = (props) => {
             </div>
           </div>
 
-          {/* 2. BARRA DE BOTÕES ESTILO APP COM A ABA DE ARQUIVOS/BIBLIOTECA */}
+          {/* 2. BARRA DE BOTÕES COM PADRÃO UNIFICADO (CONTORNO SUTIL + DESTAQUE SELECIONADO) */}
           <div className="pt-1.5 border-t border-border/70 grid grid-cols-7 gap-1">
             {[
               {
@@ -165,7 +165,6 @@ export const StudentHeaderNav: React.FC<any> = (props) => {
                 line2: 'Arquivos',
                 icon: FolderOpen,
                 count: libraryFiles.length,
-                isSpecial: true,
               },
               {
                 id: 'boletim' as const,
@@ -190,23 +189,21 @@ export const StudentHeaderNav: React.FC<any> = (props) => {
                   type="button"
                   onClick={() => setActiveNav(btn.id)}
                   className={`py-2 px-0.5 rounded-xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer relative ${
-                    btn.isSpecial && !isSelected
-                      ? 'bg-cyan-500/10 border border-cyan-500/30 hover:bg-cyan-500/20 text-cyan-400'
-                      : isSelected
-                      ? 'bg-emerald-950/60 text-emerald-300/90 font-bold border border-emerald-500/40 shadow-sm'
-                      : 'text-muted hover:text-foreground hover:bg-background/60 border border-transparent'
+                    isSelected
+                      ? 'bg-emerald-950/70 border border-emerald-500/50 text-emerald-300 shadow-sm font-bold'
+                      : 'bg-surface/50 border border-border/60 hover:border-cyan-500/40 hover:bg-cyan-500/10 text-muted hover:text-cyan-300'
                   }`}
                 >
                   <div className="relative flex items-center justify-center">
                     <IconComp
                       className={`w-4 h-4 sm:w-5 sm:h-5 ${
-                        btn.isSpecial && !isSelected ? 'text-cyan-400' : isSelected ? 'text-emerald-300/90' : ''
+                        isSelected ? 'text-emerald-300' : 'text-muted group-hover:text-cyan-300'
                       }`}
                     />
                     {btn.count > 0 && (
                       <span
                         className={`ml-0.5 text-[10px] font-mono font-bold ${
-                          isSelected ? 'text-emerald-200/90' : btn.isSpecial ? 'text-cyan-300' : 'text-muted'
+                          isSelected ? 'text-emerald-200' : 'text-muted'
                         }`}
                       >
                         {btn.count}
