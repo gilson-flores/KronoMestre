@@ -51,6 +51,7 @@ interface InteractiveActivitiesViewProps {
   teacher: TeacherUser;
   onOpenNewActivityModal?: () => void;
   onSaveCreatedActivity: (activity: Activity) => Promise<void> | void;
+  onUpdateActivity?: (activity: Activity) => Promise<void> | void;
   onEditActivity?: (activity: Activity) => void;
   onDeleteActivity?: (activityId: string) => void;
   onPlayGamePreview?: (activity: Activity) => void;
@@ -67,6 +68,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
   students,
   teacher,
   onSaveCreatedActivity,
+  onUpdateActivity,
   onEditActivity,
   onDeleteActivity,
   onPlayGamePreview,
@@ -319,6 +321,10 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
               teacher={teacher}
               isTeacher={true}
               role="teacher"
+              onUpdateActivity={async (updatedAct: Activity) => {
+                setActiveDebateCockpitGame(updatedAct);
+                if (onUpdateActivity) await onUpdateActivity(updatedAct);
+              }}
               onClose={() => setActiveDebateCockpitGame(null)}
             />
           </div>

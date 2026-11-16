@@ -153,8 +153,8 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
       : isAuthenticatedTeacher;
 
   const safeActivity: Activity = useMemo(() => {
-    if (activityProp) return activityProp;
     if (fetchedActivity) return fetchedActivity;
+    if (activityProp) return activityProp;
     return {
       id: 'debate-live',
       title: titleProp || 'Debate Sociológico Sem Papel',
