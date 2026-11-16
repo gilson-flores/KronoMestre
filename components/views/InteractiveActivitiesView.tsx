@@ -1,5 +1,5 @@
 'use client';
-import { DebateTeacherCockpit } from "@/components/views/debate/DebateTeacherCockpit";
+import { DebatePaperlessView } from "@/components/views/DebatePaperlessView";
 import { InteractiveCreatorBody } from "@/components/parts/InteractiveCreatorBody";
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
@@ -308,6 +308,23 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
   return (
     
     <div className="space-y-6 sm:space-y-8 animate-fadeIn pb-12 bg-[#09101f] text-slate-100 min-h-screen p-4 sm:p-6 rounded-3xl border border-cyan-500/20 shadow-2xl">
+      {activeDebateCockpitGame && (
+        <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md overflow-y-auto p-3 sm:p-6 animate-fadeIn">
+          <div className="max-w-7xl mx-auto">
+            <DebatePaperlessView
+              activity={activeDebateCockpitGame}
+              debateConfig={activeDebateCockpitGame.gameData?.debateConfig || (activeDebateCockpitGame as any).debateConfig}
+              students={students}
+              allStudents={students}
+              teacher={teacher}
+              isTeacher={true}
+              role="teacher"
+              onClose={() => setActiveDebateCockpitGame(null)}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Top Header com Identidade KronoGames Neon */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-cyan-500/20">
         <div>
@@ -497,7 +514,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                         <button
                           type="button"
                         onClick={() => {
-                          if (game.gameMode === 'debate_paperless' || (game as any).debateConfig) {
+                          if (game.gameMode === 'debate_paperless' || Boolean(game.gameData?.debateConfig) || Boolean((game as any).debateConfig) || Boolean(game.title?.toLowerCase().includes('debate'))) {
                             setActiveDebateCockpitGame(game);
                           } else if (typeof onPlayGamePreview === "function") {
                             onPlayGamePreview(game);
