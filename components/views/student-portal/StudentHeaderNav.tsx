@@ -1,13 +1,13 @@
 'use client';
 import React from 'react';
-import { Home, Clock, CheckCheck, Gamepad2, BarChart3, User, Moon, Sun, MessageSquare, LogOut, Sparkles, RefreshCw } from 'lucide-react';
+import { Home, Clock, CheckCheck, Gamepad2, BarChart3, User, Moon, Sun, MessageSquare, LogOut, Sparkles, RefreshCw, FolderOpen } from 'lucide-react';
 
 export const StudentHeaderNav: React.FC<any> = (props) => {
   const {
     showVersionUpdateBanner, handleDismissOrApplyVersionUpdate, activeStudent,
     studentTurmaStd, setActiveNav, activeNav, onToggleTheme, themeMode,
     handleOpenChat, unreadMessagesCount, onLogout, studentActivities,
-    pendingActivities, completedActivities, kronoGamesActivities
+    pendingActivities, completedActivities, kronoGamesActivities, libraryFiles = []
   } = props;
   return (
     <>
@@ -42,11 +42,11 @@ export const StudentHeaderNav: React.FC<any> = (props) => {
         </div>
       )}
 
-      {/* 1. CABEÇALHO DO ALUNO + BARRA DE BOTÕES EM DUAS LINHAS SEM CORTAR NOMES */}
+      {/* 1. CABEÇALHO DO ALUNO + BARRA DE BOTÕES ESTILIZADA */}
       <header className="sticky top-0 z-30 bg-surface/95 backdrop-blur-md border-b border-border px-3 sm:px-4 py-3">
         <div className="max-w-2xl mx-auto space-y-3">
           <div className="flex items-start gap-3.5">
-            {/* Avatar em Círculo Perfeito do Mesmo Tamanho (w-14 h-14 rounded-full) */}
+            {/* Avatar em Círculo Perfeito */}
             <button
               type="button"
               onClick={() => setActiveNav('perfil')}
@@ -72,7 +72,7 @@ export const StudentHeaderNav: React.FC<any> = (props) => {
               )}
             </button>
 
-            {/* Turma em cima + Nome do Aluno por baixo estendendo até o final */}
+            {/* Turma em cima + Nome do Aluno por baixo */}
             <div className="flex-1 min-w-0 space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="px-2.5 py-0.5 rounded-lg bg-emerald-950/60 border border-emerald-800/60 text-emerald-300/90 font-mono text-xs font-extrabold">
@@ -84,7 +84,7 @@ export const StudentHeaderNav: React.FC<any> = (props) => {
                     <button
                       type="button"
                       onClick={onToggleTheme}
-                      className="p-2 rounded-xl bg-background hover:bg-surface-hover border border-border text-muted hover:text-foreground cursor-pointer"
+                      className="p-2 rounded-xl bg-background hover:bg-surface-hover border border-border text-muted hover:text-foreground cursor-pointer transition-all"
                       title="Alternar tema Claro / Escuro"
                     >
                       {themeMode === 'light' ? (
@@ -98,7 +98,7 @@ export const StudentHeaderNav: React.FC<any> = (props) => {
                   <button
                     type="button"
                     onClick={handleOpenChat}
-                    className="relative p-2 rounded-xl bg-background hover:bg-surface-hover border border-border text-muted hover:text-foreground cursor-pointer"
+                    className="relative p-2 rounded-xl bg-background hover:bg-surface-hover border border-border text-muted hover:text-foreground cursor-pointer transition-all"
                     title="Mensagens do Professor"
                   >
                     <MessageSquare className="w-4 h-4" />
@@ -113,7 +113,7 @@ export const StudentHeaderNav: React.FC<any> = (props) => {
                     <button
                       type="button"
                       onClick={onLogout}
-                      className="p-2 rounded-xl bg-background hover:bg-rose-500/15 border border-border text-muted hover:text-rose-400 cursor-pointer"
+                      className="p-2 rounded-xl bg-background hover:bg-rose-500/15 border border-border text-muted hover:text-rose-400 cursor-pointer transition-all"
                       title="Sair da conta"
                     >
                       <LogOut className="w-4 h-4" />
@@ -128,8 +128,8 @@ export const StudentHeaderNav: React.FC<any> = (props) => {
             </div>
           </div>
 
-          {/* 2. BARRA DE BOTÕES ESTILO APP DE SMARTPHONE (2 LINHAS INTEIRAS SEM CORTAR PALAVRAS) */}
-          <div className="pt-1.5 border-t border-border/70 grid grid-cols-6 gap-1">
+          {/* 2. BARRA DE BOTÕES ESTILO APP COM A ABA DE ARQUIVOS/BIBLIOTECA */}
+          <div className="pt-1.5 border-t border-border/70 grid grid-cols-7 gap-1">
             {[
               {
                 id: 'feed' as const,
@@ -160,6 +160,14 @@ export const StudentHeaderNav: React.FC<any> = (props) => {
                 count: kronoGamesActivities.length,
               },
               {
+                id: 'arquivos' as const,
+                line1: 'Livro &',
+                line2: 'Arquivos',
+                icon: FolderOpen,
+                count: libraryFiles.length,
+                isSpecial: true,
+              },
+              {
                 id: 'boletim' as const,
                 line1: 'Meu',
                 line2: 'Boletim',
@@ -181,20 +189,24 @@ export const StudentHeaderNav: React.FC<any> = (props) => {
                   key={btn.id}
                   type="button"
                   onClick={() => setActiveNav(btn.id)}
-                  className={`py-2 px-0.5 rounded-xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer ${
-                    isSelected
-                      ? 'bg-emerald-950/60 text-emerald-300/90 font-bold'
-                      : 'text-muted hover:text-foreground hover:bg-background/60'
+                  className={`py-2 px-0.5 rounded-xl flex flex-col items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer relative ${
+                    btn.isSpecial && !isSelected
+                      ? 'bg-cyan-500/10 border border-cyan-500/30 hover:bg-cyan-500/20 text-cyan-400'
+                      : isSelected
+                      ? 'bg-emerald-950/60 text-emerald-300/90 font-bold border border-emerald-500/40 shadow-sm'
+                      : 'text-muted hover:text-foreground hover:bg-background/60 border border-transparent'
                   }`}
                 >
                   <div className="relative flex items-center justify-center">
                     <IconComp
-                      className={`w-4 h-4 sm:w-5 sm:h-5 ${isSelected ? 'text-emerald-300/90' : ''}`}
+                      className={`w-4 h-4 sm:w-5 sm:h-5 ${
+                        btn.isSpecial && !isSelected ? 'text-cyan-400' : isSelected ? 'text-emerald-300/90' : ''
+                      }`}
                     />
                     {btn.count > 0 && (
                       <span
                         className={`ml-0.5 text-[10px] font-mono font-bold ${
-                          isSelected ? 'text-emerald-200/90' : 'text-muted'
+                          isSelected ? 'text-emerald-200/90' : btn.isSpecial ? 'text-cyan-300' : 'text-muted'
                         }`}
                       >
                         {btn.count}
@@ -202,10 +214,10 @@ export const StudentHeaderNav: React.FC<any> = (props) => {
                     )}
                   </div>
                   <div className="flex flex-col items-center leading-[1.15] text-center">
-                    <span className="text-[9px] sm:text-[10px] tracking-tight whitespace-nowrap">
+                    <span className="text-[9px] sm:text-[10px] tracking-tight whitespace-nowrap font-medium">
                       {btn.line1}
                     </span>
-                    <span className="text-[9px] sm:text-[10px] tracking-tight whitespace-nowrap">
+                    <span className="text-[9px] sm:text-[10px] tracking-tight whitespace-nowrap font-medium">
                       {btn.line2}
                     </span>
                   </div>
@@ -215,7 +227,6 @@ export const StudentHeaderNav: React.FC<any> = (props) => {
           </div>
         </div>
       </header>
-
     </>
   );
 };
