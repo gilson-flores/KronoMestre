@@ -491,7 +491,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
                       {onPlayGamePreview && (
                         <button
                           type="button"
-                          onClick={() => { if (typeof onOpenDebateCockpit === "function") { onOpenDebateCockpit(game); } else if (typeof onPlayGamePreview === "function") { onPlayGamePreview(game); } }}
+                        onClick={() => { if (typeof onPlayGamePreview === "function") { onPlayGamePreview(game); } }}
                           className="flex-1 py-2 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
                         >
                           <Play className="w-3.5 h-3.5 fill-current" />
