@@ -1,3 +1,4 @@
+import { LibraryView } from '@/components/views/LibraryView';
 'use client';
 import React from 'react';
 import { CheckCircle2, Gamepad2, FileText, Link2, ExternalLink, Users, Play, ChevronRight, LogOut, Camera, Check, KeyRound, X, Send } from 'lucide-react';
@@ -315,7 +316,13 @@ export const StudentMainAndDrawer: React.FC<any> = (props) => {
         {/* ===================================================================
             ABA MEU PERFIL + TROCA DE AVATAR ATIVADA + TROCA DE SENHA
            =================================================================== */}
-        {activeNav === 'perfil' && (
+        {activeNav === 'arquivos' && (
+        <div className="space-y-4 animate-fadeIn">
+          <LibraryView files={props.libraryFiles || []} isReadOnly={true} />
+        </div>
+      )}
+
+      {activeNav === 'perfil' && (
           <div className="space-y-4">
             {/* Card Principal do Aluno */}
             <div className="p-5 rounded-2xl bg-surface border border-border flex items-center justify-between gap-4">
