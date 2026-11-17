@@ -141,11 +141,58 @@ export async function PUT(req: NextRequest) {
         });
       }
       
+      let mergedGameData = cleanData.gameData;
+      if (doc.exists) {
+        const currentData = doc.data() || {};
+        const currCfg = currentData.gameData?.debateConfig;
+        const incCfg = cleanData.gameData?.debateConfig;
+        if (currCfg && incCfg) {
+          const isStudentSave = incCfg._updateSource === 'student_answers';
+          const clearPrefix = incCfg._clearTurmaPrefix || '';
+
+          const mergeAnswerMap = (oldMap: any = {}, newMap: any = {}) => {
+            const combined: Record<string, string> = { ...oldMap, ...newMap };
+            if (clearPrefix) {
+              Object.keys(combined).forEach((k) => {
+                if (k.startsWith(clearPrefix)) {
+                  combined[k] = '';
+                }
+              });
+            }
+            return combined;
+          };
+
+          const cleanIncCfg = { ...incCfg };
+          delete cleanIncCfg._updateSource;
+          delete cleanIncCfg._clearTurmaPrefix;
+
+          mergedGameData = {
+            ...(currentData.gameData || {}),
+            ...(cleanData.gameData || {}),
+            debateConfig: {
+              ...currCfg,
+              ...cleanIncCfg,
+              participants: isStudentSave
+                ? (Array.isArray(currCfg.participants) ? currCfg.participants : (cleanIncCfg.participants || []))
+                : (Array.isArray(cleanIncCfg.participants) ? cleanIncCfg.participants : (currCfg.participants || [])),
+              proAnswers: mergeAnswerMap(currCfg.proAnswers, cleanIncCfg.proAnswers),
+              contraAnswers: mergeAnswerMap(currCfg.contraAnswers, cleanIncCfg.contraAnswers),
+              jurorAnswers: mergeAnswerMap(currCfg.jurorAnswers, cleanIncCfg.jurorAnswers),
+              proSummariesByTurma: { ...(currCfg.proSummariesByTurma || {}), ...(cleanIncCfg.proSummariesByTurma || {}) },
+              contraSummariesByTurma: { ...(currCfg.contraSummariesByTurma || {}), ...(cleanIncCfg.contraSummariesByTurma || {}) },
+              jurorQuestionsByTurma: { ...(currCfg.jurorQuestionsByTurma || {}), ...(cleanIncCfg.jurorQuestionsByTurma || {}) },
+              teacherChecklists: { ...(currCfg.teacherChecklists || {}), ...(cleanIncCfg.teacherChecklists || {}) },
+            },
+          };
+        }
+      }
+
       const pendingCorrection = mergedSubmissions.filter((s: any) => s.status === 'pending').length;
       const totalSubmissions = mergedSubmissions.length;
       
       const mergedData = {
         ...cleanData,
+        ...(mergedGameData ? { gameData: mergedGameData } : {}),
         submissions: mergedSubmissions,
         pendingCorrection,
         totalSubmissions

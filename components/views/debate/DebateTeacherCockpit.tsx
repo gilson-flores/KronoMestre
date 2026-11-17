@@ -3,7 +3,7 @@ import React from 'react';
 import { Clock, BookOpen, CheckSquare, Play, Pause, RotateCcw, Sparkles, Save, Trash2, CheckCircle2 } from 'lucide-react';
 import { GroupRole, DEFAULT_TEACHER_CRITERIA, DEBATE_TIMER_PRESETS } from './debateUtils';
 export const DebateTeacherCockpit: React.FC<any> = (props) => {
-  const { currentTurmaScope, safeActivity, setSelectedTeacherTurma, availableTurmas, onClose, setTeacherTab, teacherTab, turmaParticipants, statusBanner, setStatusBanner, timerSecondsLeft, formatTimerMMSS, setIsTimerRunning, isTimerRunning, activeTimerPresetId, setTimerSecondsLeft, setActiveTimerPresetId, proMembers, contraMembers, jurorMembers, localConfig, handleAddStudentToGroup, unassignedClassmates, handleMoveStudentGroup, handleRemoveStudentFromGroup, handleGenerateGroupSynthesis, isGeneratingAI, persistDebateConfig, setLocalConfig, getScopedAnswer, handleChangeScopedAnswer, getGroupChecklistState, handleToggleTeacherCriterion, handleChangeTeacherGroupScore, handleChangeTeacherGroupNotes, handleApplyGroupChecklistToCorrections } = props;
+  const { currentTurmaScope, safeActivity, setSelectedTeacherTurma, availableTurmas, onClose, setTeacherTab, teacherTab, turmaParticipants, statusBanner, setStatusBanner, timerSecondsLeft, formatTimerMMSS, setIsTimerRunning, isTimerRunning, activeTimerPresetId, setTimerSecondsLeft, setActiveTimerPresetId, proMembers, contraMembers, jurorMembers, localConfig, handleAddStudentToGroup, unassignedClassmates, handleMoveStudentGroup, handleRemoveStudentFromGroup, handleGenerateGroupSynthesis, isGeneratingAI, persistDebateConfig, setLocalConfig, getScopedAnswer, handleChangeScopedAnswer, getScopedSummary, handleChangeScopedSummary, handleClearCurrentTurmaAnswers, getGroupChecklistState, handleToggleTeacherCriterion, handleChangeTeacherGroupScore, handleChangeTeacherGroupNotes, handleApplyGroupChecklistToCorrections } = props;
   return (
         <div className="space-y-6">
           <div className="p-5 rounded-3xl bg-surface border border-cyan-500/30 shadow-2xl space-y-4">
@@ -362,7 +362,18 @@ export const DebateTeacherCockpit: React.FC<any> = (props) => {
                     Você pode editar qualquer resumo elaborado, enunciado ou resposta dos grupos abaixo e salvar em tempo real.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {handleClearCurrentTurmaAnswers && (
+                    <button
+                      type="button"
+                      onClick={handleClearCurrentTurmaAnswers}
+                      className="px-3.5 py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                      title="Apagar respostas salvas anteriormente nesta turma"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Limpar Respostas da Turma {currentTurmaScope}</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     disabled={isGeneratingAI}
@@ -426,17 +437,23 @@ export const DebateTeacherCockpit: React.FC<any> = (props) => {
                     {/* Resumo Elaborado da Equipe */}
                     <div className="p-3.5 rounded-2xl bg-slate-950 border border-cyan-500/30 space-y-1.5">
                       <label className="text-[10px] font-black uppercase text-cyan-400 block">
-                        📘 Resumo Elaborado de Respostas ({col.roleKey.toUpperCase()}):
+                        {col.roleKey === 'juror'
+                          ? `⚖️ Perguntas de Sabatina Formuladas pela IA para o Júri (Turma ${currentTurmaScope}):`
+                          : `📘 Síntese das Respostas dos Alunos (${col.roleKey.toUpperCase()} • Turma ${currentTurmaScope}):`}
                       </label>
                       <textarea
-                        rows={6}
-                        value={localConfig[col.summaryField] || ''}
-                        onChange={(e) =>
-                          setLocalConfig((prev: any) => ({
-                            ...prev,
-                            [col.summaryField]: e.target.value,
-                          }))
-                        }
+                        rows={7}
+                        value={getScopedSummary ? getScopedSummary(col.roleKey) : (localConfig[col.summaryField] || '')}
+                        onChange={(e) => {
+                          if (handleChangeScopedSummary) {
+                            handleChangeScopedSummary(col.roleKey, e.target.value);
+                          } else {
+                            setLocalConfig((prev: any) => ({
+                              ...prev,
+                              [col.summaryField]: e.target.value,
+                            }));
+                          }
+                        }}
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-100 leading-relaxed focus:outline-none focus:border-cyan-400"
                       />
                     </div>

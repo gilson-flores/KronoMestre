@@ -709,8 +709,17 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
       <StudentActivityExecutionView
         executingActivity={executingActivity} setExecutingActivity={setExecutingActivity}
         mySubmissionsMap={mySubmissionsMap} activeStudent={activeStudent}
-        rosterStudents={rosterStudents} onSaveActivity={onSaveActivity}
-        onUpdateActivity={onUpdateActivity} onSubmitAnswer={onSubmitAnswer}
+        rosterStudents={rosterStudents}
+        onSaveActivity={async (updatedAct: Activity) => {
+          setExecutingActivity(updatedAct);
+          if (onSaveActivity) await onSaveActivity(updatedAct);
+        }}
+        onUpdateActivity={async (updatedAct: Activity) => {
+          setExecutingActivity(updatedAct);
+          if (onUpdateActivity) await onUpdateActivity(updatedAct);
+          else if (onSaveActivity) await onSaveActivity(updatedAct);
+        }}
+        onSubmitAnswer={onSubmitAnswer}
         showNotice={showNotice} studentTurmaStd={studentTurmaStd}
         classmateDropdownValue={classmateDropdownValue} setClassmateDropdownValue={setClassmateDropdownValue}
         eligibleClassmates={eligibleClassmates} selectedGroupNames={selectedGroupNames}

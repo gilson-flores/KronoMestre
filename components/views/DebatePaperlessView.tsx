@@ -2,25 +2,12 @@
 import { DebateTeacherCockpit } from "@/components/views/debate/DebateTeacherCockpit";
 import { DebateStudentBenchView } from "@/components/views/debate/DebateStudentBenchView";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Activity, StudentUser, TeacherUser } from '@/lib/types';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Activity, StudentUser } from '@/lib/types';
 import {
   Scale,
-  Clock,
-  Play,
-  Pause,
-  RotateCcw,
-  CheckSquare,
-  Trash2,
-  UserPlus,
-  ArrowRight,
-  Sparkles,
-  CheckCircle2,
-  Lock,
-  BookOpen,
   Sliders,
   Eye,
-  Save,
 } from 'lucide-react';
 import {
   isSameStudentTurma,
@@ -28,8 +15,26 @@ import {
   syncGroupGradeToSubmissions,
 } from '@/lib/groupActivityUtils';
 
-import { GroupRole, LocalDebateQuestion, LocalDebateParticipant, LocalDebateCriterion, LocalDebateConfig, TeacherGroupChecklistState, DebatePaperlessViewProps, DEFAULT_TEACHER_CRITERIA, DEBATE_TIMER_PRESETS, ensureSixQuestions, buildDefaultElaborateSummaries } from '@/components/views/debate/debateUtils';
-export type { LocalDebateQuestion, LocalDebateParticipant, LocalDebateCriterion, LocalDebateConfig, DebatePaperlessViewProps };
+import {
+  GroupRole,
+  LocalDebateQuestion,
+  LocalDebateParticipant,
+  LocalDebateCriterion,
+  LocalDebateConfig,
+  TeacherGroupChecklistState,
+  DebatePaperlessViewProps,
+  DEFAULT_TEACHER_CRITERIA,
+  ensureSixQuestions,
+  buildDefaultElaborateSummaries,
+} from '@/components/views/debate/debateUtils';
+
+export type {
+  LocalDebateQuestion,
+  LocalDebateParticipant,
+  LocalDebateCriterion,
+  LocalDebateConfig,
+  DebatePaperlessViewProps,
+};
 
 export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
   activity: activityProp,
@@ -55,9 +60,15 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
   );
   const [fetchedStudents, setFetchedStudents] = useState<StudentUser[]>([]);
   const [fetchedActivity, setFetchedActivity] = useState<Activity | null>(activityProp || null);
+  const [isRefreshingBench, setIsRefreshingBench] = useState<boolean>(false);
 
   useEffect(() => {
-    if (activityProp) setFetchedActivity(activityProp);
+    if (activityProp) {
+      setFetchedActivity((prev) => {
+        if (!prev || prev.id !== activityProp.id) return activityProp;
+        return prev;
+      });
+    }
   }, [activityProp]);
 
   useEffect(() => {
@@ -134,7 +145,6 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
   const activeStudent = student || currentStudent || sessionStudent || null;
   const effectiveRole = roleProp || sessionRole;
 
-  // Detecta se o usuário autenticado é o Professor (ou se abriu o preview docente)
   const isAuthenticatedTeacher = Boolean(
     isTeacherProp ||
       isTeacherPreview ||
@@ -143,7 +153,6 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
       (!activeStudent && effectiveRole !== 'student')
   );
 
-  // Permite ao Professor alternar livremente entre o Cockpit do Professor e a Simulação da Visão do Aluno
   const [viewModeOverride, setViewModeOverride] = useState<'teacher' | 'student_sim' | null>(null);
   const isTeacherMode =
     viewModeOverride === 'teacher'
@@ -179,20 +188,35 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
     return fetchedStudents;
   }, [students, allStudents, fetchedStudents]);
 
+  // ITEM 1 CORRIGIDO: Exibir no Cockpit SOMENTE as turmas às quais este debate foi destinado!
   const availableTurmas = useMemo(() => {
+    const rawActTurma = String(
+      (safeActivity as any)._originalTurmaScope || safeActivity.turma || ''
+    ).trim();
+
+    if (
+      rawActTurma &&
+      rawActTurma.toLowerCase() !== 'todas' &&
+      rawActTurma.toLowerCase() !== 'todas as turmas' &&
+      rawActTurma.toLowerCase() !== 'geral'
+    ) {
+      const explicitTurmas = rawActTurma
+        .split(/[,;]+/)
+        .map((t: string) => t.replace(/turma/gi, '').trim())
+        .filter(Boolean);
+      if (explicitTurmas.length > 0) {
+        return Array.from(new Set(explicitTurmas)).sort((a, b) =>
+          a.localeCompare(b, undefined, { numeric: true })
+        );
+      }
+    }
+
+    // Fallback apenas se a atividade tiver sido criada literalmente para "Todas"
     const set = new Set<string>();
     rosterStudents.forEach((s) => {
-      if (!s.isArchived && s.turma) set.add(s.turma.trim());
+      if (!s.isArchived && s.turma && s.turma.trim()) set.add(s.turma.trim());
     });
-    const rawActTurma = ((safeActivity as any)._originalTurmaScope || safeActivity.turma || '').trim();
-    if (rawActTurma && rawActTurma.toLowerCase() !== 'todas') {
-      rawActTurma
-        .split(',')
-        .map((t: string) => t.trim())
-        .filter(Boolean)
-        .forEach((t: string) => set.add(t));
-    }
-    const arr = Array.from(set).sort((a, b) => a.localeCompare(b));
+    const arr = Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
     return arr.length > 0 ? arr : ['Geral'];
   }, [rosterStudents, safeActivity]);
 
@@ -206,7 +230,6 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
     }
   }, [availableTurmas, selectedTeacherTurma]);
 
-  // REQ 1: Isolamento estrito de turma para o aluno
   const currentTurmaScope = useMemo(() => {
     if (!isAuthenticatedTeacher && activeStudent?.turma) {
       return activeStudent.turma.trim();
@@ -214,70 +237,125 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
     return selectedTeacherTurma || availableTurmas[0] || 'Geral';
   }, [isAuthenticatedTeacher, activeStudent?.turma, selectedTeacherTurma, availableTurmas]);
 
-  // Constrói a configuração garantindo SEMPRE 6 perguntas por equipe + 3 resumos elaborados
-  const baseDebateConfig: LocalDebateConfig = useMemo(() => {
-    const cfg: any = debateConfigProp || safeActivity.gameData?.debateConfig || {};
-    const topicTitle = safeActivity.title || titleProp || 'Debate Sociológico';
-    const defaultSummaries = buildDefaultElaborateSummaries(topicTitle);
+  const buildConfigFromSource = useCallback(
+    (cfgSource: any): LocalDebateConfig => {
+      const cfg: any = cfgSource || {};
+      const topicTitle = safeActivity.title || titleProp || 'Debate Sociológico';
+      const defaultSummaries = buildDefaultElaborateSummaries(topicTitle);
 
-    return {
-      maxJurors: cfg.maxJurors || 3,
-      proQuestions: ensureSixQuestions(cfg.proQuestions, 'pro', topicTitle),
-      contraQuestions: ensureSixQuestions(cfg.contraQuestions, 'contra', topicTitle),
-      jurorQuestions: ensureSixQuestions(cfg.jurorQuestions, 'juror', topicTitle),
-      checklistCriteria:
-        Array.isArray(cfg.checklistCriteria) && cfg.checklistCriteria.length > 0
-          ? cfg.checklistCriteria
-          : [
-              { id: 'crit_1', number: 1, title: 'Rigor Conceitual Sociológico', description: 'Mobilizou conceitos e autores da Sociologia sem recorrer ao senso comum.' },
-              { id: 'crit_2', number: 2, title: 'Evidências e Fatos Concretos', description: 'Apresentou dados históricos, estatísticos ou exemplos reais da sociedade brasileira.' },
-              { id: 'crit_3', number: 3, title: 'Coerência Lógica e Argumentativa', description: 'Sustentou a tese sem contradições internas e com clareza.' },
-              { id: 'crit_4', number: 4, title: 'Capacidade de Réplica e Refutação', description: 'Respondeu diretamente aos argumentos da bancada oposta com base sociológica.' },
-              { id: 'crit_5', number: 5, title: 'Articulação Coletiva e Uso do Tempo', description: 'A equipe dividiu a fala de forma equilibrada e respeitou o Timer.' },
-              { id: 'crit_6', number: 6, title: 'Ética Democrática e Direitos Humanos', description: 'Manteve postura respeitosa e alinhada à cidadania.' },
-            ],
-      jurorInitialGuide: cfg.jurorInitialGuide || defaultSummaries.jurorGuideAI,
-      participants: Array.isArray(cfg.participants) ? cfg.participants : [],
-      proAnswers: cfg.proAnswers || {},
-      contraAnswers: cfg.contraAnswers || {},
-      jurorAnswers: cfg.jurorAnswers || {},
-      proResearchCompleted: Boolean(cfg.proResearchCompleted),
-      contraResearchCompleted: Boolean(cfg.contraResearchCompleted),
-      proSummaryAI: cfg.proSummaryAI || cfg.proSummary || defaultSummaries.proSummaryAI,
-      contraSummaryAI: cfg.contraSummaryAI || cfg.contraSummary || defaultSummaries.contraSummaryAI,
-      jurorGuideAI: cfg.jurorGuideAI || defaultSummaries.jurorGuideAI,
-      jurorVerdicts: Array.isArray(cfg.jurorVerdicts) ? cfg.jurorVerdicts : [],
-      gradingMode: cfg.gradingMode || 'group',
-      groupGrades: cfg.groupGrades || {},
-      individualGrades: cfg.individualGrades || {},
-      teacherChecklists: cfg.teacherChecklists || {},
-    };
-  }, [debateConfigProp, safeActivity, titleProp]);
+      return {
+        maxJurors: cfg.maxJurors || 3,
+        proQuestions: ensureSixQuestions(cfg.proQuestions, 'pro', topicTitle),
+        contraQuestions: ensureSixQuestions(cfg.contraQuestions, 'contra', topicTitle),
+        jurorQuestions: ensureSixQuestions(cfg.jurorQuestions, 'juror', topicTitle),
+        checklistCriteria:
+          Array.isArray(cfg.checklistCriteria) && cfg.checklistCriteria.length > 0
+            ? cfg.checklistCriteria
+            : [
+                { id: 'crit_1', number: 1, title: 'Rigor Conceitual Sociológico', description: 'Mobilizou conceitos e autores da Sociologia sem recorrer ao senso comum.' },
+                { id: 'crit_2', number: 2, title: 'Evidências e Fatos Concretos', description: 'Apresentou dados históricos, estatísticos ou exemplos reais da sociedade brasileira.' },
+                { id: 'crit_3', number: 3, title: 'Coerência Lógica e Argumentativa', description: 'Sustentou a tese sem contradições internas e com clareza.' },
+                { id: 'crit_4', number: 4, title: 'Capacidade de Réplica e Refutação', description: 'Respondeu diretamente aos argumentos da bancada oposta com base sociológica.' },
+                { id: 'crit_5', number: 5, title: 'Articulação Coletiva e Uso do Tempo', description: 'A equipe dividiu a fala de forma equilibrada e respeitou o Timer.' },
+                { id: 'crit_6', number: 6, title: 'Ética Democrática e Direitos Humanos', description: 'Manteve postura respeitosa e alinhada à cidadania.' },
+              ],
+        jurorInitialGuide: cfg.jurorInitialGuide || defaultSummaries.jurorGuideAI,
+        participants: Array.isArray(cfg.participants) ? cfg.participants : [],
+        proAnswers: cfg.proAnswers || {},
+        contraAnswers: cfg.contraAnswers || {},
+        jurorAnswers: cfg.jurorAnswers || {},
+        proSummariesByTurma: cfg.proSummariesByTurma || {},
+        contraSummariesByTurma: cfg.contraSummariesByTurma || {},
+        jurorQuestionsByTurma: cfg.jurorQuestionsByTurma || {},
+        proResearchCompleted: Boolean(cfg.proResearchCompleted),
+        contraResearchCompleted: Boolean(cfg.contraResearchCompleted),
+        proSummaryAI: cfg.proSummaryAI || cfg.proSummary || defaultSummaries.proSummaryAI,
+        contraSummaryAI: cfg.contraSummaryAI || cfg.contraSummary || defaultSummaries.contraSummaryAI,
+        jurorGuideAI: cfg.jurorGuideAI || defaultSummaries.jurorGuideAI,
+        jurorVerdicts: Array.isArray(cfg.jurorVerdicts) ? cfg.jurorVerdicts : [],
+        gradingMode: cfg.gradingMode || 'group',
+        groupGrades: cfg.groupGrades || {},
+        individualGrades: cfg.individualGrades || {},
+        teacherChecklists: cfg.teacherChecklists || {},
+      };
+    },
+    [safeActivity.title, titleProp]
+  );
 
-  const [localConfig, setLocalConfig] = useState<LocalDebateConfig>(baseDebateConfig);
+  const initialConfig = useMemo(
+    () => buildConfigFromSource(debateConfigProp || safeActivity.gameData?.debateConfig),
+    [buildConfigFromSource, debateConfigProp, safeActivity.gameData?.debateConfig]
+  );
+
+  const [localConfig, setLocalConfig] = useState<LocalDebateConfig>(initialConfig);
+  const latestConfigRef = useRef<LocalDebateConfig>(initialConfig);
+  const lastTrackedActivityIdRef = useRef<string>(safeActivity.id);
+
+  // Atualiza a ref sempre que localConfig mudar
+  const updateLocalConfigState = useCallback((updater: LocalDebateConfig | ((prev: LocalDebateConfig) => LocalDebateConfig)) => {
+    setLocalConfig((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      latestConfigRef.current = next;
+      return next;
+    });
+  }, []);
+
+  // Só reinicializa se trocar de atividade (evita apagar alunos recém-selecionados na Turma 203!)
+  useEffect(() => {
+    if (safeActivity.id && safeActivity.id !== lastTrackedActivityIdRef.current) {
+      lastTrackedActivityIdRef.current = safeActivity.id;
+      const fresh = buildConfigFromSource(debateConfigProp || safeActivity.gameData?.debateConfig);
+      latestConfigRef.current = fresh;
+      setLocalConfig(fresh);
+    }
+  }, [safeActivity.id, debateConfigProp, safeActivity.gameData?.debateConfig, buildConfigFromSource]);
+
   const [statusBanner, setStatusBanner] = useState<{
     type: 'success' | 'error' | 'info';
     text: string;
   } | null>(null);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
-
-  useEffect(() => {
-    setLocalConfig(baseDebateConfig);
-  }, [baseDebateConfig]);
+  const [isSavingAnswers, setIsSavingAnswers] = useState(false);
 
   const notify = useCallback((type: 'success' | 'error' | 'info', text: string) => {
     setStatusBanner({ type, text });
     setTimeout(() => {
       setStatusBanner((prev) => (prev?.text === text ? null : prev));
-    }, 4500);
+    }, 5000);
   }, []);
+
+  // Função para o aluno ou professor sincronizar com o servidor sob demanda
+  const handleRefreshFromServer = useCallback(async () => {
+    if (!safeActivity.id || safeActivity.id === 'debate-live') return;
+    setIsRefreshingBench(true);
+    try {
+      const r = await fetch('/api/activities');
+      if (r.ok) {
+        const d = await r.json();
+        const found = (d.activities || []).find((a: Activity) => a.id === safeActivity.id);
+        if (found) {
+          setFetchedActivity(found);
+          const merged = buildConfigFromSource(found.gameData?.debateConfig);
+          latestConfigRef.current = merged;
+          setLocalConfig(merged);
+          notify('success', 'Bancadas e respostas sincronizadas com o servidor!');
+        }
+      }
+    } catch {
+      notify('error', 'Não foi possível sincronizar agora. Verifique sua conexão.');
+    } finally {
+      setIsRefreshingBench(false);
+    }
+  }, [safeActivity.id, buildConfigFromSource, notify]);
 
   const persistDebateConfig = useCallback(
     async (
       nextConfig: LocalDebateConfig,
       updatedSubmissions?: Activity['submissions'],
-      toastMsg?: string
+      toastMsg?: string,
+      options?: { updateSource?: 'teacher_cockpit' | 'student_answers'; clearTurmaPrefix?: string }
     ) => {
+      latestConfigRef.current = nextConfig;
       setLocalConfig(nextConfig);
 
       if (onUpdateDebateConfig) {
@@ -286,6 +364,13 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
 
       const originalTurmaScope =
         (safeActivity as any)._originalTurmaScope || safeActivity.turma;
+
+      const configForApi = {
+        ...nextConfig,
+        _updateSource: options?.updateSource || (isAuthenticatedTeacher ? 'teacher_cockpit' : 'student_answers'),
+        ...(options?.clearTurmaPrefix ? { _clearTurmaPrefix: options.clearTurmaPrefix } : {}),
+      };
+
       const updatedActivity: Activity = {
         ...safeActivity,
         turma: originalTurmaScope,
@@ -304,7 +389,7 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
             introText: safeActivity.description || '',
             stages: [],
           }),
-          debateConfig: nextConfig as any,
+          debateConfig: configForApi as any,
         },
       };
 
@@ -312,27 +397,28 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
 
       try {
         if (onSaveActivity) await onSaveActivity(updatedActivity);
-        if (onUpdateActivity) await onUpdateActivity(updatedActivity);
+        else if (onUpdateActivity) await onUpdateActivity(updatedActivity);
 
         if (safeActivity.id && safeActivity.id !== 'debate-live') {
-          await fetch('/api/activities', {
+          const res = await fetch('/api/activities', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(updatedActivity),
           });
+          if (!res.ok) throw new Error('Falha ao gravar no servidor');
         }
 
         if (toastMsg) notify('success', toastMsg);
       } catch (err) {
         console.warn('Aviso ao persistir configuração do debate:', err);
-        if (toastMsg) notify('info', toastMsg);
+        if (toastMsg) notify('info', `${toastMsg} (Salvo no aparelho)`);
       }
     },
-    [safeActivity, onUpdateDebateConfig, onSaveActivity, onUpdateActivity, notify]
+    [safeActivity, isAuthenticatedTeacher, onUpdateDebateConfig, onSaveActivity, onUpdateActivity, notify]
   );
 
   // ==========================================================================
-  // ISOLAMENTO DE PARTICIPANTES E RESPOSTAS POR TURMA (REQ 1)
+  // ISOLAMENTO DE PARTICIPANTES E RESPOSTAS POR TURMA
   // ==========================================================================
   const allParticipants = useMemo(
     () => (Array.isArray(localConfig.participants) ? localConfig.participants : []),
@@ -385,18 +471,22 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
     [turmaParticipants]
   );
 
-  // REQ 2: Colegas da mesma turma disponíveis na lista suspensa (<select>)
   const unassignedClassmates = useMemo(
     () => getEligibleClassmatesForGroup(rosterStudents, currentTurmaScope, assignedIdsInTurma),
     [rosterStudents, currentTurmaScope, assignedIdsInTurma]
   );
 
-  // Simulação de grupo caso o professor clique em "Simular Visão do Aluno"
   const [simulatedStudentRole, setSimulatedStudentRole] = useState<GroupRole>('pro');
 
   const myParticipantRecord = useMemo(() => {
     if (!activeStudent) return null;
-    return turmaParticipants.find((p) => p.studentId === activeStudent.id) || null;
+    return (
+      turmaParticipants.find(
+        (p) =>
+          p.studentId === activeStudent.id ||
+          (Boolean(activeStudent.matricula) && p.studentId === activeStudent.matricula)
+      ) || null
+    );
   }, [activeStudent, turmaParticipants]);
 
   const myRole: GroupRole | null = isAuthenticatedTeacher
@@ -411,68 +501,171 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
     return `t_${cleanTurma}_`;
   }, [currentTurmaScope]);
 
+  // Hidrata rascunho salvo no localStorage do aparelho do aluno para esta turma (proteção total contra perda)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !safeActivity.id) return;
+    try {
+      const localDraftKey = `krono_debate_draft_${safeActivity.id}_${answerScopePrefix}`;
+      const raw = localStorage.getItem(localDraftKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        updateLocalConfigState((prev) => ({
+          ...prev,
+          proAnswers: { ...(parsed.proAnswers || {}), ...(prev.proAnswers || {}) },
+          contraAnswers: { ...(parsed.contraAnswers || {}), ...(prev.contraAnswers || {}) },
+          jurorAnswers: { ...(parsed.jurorAnswers || {}), ...(prev.jurorAnswers || {}) },
+        }));
+      }
+    } catch {}
+  }, [safeActivity.id, answerScopePrefix, updateLocalConfigState]);
+
+  // ITEM 3 CORRIGIDO: Lê ESTRITAMENTE a chave da turma (scopedKey = t_203_pro_q_1).
+  // NUNCA puxa a chave global sem turma (questionId), impedindo que respostas prontas ou de outras turmas vazem!
   const getScopedAnswer = useCallback(
     (roleKey: GroupRole, questionId: string): string => {
       const scopedKey = `${answerScopePrefix}${questionId}`;
       if (roleKey === 'pro') {
-        return localConfig.proAnswers?.[scopedKey] ?? localConfig.proAnswers?.[questionId] ?? '';
+        return localConfig.proAnswers?.[scopedKey] ?? '';
+      }
+      if (roleKey === 'contra') {
+        return localConfig.contraAnswers?.[scopedKey] ?? '';
+      }
+      const jurorMap = localConfig.jurorAnswers || {};
+      return jurorMap[scopedKey] ?? '';
+    },
+    [answerScopePrefix, localConfig.proAnswers, localConfig.contraAnswers, localConfig.jurorAnswers]
+  );
+
+  // Grava apenas na chave da turma atual + faz backup imediato no localStorage do dispositivo
+  const handleChangeScopedAnswer = useCallback(
+    (roleKey: GroupRole, questionId: string, val: string) => {
+      const scopedKey = `${answerScopePrefix}${questionId}`;
+      updateLocalConfigState((prev) => {
+        const next: LocalDebateConfig =
+          roleKey === 'pro'
+            ? { ...prev, proAnswers: { ...(prev.proAnswers || {}), [scopedKey]: val } }
+            : roleKey === 'contra'
+            ? { ...prev, contraAnswers: { ...(prev.contraAnswers || {}), [scopedKey]: val } }
+            : { ...prev, jurorAnswers: { ...(prev.jurorAnswers || {}), [scopedKey]: val } };
+
+        if (typeof window !== 'undefined' && safeActivity.id) {
+          try {
+            const localDraftKey = `krono_debate_draft_${safeActivity.id}_${answerScopePrefix}`;
+            localStorage.setItem(
+              localDraftKey,
+              JSON.stringify({
+                proAnswers: next.proAnswers,
+                contraAnswers: next.contraAnswers,
+                jurorAnswers: next.jurorAnswers,
+              })
+            );
+          } catch {}
+        }
+        return next;
+      });
+    },
+    [answerScopePrefix, safeActivity.id, updateLocalConfigState]
+  );
+
+  // Resumos elaborados e Perguntas do Júri isolados por Turma
+  const getScopedSummary = useCallback(
+    (roleKey: GroupRole): string => {
+      const defaults = buildDefaultElaborateSummaries(safeActivity.title);
+      if (roleKey === 'pro') {
+        return (
+          localConfig.proSummariesByTurma?.[answerScopePrefix] ||
+          localConfig.proSummaryAI ||
+          defaults.proSummaryAI
+        );
       }
       if (roleKey === 'contra') {
         return (
-          localConfig.contraAnswers?.[scopedKey] ??
-          localConfig.contraAnswers?.[questionId] ??
-          ''
+          localConfig.contraSummariesByTurma?.[answerScopePrefix] ||
+          localConfig.contraSummaryAI ||
+          defaults.contraSummaryAI
         );
       }
-      const jurorMap = localConfig.jurorAnswers || {};
-      return jurorMap[scopedKey] ?? jurorMap[questionId] ?? '';
+      return (
+        localConfig.jurorQuestionsByTurma?.[answerScopePrefix] ||
+        localConfig.jurorGuideAI ||
+        defaults.jurorGuideAI
+      );
     },
-    [answerScopePrefix, localConfig]
+    [answerScopePrefix, localConfig, safeActivity.title]
   );
 
-  const handleChangeScopedAnswer = (roleKey: GroupRole, questionId: string, val: string) => {
-    const scopedKey = `${answerScopePrefix}${questionId}`;
-    setLocalConfig((prev) => {
-      if (roleKey === 'pro') {
+  const handleChangeScopedSummary = useCallback(
+    (roleKey: GroupRole, val: string) => {
+      updateLocalConfigState((prev) => {
+        if (roleKey === 'pro') {
+          return {
+            ...prev,
+            proSummaryAI: val,
+            proSummariesByTurma: { ...(prev.proSummariesByTurma || {}), [answerScopePrefix]: val },
+          };
+        }
+        if (roleKey === 'contra') {
+          return {
+            ...prev,
+            contraSummaryAI: val,
+            contraSummariesByTurma: { ...(prev.contraSummariesByTurma || {}), [answerScopePrefix]: val },
+          };
+        }
         return {
           ...prev,
-          proAnswers: { ...(prev.proAnswers || {}), [scopedKey]: val, [questionId]: val },
+          jurorGuideAI: val,
+          jurorQuestionsByTurma: { ...(prev.jurorQuestionsByTurma || {}), [answerScopePrefix]: val },
         };
-      }
-      if (roleKey === 'contra') {
-        return {
-          ...prev,
-          contraAnswers: { ...(prev.contraAnswers || {}), [scopedKey]: val, [questionId]: val },
-        };
-      }
-      return {
-        ...prev,
-        jurorAnswers: { ...(prev.jurorAnswers || {}), [scopedKey]: val, [questionId]: val },
-      };
-    });
+      });
+    },
+    [answerScopePrefix, updateLocalConfigState]
+  );
+
+  // Permite ao professor limpar respostas de teste da turma atual com 1 clique
+  const handleClearCurrentTurmaAnswers = async () => {
+    const current = latestConfigRef.current;
+    const cleanMap = (mapObj: Record<string, string> = {}) => {
+      const copy = { ...mapObj };
+      Object.keys(copy).forEach((k) => {
+        if (k.startsWith(answerScopePrefix)) {
+          copy[k] = '';
+        }
+      });
+      return copy;
+    };
+
+    const nextConfig: LocalDebateConfig = {
+      ...current,
+      proAnswers: cleanMap(current.proAnswers),
+      contraAnswers: cleanMap(current.contraAnswers),
+      jurorAnswers: cleanMap(current.jurorAnswers),
+    };
+
+    if (typeof window !== 'undefined' && safeActivity.id) {
+      try {
+        localStorage.removeItem(`krono_debate_draft_${safeActivity.id}_${answerScopePrefix}`);
+      } catch {}
+    }
+
+    await persistDebateConfig(
+      nextConfig,
+      undefined,
+      `Caixas de resposta da Turma ${currentTurmaScope} limpas e prontas para os alunos!`,
+      { updateSource: 'teacher_cockpit', clearTurmaPrefix: answerScopePrefix }
+    );
   };
 
   // ==========================================================================
-  // INSCRIÇÃO E GERENCIAMENTO DE INTEGRANTES (REQ 2 & REQ 6)
+  // ITEM 2 & 4 CORRIGIDO: ALOCAÇÃO EXCLUSIVA PELO PROFESSOR SEM CONDIÇÃO DE CORRIDA
   // ==========================================================================
   const handleAddStudentToGroup = async (
     targetStudent: { id: string; fullName: string; turma?: string },
     targetRole: GroupRole
   ) => {
-    if (targetRole === 'juror' && jurorMembers.length >= (localConfig.maxJurors || 3)) {
-      const alreadyInJurors = jurorMembers.some((j) => j.studentId === targetStudent.id);
-      if (!alreadyInJurors) {
-        notify(
-          'error',
-          `O Corpo de Jurados desta turma já atingiu o limite de ${localConfig.maxJurors || 3} integrantes.`
-        );
-        return;
-      }
-    }
-
-    const filtered = allParticipants.filter((p) => p.studentId !== targetStudent.id);
-    const existingForRoleInTurma = turmaParticipants.filter((p) => p.role === targetRole);
-    const isFirstLeader = existingForRoleInTurma.length === 0;
+    // Sempre lê a referência síncrona mais recente (permite adicionar 8, 9, 15 alunos seguidos sem perder nenhum!)
+    const currentCfg = latestConfigRef.current;
+    const currentList = Array.isArray(currentCfg.participants) ? currentCfg.participants : [];
 
     const rosterMatch = rosterStudents.find(
       (s) => s.id === targetStudent.id || (Boolean(s.matricula) && s.matricula === targetStudent.id)
@@ -482,19 +675,26 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
       rosterMatch?.fullName ||
       (rosterMatch as any)?.name ||
       (targetStudent as any).name ||
-      'Simulação Docente';
+      'Estudante';
+    const resolvedTurma = targetStudent.turma || rosterMatch?.turma || currentTurmaScope;
+
+    const filtered = currentList.filter((p) => p.studentId !== targetStudent.id);
+    const existingForRoleInTurma = filtered.filter(
+      (p) => p.role === targetRole && isSameStudentTurma(p.turma || '', resolvedTurma)
+    );
+    const isFirstLeader = existingForRoleInTurma.length === 0;
 
     const newParticipant: LocalDebateParticipant = {
-      studentId: targetStudent.id || 'teacher-sim',
+      studentId: targetStudent.id,
       studentName: resolvedFullName,
       role: targetRole,
-      turma: targetStudent.turma || currentTurmaScope,
+      turma: resolvedTurma,
       isLeader: isFirstLeader,
     };
 
     const nextParticipants = [...filtered, newParticipant];
     const nextConfig: LocalDebateConfig = {
-      ...localConfig,
+      ...currentCfg,
       participants: nextParticipants,
     };
 
@@ -502,23 +702,31 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
     await persistDebateConfig(
       nextConfig,
       undefined,
-      `${targetStudent.fullName} integrado(a) ao grupo ${
+      `${resolvedFullName} alocado(a) em ${
         targetRole === 'pro'
-          ? 'Bancada PRÓ'
+          ? '🏛️ Girondinos'
           : targetRole === 'contra'
-          ? 'Bancada CONTRA'
-          : 'Corpo de JURADOS'
-      }!`
+          ? '🔥 Jacobinos'
+          : '⚖️ Júri de Analistas'
+      } (Turma ${resolvedTurma})!`,
+      { updateSource: 'teacher_cockpit' }
     );
   };
 
   const handleRemoveStudentFromGroup = async (studentId: string, studentName: string) => {
-    const nextParticipants = allParticipants.filter((p) => p.studentId !== studentId);
+    const currentCfg = latestConfigRef.current;
+    const currentList = Array.isArray(currentCfg.participants) ? currentCfg.participants : [];
+    const nextParticipants = currentList.filter((p) => p.studentId !== studentId);
     const nextConfig: LocalDebateConfig = {
-      ...localConfig,
+      ...currentCfg,
       participants: nextParticipants,
     };
-    await persistDebateConfig(nextConfig, undefined, `${studentName} removido(a) do grupo.`);
+    await persistDebateConfig(
+      nextConfig,
+      undefined,
+      `${studentName || 'Aluno'} removido(a) da bancada.`,
+      { updateSource: 'teacher_cockpit' }
+    );
   };
 
   const handleMoveStudentGroup = async (
@@ -537,51 +745,157 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
   };
 
   // ==========================================================================
-  // GERAÇÃO / ATUALIZAÇÃO DOS 3 RESUMOS ELABORADOS DE RESPOSTAS COM IA
+  // ITEM 4 CORRIGIDO: SALVAMENTO GARANTIDO DAS 6 RESPOSTAS PELO ALUNO (PASSO 1)
+  // ==========================================================================
+  const handleStudentSaveStep1Answers = async (advanceToStep2: boolean = false) => {
+    if (!myRole) return;
+    setIsSavingAnswers(true);
+    try {
+      const currentCfg = latestConfigRef.current;
+
+      // Compila as respostas atuais do grupo para já garantir registro em submissions também
+      const myTeamMembers =
+        myRole === 'pro' ? proMembers : myRole === 'contra' ? contraMembers : jurorMembers;
+      const submitterName = activeStudent?.fullName || 'Estudante';
+      const memberNamesCsv =
+        myTeamMembers.length > 0
+          ? myTeamMembers.map((m) => m.studentName).filter(Boolean).join(', ')
+          : submitterName;
+
+      const questionsList: LocalDebateQuestion[] =
+        myRole === 'pro'
+          ? currentCfg.proQuestions
+          : myRole === 'contra'
+          ? currentCfg.contraQuestions
+          : currentCfg.jurorQuestions;
+
+      const compiledText = questionsList
+        .map((q, idx) => {
+          const scopedKey = `${answerScopePrefix}${q.id}`;
+          const mapToRead =
+            myRole === 'pro'
+              ? currentCfg.proAnswers
+              : myRole === 'contra'
+              ? currentCfg.contraAnswers
+              : currentCfg.jurorAnswers;
+          const ans = (mapToRead?.[scopedKey] || '').trim() || '(Em elaboração)';
+          return `[Pergunta ${idx + 1} - ${q.sociologicalConcept}]: ${q.prompt}\nResposta da Bancada: ${ans}`;
+        })
+        .join('\n\n');
+
+      const roleHeader =
+        myRole === 'pro'
+          ? 'BANCADA DOS GIRONDINOS (PRÓ)'
+          : myRole === 'contra'
+          ? 'BANCADA DOS JACOBINOS (CONTRA)'
+          : 'JÚRI DE ANALISTAS';
+
+      const partialReport = `=== PESQUISA DA ${roleHeader} • TURMA ${currentTurmaScope} ===\nIntegrantes alocados pelo Professor: ${memberNamesCsv}\n\n${compiledText}`;
+
+      await persistDebateConfig(
+        currentCfg,
+        undefined,
+        `✅ As 6 respostas da sua bancada foram salvas com segurança para todo o grupo!`,
+        { updateSource: 'student_answers' }
+      );
+
+      if (onSubmitAnswer && activeStudent) {
+        await onSubmitAnswer(
+          safeActivity.id,
+          activeStudent.id,
+          partialReport,
+          0,
+          0,
+          safeActivity.maxGrade || 10,
+          {},
+          memberNamesCsv
+        );
+      }
+
+      if (advanceToStep2) {
+        setStudentStep(2);
+      }
+    } finally {
+      setIsSavingAnswers(false);
+    }
+  };
+
+  // ==========================================================================
+  // ITENS 5 E 6 CORRIGIDOS: GERAÇÃO DE RESUMOS E PERGUNTAS DO JÚRI POR TURMA
   // ==========================================================================
   const handleGenerateGroupSynthesis = async () => {
     setIsGeneratingAI(true);
     try {
+      const currentCfg = latestConfigRef.current;
+
+      // Extrai as 6 respostas da turma ativa (sem prefixo) para a API de IA ler os textos reais!
+      const proAnswersForTurma: Record<string, string> = {};
+      (currentCfg.proQuestions || []).forEach((q) => {
+        proAnswersForTurma[q.id] = currentCfg.proAnswers?.[`${answerScopePrefix}${q.id}`] || '';
+      });
+
+      const contraAnswersForTurma: Record<string, string> = {};
+      (currentCfg.contraQuestions || []).forEach((q) => {
+        contraAnswersForTurma[q.id] = currentCfg.contraAnswers?.[`${answerScopePrefix}${q.id}`] || '';
+      });
+
+      const jurorAnswersForTurma: Record<string, string> = {};
+      (currentCfg.jurorQuestions || []).forEach((q) => {
+        jurorAnswersForTurma[q.id] = currentCfg.jurorAnswers?.[`${answerScopePrefix}${q.id}`] || '';
+      });
+
       const res = await fetch('/api/gemini/debate-summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: safeActivity.title,
           topic: safeActivity.description || safeActivity.title,
-          proQuestions: localConfig.proQuestions,
-          contraQuestions: localConfig.contraQuestions,
-          proAnswers: localConfig.proAnswers,
-          contraAnswers: localConfig.contraAnswers,
+          turma: currentTurmaScope,
+          proQuestions: currentCfg.proQuestions,
+          contraQuestions: currentCfg.contraQuestions,
+          jurorQuestions: currentCfg.jurorQuestions,
+          proAnswers: proAnswersForTurma,
+          contraAnswers: contraAnswersForTurma,
+          jurorAnswers: jurorAnswersForTurma,
         }),
       });
 
       const defaults = buildDefaultElaborateSummaries(safeActivity.title);
-      let nextConfig = { ...localConfig };
+      let nextConfig = { ...currentCfg };
+
       if (res.ok) {
         const data = await res.json();
+        const proText = data.proSummary || data.proSummaryAI || defaults.proSummaryAI;
+        const contraText = data.contraSummary || data.contraSummaryAI || defaults.contraSummaryAI;
+        const jurorText = data.jurorGuideSummary || data.jurorGuideAI || defaults.jurorGuideAI;
+
         nextConfig = {
-          ...localConfig,
-          proSummaryAI: data.proSummaryAI || localConfig.proSummaryAI || defaults.proSummaryAI,
-          contraSummaryAI:
-            data.contraSummaryAI || localConfig.contraSummaryAI || defaults.contraSummaryAI,
-          jurorGuideAI: data.jurorGuideAI || localConfig.jurorGuideAI || defaults.jurorGuideAI,
-        };
-      } else {
-        nextConfig = {
-          ...localConfig,
-          proSummaryAI: localConfig.proSummaryAI || defaults.proSummaryAI,
-          contraSummaryAI: localConfig.contraSummaryAI || defaults.contraSummaryAI,
-          jurorGuideAI: localConfig.jurorGuideAI || defaults.jurorGuideAI,
+          ...currentCfg,
+          proSummaryAI: proText,
+          contraSummaryAI: contraText,
+          jurorGuideAI: jurorText,
+          proSummariesByTurma: {
+            ...(currentCfg.proSummariesByTurma || {}),
+            [answerScopePrefix]: proText,
+          },
+          contraSummariesByTurma: {
+            ...(currentCfg.contraSummariesByTurma || {}),
+            [answerScopePrefix]: contraText,
+          },
+          jurorQuestionsByTurma: {
+            ...(currentCfg.jurorQuestionsByTurma || {}),
+            [answerScopePrefix]: jurorText,
+          },
         };
       }
 
       await persistDebateConfig(
         nextConfig,
         undefined,
-        'Os 3 Resumos Elaborados de Respostas foram atualizados com sucesso!'
+        `Sínteses das Bancadas e Perguntas de Sabatina do Júri geradas com base nas respostas da Turma ${currentTurmaScope}!`
       );
     } catch (e) {
-      notify('error', 'Não foi possível regenerar agora. Os 3 resumos elaborados atuais foram mantidos.');
+      notify('error', 'Não foi possível regenerar agora. As sínteses atuais foram mantidas.');
     } finally {
       setIsGeneratingAI(false);
     }
@@ -606,7 +920,7 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
       myRole === 'pro' ? proMembers : myRole === 'contra' ? contraMembers : jurorMembers;
     const memberNamesCsv =
       myTeamMembers.length > 0
-        ? myTeamMembers.map((m) => m.studentName).join(', ')
+        ? myTeamMembers.map((m) => m.studentName).filter(Boolean).join(', ')
         : studentSubmitter.fullName;
 
     const questionsList: LocalDebateQuestion[] =
@@ -625,25 +939,27 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
 
     let finalReportText = `=== RELATÓRIO DE TRAJETÓRIA DO GRUPO (${
       myRole === 'pro'
-        ? 'BANCADA PRÓ'
+        ? 'BANCADA DOS GIRONDINOS'
         : myRole === 'contra'
-        ? 'BANCADA CONTRA'
-        : 'CORPO DE JURADOS'
+        ? 'BANCADA DOS JACOBINOS'
+        : 'JÚRI DE ANALISTAS'
     }) • TURMA ${currentTurmaScope} ===\nIntegrantes: ${memberNamesCsv}\n\n${compiledQuestionsAndAnswers}`;
 
     if (myRole === 'juror') {
       const proScoreCount = Object.values(jurorChecklistPro).filter(Boolean).length;
       const contraScoreCount = Object.values(jurorChecklistContra).filter(Boolean).length;
-      finalReportText += `\n\n=== VEREDITO DO GRANDE DEBATE (JURADOS) ===\nCritérios cumpridos pela Bancada PRÓ: ${proScoreCount}/${
+      finalReportText += `\n\n=== VEREDITO DO GRANDE DEBATE (JURADOS) ===\nCritérios cumpridos pelos Girondinos: ${proScoreCount}/${
         localConfig.checklistCriteria.length || 6
-      }\nCritérios cumpridos pela Bancada CONTRA: ${contraScoreCount}/${
+      }\nCritérios cumpridos pelos Jacobinos: ${contraScoreCount}/${
         localConfig.checklistCriteria.length || 6
       }\nParecer Fundamentado do Júri: ${jurorVerdictComment || 'Registrado em sala.'}`;
     } else if (groupFinalArgument.trim()) {
       finalReportText += `\n\n=== SÍNTESE FINAL DO GRANDE DEBATE ===\n${groupFinalArgument.trim()}`;
     }
 
-    await persistDebateConfig(localConfig);
+    await persistDebateConfig(latestConfigRef.current, undefined, undefined, {
+      updateSource: 'student_answers',
+    });
 
     if (onSubmitAnswer && activeStudent) {
       await onSubmitAnswer(
@@ -669,7 +985,7 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
   };
 
   // ==========================================================================
-  // REQ 4: TIMER OFICIAL DO PROFESSOR PARA O GRANDE DEBATE
+  // TIMER OFICIAL DO PROFESSOR PARA O GRANDE DEBATE
   // ==========================================================================
   const [activeTimerPresetId, setActiveTimerPresetId] = useState<string>('exp_pro');
   const [timerSecondsLeft, setTimerSecondsLeft] = useState<number>(180);
@@ -696,7 +1012,7 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
   };
 
   // ==========================================================================
-  // REQ 5: CHECKLIST DE AVALIAÇÃO DO PROFESSOR POR GRUPO -> ABA CORREÇÕES
+  // CHECKLIST DE AVALIAÇÃO DO PROFESSOR POR GRUPO -> ABA CORREÇÕES
   // ==========================================================================
   const [teacherTab, setTeacherTab] = useState<
     'grupos_timer' | 'perguntas_resumos' | 'checklist_notas'
@@ -776,158 +1092,228 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
   };
 
   const handleApplyGroupChecklistToCorrections = async (roleKey: GroupRole) => {
-    const groupParticipants =
+    const chk = getGroupChecklistState(roleKey);
+    const teamMembers =
       roleKey === 'pro' ? proMembers : roleKey === 'contra' ? contraMembers : jurorMembers;
 
-    if (groupParticipants.length === 0) {
-      notify('error', 'Este grupo ainda não possui alunos cadastrados nesta turma.');
+    if (teamMembers.length === 0) {
+      notify(
+        'error',
+        `Adicione pelo menos 1 aluno ao grupo (${roleKey.toUpperCase()}) na Turma ${currentTurmaScope} antes de lançar a nota.`
+      );
       return;
     }
 
-    const groupStudentObjects: StudentUser[] = groupParticipants.map((p) => {
-      const found = rosterStudents.find((s) => s.id === p.studentId);
+    const memberRosterObjects: StudentUser[] = teamMembers.map((m) => {
+      const found = rosterStudents.find((s) => s.id === m.studentId);
       return (
-        found ||
-        ({
-          id: p.studentId,
-          fullName: p.studentName,
-          matricula: p.studentId,
+        found || {
+          id: m.studentId,
+          fullName: m.studentName,
+          matricula: m.studentId,
           turma: currentTurmaScope,
           tag: 'REGULAR',
           avatarUrl: '',
-          xp: 0,
+          xp: 100,
           level: 1,
-          passwordHash: '',
-        } as StudentUser)
+        }
       );
     });
 
-    const chkState = getGroupChecklistState(roleKey);
-    const roleLabel =
-      roleKey === 'pro'
-        ? 'Bancada PRÓ'
-        : roleKey === 'contra'
-        ? 'Bancada CONTRA'
-        : 'Corpo de JURADOS';
-
-    const checkedLabels = DEFAULT_TEACHER_CRITERIA.filter(
-      (c) => chkState.criteriaChecked[c.id]
-    ).map((c) => `✅ ${c.label} (+${c.weight.toFixed(1)})`);
-
-    const uncheckedLabels = DEFAULT_TEACHER_CRITERIA.filter(
-      (c) => !chkState.criteriaChecked[c.id]
-    ).map((c) => `⬜ ${c.label}`);
-
-    const feedbackSummary = [
-      `📋 CHECKLIST DE AVALIAÇÃO DO PROFESSOR — ${roleLabel.toUpperCase()} (Turma ${currentTurmaScope})`,
-      `Nota Final do Grupo: ${chkState.customScore.toFixed(1)} / 10.0`,
-      '',
-      'Critérios Atendidos:',
-      ...(checkedLabels.length > 0 ? checkedLabels : ['Nenhum critério marcado no checklist']),
-      ...(uncheckedLabels.length > 0 ? ['', 'Critérios Pendentes:', ...uncheckedLabels] : []),
-      ...(chkState.teacherNotes.trim()
-        ? ['', `Parecer Pedagógico do Professor: ${chkState.teacherNotes.trim()}`]
-        : []),
-    ].join('\n');
-
-    const questionsList: LocalDebateQuestion[] =
+    const questionsList =
       roleKey === 'pro'
         ? localConfig.proQuestions
         : roleKey === 'contra'
         ? localConfig.contraQuestions
         : localConfig.jurorQuestions;
 
-    const compiledAnswer = questionsList
+    const compiledQAs = questionsList
       .map((q, idx) => {
-        const ans = getScopedAnswer(roleKey, q.id) || '(Respondido oralmente / em grupo)';
-        return `Pergunta ${idx + 1} (${q.sociologicalConcept}): ${q.prompt}\nResposta: ${ans}`;
+        const ans = getScopedAnswer(roleKey, q.id) || '(Resposta apresentada oralmente em sala)';
+        return `[Questão ${idx + 1} - ${q.sociologicalConcept}]: ${q.prompt}\nResposta: ${ans}`;
       })
       .join('\n\n');
 
-    const updatedActWithSubs = syncGroupGradeToSubmissions({
-      activity: safeActivity,
-      groupMembers: groupStudentObjects,
-      finalScore: chkState.customScore,
-      checklistSummary: feedbackSummary,
-      groupCompiledAnswer: compiledAnswer,
-      groupRoleLabel: roleLabel,
-    });
+    const checkedLabels = DEFAULT_TEACHER_CRITERIA.filter(
+      (c) => chk.criteriaChecked[c.id]
+    ).map((c) => `✓ ${c.label} (+${c.weight} pts)`);
 
-    const key = getChecklistKey(roleKey);
-    const nextTeacherChecklists = {
+    const feedbackSummary = [
+      `[AVALIAÇÃO DO DEBATE SEM PAPEL • ${
+        roleKey === 'pro'
+          ? 'BANCADA DOS GIRONDINOS'
+          : roleKey === 'contra'
+          ? 'BANCADA DOS JACOBINOS'
+          : 'JÚRI DE ANALISTAS'
+      } • TURMA ${currentTurmaScope}]`,
+      checkedLabels.length > 0
+        ? `Critérios Atingidos:\n${checkedLabels.join('\n')}`
+        : 'Avaliação direta atribuída pelo professor.',
+      chk.teacherNotes ? `Parecer do Professor: ${chk.teacherNotes}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+
+    const groupRoleLabel =
+      roleKey === 'pro'
+        ? 'Bancada dos Girondinos'
+        : roleKey === 'contra'
+        ? 'Bancada dos Jacobinos'
+        : 'Júri de Analistas';
+
+    const syncedActivity = syncGroupGradeToSubmissions({
+      activity: safeActivity,
+      groupMembers: memberRosterObjects,
+      finalScore: chk.customScore,
+      checklistSummary: feedbackSummary,
+      groupCompiledAnswer: compiledQAs,
+      groupRoleLabel,
+    });
+    const syncedSubmissions = syncedActivity.submissions || [];
+
+    const nextChecklists = {
       ...teacherChecklists,
-      [key]: {
-        ...chkState,
-        appliedAt: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      [getChecklistKey(roleKey)]: {
+        ...chk,
+        appliedAt: new Date().toLocaleString('pt-BR'),
       },
     };
+
+    setTeacherChecklists(nextChecklists);
 
     const nextConfig: LocalDebateConfig = {
-      ...localConfig,
+      ...latestConfigRef.current,
+      teacherChecklists: nextChecklists,
       groupGrades: {
-        ...(localConfig.groupGrades || {}),
-        [roleKey]: chkState.customScore,
+        ...(latestConfigRef.current.groupGrades || {}),
+        [getChecklistKey(roleKey)]: chk.customScore,
       },
-      teacherChecklists: nextTeacherChecklists,
     };
 
-    setTeacherChecklists(nextTeacherChecklists);
     await persistDebateConfig(
       nextConfig,
-      updatedActWithSubs.submissions,
-      `Nota ${chkState.customScore.toFixed(1)} aplicada a todos os ${groupStudentObjects.length} integrantes do grupo (${roleLabel}) e vinculada à Aba Correções!`
+      syncedSubmissions,
+      `Nota ${chk.customScore.toFixed(1)} aplicada a todos os ${teamMembers.length} integrante(s) do grupo e sincronizada na Aba Correções!`,
+      { updateSource: 'teacher_cockpit' }
     );
   };
 
   return (
-    <div className="space-y-5 text-slate-100">
-      {/* BARRA SUPERIOR SEMPRE VISÍVEL PARA O PROFESSOR ALTERNAR ENTRE COCKPIT E VISÃO DO ALUNO */}
+    <div className="w-full max-w-6xl mx-auto text-slate-100 space-y-6 pb-12">
       {isAuthenticatedTeacher && (
-        <div className="p-3.5 rounded-2xl bg-slate-950 border border-cyan-500/40 flex flex-wrap items-center justify-between gap-3 shadow-lg">
-          <div className="flex items-center gap-2">
-            <Sliders className="w-4 h-4 text-cyan-400" />
-            <span className="text-xs font-black uppercase tracking-wider text-cyan-300">
-              Modo de Comando do Professor:
-            </span>
+        <div className="p-3 rounded-2xl bg-slate-900/95 border border-cyan-500/40 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+          <div className="flex items-center gap-2 text-xs font-bold text-cyan-300">
+            <Scale className="w-4 h-4" />
+            <span>Modo de Visualização do Professor (Turma {currentTurmaScope}):</span>
           </div>
-
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setViewModeOverride('teacher')}
-              className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer transition-all ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer transition-all ${
                 isTeacherMode
-                  ? 'bg-emerald-700 text-white shadow-md'
-                  : 'bg-slate-900 text-slate-300 border border-slate-700 hover:text-white'
+                  ? 'bg-cyan-500 text-slate-950 shadow-md'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
               }`}
             >
               <Sliders className="w-3.5 h-3.5" />
-              <span>🎛️ Painel de Controle do Professor (Timer, Grupos, 6 Questões & Checklist)</span>
+              <span>Cockpit do Professor (Timer, Grupos & Notas)</span>
             </button>
-
             <button
               type="button"
               onClick={() => setViewModeOverride('student_sim')}
-              className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer transition-all ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer transition-all ${
                 !isTeacherMode
-                  ? 'bg-emerald-700 text-white shadow-md'
-                  : 'bg-slate-900 text-slate-300 border border-slate-700 hover:text-white'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md'
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
               }`}
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>👁️ Simular Visão do Aluno (Passo 1, 2 e 3)</span>
+              <span>Simular Bancada do Aluno</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* =====================================================================
-          1. PAINEL DE CONTROLE ROBUSTO DO PROFESSOR
-         ===================================================================== */}
       {isTeacherMode ? (
-        <DebateTeacherCockpit currentTurmaScope={currentTurmaScope} safeActivity={safeActivity} setSelectedTeacherTurma={setSelectedTeacherTurma} availableTurmas={availableTurmas} onClose={onClose} setTeacherTab={setTeacherTab} teacherTab={teacherTab} turmaParticipants={turmaParticipants} statusBanner={statusBanner} setStatusBanner={setStatusBanner} timerSecondsLeft={timerSecondsLeft} formatTimerMMSS={formatTimerMMSS} setIsTimerRunning={setIsTimerRunning} isTimerRunning={isTimerRunning} activeTimerPresetId={activeTimerPresetId} setTimerSecondsLeft={setTimerSecondsLeft} setActiveTimerPresetId={setActiveTimerPresetId} proMembers={proMembers} contraMembers={contraMembers} jurorMembers={jurorMembers} localConfig={localConfig} handleAddStudentToGroup={handleAddStudentToGroup} unassignedClassmates={unassignedClassmates} handleMoveStudentGroup={handleMoveStudentGroup} handleRemoveStudentFromGroup={handleRemoveStudentFromGroup} handleGenerateGroupSynthesis={handleGenerateGroupSynthesis} isGeneratingAI={isGeneratingAI} persistDebateConfig={persistDebateConfig} setLocalConfig={setLocalConfig} getScopedAnswer={getScopedAnswer} handleChangeScopedAnswer={handleChangeScopedAnswer} getGroupChecklistState={getGroupChecklistState} handleToggleTeacherCriterion={handleToggleTeacherCriterion} handleChangeTeacherGroupScore={handleChangeTeacherGroupScore} handleChangeTeacherGroupNotes={handleChangeTeacherGroupNotes} handleApplyGroupChecklistToCorrections={handleApplyGroupChecklistToCorrections} />
+        <DebateTeacherCockpit
+          currentTurmaScope={currentTurmaScope}
+          safeActivity={safeActivity}
+          setSelectedTeacherTurma={setSelectedTeacherTurma}
+          availableTurmas={availableTurmas}
+          onClose={onClose}
+          setTeacherTab={setTeacherTab}
+          teacherTab={teacherTab}
+          turmaParticipants={turmaParticipants}
+          statusBanner={statusBanner}
+          setStatusBanner={setStatusBanner}
+          timerSecondsLeft={timerSecondsLeft}
+          formatTimerMMSS={formatTimerMMSS}
+          setIsTimerRunning={setIsTimerRunning}
+          isTimerRunning={isTimerRunning}
+          activeTimerPresetId={activeTimerPresetId}
+          setTimerSecondsLeft={setTimerSecondsLeft}
+          setActiveTimerPresetId={setActiveTimerPresetId}
+          proMembers={proMembers}
+          contraMembers={contraMembers}
+          jurorMembers={jurorMembers}
+          localConfig={localConfig}
+          handleAddStudentToGroup={handleAddStudentToGroup}
+          unassignedClassmates={unassignedClassmates}
+          handleMoveStudentGroup={handleMoveStudentGroup}
+          handleRemoveStudentFromGroup={handleRemoveStudentFromGroup}
+          handleGenerateGroupSynthesis={handleGenerateGroupSynthesis}
+          isGeneratingAI={isGeneratingAI}
+          persistDebateConfig={persistDebateConfig}
+          setLocalConfig={updateLocalConfigState}
+          getScopedAnswer={getScopedAnswer}
+          handleChangeScopedAnswer={handleChangeScopedAnswer}
+          getScopedSummary={getScopedSummary}
+          handleChangeScopedSummary={handleChangeScopedSummary}
+          handleClearCurrentTurmaAnswers={handleClearCurrentTurmaAnswers}
+          getGroupChecklistState={getGroupChecklistState}
+          handleToggleTeacherCriterion={handleToggleTeacherCriterion}
+          handleChangeTeacherGroupScore={handleChangeTeacherGroupScore}
+          handleChangeTeacherGroupNotes={handleChangeTeacherGroupNotes}
+          handleApplyGroupChecklistToCorrections={handleApplyGroupChecklistToCorrections}
+        />
       ) : (
-        <DebateStudentBenchView myRole={myRole} proMembers={proMembers} contraMembers={contraMembers} jurorMembers={jurorMembers} localConfig={localConfig} currentTurmaScope={currentTurmaScope} safeActivity={safeActivity} isAuthenticatedTeacher={isAuthenticatedTeacher} simulatedStudentRole={simulatedStudentRole} setSimulatedStudentRole={setSimulatedStudentRole} statusBanner={statusBanner} setStatusBanner={setStatusBanner} handleAddStudentToGroup={handleAddStudentToGroup} activeStudent={activeStudent} studentStep={studentStep} setStudentStep={setStudentStep} selectedClassmateIdToAdd={selectedClassmateIdToAdd} setSelectedClassmateIdToAdd={setSelectedClassmateIdToAdd} unassignedClassmates={unassignedClassmates} getScopedAnswer={getScopedAnswer} handleChangeScopedAnswer={handleChangeScopedAnswer} handleGenerateGroupSynthesis={handleGenerateGroupSynthesis} isGeneratingAI={isGeneratingAI} persistDebateConfig={persistDebateConfig} jurorChecklistPro={jurorChecklistPro} setJurorChecklistPro={setJurorChecklistPro} jurorChecklistContra={jurorChecklistContra} setJurorChecklistContra={setJurorChecklistContra} jurorVerdictComment={jurorVerdictComment} setJurorVerdictComment={setJurorVerdictComment} groupFinalArgument={groupFinalArgument} setGroupFinalArgument={setGroupFinalArgument} handleStudentFinishDebateStep3={handleStudentFinishDebateStep3} />
+        <DebateStudentBenchView
+          myRole={myRole}
+          proMembers={proMembers}
+          contraMembers={contraMembers}
+          jurorMembers={jurorMembers}
+          localConfig={localConfig}
+          currentTurmaScope={currentTurmaScope}
+          safeActivity={safeActivity}
+          isAuthenticatedTeacher={isAuthenticatedTeacher}
+          simulatedStudentRole={simulatedStudentRole}
+          setSimulatedStudentRole={setSimulatedStudentRole}
+          statusBanner={statusBanner}
+          setStatusBanner={setStatusBanner}
+          activeStudent={activeStudent}
+          studentStep={studentStep}
+          setStudentStep={setStudentStep}
+          getScopedAnswer={getScopedAnswer}
+          handleChangeScopedAnswer={handleChangeScopedAnswer}
+          getScopedSummary={getScopedSummary}
+          handleStudentSaveStep1Answers={handleStudentSaveStep1Answers}
+          isSavingAnswers={isSavingAnswers}
+          handleRefreshFromServer={handleRefreshFromServer}
+          isRefreshingBench={isRefreshingBench}
+          handleGenerateGroupSynthesis={handleGenerateGroupSynthesis}
+          isGeneratingAI={isGeneratingAI}
+          persistDebateConfig={persistDebateConfig}
+          jurorChecklistPro={jurorChecklistPro}
+          setJurorChecklistPro={setJurorChecklistPro}
+          jurorChecklistContra={jurorChecklistContra}
+          setJurorChecklistContra={setJurorChecklistContra}
+          jurorVerdictComment={jurorVerdictComment}
+          setJurorVerdictComment={setJurorVerdictComment}
+          groupFinalArgument={groupFinalArgument}
+          setGroupFinalArgument={setGroupFinalArgument}
+          handleStudentFinishDebateStep3={handleStudentFinishDebateStep3}
+        />
       )}
     </div>
   );

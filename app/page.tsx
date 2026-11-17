@@ -737,6 +737,8 @@ export default function Home() {
         messages={chatMessages}
         students={students}
         onLogout={handleLogout}
+        onSaveActivity={handleSaveActivity}
+        onUpdateActivity={handleSaveActivity}
         onSubmitAnswer={handleStudentSubmitAnswer}
         onSendMessage={handleSendMessage}
         onMarkThreadAsRead={handleMarkThreadAsRead}

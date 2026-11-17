@@ -8,29 +8,118 @@ export const dynamic = "force-dynamic";
 interface SummaryRequestPayload {
   title: string;
   topic: string;
+  turma?: string;
   subject?: string;
   supportMaterial?: string;
   proQuestions: DebateGuidingQuestion[];
   contraQuestions: DebateGuidingQuestion[];
+  jurorQuestions?: DebateGuidingQuestion[];
   proAnswers: Record<string, string>;
   contraAnswers: Record<string, string>;
+  jurorAnswers?: Record<string, string>;
 }
 
-function buildFallbackSummaries(payload: SummaryRequestPayload) {
-  const { topic, proQuestions = [], contraQuestions = [], proAnswers = {}, contraAnswers = {} } = payload;
+function buildSynthesizedFromStudentAnswers(payload: SummaryRequestPayload) {
+  const {
+    title,
+    topic,
+    turma = "",
+    proQuestions = [],
+    contraQuestions = [],
+    proAnswers = {},
+    contraAnswers = {},
+  } = payload;
 
-  const proPoints = proQuestions
-    .map((q, i) => `• Eixo ${i + 1} (${q.sociologicalConcept}): ${proAnswers[q.id] || "Argumento em consolidação pela bancada."}`)
+  const cleanLabel = (title || topic || "Debate Sociológico").trim();
+  const turmaTag = turma ? ` • TURMA ${turma}` : "";
+
+  const proAnsweredItems = proQuestions.map((q, i) => {
+    const ans = (proAnswers[q.id] || "").trim();
+    return {
+      index: i + 1,
+      concept: q.sociologicalConcept || `Eixo ${i + 1}`,
+      prompt: q.prompt,
+      answer: ans,
+    };
+  });
+
+  const contraAnsweredItems = contraQuestions.map((q, i) => {
+    const ans = (contraAnswers[q.id] || "").trim();
+    return {
+      index: i + 1,
+      concept: q.sociologicalConcept || `Eixo ${i + 1}`,
+      prompt: q.prompt,
+      answer: ans,
+    };
+  });
+
+  const proFilledCount = proAnsweredItems.filter((x) => x.answer.length > 0).length;
+  const contraFilledCount = contraAnsweredItems.filter((x) => x.answer.length > 0).length;
+
+  const proSynthesisLines = proAnsweredItems
+    .map((item) =>
+      item.answer
+        ? `• [Questão ${item.index} - ${item.concept}]: "${item.answer}"`
+        : `• [Questão ${item.index} - ${item.concept}]: (Ainda não respondida pela bancada — completar no Passo 1)`
+    )
     .join("\n");
 
-  const contraPoints = contraQuestions
-    .map((q, i) => `• Eixo ${i + 1} (${q.sociologicalConcept}): ${contraAnswers[q.id] || "Contraponto em consolidação pela bancada."}`)
+  const contraSynthesisLines = contraAnsweredItems
+    .map((item) =>
+      item.answer
+        ? `• [Questão ${item.index} - ${item.concept}]: "${item.answer}"`
+        : `• [Questão ${item.index} - ${item.concept}]: (Ainda não respondida pela bancada — completar no Passo 1)`
+    )
     .join("\n");
+
+  const proSummary = `📘 SÍNTESE DAS RESPOSTAS DA BANCADA DOS GIRONDINOS (${cleanLabel.toUpperCase()}${turmaTag})
+Respostas integradas: ${proFilledCount} de ${proQuestions.length || 6} questões.
+
+1. ARGUMENTOS CONSTRUÍDOS PELA SUA BANCADA:
+${proSynthesisLines}
+
+2. COMO USAR SUAS RESPOSTAS NA EXPOSIÇÃO E RÉPLICA:
+• Abertura (Exposição): Comecem apresentando os argumentos das Questões 1 e 2 acima, destacando os conceitos sociológicos pesquisados pelo grupo.
+• Sustentação (Réplica): Usem os exemplos e dados que vocês anotaram nas Questões 3, 4 e 5 para rebater as críticas dos Jacobinos.
+• Fechamento (Tréplica): Concluam com a tese final da Questão 6 demonstrando a consistência da posição girondina.`;
+
+  const contraSummary = `📕 SÍNTESE DAS RESPOSTAS DA BANCADA DOS JACOBINOS (${cleanLabel.toUpperCase()}${turmaTag})
+Respostas integradas: ${contraFilledCount} de ${contraQuestions.length || 6} questões.
+
+1. ARGUMENTOS CRÍTICOS CONSTRUÍDOS PELA SUA BANCADA:
+${contraSynthesisLines}
+
+2. COMO USAR SUAS RESPOSTAS NA EXPOSIÇÃO E RÉPLICA:
+• Abertura (Exposição): Iniciem expondo as contradições e relações de poder levantadas pelo grupo nas Questões 1 e 2.
+• Contra-Ataque (Réplica): Confrontem a bancada adversária usando os problemas reais e exclusões que vocês registraram nas Questões 3, 4 e 5.
+• Fechamento (Tréplica): Encerrem com a proposta de transformação estrutural que vocês formularam na Questão 6.`;
+
+  // Construção das 6 Perguntas do Júri baseadas diretamente no que Girondinos e Jacobinos responderam
+  const proFirstAns = proAnsweredItems.find((x) => x.answer)?.answer || "a defesa institucional apresentada pelo grupo";
+  const proSecondAns = proAnsweredItems.slice(1).find((x) => x.answer)?.answer || "os benefícios sociais defendidos pela bancada";
+  const contraFirstAns = contraAnsweredItems.find((x) => x.answer)?.answer || "as críticas estruturais levantadas pelo grupo";
+  const contraSecondAns = contraAnsweredItems.slice(1).find((x) => x.answer)?.answer || "as desigualdades apontadas pela bancada";
+
+  const jurorGuideSummary = `⚖️ PERGUNTAS DE SABATINA FORMULADAS PELA IA PARA O JÚRI (${cleanLabel.toUpperCase()}${turmaTag})
+(Elaboradas a partir das respostas e resumos das Bancadas dos Girondinos e dos Jacobinos)
+
+🏛️ PERGUNTAS DIRECIONADAS AOS GIRONDINOS (LADO PRÓ):
+1. Confronto de Realidade: A bancada dos Girondinos sustentou em seu resumo que "${proFirstAns.slice(0, 140)}...". Como vocês respondem à crítica dos Jacobinos de que essa posição ignora as desigualdades materiais da população?
+2. Comprovação Prática: Vocês destacaram que "${proSecondAns.slice(0, 140)}...". Que evidência histórica ou dado concreto comprova que esse modelo funciona para todas as classes sociais e não apenas para uma elite?
+3. Limite Institucional: Se o modelo defendido pelos Girondinos encontrar resistência popular ou crise econômica, qual medida concreta a bancada propõe sem violar os direitos democráticos?
+
+🔥 PERGUNTAS DIRECIONADAS AOS JACOBINOS (LADO CONTRA):
+4. Viabilidade da Proposta: A bancada dos Jacobinos afirmou em seu resumo que "${contraFirstAns.slice(0, 140)}...". Como implementar essa ruptura ou transformação sem gerar instabilidade institucional ou autoritarismo?
+5. Resposta ao Contraponto Girondino: Vocês apontaram que "${contraSecondAns.slice(0, 140)}...". Como a bancada jacobina rebate o argumento girondino de que reformas graduais protegem melhor a coesão social?
+6. Critério Decisivo para amanhã: Qual garantia concreta os Jacobinos oferecem de que sua proposta resolverá o problema estrutural sem criar novas formas de exclusão?`;
 
   return {
-    proSummary: `📘 DOSSIÊ ESTRATÉGICO DA BANCADA PRÓ — "${topic}"\n\n1. TESE CENTRAL FAVORÁVEL:\nNossa bancada sustenta a importância e a validade sociológica do tema a partir das seguintes pesquisas realizadas pelo grupo:\n${proPoints}\n\n2. ROTEIRO PARA RÉPLICA E TRÉPLICA:\n• Apresentem os dados empíricos logo nos primeiros minutos do Timer.\n• Conectem os argumentos aos conceitos sociológicos estudados e mostrem como as críticas adversárias não invalidam os avanços sociais demonstrados.`,
-    contraSummary: `📕 DOSSIÊ ESTRATÉGICO DA BANCADA CONTRA — "${topic}"\n\n1. TESE CENTRAL CRÍTICA / OPOSIÇÃO:\nNossa bancada problematiza as contradições estruturais, limites práticos e relações de poder envolvidas no tema com base na pesquisa do grupo:\n${contraPoints}\n\n2. ROTEIRO PARA RÉPLICA E TRÉPLICA:\n• Questionem a distância entre o discurso formal e a realidade concreta brasileira.\n• Exijam evidências práticas da Bancada Pró durante a fase de réplica controlada pelo Timer.`,
-    jurorGuideSummary: `⚖️ GUIA DE JULGAMENTO DOS 3 JURADOS — "${topic}"\n\n1. O QUE AVALIAR NA BANCADA PRÓ:\nVerifiquem se o grupo fundamentou a defesa usando os conceitos de ${proQuestions.map((q) => q.sociologicalConcept).join(", ")} com dados reais.\n\n2. O QUE AVALIAR NA BANCADA CONTRA:\nVerifiquem se o grupo apresentou problematizações sociológicas consistentes sobre ${contraQuestions.map((q) => q.sociologicalConcept).join(", ")} sem cair em senso comum.\n\n3. INSTRUÇÃO DE USO DOS 2 CHECKLISTS:\nMarquem "Cumpriu" ou "Não Cumpriu" nos 6 critérios para o Lado Pró e nos 6 critérios para o Lado Contra enquanto acompanham o Timer do Professor.`,
+    proSummary,
+    contraSummary,
+    jurorGuideSummary,
+    proSummaryAI: proSummary,
+    contraSummaryAI: contraSummary,
+    jurorGuideAI: jurorGuideSummary,
   };
 }
 
@@ -42,9 +131,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Payload inválido." }, { status: 400 });
   }
 
+  const localSynthesized = buildSynthesizedFromStudentAnswers(payload);
   const ai = getGeminiClient();
   if (!ai) {
-    return NextResponse.json({ ...buildFallbackSummaries(payload), isFallback: true });
+    return NextResponse.json({ ...localSynthesized, isFallback: true });
   }
 
   try {
@@ -52,31 +142,42 @@ export async function POST(req: NextRequest) {
     let generatedText: string | null = null;
 
     const proCompiled = (payload.proQuestions || [])
-      .map((q, i) => `Questão Pró ${i + 1} (${q.sociologicalConcept}): ${q.prompt}\nResposta pesquisada pelo Grupo Pró: ${payload.proAnswers?.[q.id] || "(Ainda não preenchida)"}`)
+      .map(
+        (q, i) =>
+          `Pergunta Girondinos ${i + 1} (${q.sociologicalConcept}): ${q.prompt}\nResposta Real Escrita pelos Alunos (Girondinos): ${
+            (payload.proAnswers?.[q.id] || "").trim() || "(Em branco)"
+          }`
+      )
       .join("\n\n");
 
     const contraCompiled = (payload.contraQuestions || [])
-      .map((q, i) => `Questão Contra ${i + 1} (${q.sociologicalConcept}): ${q.prompt}\nResposta pesquisada pelo Grupo Contra: ${payload.contraAnswers?.[q.id] || "(Ainda não preenchida)"}`)
+      .map(
+        (q, i) =>
+          `Pergunta Jacobinos ${i + 1} (${q.sociologicalConcept}): ${q.prompt}\nResposta Real Escrita pelos Alunos (Jacobinos): ${
+            (payload.contraAnswers?.[q.id] || "").trim() || "(Em branco)"
+          }`
+      )
       .join("\n\n");
 
-    const prompt = `Você é um Professor Doutor em Sociologia orientando um Debate Sem Papel no Ensino Médio.
-Tema do Debate: "${payload.topic}" (Título: "${payload.title}").
-Roteiro do Professor: "${payload.supportMaterial || ""}"
+    const prompt = `Você é o Professor Gilson Flores orientando um Debate Sem Papel de Sociologia no Ensino Médio (Turma ${payload.turma || "Ativa"}).
+Título do Debate: "${payload.title}"
+Tema / Contexto: "${payload.topic}"
 
-Os estudantes concluíram a fase de pesquisa norteadora e enviaram as seguintes respostas:
+Abaixo estão as RESPOSTAS REAIS escritas pelos estudantes das duas bancadas:
 
-=== PESQUISA DA BANCADA PRÓ ===
+=== RESPOSTAS REAIS DA BANCADA DOS GIRONDINOS (PRÓ) ===
 ${proCompiled}
 
-=== PESQUISA DA BANCADA CONTRA ===
+=== RESPOSTAS REAIS DA BANCADA DOS JACOBINOS (CONTRA) ===
 ${contraCompiled}
 
-Sua tarefa é gerar 3 TEXTOS-RESUMO ESTRATÉGICOS E INDEPENDENTES (em português claro, bem estruturado em tópicos para leitura rápida no celular durante o debate):
-1. "proSummary": Resumo exclusivo para todos os integrantes da BANCADA PRÓ lerem na aula do debate, organizando os melhores argumentos pesquisados por eles, exemplos sociológicos e como se defender na réplica/tréplica.
-2. "contraSummary": Resumo exclusivo para todos os integrantes da BANCADA CONTRA lerem na aula do debate, organizando as críticas estruturais pesquisadas por eles, conceitos sociológicos e como contra-argumentar na réplica/tréplica.
-3. "jurorGuideSummary": Resumo exclusivo para os 3 JURADOS saberem exatamente o que julgar em cada bancada, quais conceitos sociológicos observar e como preencher os 2 checklists (Pró e Contra).
+REGRAS OBRIGATÓRIAS:
+1. NÃO escreva textos genéricos ou vagos! Sintetize FIELMENTE o que os alunos escreveram acima, citando e organizando os próprios argumentos deles em tópicos claros para leitura rápida durante o debate. Se alguma questão estiver em branco, aponte qual ponto o grupo ainda precisa complementar.
+2. Em "proSummary": Crie o Resumo Elaborado da Bancada dos Girondinos sintetizando as respostas reais que eles deram nas 6 questões e orientando como usá-las na Exposição, Réplica e Tréplica.
+3. Em "contraSummary": Crie o Resumo Elaborado da Bancada dos Jacobinos sintetizando as respostas reais que eles deram nas 6 questões e orientando como usá-las na Exposição, Réplica e Tréplica.
+4. Em "jurorGuideSummary": O Júri NÃO deve receber um resumo comum! Formule 6 PERGUNTAS DIRETAS E INCISIVAS DE SABATINA (3 perguntas para o Júri fazer aos Girondinos e 3 perguntas para o Júri fazer aos Jacobinos) baseadas diretamente nos resumos e respostas que os dois grupos produziram acima, colocando os pontos de divergência frente a frente.
 
-Retorne EXCLUSIVAMENTE um JSON válido com as 3 chaves:
+Retorne EXCLUSIVAMENTE um JSON válido com as chaves:
 {
   "proSummary": "...",
   "contraSummary": "...",
@@ -90,7 +191,7 @@ Retorne EXCLUSIVAMENTE um JSON válido com as 3 chaves:
           contents: [{ role: "user", parts: [{ text: prompt }] }],
           config: {
             responseMimeType: "application/json",
-            temperature: 0.75,
+            temperature: 0.5,
           },
         });
         if (response && response.text) {
@@ -104,13 +205,22 @@ Retorne EXCLUSIVAMENTE um JSON válido com as 3 chaves:
 
     if (generatedText) {
       try {
-        const cleaned = generatedText.replace(/^\`\`\`json\s*/i, "").replace(/\s*\`\`\`$/i, "").trim();
+        const cleaned = generatedText
+          .replace(/^```json\s*/i, "")
+          .replace(/\s*```$/i, "")
+          .trim();
         const parsed = JSON.parse(cleaned);
-        const fb = buildFallbackSummaries(payload);
+        const proFinal = parsed.proSummary || parsed.proSummaryAI || localSynthesized.proSummary;
+        const contraFinal = parsed.contraSummary || parsed.contraSummaryAI || localSynthesized.contraSummary;
+        const jurorFinal = parsed.jurorGuideSummary || parsed.jurorGuideAI || localSynthesized.jurorGuideSummary;
+
         return NextResponse.json({
-          proSummary: parsed.proSummary || fb.proSummary,
-          contraSummary: parsed.contraSummary || fb.contraSummary,
-          jurorGuideSummary: parsed.jurorGuideSummary || fb.jurorGuideSummary,
+          proSummary: proFinal,
+          contraSummary: contraFinal,
+          jurorGuideSummary: jurorFinal,
+          proSummaryAI: proFinal,
+          contraSummaryAI: contraFinal,
+          jurorGuideAI: jurorFinal,
           isFallback: false,
         });
       } catch {
@@ -118,8 +228,8 @@ Retorne EXCLUSIVAMENTE um JSON válido com as 3 chaves:
       }
     }
 
-    return NextResponse.json({ ...buildFallbackSummaries(payload), isFallback: true });
+    return NextResponse.json({ ...localSynthesized, isFallback: true });
   } catch {
-    return NextResponse.json({ ...buildFallbackSummaries(payload), isFallback: true });
+    return NextResponse.json({ ...localSynthesized, isFallback: true });
   }
 }
