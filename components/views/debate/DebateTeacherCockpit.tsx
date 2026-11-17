@@ -295,23 +295,23 @@ export const DebateTeacherCockpit: React.FC<any> = (props) => {
                         ) : (
                           grp.members.map((member: any, mIdx: number) => (
                             <div
-                              key={member.studentId}
-                              className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between gap-2"
+                              key={member.studentId || mIdx}
+                              className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
                             >
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
                                   {mIdx === 0 && (
-                                    <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[9px] font-black uppercase">
+                                    <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[9px] font-black uppercase shrink-0">
                                       Líder
                                     </span>
                                   )}
-                                  <span className="text-xs font-bold text-slate-100 truncate block">
-                                    {member.studentName}
+                                  <span className="text-xs font-bold text-slate-100 leading-snug break-words" title={member.studentName || member.studentId}>
+                                    {member.studentName || `Aluno (${member.studentId || 'Simulação'})`}
                                   </span>
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-1.5 shrink-0">
+                              <div className="flex items-center justify-end gap-1.5 shrink-0">
                                 <select
                                   value={member.role}
                                   onChange={(e) =>

@@ -522,6 +522,20 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                       .map((sub) => {
                       const isStudentExpanded = expandedStudentId === sub.studentId;
                       const subKey = `${act.id}_${sub.studentId}`;
+                      const matchedStudent = students.find(
+                        (s) =>
+                          s.id === sub.studentId ||
+                          (Boolean(s.matricula) && (s.matricula === sub.matricula || s.matricula === sub.studentId))
+                      );
+                      const resolvedStudentName =
+                        (sub.studentName && sub.studentName.trim()) ||
+                        matchedStudent?.fullName ||
+                        (matchedStudent as any)?.name ||
+                        `Aluno (${sub.matricula || sub.studentId || 'Sem ID'})`;
+                      const resolvedAvatarUrl =
+                        sub.avatarUrl ||
+                        matchedStudent?.avatarUrl ||
+                        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100';
                       
                       return (
                         <div key={sub.studentId} className="animate-fadeIn">
@@ -531,10 +545,10 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                             onClick={() => setExpandedStudentId(isStudentExpanded ? null : sub.studentId)}
                           >
                             <div className="flex items-center gap-3 min-w-0">
-                              <img src={sub.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100'} alt={sub.studentName} className="w-10 h-10 rounded-full border border-border shrink-0" />
-                              <div className="min-w-0">
-                                <h4 className="text-sm font-bold text-foreground truncate flex items-center gap-2">
-                                  {sub.studentName}
+                              <img src={resolvedAvatarUrl} alt={resolvedStudentName} className="w-10 h-10 rounded-full border border-border shrink-0 object-cover bg-slate-900" />
+                              <div className="min-w-0 flex-1">
+                                <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
+                                  <span className="truncate">{resolvedStudentName}</span>
                                   {sub.status === 'graded' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
                                   {sub.status === 'returned' && <RefreshCw className="w-3.5 h-3.5 text-orange-400" />}
                                 </h4>

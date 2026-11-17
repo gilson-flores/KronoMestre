@@ -340,12 +340,31 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
   );
 
   const turmaParticipants = useMemo(() => {
-    return allParticipants.filter((p) => {
-      if (p.turma) return isSameStudentTurma(p.turma, currentTurmaScope);
-      const found = rosterStudents.find((s) => s.id === p.studentId);
-      if (found?.turma) return isSameStudentTurma(found.turma, currentTurmaScope);
-      return true;
-    });
+    return allParticipants
+      .map((p) => {
+        const found = rosterStudents.find(
+          (s) =>
+            s.id === p.studentId ||
+            (Boolean(s.matricula) && s.matricula === p.studentId)
+        );
+        const resolvedName =
+          (p.studentName && p.studentName.trim()) ||
+          found?.fullName ||
+          (found as any)?.name ||
+          (p as any).fullName ||
+          (p as any).name ||
+          (p.studentId === 'teacher-sim' ? 'Simulação Docente' : '');
+        return {
+          ...p,
+          studentName: resolvedName,
+          turma: p.turma || found?.turma || currentTurmaScope,
+        };
+      })
+      .filter((p) => {
+        if (!p.studentId && !p.studentName) return false;
+        if (p.turma) return isSameStudentTurma(p.turma, currentTurmaScope);
+        return true;
+      });
   }, [allParticipants, currentTurmaScope, rosterStudents]);
 
   const proMembers = useMemo(
@@ -455,9 +474,19 @@ export const DebatePaperlessView: React.FC<DebatePaperlessViewProps> = ({
     const existingForRoleInTurma = turmaParticipants.filter((p) => p.role === targetRole);
     const isFirstLeader = existingForRoleInTurma.length === 0;
 
+    const rosterMatch = rosterStudents.find(
+      (s) => s.id === targetStudent.id || (Boolean(s.matricula) && s.matricula === targetStudent.id)
+    );
+    const resolvedFullName =
+      (targetStudent.fullName && targetStudent.fullName.trim()) ||
+      rosterMatch?.fullName ||
+      (rosterMatch as any)?.name ||
+      (targetStudent as any).name ||
+      'Simulação Docente';
+
     const newParticipant: LocalDebateParticipant = {
-      studentId: targetStudent.id,
-      studentName: targetStudent.fullName,
+      studentId: targetStudent.id || 'teacher-sim',
+      studentName: resolvedFullName,
       role: targetRole,
       turma: targetStudent.turma || currentTurmaScope,
       isLeader: isFirstLeader,

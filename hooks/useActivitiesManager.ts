@@ -235,8 +235,13 @@ export function useActivitiesManager({
 
         updatedSubmissions = updatedSubmissions.map((sub) => {
           if (idsToUpdate.includes(sub.studentId)) {
+            const matchedSt = students.find(
+              (s) => s.id === sub.studentId || (Boolean(s.matricula) && s.matricula === sub.matricula)
+            );
             return {
               ...sub,
+              studentName: (sub.studentName && sub.studentName.trim()) || matchedSt?.fullName || (matchedSt as any)?.name || sub.studentName,
+              avatarUrl: sub.avatarUrl || matchedSt?.avatarUrl,
               essayScore,
               teacherFeedback: feedback,
               status,
@@ -354,6 +359,13 @@ export function useActivitiesManager({
           if (existingIndex >= 0) {
             updatedSubmissions[existingIndex] = {
               ...updatedSubmissions[existingIndex],
+              studentName:
+                (updatedSubmissions[existingIndex].studentName &&
+                  updatedSubmissions[existingIndex].studentName.trim()) ||
+                targetSt.fullName ||
+                (targetSt as any).name ||
+                updatedSubmissions[existingIndex].studentName,
+              avatarUrl: updatedSubmissions[existingIndex].avatarUrl || targetSt.avatarUrl,
               essayAnswer,
               objectiveScore,
               maxObjectiveScore,

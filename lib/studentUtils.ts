@@ -442,24 +442,54 @@ export function getActivityStudentAndSubmissionCounts(
   let expectedStudentsCount = 0;
   let submissionsList: ActivitySubmission[] = [];
 
+  const findAndHydrateStudentSub = (s: ActivitySubmission) => {
+    const st =
+      enrolledStudents.find(
+        (x) =>
+          x.id === s.studentId ||
+          (Boolean(x.matricula) && (x.matricula === s.matricula || x.matricula === s.studentId))
+      ) ||
+      (students || []).find(
+        (x) =>
+          x.id === s.studentId ||
+          (Boolean(x.matricula) && (x.matricula === s.matricula || x.matricula === s.studentId))
+      );
+    if (!st) return { st: undefined, hydrated: s };
+    const resolvedName =
+      (s.studentName && s.studentName.trim()) ||
+      st.fullName ||
+      (st as any).name ||
+      s.studentName ||
+      '';
+    return {
+      st,
+      hydrated: {
+        ...s,
+        studentName: resolvedName,
+        avatarUrl: s.avatarUrl || st.avatarUrl,
+        matricula: s.matricula || st.matricula,
+      },
+    };
+  };
+
   if (isAdaptedAct) {
     expectedStudentsCount = students && students.length > 0 ? pneEnrolledTakingAdaptation.length : 1;
-    submissionsList = (act.submissions || []).filter((s) => {
-      const st = enrolledStudents.find((x) => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
-      return st && isStudentPNE(st) && !isProficientPne(st);
-    });
+    submissionsList = (act.submissions || [])
+      .map(findAndHydrateStudentSub)
+      .filter(({ st }) => Boolean(st && isStudentPNE(st) && !isProficientPne(st)))
+      .map(({ hydrated }) => hydrated);
   } else if (hasAdaptationChild) {
     expectedStudentsCount = students && students.length > 0 ? studentsTakingNormal.length : (act.totalStudents || 35);
-    submissionsList = (act.submissions || []).filter((s) => {
-      const st = enrolledStudents.find((x) => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
-      return st && (!isStudentPNE(st) || isProficientPne(st));
-    });
+    submissionsList = (act.submissions || [])
+      .map(findAndHydrateStudentSub)
+      .filter(({ st }) => Boolean(st && (!isStudentPNE(st) || isProficientPne(st))))
+      .map(({ hydrated }) => hydrated);
   } else {
     expectedStudentsCount = students && students.length > 0 ? enrolledStudents.length : (act.totalStudents || 35);
-    submissionsList = (act.submissions || []).filter((s) => {
-      const st = enrolledStudents.find((x) => x.id === s.studentId || (Boolean(x.matricula) && x.matricula === s.matricula));
-      return Boolean(st);
-    });
+    submissionsList = (act.submissions || [])
+      .map(findAndHydrateStudentSub)
+      .filter(({ st }) => Boolean(st))
+      .map(({ hydrated }) => hydrated);
   }
 
   const subCount = submissionsList.length;
