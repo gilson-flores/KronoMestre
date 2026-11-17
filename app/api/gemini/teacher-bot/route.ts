@@ -290,9 +290,7 @@ function renderTeacherConfirmed(
   lastBobText: string,
   studentDetailText: string
 ): string {
-  const matchMotivo = lastBobText.match(/Já selecionei o motivo:s*([^.
-]+)/i);
-  const motivo = matchMotivo ? matchMotivo[1].trim() : "Solicitação Pedagógica de Sociologia";
+  const motivo = (lastBobText.split("Já selecionei o motivo:")[1] || "").split(".")[0].trim() || "Solicitação Pedagógica de Sociologia";
 
   return `[Etapa 3/3 • Solicitação Registrada]
 ✅ Tudo certo, ${firstName}! Sua solicitação foi registrada com total respaldo! 🤝✨
