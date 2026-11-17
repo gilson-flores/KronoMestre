@@ -469,6 +469,9 @@ export default function Home() {
                 title: item.title,
                 category: item.category || 'Geral',
                 turma: item.turma || 'Todas',
+                targetAudience: item.targetAudience,
+                markdownContent: item.markdownContent,
+                isTextbookMd: item.isTextbookMd,
                 fileSize: item.fileSize || item.file_size || '1 MB',
                 updatedAt:
                   item.updatedAt || item.updated_at || new Date().toLocaleDateString('pt-BR'),

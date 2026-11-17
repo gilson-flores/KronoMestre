@@ -55,6 +55,7 @@ export interface StudentPortalViewProps {
   allStudents?: StudentUser[];
   teacher?: TeacherUser | null;
   activities: Activity[];
+  libraryFiles?: any[];
   libraryItems?: any[];
   messages?: any[];
   onSendMessage?: (msgData: any, receiverId?: string) => any;
@@ -86,6 +87,8 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   allStudents = [],
   teacher,
   activities = [],
+  libraryFiles = [],
+  libraryItems = [],
   messages = [],
   onSendMessage,
   onSubmitAnswer,
@@ -188,6 +191,35 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordStatus, setPasswordStatus] = useState<string | null>(null);
+
+  const [fetchedLibraryFiles, setFetchedLibraryFiles] = useState<any[]>([]);
+  useEffect(() => {
+    if ((!libraryFiles || libraryFiles.length === 0) && (!libraryItems || libraryItems.length === 0)) {
+      fetch('/api/library')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (d && Array.isArray(d.files)) {
+            setFetchedLibraryFiles(d.files);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [libraryFiles, libraryItems]);
+
+  const studentLibraryFiles = useMemo(() => {
+    const raw = (Array.isArray(libraryFiles) && libraryFiles.length > 0)
+      ? libraryFiles
+      : (Array.isArray(libraryItems) && libraryItems.length > 0)
+      ? libraryItems
+      : fetchedLibraryFiles;
+    return raw.filter((file: any) => {
+      if (!file) return false;
+      const isSecondTeacherOnly = file.targetAudience === 'second_teacher' || file.turma === 'Somente 2º Professor';
+      if (isSecondTeacherOnly) return false;
+      if (!file.turma || file.turma === 'Todas' || file.targetAudience === 'all_turmas') return true;
+      return doesItemMatchStudentTurma(file.turma, activeStudent.turma);
+    });
+  }, [libraryFiles, libraryItems, fetchedLibraryFiles, activeStudent.turma]);
 
   const [fetchedClassmates, setFetchedClassmates] = useState<StudentUser[]>([]);
   const rosterStudents = useMemo(() => {
@@ -705,7 +737,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         handleOpenChat={handleOpenChat} unreadMessagesCount={unreadMessagesCount}
         onLogout={onLogout} studentActivities={studentActivities}
         pendingActivities={pendingActivities} completedActivities={completedActivities}
-        kronoGamesActivities={kronoGamesActivities}
+        kronoGamesActivities={kronoGamesActivities} libraryFiles={studentLibraryFiles}
       />
 
       {/* Notificação Toast */}
@@ -736,6 +768,7 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         setIsChatOpen={setIsChatOpen} teacher={teacher}
         myMessages={myMessages} chatInput={chatInput}
         setChatInput={setChatInput} onSendMessage={onSendMessage}
+        libraryFiles={studentLibraryFiles}
       />
     </div>
   );

@@ -220,12 +220,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         <div>
           <h1 className="text-3xl font-extrabold text-foreground tracking-tight flex items-center gap-2">
             <FolderOpen className="w-8 h-8 text-primary" />
-            <span>{isReadOnly ? 'Biblioteca de Arquivos' : 'Arquivos e Biblioteca'}</span>
+            <span>Arquivos</span>
           </h1>
           <p className="text-sm text-muted mt-1">
             {isReadOnly
-              ? 'Consulta de materiais didáticos e repositório do Google Drive de Sociologia. (Modo Somente Leitura)'
-              : 'Gerencie o Google Drive e o compartilhamento granular de materiais para turmas e 2º Professor'}
+              ? 'Materiais didáticos, apostilas e conteúdos disponíveis para estudo.'
+              : 'Gerencie e compartilhe materiais didáticos para as turmas e para o 2º Professor.'}
           </p>
         </div>
 
@@ -264,26 +264,28 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             />
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-            <TurmaFilterDropdown
-              turmasList={turmasList}
-              selectedTurmas={selectedTurmas}
-              onChange={setSelectedTurmas}
-              students={students}
-              totalCountLabel="alunos"
-            />
+          {!isReadOnly && (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+              <TurmaFilterDropdown
+                turmasList={turmasList}
+                selectedTurmas={selectedTurmas}
+                onChange={setSelectedTurmas}
+                students={students}
+                totalCountLabel="alunos"
+              />
 
-            <select
-              value={audienceFilter}
-              onChange={(e) => setAudienceFilter(e.target.value as any)}
-              className="px-3.5 py-2.5 rounded-2xl bg-background border border-border text-xs font-bold text-foreground focus:outline-none focus:border-primary cursor-pointer"
-            >
-              <option value="all">Todos os Públicos ({files.length})</option>
-              <option value="all_turmas">🌐 Todas as Turmas</option>
-              <option value="second_teacher">🤝 Somente 2º Professor</option>
-              <option value="specific_turmas">🎯 Turmas Específicas</option>
-            </select>
-          </div>
+              <select
+                value={audienceFilter}
+                onChange={(e) => setAudienceFilter(e.target.value as any)}
+                className="px-3.5 py-2.5 rounded-2xl bg-background border border-border text-xs font-bold text-foreground focus:outline-none focus:border-primary cursor-pointer"
+              >
+                <option value="all">Todos os Públicos ({files.length})</option>
+                <option value="all_turmas">🌐 Todas as Turmas</option>
+                <option value="second_teacher">🤝 Somente 2º Professor</option>
+                <option value="specific_turmas">🎯 Turmas Específicas</option>
+              </select>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-between text-[11px] text-muted px-1">
@@ -445,107 +447,6 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           </form>
         </div>
       )}
-
-      {/* CARD CONFIGURAÇÃO DO REPOSITÓRIO DO GOOGLE DRIVE */}
-      <div className="glass-panel p-6 rounded-3xl border border-primary/40 bg-gradient-to-br from-surface via-surface to-background space-y-4 shadow-xl relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-primary/15 border border-primary/30 text-primary flex items-center justify-center shrink-0 shadow-lg shadow-[#4ade80]/10">
-              <HardDrive className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-foreground leading-tight flex items-center gap-2">
-                <span>Repositório Geral do Google Drive</span>
-                {folderInput.trim() ? (
-                  <span className="text-[10px] font-extrabold bg-primary/20 text-primary border border-primary/40 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                    Conectado
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-extrabold bg-amber-100 text-amber-600 border border-amber-200 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                    Não Configurado
-                  </span>
-                )}
-              </h2>
-              <p className="text-xs text-muted mt-0.5">
-                Pasta principal do Google Drive compartilhada com as turmas e com o 2º Professor
-              </p>
-            </div>
-          </div>
-          <span className="px-3 py-1 bg-primary/20 text-primary border border-primary/40 rounded-full text-[11px] font-bold tracking-wide uppercase shrink-0 w-fit">
-            Drive Integrado
-          </span>
-        </div>
-
-        {isReadOnly ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-            <div className="text-xs text-muted">
-              {folderInput.trim() ? (
-                <span>Repositório gerenciado pelo professor titular regente.</span>
-              ) : (
-                <span>Nenhum repositório de pasta do Google Drive configurado até o momento.</span>
-              )}
-            </div>
-            {folderInput.trim() && (
-              <a
-                href={folderInput.trim()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="py-2.5 px-5 bg-primary hover:bg-primary-hover text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95"
-              >
-                <ExternalLink className="w-4 h-4" />
-                <span>Acessar Repositório no Drive</span>
-              </a>
-            )}
-          </div>
-        ) : (
-          <form onSubmit={handleSaveDriveFolder} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                <Link2 className="w-3.5 h-3.5 text-primary" />
-                <span>Link da Pasta Principal do Google Drive</span>
-              </label>
-              <input
-                type="url"
-                value={folderInput}
-                onChange={(e) => setFolderInput(e.target.value)}
-                placeholder="https://drive.google.com/drive/folders/sua-pasta-no-drive"
-                className="w-full bg-background border border-white/15 rounded-2xl px-4 py-3 text-sm text-foreground placeholder-[#869486] focus:outline-none focus:border-primary transition-all font-mono"
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-              <div className="flex items-center gap-2">
-                <button
-                  type="submit"
-                  className="py-3 px-6 bg-primary hover:bg-primary-hover text-white font-black rounded-xl text-xs transition-all shadow-lg shadow-primary/20 flex items-center gap-2 cursor-pointer active:scale-95"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>Salvar Repositório do Drive</span>
-                </button>
-
-                {folderInput.trim() && (
-                  <a
-                    href={folderInput.trim()}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="py-3 px-5 bg-surface-hover hover:bg-white/20 text-foreground font-bold rounded-xl text-xs transition-all border border-border flex items-center gap-2 cursor-pointer active:scale-95"
-                  >
-                    <ExternalLink className="w-4 h-4 text-primary" />
-                    <span>Acessar Repositório</span>
-                  </a>
-                )}
-              </div>
-
-              {savedSuccess && (
-                <div className="flex items-center gap-2 text-primary text-xs font-bold animate-fadeIn">
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Repositório do Google Drive salvo com sucesso!</span>
-                </div>
-              )}
-            </div>
-          </form>
-        )}
-      </div>
 
       {/* LISTA DE ARQUIVOS COMPARTILHADOS */}
       <div className="space-y-3 pt-2">
