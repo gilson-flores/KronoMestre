@@ -3,6 +3,8 @@
 import { useState, useCallback } from 'react';
 import { ChatMessage, StudentUser, TeacherUser, Activity } from '@/lib/types';
 
+export const BOBY_AVATAR = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNTYgMjU2Ij4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iYm9iQmciIHgxPSIwIiB5MT0iMCIgeDI9IjI1NiIgeTI9IjI1NiI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMwZjE3MmEiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMWUzYThhIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJib2JCb2R5IiB4MT0iMCIgeTE9IjQwIiB4Mj0iMCIgeTI9IjIyMCI+CiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNmOGZhZmMiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjY2JkNWUxIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KICA8cmVjdCB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiIgcng9IjY0IiBmaWxsPSJ1cmwoI2JvYkJnKSIvPgogIDxsaW5lIHgxPSIxMjgiIHkxPSIyOCIgeDI9IjEyOCIgeTI9IjU4IiBzdHJva2U9IiMzOGJkZjgiIHN0cm9rZS13aWR0aD0iOCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CiAgPGNpcmNsZSBjeD0iMTI4IiBjeT0iMjQiIHI9IjEyIiBmaWxsPSIjMjJkM2VlIi8+CiAgPHJlY3QgeD0iMzYiIHk9IjEwNiIgd2lkdGg9IjE2IiBoZWlnaHQ9IjQ0IiByeD0iOCIgZmlsbD0iIzM4YmRmOCIvPgogIDxyZWN0IHg9IjIwNCIgeT0iMTA2IiB3aWR0aD0iMTYiIGhlaWdodD0iNDQiIHJ4PSI4IiBmaWxsPSIjMzhiZGY4Ii8+CiAgPHJlY3QgeD0iNTIiIHk9IjU4IiB3aWR0aD0iMTUyIiBoZWlnaHQ9IjE0MCIgcng9IjQyIiBmaWxsPSJ1cmwoI2JvYkJvZHkpIiBzdHJva2U9IiMzOGJkZjgiIHN0cm9rZS13aWR0aD0iNiIvPgogIDxyZWN0IHg9IjcwIiB5PSI4MiIgd2lkdGg9IjExNiIgaGVpZ2h0PSI2OCIgcng9IjI0IiBmaWxsPSIjMGYxNzJhIiBzdHJva2U9IiMwMjg0YzciIHN0cm9rZS13aWR0aD0iNCIvPgogIDxjaXJjbGUgY3g9IjEwMiIgY3k9IjExNiIgcj0iMTIiIGZpbGw9IiMyMmQzZWUiLz4KICA8Y2lyY2xlIGN4PSIxMDYiIGN5PSIxMTIiIHI9IjQiIGZpbGw9IiNmZmZmZmYiLz4KICA8Y2lyY2xlIGN4PSIxNTQiIGN5PSIxMTYiIHI9IjEyIiBmaWxsPSIjMjJkM2VlIi8+CiAgPGNpcmNsZSBjeD0iMTU4IiBjeT0iMTEyIiByPSI0IiBmaWxsPSIjZmZmZmZmIi8+CiAgPHBhdGggZD0iTSAxMDIgMTcwIFEgMTI4IDE4OCAxNTQgMTcwIiBmaWxsPSJub25lIiBzdHJva2U9IiMwMjg0YzciIHN0cm9rZS13aWR0aD0iNyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CiAgPGNpcmNsZSBjeD0iODQiIGN5PSIxNjgiIHI9IjYiIGZpbGw9IiMzOGJkZjgiIG9wYWNpdHk9IjAuNiIvPgogIDxjaXJjbGUgY3g9IjE3MiIgY3k9IjE2OCIgcj0iNiIgZmlsbD0iIzM4YmRmOCIgb3BhY2l0eT0iMC42Ii8+Cjwvc3ZnPg==';
+
 export const mergeChatMessage = (
   prev: ChatMessage[],
   incoming: ChatMessage
@@ -162,9 +164,9 @@ export function useChatMessaging(
                 id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
                 threadId: msgData.threadId,
                 senderId: teacher.id || 'teacher-1',
-                senderName: data.teacherName || `Boby Sociólogo 🤖 (${cleanTeacherName})`,
+                senderName: data.teacherName || 'Bob 🤖 (Agente de Atendimento)',
                 senderRole: 'teacher',
-                senderAvatar: teacher.avatarUrl,
+                senderAvatar: BOBY_AVATAR,
                 recipientId: msgData.senderId,
                 recipientName: msgData.senderName,
                 content: data.reply,

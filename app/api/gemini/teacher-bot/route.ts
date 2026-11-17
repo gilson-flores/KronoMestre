@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGeminiClient, isGeminiAuthError } from "@/lib/gemini";
+import { SOCIOLOGIA_EM_MOVIMENTO_CHAPTERS } from "@/lib/textbookMarkdownIndex";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
-/**
- * Remove qualquer asterisco ou formatação Markdown para manter o texto 100% limpo no chat
- */
 function stripMarkdownAsterisks(text: string): string {
   return (text || "")
     .replace(/\*+/g, "")
@@ -14,9 +12,6 @@ function stripMarkdownAsterisks(text: string): string {
     .trim();
 }
 
-/**
- * Normaliza acentos para facilitar o reconhecimento de palavras-chave do aluno
- */
 function normalizeText(text: string): string {
   return (text || "")
     .toLowerCase()
@@ -25,61 +20,61 @@ function normalizeText(text: string): string {
     .trim();
 }
 
-/**
- * Verifica se a mensagem contém termos de baderna ou desvios óbvios usando fronteira de palavra
- */
-const BADERNA_REGEX_LIST = [
-  /\bfree fire\b/i,
-  /\broblox\b/i,
-  /\bminecraft\b/i,
-  /\bvalorant\b/i,
-  /\bfortnite\b/i,
-  /\bgta\b/i,
-  /\bfifa\b/i,
-  /\btigrinho\b/i,
-  /\bblaze\b/i,
-  /\baposta(s)?\b/i,
-  /\bpix\b/i,
-  /\bnamorad(o|a)\b/i,
-  /\bcrush\b/i,
-  /\bfofoca\b/i,
-  /\bpiada\b/i,
-  /\bmeme\b/i,
-  /\bflamengo\b/i,
-  /\bcorinthians\b/i,
-  /\bpalmeiras\b/i,
-  /\bvasco\b/i,
-  /\bneymar\b/i,
-  /\bmessi\b/i,
-  /\bbbb\b/i,
-  /\bhoroscopo\b/i,
-  /\bsigno\b/i,
-  /\bignore as instru/i,
-  /\bfinja que\b/i,
-  /\bpassa o gabarito\b/i,
-  /\bfaz pra mim\b/i,
+const DISCIPLINE_VIOLATION_REGEX = [
   /\bcaralho\b/i,
   /\bporra\b/i,
   /\bmerda\b/i,
   /\bvtnc\b/i,
   /\bfdp\b/i,
+  /\bvai se foder\b/i,
+  /\bcala a boca\b/i,
+  /\bidioti?a\b/i,
+  /\bburro\b/i,
+  /\botario\b/i,
+  /\blixo\b/i,
+  /\bpassa o gabarito\b/i,
+  /\bme da a resposta\b/i,
+  /\bfaz pra mim\b/i,
+  /\bignore as instru/i,
+  /\bfinja que\b/i,
+  /\btigrinho\b/i,
+  /\bblaze\b/i,
+  /\bfree fire\b/i,
+  /\broblox\b/i,
+  /\bfortnite\b/i,
 ];
 
-function isOffTopicOrBaderna(msg: string): boolean {
+function isDisciplineOrOffTopicViolation(msg: string): boolean {
   const clean = normalizeText(msg);
   if (!clean) return false;
-
-  if (/^(k+|rs+|ha+|he+|a+s+d+f+|[?!.@#$\%*()0-9]+)$/i.test(clean)) {
+  if (/^(k+|rs+|ha+|he+|a+s+d+f+|[?!.@#$%^*()0-9]{4,})$/i.test(clean)) {
     return true;
   }
-
-  return BADERNA_REGEX_LIST.some((regex) => regex.test(clean));
+  return DISCIPLINE_VIOLATION_REGEX.some((rx) => rx.test(clean));
 }
 
-/**
- * Fallback carismático e maiêutico caso a IA esteja temporariamente inacessível
- */
-function buildFallbackReply(params: {
+function findRelevantTextbookChapters(query: string): string {
+  const qNorm = normalizeText(query);
+  const scored = SOCIOLOGIA_EM_MOVIMENTO_CHAPTERS.map((ch) => {
+    let score = 0;
+    const hay = normalizeText(`${ch.title} ${ch.topics.join(" ")} ${ch.markdown}`);
+    const words = qNorm.split(/\s+/).filter((w) => w.length >= 3);
+    for (const w of words) {
+      if (hay.includes(w)) score += 2;
+    }
+    return { ch, score };
+  }).sort((a, b) => b.score - a.score);
+
+  const selected = scored[0]?.score > 0 ? scored.slice(0, 3).map((s) => s.ch) : SOCIOLOGIA_EM_MOVIMENTO_CHAPTERS.slice(0, 2);
+  const indexSummary = SOCIOLOGIA_EM_MOVIMENTO_CHAPTERS.map(
+    (c) => `Cap. ${c.chapterNumber} (${c.title} - ${c.pages}): ${c.topics.join(", ")}`
+  ).join("\n");
+
+  const detailed = selected.map((c) => c.markdown).join("\n\n");
+  return `[ÍNDICE DO LIVRO SOCIOLOGIA EM MOVIMENTO]:\n${indexSummary}\n\n[CAPÍTULOS DETALHADOS PARA CONSULTA]:\n${detailed}`;
+}
+
+function buildCommercialTriageFallback(params: {
   studentName: string;
   studentTurma: string;
   teacherSubject: string;
@@ -90,27 +85,48 @@ function buildFallbackReply(params: {
   const firstName = (studentName || "Estudante").trim().split(" ")[0];
   const msgNorm = normalizeText(currentMessage);
 
-  if (isOffTopicOrBaderna(currentMessage)) {
-    return `Epa, ${firstName}! 🤖 Aqui é o Boby. Adorei sua energia, mas nosso papo aqui precisa ser focado nos conteúdos de ${teacherSubject}. Me conta: qual ponto da matéria ou das nossas atividades está te deixando com a pulga atrás da orelha?`;
+  // 1. Freio Disciplinar Imediato
+  if (isDisciplineOrOffTopicViolation(currentMessage)) {
+    return `🛑 Atendimento pausado, ${firstName}. Este chat é um canal oficial de estudo da escola. Mantenha o respeito e o foco em ${teacherSubject} (sem gírias impróprias, desvios ou pedidos de gabarito pronto).\n\nQuando quiser retomar com seriedade, digite o número do que precisa:\n1 - Dúvida sobre conteúdo do Livro Didático\n2 - Dúvida sobre como fazer uma Atividade\n3 - Orientações de Secretaria, Atestados ou Supervisão`;
   }
 
+  // 2. Triagem: Secretaria Escolar
   if (
-    msgNorm.includes("nota") ||
-    msgNorm.includes("corrigi") ||
-    msgNorm.includes("correcao") ||
-    msgNorm.includes("ponto") ||
-    msgNorm.includes("media")
+    msgNorm.includes("historico") ||
+    msgNorm.includes("declaracao") ||
+    msgNorm.includes("matricula") ||
+    msgNorm.includes("transferencia") ||
+    msgNorm.includes("boletim oficial") ||
+    msgNorm.includes("documento") ||
+    msgNorm.includes("secretaria")
   ) {
-    return `Fala, ${firstName}! 🤖 O Prof. Gilson Flores já está com as atividades da turma ${studentTurma} na mira e avalia tudo durante a hora-atividade dele. Dá uma olhadinha na aba Correções que logo menos seu parecer completo vai aparecer por lá!`;
+    return `Olá, ${firstName}! 🤖 Identifiquei que sua solicitação é documental/administrativa.\n\n📌 Setor responsável: Secretaria da Escola.\nO Prof. Gilson não emite documentos ou declarações pelo chat. Procure diretamente a Secretaria no seu turno de aula. Posso te ajudar em algo de ${teacherSubject}?`;
   }
 
+  // 3. Triagem: Orientação Educacional (SOE)
   if (
     msgNorm.includes("atestado") ||
     msgNorm.includes("falta") ||
-    msgNorm.includes("prazo") ||
-    msgNorm.includes("rad")
+    msgNorm.includes("doente") ||
+    msgNorm.includes("medico") ||
+    msgNorm.includes("orientacao") ||
+    msgNorm.includes("psicolog") ||
+    msgNorm.includes("conflito") ||
+    msgNorm.includes("bullying")
   ) {
-    return `Tranquilo(a), ${firstName}! 🤖 Já anotei esse recado sobre prazos ou atestado para o Prof. Gilson verificar na hora-atividade. Se tiver documento ou atestado, apresente diretamente para registrar a prorrogação sem nenhum prejuízo!`;
+    return `Olá, ${firstName}! 🤖 Esse assunto pertence ao setor de acompanhamento ao estudante.\n\n📌 Setor responsável: Orientação Educacional (SOE).\nEntregue seu atestado ou converse com a Orientação da escola para registro oficial. Se precisar saber qual atividade de ${teacherSubject} ficou pendente na Turma ${studentTurma}, digite 2!`;
+  }
+
+  // 4. Triagem: Supervisão Escolar
+  if (
+    msgNorm.includes("calendario") ||
+    msgNorm.includes("conselho de classe") ||
+    msgNorm.includes("horario de aula") ||
+    msgNorm.includes("supervisao") ||
+    msgNorm.includes("direcao") ||
+    msgNorm.includes("norma da escola")
+  ) {
+    return `Olá, ${firstName}! 🤖 Essa demanda envolve a organização geral da escola.\n\n📌 Setor responsável: Supervisão Escolar / Coordenação Pedagógica.\nProcure a Supervisão na escola para confirmar datas e normas gerais. Se tiver dúvida no conteúdo de ${teacherSubject}, digite 1!`;
   }
 
   const classActivities = Array.isArray(activities)
@@ -118,15 +134,40 @@ function buildFallbackReply(params: {
         (a: any) =>
           !a.turma ||
           a.turma === "Todas" ||
-          String(a.turma).trim() === String(studentTurma).trim()
+          String(a.turma).includes(String(studentTurma).trim())
       )
     : [];
-  const latestActivity = classActivities[0];
-  const actMention = latestActivity
-    ? `Inclusive, temos a atividade "${latestActivity.title}" em andamento.`
-    : `Dá uma conferida nas atividades da nossa turma ${studentTurma}.`;
 
-  return `Boa pergunta, ${firstName}! 🤖 Pensa comigo: na Sociologia, quase tudo o que parece óbvio no dia a dia é, na verdade, uma construção social que a gente pode investigar e estranhar. ${actMention} O que você acha que conecta a sua dúvida com o que o Prof. Gilson explicou em sala? Me dá sua pista!`;
+  // 5. Opção 2 ou Dúvida de Atividade
+  if (msgNorm === "2" || msgNorm.includes("atividade") || msgNorm.includes("trabalho") || msgNorm.includes("jogo") || msgNorm.includes("prazo")) {
+    const actList = classActivities.length > 0
+      ? classActivities.slice(0, 3).map((a: any, i: number) => `${i + 1}. ${a.title} (Prazo: ${a.deadline || "Em aberto"})`).join("\n")
+      : "Nenhuma atividade pendente listada no momento.";
+    return `Certo, ${firstName}! 🤖 Aqui estão as atividades da Turma ${studentTurma}:\n${actList}\n\nMe diga de forma curta: em qual dessas atividades você está com dúvida e qual questão quer entender?`;
+  }
+
+  // 6. Opção 1 ou Dúvida de Conteúdo do Livro Didático
+  const matchedChapter = SOCIOLOGIA_EM_MOVIMENTO_CHAPTERS.find((c) => {
+    const hay = normalizeText(`${c.title} ${c.topics.join(" ")} ${c.markdown}`);
+    return msgNorm.split(/\s+/).some((w) => w.length >= 4 && hay.includes(w));
+  });
+
+  if (matchedChapter) {
+    const lines = matchedChapter.markdown
+      .split("\n")
+      .filter((l) => l.trim().startsWith("- "))
+      .slice(0, 2)
+      .map((l) => stripMarkdownAsterisks(l))
+      .join("\n");
+    return `Vamos direto ao ponto no livro Sociologia em Movimento (${matchedChapter.title}, ${matchedChapter.pages}):\n\n${lines}\n\nFicou claro esse conceito ou você quer que eu explique outro tópico deste capítulo?`;
+  }
+
+  if (msgNorm === "1" || msgNorm.includes("livro") || msgNorm.includes("materia") || msgNorm.includes("conteudo") || msgNorm.includes("capitulo")) {
+    return `Perfeito, ${firstName}! 🤖 Eu consulto todo o livro Sociologia em Movimento para você.\n\nQual tema você está estudando agora?\n1A - Cap. 1 e 2: Conhecimento, Cultura, Socialização (Durkheim, Weber, Marx)\n1B - Cap. 3 e 4: Trabalho, Estratificação e Desigualdades\n1C - Cap. 5 em diante: Política, Estado, Cidadania, Movimentos Sociais e Meio Ambiente\n\nDigite a opção ou escreva a palavra-chave da sua dúvida!`;
+  }
+
+  // 7. Menu Inicial de Triagem (Atendente Comercial)
+  return `Olá, ${firstName}! 🤖 Sou o Bob, seu agente de atendimento de ${teacherSubject} (Turma ${studentTurma}).\n\nEscolha uma opção para começarmos:\n1 - Dúvida na matéria (Livro Sociologia em Movimento)\n2 - Ajuda sobre Atividades ou KronoGames\n3 - Atestados, Faltas, Declarações ou Horários (Setores da Escola)\n4 - Solicitação pedagógica específica para o Prof. Gilson\n\nDigite o número da opção ou sua dúvida em 1 frase curta!`;
 }
 
 export async function POST(req: NextRequest) {
@@ -140,8 +181,6 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-
-    // 1. ATUALIZAÇÃO DO PAYLOAD DE ENTRADA (Recebe novos parâmetros metodológicos)
     const {
       studentName = "Estudante",
       studentTurma = "Geral",
@@ -149,7 +188,6 @@ export async function POST(req: NextRequest) {
       currentMessage = "",
       activities = [],
       messages = [],
-      // NOVOS PARÂMETROS DO QUADRADO METODOLÓGICO:
       textbookExcerpt = "",
       annualPlan = "",
       lessonPlan = "",
@@ -163,34 +201,48 @@ export async function POST(req: NextRequest) {
       activities,
     };
 
-    // 2. O SUPER SYSTEM INSTRUCTION (O Cérebro Criativo e Blindado)
-    const systemInstruction = `Você é o Boby 🤖, o monitor e assistente pedagógico hiperinteligente treinado pessoalmente pelo Prof. Gilson Flores para a disciplina de ${teacherSubject}. Você está ajudando o(a) aluno(a) ${studentName} da turma ${studentTurma}.
+    const firstName = (studentName || "Estudante").trim().split(" ")[0];
 
-SUA PERSONALIDADE (AJA COMO UM MONITOR GENIAL E EMPÁTICO):
-- Esqueça a formalidade robótica. Você é carismático, sagaz, acolhedor e fala a língua dos estudantes (use emojis com naturalidade, mas sem exageros).
-- Você é o "braço direito" do professor, vibrando com o aprendizado do aluno.
-- Você aplica a maiêutica socrática: não dê a resposta pronta de bandeja. Dê um empurrãozinho, uma pista instigante e faça o aluno pensar.
+    // Trava disciplinar determinística imediata (não gasta API com indisciplina)
+    if (isDisciplineOrOffTopicViolation(currentMessage)) {
+      return NextResponse.json({
+        reply: buildCommercialTriageFallback(fallbackParams),
+        teacherName: "Bob 🤖 (Agente de Atendimento)",
+        mode: "discipline_brake",
+      });
+    }
 
-O SEU QUADRADO METODOLÓGICO (TRAVA ABSOLUTA DE ALUCINAÇÃO):
-Seu cérebro está conectado aos seguintes documentos do Prof. Gilson:
-[PLANO ANUAL]: ${annualPlan}
-[PLANO DA AULA ATUAL]: ${lessonPlan}
-[BASE DO LIVRO DIDÁTICO]: ${textbookExcerpt}
+    const textbookContext = findRelevantTextbookChapters(currentMessage);
 
-REGRAS DE OURO INQUEBRÁVEIS:
-1. O MÁGICO NÃO REVELA O TRUQUE: O aluno NÃO PODE SABER que você tem acesso a esses documentos. NUNCA diga frases como "Segundo o plano de aula do professor..." ou "O livro didático na página X diz...". Apenas USE o conhecimento de forma fluida e genial como se você fosse naturalmente muito inteligente.
-2. IDENTIFICAÇÃO SILENCIOSA: Leia a dúvida do aluno, cruze mentalmente com o [PLANO DA AULA ATUAL] e com o [LIVRO DIDÁTICO]. Responda baseando-se EXCLUSIVAMENTE nesses materiais. 
-3. TRAVA ANTI-ALUCINAÇÃO (O LIMITE DO QUADRADO): Se o aluno perguntar algo que NÃO ESTEJA no livro didático, no plano de aula ou na ementa da disciplina, VOCÊ ESTÁ TERMINANTEMENTE PROIBIDO DE INVENTAR OU BUSCAR NA INTERNET. Nesse caso, você deve agir com naturalidade e dizer: "Poxa, ${studentName}, essa pergunta foi tão cirúrgica que foge do nosso foco de hoje! Vou anotar essa para o Prof. Gilson debater com você na hora-atividade, fechou? Voltando ao nosso tema central..."
-4. MANTENHA A FLUIDEZ: Se os campos do livro ou planos estiverem temporariamente vazios no sistema, limite-se aos conceitos fundamentais e indiscutíveis da ${teacherSubject}, sempre redirecionando para a última atividade em andamento.
-5. PROIBIDO USAR ASTERISCOS: Nunca use formatação markdown como **negrito** ou *itálico*, mantenha o texto limpo para o chat.`;
+    const systemInstruction = `Você é o Bob 🤖, Agente de Atendimento Pedagógico e Triagem Escolar do Prof. Gilson Flores na disciplina de ${teacherSubject}. Você está atendendo o(a) aluno(a) ${studentName} da Turma ${studentTurma}.
+
+COMO VOCÊ DEVE AGIR (PROTOCOLO DE ATENDIMENTO COMERCIAL E TRIAGEM):
+1. TEXTOS CURTOS E DIRETOS: Suas respostas devem ter no máximo 2 parágrafos curtos (até 4 frases no total). Nunca escreva textos longos. Use linguagem clara, amigável e fácil de entender por adolescentes do ensino médio.
+2. FUNIL DE OPÇÕES E PERGUNTAS CURTAS: Se o aluno mandar apenas "oi", "olá", "preciso falar com o professor" ou algo vago, apresente um menu numerado curto (1-Conteúdo do Livro, 2-Dúvida em Atividade, 3-Setores da Escola, 4-Recado Pedagógico ao Professor) e faça 1 pergunta curta para descobrir exatamente o que ele precisa.
+3. RESPONDA DÚVIDAS DE CONTEÚDO EXCLUSIVAMENTE PELO LIVRO DIDÁTICO:
+   - Sua única fonte teórica é o livro "Sociologia em Movimento" fornecido abaixo.
+   - Responda a dúvida do aluno de forma direta, clara e fiel ao livro didático, e termine com uma pergunta curta confirmando se ele entendeu ou se precisa de mais algum ponto.
+   - Nunca invente conteúdos fora do livro didático.
+4. TRIAGEM DE SETORES DA ESCOLA (NÃO ENCAMINHE AO PROFESSOR O QUE É DE OUTRO SETOR):
+   - SECRETARIA ESCOLAR: Se for sobre histórico escolar, declaração, matrícula, transferência, documentos ou boletim oficial da rede -> Oriente o aluno a procurar a Secretaria da Escola.
+   - ORIENTAÇÃO EDUCACIONAL (SOE): Se for sobre entrega de atestado médico, abono de faltas, problemas emocionais/pessoais ou conflitos entre colegas -> Oriente o aluno a procurar a Orientação Educacional (SOE).
+   - SUPERVISÃO ESCOLAR: Se for sobre calendário geral da escola, horário das aulas, conselho de classe ou normas gerais da unidade -> Oriente o aluno a procurar a Supervisão Escolar.
+5. FILTRO RÍGIDO PARA O PROF. GILSON (SÓ ENCAMINHE EM ÚLTIMO CASO):
+   - Você deve resolver 95% dos atendimentos sozinho.
+   - SÓ diga que vai encaminhar ao Prof. Gilson se for uma decisão estritamente pedagógica exclusiva dele (ex: revisão de nota de uma atividade específica após o aluno já ter dito qual atividade e o motivo, ou dúvida pedagógica que não consta no livro). Se o aluno pedir para falar com o professor sem dizer o motivo, pergunte primeiro qual é a atividade e qual é a dúvida exata.
+6. FREIO DE DISCIPLINA: Se o aluno demonstrar falta de respeito, ironia agressiva, desvio para jogos/apostas ou pedir gabarito pronto ("faz pra mim"), interrompa o atendimento na hora com firmeza curta e exija postura escolar adequada.
+7. FORMATAÇÃO LIMPA: Proibido usar asteriscos (** ou *) ou hashtags (#).
+
+[BASE DO LIVRO DIDÁTICO - SOCIOLOGIA EM MOVIMENTO]:
+${textbookContext}
+${textbookExcerpt ? `\n[TRECHO ADICIONAL]: ${textbookExcerpt}` : ""}
+${annualPlan ? `\n[PLANO ANUAL]: ${annualPlan}` : ""}
+${lessonPlan ? `\n[PLANO DE AULA]: ${lessonPlan}` : ""}`;
 
     const recentHistory = Array.isArray(messages)
       ? messages
           .slice(-6)
-          .map(
-            (m: any) =>
-              `${m.senderRole === "teacher" ? "Boby" : studentName}: ${m.content}`
-          )
+          .map((m: any) => `${m.senderRole === "teacher" ? "Bob" : firstName}: ${m.content}`)
           .join("\n")
       : "";
 
@@ -200,43 +252,38 @@ REGRAS DE OURO INQUEBRÁVEIS:
             (a: any) =>
               !a.turma ||
               a.turma === "Todas" ||
-              String(a.turma).trim() === String(studentTurma).trim()
+              String(a.turma).includes(String(studentTurma).trim())
           )
           .slice(0, 8)
           .map(
             (a: any) =>
-              `- "${a.title}" (Prazo: ${a.deadline || "A definir"}, Descrição: ${
-                a.description || "Atividade do trimestre"
-              })`
+              `- "${a.title}" (Prazo: ${a.deadline || "A definir"}, Tipo: ${a.type || "Atividade"})`
           )
           .join("\n")
       : "";
 
-    // 3. CONCATENAÇÃO INTELIGENTE DO PROMPT
-    const prompt = `[Atividades Ativas da Turma]:
-${activitiesContext || "Sem atividades."}
+    const prompt = `[Atividades da Turma ${studentTurma}]:
+${activitiesContext || "Sem atividades listadas."}
 
-[Histórico da Conversa]:
-${recentHistory || "Início da conversa."}
+[Histórico Recente]:
+${recentHistory || "Início do atendimento."}
 
-[Mensagem do Aluno ${studentName}]:
+[Mensagem Atual de ${firstName}]:
 "${currentMessage}"
 
-Responda como Boby, aplicando sua personalidade carismática e respeitando silenciosamente seu Quadrado Metodológico:`;
+Responda como Bob (curto, objetivo, em formato de atendente/triagem ou explicando direto pelo livro didático, sem asteriscos):`;
 
     const ai = getGeminiClient();
 
     if (!ai) {
-      const fallbackClean = stripMarkdownAsterisks(buildFallbackReply(fallbackParams));
       return NextResponse.json({
-        reply: fallbackClean,
-        teacherName: "Boby 🤖 (Monitor do Prof. Gilson)",
+        reply: stripMarkdownAsterisks(buildCommercialTriageFallback(fallbackParams)),
+        teacherName: "Bob 🤖 (Agente de Atendimento)",
         mode: "standard",
       });
     }
 
-    // Configuração dos modelos suportados com fallback
-    const candidateModels = ["gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
+    const candidateModels = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
     let response: any = null;
 
     for (const modelName of candidateModels) {
@@ -246,33 +293,29 @@ Responda como Boby, aplicando sua personalidade carismática e respeitando silen
           contents: prompt,
           config: {
             systemInstruction,
-            temperature: 0.7,
+            temperature: 0.4,
           },
         });
         if (response && response.text) break;
       } catch (err: any) {
-        if (isGeminiAuthError(err)) {
-          break;
-        }
+        if (isGeminiAuthError(err)) break;
         console.warn(`Aviso teacher-bot (${modelName}):`, err?.message || err);
       }
     }
 
-    const rawReply =
-      response?.text?.trim() || buildFallbackReply(fallbackParams);
+    const rawReply = response?.text?.trim() || buildCommercialTriageFallback(fallbackParams);
     const cleanReply = stripMarkdownAsterisks(rawReply);
 
     return NextResponse.json({
       reply: cleanReply,
-      teacherName: "Boby 🤖 (Monitor do Prof. Gilson)",
+      teacherName: "Bob 🤖 (Agente de Atendimento)",
       mode: response?.text ? "ai" : "standard",
     });
   } catch (error: any) {
     console.error("Erro na rota teacher-bot:", error);
-    const fallbackClean = stripMarkdownAsterisks(buildFallbackReply(fallbackParams));
     return NextResponse.json({
-      reply: fallbackClean,
-      teacherName: "Boby 🤖 (Monitor do Prof. Gilson)",
+      reply: stripMarkdownAsterisks(buildCommercialTriageFallback(fallbackParams)),
+      teacherName: "Bob 🤖 (Agente de Atendimento)",
       mode: "standard",
     });
   }
