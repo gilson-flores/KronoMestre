@@ -240,8 +240,8 @@ export function useActivitiesManager({
             );
             return {
               ...sub,
-              studentName: (sub.studentName && sub.studentName.trim()) || matchedSt?.fullName || (matchedSt as any)?.name || sub.studentName,
-              avatarUrl: sub.avatarUrl || matchedSt?.avatarUrl,
+              studentName: (sub.studentName && sub.studentName.trim()) || matchedSt?.fullName || (matchedSt as any)?.name || sub.studentName || '',
+              avatarUrl: sub.avatarUrl || matchedSt?.avatarUrl || '',
               essayScore,
               teacherFeedback: feedback,
               status,
@@ -365,7 +365,7 @@ export function useActivitiesManager({
                 targetSt.fullName ||
                 (targetSt as any).name ||
                 updatedSubmissions[existingIndex].studentName,
-              avatarUrl: updatedSubmissions[existingIndex].avatarUrl || targetSt.avatarUrl,
+              avatarUrl: updatedSubmissions[existingIndex].avatarUrl || targetSt.avatarUrl || '',
               essayAnswer,
               objectiveScore,
               maxObjectiveScore,
