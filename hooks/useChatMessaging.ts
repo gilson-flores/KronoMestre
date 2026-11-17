@@ -146,7 +146,7 @@ export function useChatMessaging(
               teacherName: cleanTeacherName,
               teacherSubject: teacher.subject || 'Sociologia',
               schoolName: teacher.school || "EEB Prof. Jandira D'Ávila",
-              messages: [...chatMessages, newMsg],
+              messages: [...chatMessages.filter((m) => m.threadId === msgData.threadId || m.senderId === msgData.senderId || m.recipientId === msgData.senderId), newMsg],
               activities: activities,
               currentMessage: msgData.content,
             }),
