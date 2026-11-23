@@ -709,3 +709,119 @@ export function isActivityKronoGame(act?: Activity | null): boolean {
       Boolean(act.gameData)
   );
 }
+
+
+export interface ObjectiveRecalculationResult {
+  updatedActivity: Activity;
+  totalSubmissions: number;
+  recalculatedCount: number;
+  changedCount: number;
+  skippedWithoutAnswersCount: number;
+}
+
+export function recalculateActivityObjectiveSubmissions(
+  activity: Activity,
+  targetStudentId?: string
+): ObjectiveRecalculationResult {
+  const rawQuestions: any[] = Array.isArray(activity.questions) ? activity.questions : [];
+  const objQuestions = rawQuestions.filter(
+    (q: any) => q.type === 'multiple_choice' || (q.type !== 'essay' && Array.isArray(q.options))
+  );
+
+  const submissions = Array.isArray(activity.submissions) ? activity.submissions : [];
+  if (objQuestions.length === 0 || submissions.length === 0) {
+    return {
+      updatedActivity: activity,
+      totalSubmissions: submissions.length,
+      recalculatedCount: 0,
+      changedCount: 0,
+      skippedWithoutAnswersCount: submissions.length,
+    };
+  }
+
+  const hasExplicitPoints = objQuestions.some(
+    (q: any) => q.points !== undefined && q.points !== null && Number(q.points) > 0
+  );
+  const distribution = getActivityGradeDistribution(activity as any);
+
+  let recalculatedCount = 0;
+  let changedCount = 0;
+  let skippedWithoutAnswersCount = 0;
+
+  const updatedSubmissions = submissions.map((sub) => {
+    if (targetStudentId && sub.studentId !== targetStudentId) {
+      return sub;
+    }
+
+    const answersMap = sub.selectedObjectiveAnswers;
+    const hasSavedAnswers =
+      answersMap &&
+      typeof answersMap === 'object' &&
+      !Array.isArray(answersMap) &&
+      Object.keys(answersMap).length > 0;
+
+    if (!hasSavedAnswers) {
+      skippedWithoutAnswersCount++;
+      return sub;
+    }
+
+    let earnedScore = 0;
+    let computedMaxObj = 0;
+
+    if (hasExplicitPoints) {
+      objQuestions.forEach((q: any) => {
+        const pts = Number(q.points || 1);
+        computedMaxObj += pts;
+        const chosenIdx = answersMap[q.id];
+        const correctIdx = Number(q.correctOptionIndex ?? q.correctAnswer ?? 0);
+        if (chosenIdx !== undefined && chosenIdx !== null && Number(chosenIdx) === correctIdx) {
+          earnedScore += pts;
+        }
+      });
+    } else {
+      // Respeita a escala já adotada na submissão (ex: 1 pt/questão do portal ou maxObjectiveGrade)
+      const targetMax =
+        Number(sub.maxObjectiveScore) > 0
+          ? Number(sub.maxObjectiveScore)
+          : distribution.maxObjectiveGrade > 0
+          ? distribution.maxObjectiveGrade
+          : objQuestions.length;
+      const ptsPerQuestion = targetMax / objQuestions.length;
+      computedMaxObj = targetMax;
+
+      objQuestions.forEach((q: any) => {
+        const chosenIdx = answersMap[q.id];
+        const correctIdx = Number(q.correctOptionIndex ?? q.correctAnswer ?? 0);
+        if (chosenIdx !== undefined && chosenIdx !== null && Number(chosenIdx) === correctIdx) {
+          earnedScore += ptsPerQuestion;
+        }
+      });
+    }
+
+    const nextObjectiveScore = Math.round(earnedScore * 100) / 100;
+    const nextMaxObjectiveScore = Math.round(computedMaxObj * 100) / 100;
+    const prevScore = Number(sub.objectiveScore || 0);
+
+    recalculatedCount++;
+    if (Math.abs(nextObjectiveScore - prevScore) > 0.001) {
+      changedCount++;
+    }
+
+    return {
+      ...sub,
+      objectiveScore: nextObjectiveScore,
+      maxObjectiveScore: nextMaxObjectiveScore,
+    };
+  });
+
+  return {
+    updatedActivity: {
+      ...activity,
+      submissions: updatedSubmissions,
+    },
+    totalSubmissions: targetStudentId ? 1 : submissions.length,
+    recalculatedCount,
+    changedCount,
+    skippedWithoutAnswersCount,
+  };
+}

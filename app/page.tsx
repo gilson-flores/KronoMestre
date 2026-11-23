@@ -88,15 +88,18 @@ export default function Home() {
   } | null>(null);
   const [newTeacherPassword, setNewTeacherPassword] = useState('');
 
-  const showGlobalStatus = useCallback((type: 'success' | 'error' | 'info', message: string) => {
-    if (type === 'success') {
-      scrollToTop();
-    }
-    setGlobalDbStatus({ type: type === 'info' ? 'success' : type, message });
-    setTimeout(() => {
-      setGlobalDbStatus((current) => (current?.message === message ? null : current));
-    }, 6000);
-  }, []);
+  const showGlobalStatus = useCallback(
+    (type: 'success' | 'error' | 'info', message: string, options?: { skipScroll?: boolean }) => {
+      if (type === 'success' && !options?.skipScroll) {
+        scrollToTop();
+      }
+      setGlobalDbStatus({ type: type === 'info' ? 'success' : type, message });
+      setTimeout(() => {
+        setGlobalDbStatus((current) => (current?.message === message ? null : current));
+      }, 5000);
+    },
+    []
+  );
 
   // Referências intermediárias para inicialização coordenada entre os hooks
   const studentsSetterRef = useRef<React.Dispatch<React.SetStateAction<StudentUser[]>>>(() => {});
@@ -790,7 +793,11 @@ export default function Home() {
         />
 
         {globalDbStatus && (
-          <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 pt-4">
+          <div className={
+            activeTeacherTab === 'correcoes' || activeTeacherTab === 'grading'
+              ? 'fixed bottom-5 right-5 z-50 max-w-md w-[calc(100%-2.5rem)] sm:w-auto shadow-2xl animate-fadeIn'
+              : 'max-w-7xl w-full mx-auto px-4 sm:px-6 pt-4'
+          }>
             <div
               className={`p-4 rounded-2xl text-xs font-bold flex items-center justify-between shadow-lg transition-all animate-fadeIn ${
                 globalDbStatus.type === 'success'

@@ -11,7 +11,7 @@ interface UseActivitiesManagerParams {
   students: StudentUser[];
   setStudents: React.Dispatch<React.SetStateAction<StudentUser[]>>;
   currentStudent: StudentUser | null;
-  showGlobalStatus: (type: 'success' | 'error' | 'info', msg: string) => void;
+  showGlobalStatus: (type: 'success' | 'error' | 'info', msg: string, options?: { skipScroll?: boolean }) => void;
 }
 
 export function useActivitiesManager({
@@ -25,14 +25,41 @@ export function useActivitiesManager({
   const [activities, setActivities] = useState<Activity[]>(initialActivities);
   const [selectedActivityForGrading, setSelectedActivityForGrading] = useState<Activity | null>(null);
 
-  const handleSaveEditedActivity = useCallback((updatedActivity: Activity) => {
-    setActivities((prev) => prev.map((a) => (a.id === updatedActivity.id ? updatedActivity : a)));
-    fetch('/api/activities', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedActivity),
-    }).catch((err) => console.warn('Erro ao persistir alteração da atividade:', err));
-  }, []);
+  const handleSaveEditedActivity = useCallback(
+    async (updatedActivity: Activity, options?: { silent?: boolean; skipScroll?: boolean; customMessage?: string }) => {
+      setActivities((prev) => {
+        const next = prev.map((a) => (a.id === updatedActivity.id ? updatedActivity : a));
+        if (typeof window !== 'undefined')
+          setScopedLocalStorageItem('local_activities_data', JSON.stringify(next), teacher.id);
+        return next;
+      });
+      if (selectedActivityForGrading?.id === updatedActivity.id) {
+        setSelectedActivityForGrading(updatedActivity);
+      }
+
+      try {
+        const res = await fetch('/api/activities', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedActivity),
+        });
+        if (!res.ok) throw new Error('Falha ao persistir alteração da atividade.');
+        if (!options?.silent) {
+          showGlobalStatus(
+            'success',
+            options?.customMessage || `Atividade "${updatedActivity.title}" atualizada com sucesso!`,
+            { skipScroll: options?.skipScroll ?? true }
+          );
+        }
+      } catch (err) {
+        console.warn('Erro ao persistir alteração da atividade:', err);
+        showGlobalStatus('error', 'Alteração exibida na tela, mas houve falha ao salvar na nuvem.', {
+          skipScroll: true,
+        });
+      }
+    },
+    [teacher.id, selectedActivityForGrading?.id, showGlobalStatus]
+  );
 
   const handleCreateActivity = useCallback(
     async (newAct: Activity) => {
@@ -283,7 +310,8 @@ export function useActivitiesManager({
           if (!res.ok) throw new Error('Falha ao atualizar a atividade na nuvem.');
           showGlobalStatus(
             'success',
-            'Nota e feedback sincronizados diretamente no Firebase com sucesso!'
+            'Nota e feedback sincronizados diretamente no Firebase com sucesso!',
+            { skipScroll: true }
           );
         } catch (err) {
           console.warn('Erro ao atualizar nota no Firebase:', err);

@@ -24,7 +24,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Activity, ActivityQuestion, ActivityType, StudentUser } from '@/lib/types';
-import { getTurmaLabel, canStudentAccessActivity, isStudentPNE, getOriginalTurmas } from '@/lib/studentUtils';
+import { getTurmaLabel, canStudentAccessActivity, isStudentPNE, getOriginalTurmas, recalculateActivityObjectiveSubmissions } from '@/lib/studentUtils';
 import { TurmaMultiSelect } from '@/components/TurmaMultiSelect';
 
 interface EditActivityModalProps {
@@ -74,6 +74,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   const [includedPneStudentIds, setIncludedPneStudentIds] = useState<string[]>([]);
   const [isPneDropdownOpen, setIsPneDropdownOpen] = useState<boolean>(true);
   const [questions, setQuestions] = useState<ActivityQuestion[]>([]);
+  const [recalculateObjectivesOnSave, setRecalculateObjectivesOnSave] = useState<boolean>(false);
 
   // Unlinked Parallel Recovery Exception State
   const [isUnlinkedRecoveryPopupOpen, setIsUnlinkedRecoveryPopupOpen] = useState(false);
@@ -110,6 +111,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
     setSecurityBlockPasteEssay(!!activity.securityBlockPasteEssay);
     setIncludedPneStudentIds(activity.includedPneStudentIds || []);
     setQuestions(activity.questions ? JSON.parse(JSON.stringify(activity.questions)) : []);
+    setRecalculateObjectivesOnSave(false);
   }
 
   // Filter available parent activities for subordination
@@ -156,6 +158,9 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   };
 
   const handleUpdateMCQuestion = (id: string, field: 'statement' | 'correctOptionIndex', value: any) => {
+    if (field === 'correctOptionIndex' && (activity?.submissions?.length || 0) > 0) {
+      setRecalculateObjectivesOnSave(true);
+    }
     setQuestions((prev) =>
       prev.map((q) => {
         if (q.id === id && q.type === 'multiple_choice') {
@@ -165,6 +170,19 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       })
     );
   };
+
+  const hasObjectiveQuestions = questions.some((q) => q.type === 'multiple_choice');
+  const existingSubmissionsCount = activity?.submissions?.length || 0;
+  const objectiveAnswerKeyChanged = React.useMemo(() => {
+    const origMap = new Map<string, number>();
+    (activity?.questions || []).forEach((q: any) => {
+      if (q.type === 'multiple_choice') origMap.set(q.id, Number(q.correctOptionIndex ?? 0));
+    });
+    return questions.some((q: any) => {
+      if (q.type !== 'multiple_choice') return false;
+      return origMap.has(q.id) && origMap.get(q.id) !== Number(q.correctOptionIndex ?? 0);
+    });
+  }, [activity?.questions, questions]);
 
   const handleUpdateMCOption = (questionId: string, optionIndex: number, text: string) => {
     setQuestions((prev) =>
@@ -259,7 +277,12 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       return;
     }
 
-    onSaveActivity(updatedActivity);
+    const finalActivityToSave =
+      recalculateObjectivesOnSave && hasObjectiveQuestions && existingSubmissionsCount > 0
+        ? recalculateActivityObjectiveSubmissions(updatedActivity).updatedActivity
+        : updatedActivity;
+
+    onSaveActivity(finalActivityToSave);
     onClose();
   };
 
@@ -451,7 +474,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
     );
   }
 
-  return <EditActivityModalBody {...{ onClose, availableTurmas, availableParentActivities, pneStudentsInSelectedTurmas, handleAddMultipleChoice, handleAddEssay, handleRemoveQuestion, handleUpdateMCQuestion, handleUpdateMCOption, handleUpdateEssayQuestion, handleSubmit, title, setTitle, subject, setSubject, supportMaterial, setSupportMaterial, supportLinkInput, setSupportLinkInput, selectedTurmas, setSelectedTurmas, type, setType, recoveryFromId, setRecoveryFromId, status, setStatus, deadline, setDeadline, maxGrade, setMaxGrade, allowGroupWork, setAllowGroupWork, securityFocusLock, setSecurityFocusLock, securityBlockCopyStatement, setSecurityBlockCopyStatement, securityBlockPasteEssay, setSecurityBlockPasteEssay, includedPneStudentIds, setIncludedPneStudentIds, isPneDropdownOpen, setIsPneDropdownOpen, questions }} />;
+  return <EditActivityModalBody {...{ onClose, availableTurmas, availableParentActivities, pneStudentsInSelectedTurmas, handleAddMultipleChoice, handleAddEssay, handleRemoveQuestion, handleUpdateMCQuestion, handleUpdateMCOption, handleUpdateEssayQuestion, handleSubmit, title, setTitle, subject, setSubject, supportMaterial, setSupportMaterial, supportLinkInput, setSupportLinkInput, selectedTurmas, setSelectedTurmas, type, setType, recoveryFromId, setRecoveryFromId, status, setStatus, deadline, setDeadline, maxGrade, setMaxGrade, allowGroupWork, setAllowGroupWork, securityFocusLock, setSecurityFocusLock, securityBlockCopyStatement, setSecurityBlockCopyStatement, securityBlockPasteEssay, setSecurityBlockPasteEssay, includedPneStudentIds, setIncludedPneStudentIds, isPneDropdownOpen, setIsPneDropdownOpen, questions, hasObjectiveQuestions, existingSubmissionsCount, objectiveAnswerKeyChanged, recalculateObjectivesOnSave, setRecalculateObjectivesOnSave }} />;
 };
 
 export default EditActivityModal;

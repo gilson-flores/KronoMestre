@@ -16,7 +16,7 @@ import {
   Clock
 } from 'lucide-react';
 import { Activity, StudentUser } from '@/lib/types';
-import {  getOriginalTurmas, getTurmaLabel, isActivityAdapted , getActivityStudentAndSubmissionCounts } from "@/lib/studentUtils";
+import { getOriginalTurmas, getTurmaLabel, getYearFromTurma, isActivityAdapted, getActivityStudentAndSubmissionCounts, recalculateActivityObjectiveSubmissions } from "@/lib/studentUtils";
 
 interface CorrectionsViewProps {
   onSaveActivity?: (updatedActivity: Activity) => void;
@@ -81,6 +81,14 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
   const [draftScores, setDraftScores] = useState<{ [key: string]: string }>({});
   const [draftFeedbacks, setDraftFeedbacks] = useState<{ [key: string]: string }>({});
   const [aiLoadingKey, setAiLoadingKey] = useState<string | null>(null);
+  const [localToast, setLocalToast] = useState<{ type: 'success' | 'info' | 'error'; message: string } | null>(null);
+  const triggerLocalToast = (type: 'success' | 'info' | 'error', message: string) => {
+    setLocalToast({ type, message });
+    setTimeout(() => {
+      setLocalToast((prev) => (prev?.message === message ? null : prev));
+    }, 4500);
+  };
+
   const [aiAnalysisMap, setAiAnalysisMap] = useState<Record<string, {
     suggestedScore: number;
     feedback: string;
@@ -92,7 +100,37 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
     aiUsageAnalysis: string;
     charCount: number;
     minChars: number;
+    analysisSource?: 'gemini' | 'local_fallback';
+    fallbackReason?: string;
   }>>({});
+
+  const handleReevaluateObjectives = (originalAct: Activity, targetStudentId?: string, studentName?: string) => {
+    if (!onSaveActivity) return;
+    const result = recalculateActivityObjectiveSubmissions(originalAct, targetStudentId);
+    if (result.recalculatedCount === 0) {
+      triggerLocalToast(
+        'info',
+        targetStudentId
+          ? `Nenhuma resposta objetiva gravada encontrada para ${studentName || 'este aluno'}.`
+          : 'Nenhuma entrega possui respostas objetivas individuais salvas para reavaliar.'
+      );
+      return;
+    }
+    onSaveActivity(result.updatedActivity);
+    if (targetStudentId) {
+      triggerLocalToast(
+        'success',
+        result.changedCount > 0
+          ? `Nota objetiva de ${studentName || 'aluno'} atualizada conforme o gabarito!`
+          : `Gabarito conferido para ${studentName || 'aluno'}: pontuação já estava atualizada.`
+      );
+    } else {
+      triggerLocalToast(
+        'success',
+        `Reavaliação concluída: ${result.recalculatedCount} entrega(s) verificada(s), ${result.changedCount} nota(s) objetiva(s) atualizada(s)${result.skippedWithoutAnswersCount > 0 ? ` (${result.skippedWithoutAnswersCount} sem marcação individual)` : ''}.`
+      );
+    }
+  };
 
   const handleToggleStudentRco = (originalAct: Activity, studentId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -109,17 +147,26 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
     });
   };
 
-  const handleRunAiEssayCorrection = async (act: Activity, sub: any) => {
+  const handleRunAiEssayCorrection = async (act: Activity, sub: any, studentTurma?: string) => {
     const subKey = `${act.id}_${sub.studentId}`;
     const essayText = (sub.essayAnswer || "").trim();
     if (!essayText) return;
     setAiLoadingKey(subKey);
     try {
-      const essayQuestion = (act.questions || []).find((q: any) => q.type === "essay") || (act.questions || [])[0];
-      const questionStatement = essayQuestion?.statement || act.description || act.title || "Questão dissertativa de Sociologia";
-      const keywords = (essayQuestion as any)?.keywords || (act as any).keywords || "";
-      const minChars = Number((essayQuestion as any)?.minChars || (act as any).minChars || 150);
-      const maxEssayScore = Number(sub.maxEssayScore || act.maxGrade || 10);
+      const essayQuestions = (act.questions || []).filter((q: any) => q.type === "essay");
+      const essayQuestion: any = essayQuestions[0] || (act.questions || [])[0];
+      const questionStatement =
+        essayQuestions.length > 1
+          ? essayQuestions.map((q: any, i: number) => `Questão ${i + 1}: ${q.statement || ''}`).join(' | ')
+          : essayQuestion?.statement || act.description || act.title || "Questão dissertativa de Sociologia";
+      const keywords = essayQuestions
+        .map((q: any) => q.keywords || '')
+        .filter(Boolean)
+        .join(', ') || (act as any).keywords || "";
+      const minChars = Number(
+        essayQuestion?.minCharacters || essayQuestion?.minChars || (act as any).minCharacters || (act as any).minChars || 150
+      );
+      const maxEssayScore = Number(sub.maxEssayScore > 0 ? sub.maxEssayScore : act.maxGrade || 10);
 
       const res = await fetch("/api/gemini/correct-essay", {
         method: "POST",
@@ -127,16 +174,19 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
         body: JSON.stringify({
           essayAnswer: essayText,
           questionStatement,
+          activityTitle: act.title || "",
+          activityDescription: act.description || "",
+          supportMaterial: act.supportMaterial || "",
           keywords,
-          turma: act.turma || "Ensino Médio",
+          turma: studentTurma || act.turma || "Ensino Médio",
           maxEssayScore,
           minChars,
         }),
       });
       const data = await res.json();
-      if (data) {
-        const suggested = data.suggestedScore !== undefined ? Number(data.suggestedScore) : maxEssayScore * 0.8;
-        const fb = data.feedback || "Boa argumentação sociológica.";
+      if (data && !data.error) {
+        const suggested = data.suggestedScore !== undefined ? Number(data.suggestedScore) : 0;
+        const fb = data.feedback || "";
         setDraftScores((prev) => ({ ...prev, [subKey]: String(suggested) }));
         setDraftFeedbacks((prev) => ({ ...prev, [subKey]: fb }));
         setAiAnalysisMap((prev) => ({
@@ -144,19 +194,28 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
           [subKey]: {
             suggestedScore: suggested,
             feedback: fb,
-            themeFidelity: data.themeFidelity || "Adequado ao tema proposto.",
-            keywordsCheck: data.keywordsCheck || "Conceitos avaliados.",
-            structureCheck: data.structureCheck || "Estrutura avaliada.",
-            grammarCheck: data.grammarCheck || "Norma padrão verificada.",
+            themeFidelity: data.themeFidelity || "",
+            keywordsCheck: data.keywordsCheck || "",
+            structureCheck: data.structureCheck || "",
+            grammarCheck: data.grammarCheck || "",
             aiUsagePercentage: Number(data.aiUsagePercentage ?? 0),
-            aiUsageAnalysis: data.aiUsageAnalysis || "Análise de autoria concluída.",
+            aiUsageAnalysis: data.aiUsageAnalysis || "",
             charCount: essayText.length,
             minChars,
+            analysisSource: data.analysisSource || 'gemini',
+            fallbackReason: data.fallbackReason,
           },
         }));
+        triggerLocalToast(
+          data.analysisSource === 'local_fallback' ? 'info' : 'success',
+          data.analysisSource === 'local_fallback'
+            ? 'Análise concluída via motor local (API Gemini indisponível no momento).'
+            : 'Análise pedagógica da IA concluída com base nos 4 critérios!'
+        );
       }
     } catch (err) {
       console.error("Erro na correção por IA:", err);
+      triggerLocalToast('error', 'Falha ao consultar a IA para correção dissertativa.');
     } finally {
       setAiLoadingKey(null);
     }
@@ -234,21 +293,31 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
     setDraftFeedbacks((prev) => ({ ...prev, [subKey]: val }));
   };
 
-  const handleSaveGrade = (act: Activity, studentId: string, action: 'graded' | 'returned') => {
+  const handleSaveGrade = (act: Activity, studentId: string, action: 'graded' | 'returned', existingSub?: any, studentLabel?: string) => {
     const subKey = `${act.id}_${studentId}`;
-    const rawScore = draftScores[subKey];
-    let parsedScore = parseFloat(rawScore?.replace(',', '.') || '0');
+    const rawScore = draftScores[subKey] !== undefined
+      ? draftScores[subKey]
+      : (existingSub?.essayScore !== undefined ? String(existingSub.essayScore) : '0');
+    let parsedScore = parseFloat(String(rawScore).replace(',', '.') || '0');
 
     if (action === 'graded' && (isNaN(parsedScore) || parsedScore < 0)) {
       parsedScore = 0;
     }
 
-    const feedback = draftFeedbacks[subKey] || '';
+    const feedback = draftFeedbacks[subKey] !== undefined
+      ? draftFeedbacks[subKey]
+      : (existingSub?.teacherFeedback || '');
     onUpdateSubmission(act.id, studentId, parsedScore, feedback, action);
-    
+
     setDraftScores(prev => { const next = {...prev}; delete next[subKey]; return next; });
     setDraftFeedbacks(prev => { const next = {...prev}; delete next[subKey]; return next; });
     setExpandedStudentId(null);
+    triggerLocalToast(
+      'success',
+      action === 'returned'
+        ? `Atividade devolvida para ${studentLabel || 'o aluno'} refazer.`
+        : `Nota de ${studentLabel || 'aluno'} salva com sucesso!`
+    );
   };
 
   if (isLoading) {
@@ -403,7 +472,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
           </div>
         ) : (
           filteredActivities.map((originalAct) => {
-            const targetStudents = selectedTurma === "Todas" ? students : students.filter(s => s.turma && s.turma.includes(selectedTurma));
+            const targetStudents = students.filter((s) => isTurmaMatchedByFilter(s.turma, selectedTurmas, turmasDisponiveis, 'student'));
             const metrics = getActivityStudentAndSubmissionCounts(originalAct, activities, targetStudents);
             const act = { ...originalAct, submissions: metrics.submissionsList, totalStudents: metrics.expectedStudentsCount };
             const subs = act.submissions || [];
@@ -481,6 +550,17 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                   </div>
 
                   <div className="shrink-0 border-t md:border-t-0 border-border pt-3 md:pt-0 mt-3 md:mt-0 flex flex-wrap items-center gap-2">
+                    {(originalAct.questions || []).some((q: any) => q.type === 'multiple_choice' || (q.type !== 'essay' && Array.isArray(q.options))) && subs.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleReevaluateObjectives(originalAct)}
+                        className="py-2 px-3.5 font-bold text-xs rounded-xl flex items-center gap-1.5 border bg-sky-500/10 hover:bg-sky-500/20 border-sky-500/35 text-sky-300 transition-all cursor-pointer active:scale-95"
+                        title="Recalcular notas objetivas de todas as entregas (já corrigidas e pendentes) com base no gabarito atual"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Reavaliar Objetivas</span>
+                      </button>
+                    )}
                     <div className="py-2 px-3.5 font-bold text-xs rounded-xl flex items-center gap-1.5 border bg-background border-border text-muted">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                       <span>
@@ -513,11 +593,28 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                         return true;
                       })
                       .sort((a, b) => {
-                        if (a.status === 'pending' && b.status !== 'pending') return -1;
-                        if (a.status !== 'pending' && b.status === 'pending') return 1;
-                        if (a.status === 'returned' && b.status === 'graded') return -1;
-                        if (a.status === 'graded' && b.status === 'returned') return 1;
-                        return 0;
+                        const stA = students.find(
+                          (s) => s.id === a.studentId || (Boolean(s.matricula) && (s.matricula === a.matricula || s.matricula === a.studentId))
+                        );
+                        const stB = students.find(
+                          (s) => s.id === b.studentId || (Boolean(s.matricula) && (s.matricula === b.matricula || s.matricula === b.studentId))
+                        );
+                        const turmaA = getTurmaLabel(stA?.turma || (a as any).turma || '');
+                        const turmaB = getTurmaLabel(stB?.turma || (b as any).turma || '');
+
+                        if (turmaA !== turmaB) {
+                          if (!turmaA) return 1;
+                          if (!turmaB) return -1;
+                          const yearA = getYearFromTurma(turmaA);
+                          const yearB = getYearFromTurma(turmaB);
+                          if (yearA !== yearB) return yearA - yearB;
+                          const cmpTurma = turmaA.localeCompare(turmaB, 'pt-BR', { numeric: true, sensitivity: 'base' });
+                          if (cmpTurma !== 0) return cmpTurma;
+                        }
+
+                        const nameA = (a.studentName && a.studentName.trim()) || stA?.fullName || (stA as any)?.name || '';
+                        const nameB = (b.studentName && b.studentName.trim()) || stB?.fullName || (stB as any)?.name || '';
+                        return nameA.localeCompare(nameB, 'pt-BR', { sensitivity: 'base' });
                       })
                       .map((sub) => {
                       const isStudentExpanded = expandedStudentId === sub.studentId;
@@ -536,6 +633,9 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                         sub.avatarUrl ||
                         matchedStudent?.avatarUrl ||
                         'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100';
+                      const resolvedStudentTurma = getTurmaLabel(
+                        matchedStudent?.turma || (sub as any).turma || ''
+                      );
                       
                       return (
                         <div key={sub.studentId} className="animate-fadeIn">
@@ -547,7 +647,12 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                             <div className="flex items-center gap-3 min-w-0">
                               <img src={resolvedAvatarUrl} alt={resolvedStudentName} className="w-10 h-10 rounded-full border border-border shrink-0 object-cover bg-slate-900" />
                               <div className="min-w-0 flex-1">
-                                <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
+                                <h4 className="text-sm font-bold text-foreground flex items-center gap-2 flex-wrap">
+                                  {resolvedStudentTurma && (
+                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-sky-500/15 text-sky-300 border border-sky-500/30 shrink-0">
+                                      Turma {resolvedStudentTurma}
+                                    </span>
+                                  )}
                                   <span className="truncate">{resolvedStudentName}</span>
                                   {sub.status === 'graded' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
                                   {sub.status === 'returned' && <RefreshCw className="w-3.5 h-3.5 text-orange-400" />}
@@ -600,12 +705,39 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                                   </div>
                                 ) : (
                                   <>
-                                    {Number(sub.maxObjectiveScore) > 0 && (
-<div className="flex flex-wrap items-center justify-between bg-[#171f33] p-3 rounded-xl border border-border gap-2">
-                                      <span className="text-xs font-bold text-muted">Nota Objetiva (Automática):</span>
-                                      <span className="text-sm font-black text-emerald-400">{sub.objectiveScore?.toFixed(1) || 0} / {sub.maxObjectiveScore?.toFixed(1) || 0} pts</span>
-                                    </div>
-)}
+                                    {(Number(sub.maxObjectiveScore) > 0 || (originalAct.questions || []).some((q: any) => q.type === 'multiple_choice')) && (
+                                      <div className="flex flex-wrap items-center justify-between bg-[#171f33] p-3 rounded-xl border border-border gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-xs font-bold text-muted">Nota Objetiva (Automática):</span>
+                                          {(() => {
+                                            const objQs = (originalAct.questions || []).filter((q: any) => q.type === 'multiple_choice');
+                                            if (!sub.selectedObjectiveAnswers || objQs.length === 0) return null;
+                                            const hits = objQs.filter((q: any) => Number(sub.selectedObjectiveAnswers?.[q.id]) === Number(q.correctOptionIndex ?? 0)).length;
+                                            return (
+                                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-background border border-border text-sky-300">
+                                                {hits}/{objQs.length} acertos no gabarito atual
+                                              </span>
+                                            );
+                                          })()}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-sm font-black text-emerald-400">
+                                            {Number(sub.objectiveScore || 0).toFixed(1)} / {Number(sub.maxObjectiveScore || 0).toFixed(1)} pts
+                                          </span>
+                                          {sub.selectedObjectiveAnswers && Object.keys(sub.selectedObjectiveAnswers).length > 0 && (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleReevaluateObjectives(originalAct, sub.studentId, resolvedStudentName)}
+                                              className="px-2.5 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/35 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-all"
+                                              title="Recalcular nota objetiva deste aluno pelo gabarito atual"
+                                            >
+                                              <RefreshCw className="w-3 h-3" />
+                                              <span>Reavaliar</span>
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
                                     
                                     <div className="bg-[#171f33] p-4 rounded-2xl border border-border space-y-3">
                                         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-3">
@@ -616,7 +748,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                                             {(() => {
                                               const charLen = (sub.essayAnswer || "").trim().length;
                                               const essayQ = (act.questions || []).find((q: any) => q.type === "essay") || (act.questions || [])[0];
-                                              const minC = Number((essayQ as any)?.minChars || (act as any).minChars || 150);
+                                              const minC = Number((essayQ as any)?.minCharacters || (essayQ as any)?.minChars || (act as any).minCharacters || (act as any).minChars || 150);
                                               const reachedMin = charLen >= minC;
                                               return (
                                                 <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-lg border ${
@@ -633,7 +765,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                                           {Boolean(sub.essayAnswer && sub.essayAnswer.trim()) && (
                                             <button
                                               type="button"
-                                              onClick={() => handleRunAiEssayCorrection(act, sub)}
+                                              onClick={() => handleRunAiEssayCorrection(act, sub, resolvedStudentTurma)}
                                               disabled={aiLoadingKey === subKey}
                                               className="px-3.5 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50 active:scale-95"
                                             >
@@ -660,6 +792,13 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                                               <div className="flex items-center gap-2">
                                                 <span className="text-xs font-black uppercase tracking-wider text-purple-300">
                                                   🤖 Laudo Pedagógico da IA
+                                                </span>
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                                                  aiAnalysisMap[subKey].analysisSource === 'local_fallback'
+                                                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                                                    : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                                }`} title={aiAnalysisMap[subKey].fallbackReason || 'Avaliação gerada pelo modelo Gemini'}>
+                                                  {aiAnalysisMap[subKey].analysisSource === 'local_fallback' ? '⚠️ Motor Local' : '⚡ Gemini IA'}
                                                 </span>
                                                 <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/30">
                                                   Nota Sugerida: {aiAnalysisMap[subKey].suggestedScore.toFixed(1)} pts
@@ -749,7 +888,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                                 </div>
                                 <div className="sm:col-span-4 flex flex-col sm:flex-row gap-2">
                                   <button
-                                    onClick={() => handleSaveGrade(act, sub.studentId, 'graded')}
+                                    onClick={() => handleSaveGrade(act, sub.studentId, 'graded', sub, resolvedStudentName)}
                                     className={`flex-1 py-2.5 px-3 font-black text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 ${
                                       sub.status === 'graded' 
                                         ? 'bg-[#171f33] hover:bg-sky-500 text-sky-400 hover:text-white border border-border hover:border-sky-400' 
@@ -759,7 +898,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                                     <CheckCircle2 className="w-4 h-4" /> {sub.status === 'graded' ? 'Atualizar Nota' : 'Aprovar Nota'}
                                   </button>
                                   <button
-                                    onClick={() => handleSaveGrade(act, sub.studentId, 'returned')}
+                                    onClick={() => handleSaveGrade(act, sub.studentId, 'returned', sub, resolvedStudentName)}
                                     className="py-2.5 px-3 bg-background hover:bg-orange-500/10 text-orange-400 border border-border hover:border-orange-500/40 font-bold text-[10px] rounded-xl transition-all flex items-center justify-center gap-1.5"
                                     title="Devolver para o aluno refazer"
                                   >
@@ -791,6 +930,36 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
           })
         )}
       </div>
+
+      {/* Pop-up Flutuante de Confirmação (sem rolar a tela para o topo) */}
+      {localToast && (
+        <div className="fixed bottom-5 right-5 z-50 max-w-sm w-[calc(100%-2.5rem)] sm:w-auto animate-fadeIn">
+          <div className={`px-4 py-3 rounded-2xl border shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 text-xs font-bold ${
+            localToast.type === 'error'
+              ? 'bg-rose-950/95 border-rose-500/50 text-rose-200'
+              : localToast.type === 'info'
+              ? 'bg-amber-950/95 border-amber-500/50 text-amber-200'
+              : 'bg-emerald-950/95 border-emerald-500/50 text-emerald-200'
+          }`}>
+            <div className="flex items-center gap-2 min-w-0">
+              {localToast.type === 'error' ? (
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+              )}
+              <span className="leading-snug">{localToast.message}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setLocalToast(null)}
+              className="text-current opacity-70 hover:opacity-100 px-1 cursor-pointer shrink-0"
+              aria-label="Fechar notificação"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

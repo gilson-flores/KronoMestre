@@ -27,7 +27,7 @@ import { getTurmaLabel, canStudentAccessActivity, isStudentPNE, getOriginalTurma
 import { TurmaMultiSelect } from '@/components/TurmaMultiSelect';
 
 export const EditActivityModalBody: React.FC<any> = (props) => {
-  const { onClose, availableTurmas, availableParentActivities, pneStudentsInSelectedTurmas, handleAddMultipleChoice, handleAddEssay, handleRemoveQuestion, handleUpdateMCQuestion, handleUpdateMCOption, handleUpdateEssayQuestion, handleSubmit, title, setTitle, subject, setSubject, supportMaterial, setSupportMaterial, supportLinkInput, setSupportLinkInput, selectedTurmas, setSelectedTurmas, type, setType, recoveryFromId, setRecoveryFromId, status, setStatus, deadline, setDeadline, maxGrade, setMaxGrade, allowGroupWork, setAllowGroupWork, securityFocusLock, setSecurityFocusLock, securityBlockCopyStatement, setSecurityBlockCopyStatement, securityBlockPasteEssay, setSecurityBlockPasteEssay, includedPneStudentIds, setIncludedPneStudentIds, isPneDropdownOpen, setIsPneDropdownOpen, questions } = props;
+  const { onClose, availableTurmas, availableParentActivities, pneStudentsInSelectedTurmas, handleAddMultipleChoice, handleAddEssay, handleRemoveQuestion, handleUpdateMCQuestion, handleUpdateMCOption, handleUpdateEssayQuestion, handleSubmit, title, setTitle, subject, setSubject, supportMaterial, setSupportMaterial, supportLinkInput, setSupportLinkInput, selectedTurmas, setSelectedTurmas, type, setType, recoveryFromId, setRecoveryFromId, status, setStatus, deadline, setDeadline, maxGrade, setMaxGrade, allowGroupWork, setAllowGroupWork, securityFocusLock, setSecurityFocusLock, securityBlockCopyStatement, setSecurityBlockCopyStatement, securityBlockPasteEssay, setSecurityBlockPasteEssay, includedPneStudentIds, setIncludedPneStudentIds, isPneDropdownOpen, setIsPneDropdownOpen, questions, hasObjectiveQuestions, existingSubmissionsCount, objectiveAnswerKeyChanged, recalculateObjectivesOnSave, setRecalculateObjectivesOnSave } = props;
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-2.5 sm:p-4 md:p-6 overflow-y-auto">
       <div className="bg-background border border-border w-full max-w-3xl rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 md:p-8 space-y-4 sm:space-y-5 my-auto max-h-[94vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar text-foreground shadow-2xl relative animate-fadeIn">
@@ -584,6 +584,34 @@ export const EditActivityModalBody: React.FC<any> = (props) => {
               </div>
             ))}
           </div>
+
+          {/* Opção de Reavaliação Automática de Questões Objetivas */}
+          {hasObjectiveQuestions && existingSubmissionsCount > 0 && (
+            <div className={`p-3.5 sm:p-4 rounded-2xl border transition-all ${
+              objectiveAnswerKeyChanged || recalculateObjectivesOnSave
+                ? 'bg-sky-500/10 border-sky-500/40'
+                : 'bg-surface border-border'
+            }`}>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(recalculateObjectivesOnSave)}
+                  onChange={(e) => setRecalculateObjectivesOnSave(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded accent-sky-500 cursor-pointer shrink-0"
+                />
+                <div className="space-y-0.5">
+                  <span className="text-xs font-bold text-foreground block">
+                    {objectiveAnswerKeyChanged
+                      ? 'Gabarito alterado: reavaliar automaticamente as notas objetivas de todas as entregas'
+                      : 'Reavaliar notas objetivas de todas as entregas ao salvar'}
+                  </span>
+                  <span className="text-[11px] text-muted block leading-relaxed">
+                    Recalcula as questões objetivas para todas as {existingSubmissionsCount} entrega(s) registrada(s) (já corrigidas e pendentes), mantendo intactas as notas dissertativas e feedbacks.
+                  </span>
+                </div>
+              </label>
+            </div>
+          )}
 
           {/* Submit Actions */}
           <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 sm:gap-3 pt-4 border-t border-border sticky bottom-0 bg-background sm:bg-background/95 backdrop-blur-md py-3 -mx-3.5 px-3.5 sm:-mx-6 sm:px-6 md:-mx-8 md:px-8 z-20">
