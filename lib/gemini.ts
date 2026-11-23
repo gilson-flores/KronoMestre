@@ -26,7 +26,7 @@ export function getGeminiApiKey(): string | undefined {
   // Google Generative Language API aceita estritamente chaves de API do Google (iniciando em AIza...)
   // ou tokens OAuth2 válidos (iniciando em ya29...). Tokens de outros serviços ou formatos inválidos (como AQ.*)
   // causam erro imediato 401 ACCESS_TOKEN_TYPE_UNSUPPORTED na API do Google.
-  if (!cleaned.startsWith("AIza") && !cleaned.startsWith("ya29.")) {
+  if (!cleaned.startsWith("AIza") && !cleaned.startsWith("AQ.") && !cleaned.startsWith("ya29.")) {
     return undefined;
   }
 
