@@ -338,19 +338,26 @@ Retorne EXCLUSIVAMENTE um JSON válido com as chaves exatas:
   "aiUsageAnalysis": "..."
 }`;
 
-  const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest'];
+  const candidateModels = [
+    'gemini-3.5-flash-lite',
+    'gemini-3.8-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-flash-latest',
+  ];
   let lastErrorMsg = '';
 
   for (const modelName of candidateModels) {
-    try {
-      const response = await ai.models.generateContent({
-        model: modelName,
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.25,
-        },
-      });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          config: {
+            responseMimeType: 'application/json',
+            temperature: 0.25,
+          },
+        });
 
       if (response && response.text) {
         const parsed = extractJson(response.text);
@@ -374,10 +381,30 @@ Retorne EXCLUSIVAMENTE um JSON válido com as chaves exatas:
           modelUsed: modelName,
         });
       }
-    } catch (err: any) {
-      lastErrorMsg = String(err?.message || err || 'Erro desconhecido no modelo');
-      console.warn(`[correct-essay] Falha no modelo ${modelName}:`, lastErrorMsg);
-      if (isGeminiAuthError(err)) {
+      } catch (err: any) {
+        lastErrorMsg = String(err?.message || err || 'Erro desconhecido no modelo');
+        console.warn(`[correct-essay] Falha no modelo ${modelName} (tentativa ${attempt + 1}):`, lastErrorMsg);
+        if (isGeminiAuthError(err)) {
+          return NextResponse.json(
+            generateDynamicLocalAnalysis(
+              essayAnswer,
+              questionStatement || activityTitle,
+              keywords,
+              turma,
+              numericMaxScore,
+              numericMinChars,
+              lastErrorMsg
+            )
+          );
+        }
+        const isTransient =
+          lastErrorMsg.includes('503') ||
+          lastErrorMsg.includes('UNAVAILABLE') ||
+          lastErrorMsg.includes('429');
+        if (isTransient && attempt === 0) {
+          await new Promise((r) => setTimeout(r, 800));
+          continue;
+        }
         break;
       }
     }
