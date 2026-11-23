@@ -309,16 +309,35 @@ export const InteractiveCreatorBody: React.FC<any> = (props) => {
                     </option>
                   ))}
                 </select>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const slice = getTextbookMarkdownSlice(selectedBookChapter);
-                    setGameMaterial(slice.markdownSlice);
-                  }}
-                  className="px-3 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/40 text-cyan-200 text-xs font-black cursor-pointer"
-                >
-                  Carregar Capítulo (.MD)
-                </button>
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const slice = getTextbookMarkdownSlice(selectedBookChapter);
+                      setGameMaterial(slice.markdownSlice);
+                    }}
+                    className="flex-1 px-2.5 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/40 text-cyan-200 text-xs font-black cursor-pointer"
+                  >
+                    Carregar (.MD)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const slice = getTextbookMarkdownSlice(selectedBookChapter);
+                      const chObj = SOCIOLOGIA_EM_MOVIMENTO_CHAPTERS.find((c) => c.id === selectedBookChapter);
+                      setGameMaterial(slice.markdownSlice);
+                      if (chObj && chObj.topics.length > 0) {
+                        const shuffled = [...chObj.topics].sort(() => Math.random() - 0.5);
+                        const picked = shuffled.slice(0, 2).join(' + ');
+                        setGameTopic(`${chObj.title} — Foco: ${picked}`);
+                      }
+                    }}
+                    title="Sortear aleatoriamente novos subtemas deste capítulo para gerar uma missão inédita"
+                    className="px-2.5 py-2 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 border border-purple-400/40 text-purple-200 text-xs font-black cursor-pointer shrink-0"
+                  >
+                    🎲 Sortear Foco
+                  </button>
+                </div>
               </div>
 
               {showQuickPaste && (

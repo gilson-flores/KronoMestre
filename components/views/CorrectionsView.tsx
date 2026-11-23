@@ -16,7 +16,7 @@ import {
   Clock
 } from 'lucide-react';
 import { Activity, StudentUser } from '@/lib/types';
-import { getOriginalTurmas, getTurmaLabel, getYearFromTurma, isActivityAdapted, getActivityStudentAndSubmissionCounts, recalculateActivityObjectiveSubmissions } from "@/lib/studentUtils";
+import { getOriginalTurmas, getTurmaLabel, getYearFromTurma, isActivityAdapted, getActivityStudentAndSubmissionCounts, recalculateActivityObjectiveSubmissions, computeClassEssaySimilarity } from "@/lib/studentUtils";
 
 interface CorrectionsViewProps {
   onSaveActivity?: (updatedActivity: Activity) => void;
@@ -147,7 +147,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
     });
   };
 
-  const handleRunAiEssayCorrection = async (act: Activity, sub: any, studentTurma?: string) => {
+  const handleRunAiEssayCorrection = async (act: Activity, sub: any, studentTurma?: string, sameClassSimilarity?: { matchCount: number; maxSimilarity: number; turma: string }) => {
     const subKey = `${act.id}_${sub.studentId}`;
     const essayText = (sub.essayAnswer || "").trim();
     if (!essayText) return;
@@ -181,6 +181,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
           turma: studentTurma || act.turma || "Ensino Médio",
           maxEssayScore,
           minChars,
+          sameClassSimilarity: sameClassSimilarity || null,
         }),
       });
       const data = await res.json();
@@ -636,6 +637,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                       const resolvedStudentTurma = getTurmaLabel(
                         matchedStudent?.turma || (sub as any).turma || ''
                       );
+                      const classSimilarity = computeClassEssaySimilarity(originalAct, students, sub, 50);
                       
                       return (
                         <div key={sub.studentId} className="animate-fadeIn">
@@ -656,6 +658,14 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                                   <span className="truncate">{resolvedStudentName}</span>
                                   {sub.status === 'graded' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
                                   {sub.status === 'returned' && <RefreshCw className="w-3.5 h-3.5 text-orange-400" />}
+                                  {classSimilarity.matchCount > 0 && (
+                                    <span
+                                      className="text-[10px] font-black px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border border-rose-500/40 shrink-0"
+                                      title={`Semelhança >50% com ${classSimilarity.matchCount} outra(s) resposta(s) da Turma ${classSimilarity.turma} (máx. ${classSimilarity.maxSimilarity}%)`}
+                                    >
+                                      ⚠️ Plágio/Cópia ({classSimilarity.maxSimilarity}% • +{classSimilarity.matchCount} na Turma {classSimilarity.turma})
+                                    </span>
+                                  )}
                                 </h4>
                                 <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted mt-0.5">
                                   {sub.isPhysicalDelivery ? (
@@ -765,7 +775,7 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                                           {Boolean(sub.essayAnswer && sub.essayAnswer.trim()) && (
                                             <button
                                               type="button"
-                                              onClick={() => handleRunAiEssayCorrection(act, sub, resolvedStudentTurma)}
+                                              onClick={() => handleRunAiEssayCorrection(act, sub, resolvedStudentTurma, { matchCount: classSimilarity.matchCount, maxSimilarity: classSimilarity.maxSimilarity, turma: classSimilarity.turma })}
                                               disabled={aiLoadingKey === subKey}
                                               className="px-3.5 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50 active:scale-95"
                                             >
@@ -780,6 +790,29 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                                             </button>
                                           )}
                                         </div>
+
+                                        {classSimilarity.matchCount > 0 && (
+                                          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/35 space-y-1.5">
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                              <span className="text-[11px] font-black text-rose-300 flex items-center gap-1.5">
+                                                <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                                                Alerta de Similaridade na Turma {classSimilarity.turma}: {classSimilarity.matchCount} outra(s) resposta(s) com mais de 50% de semelhança (máx. {classSimilarity.maxSimilarity}%)
+                                              </span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                              {classSimilarity.matches.slice(0, 6).map((m) => (
+                                                <span key={m.studentId} className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-background/80 border border-rose-500/30 text-rose-200">
+                                                  {m.studentName} ({m.similarityPercent}%)
+                                                </span>
+                                              ))}
+                                              {classSimilarity.matches.length > 6 && (
+                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-background/80 text-rose-300">
+                                                  +{classSimilarity.matches.length - 6} colega(s)
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
 
                                         <p className="text-xs sm:text-sm text-foreground whitespace-pre-wrap leading-relaxed bg-background/60 p-3.5 rounded-xl border border-border/50">
                                           {sub.essayAnswer || <span className="text-muted italic">Nenhum texto dissertativo enviado.</span>}

@@ -191,9 +191,11 @@ function generateDynamicLocalAnalysis(
     'diante do exposto', 'sob essa otica', 'em conclusao', 'e imperativo que', 'fomenta', 'corrobora'
   ];
   const aiHits = aiMarkers.filter((m) => normText.includes(m)).length;
+  const isSuspiciouslyPerfect =
+    !isEvasive && foundTypos.length === 0 && grammarIssues.length === 0 && wordCount >= 55 && sentences.length >= 3;
   const aiUsagePercentage = isEvasive
     ? 0
-    : Math.min(92, Math.max(5, aiHits * 22 + (foundTypos.length === 0 && wordCount > 80 && paragraphs.length >= 3 ? 18 : 6) - foundTypos.length * 4));
+    : Math.min(96, Math.max(5, aiHits * 24 + (isSuspiciouslyPerfect ? 48 : 8) + (paragraphs.length >= 3 && foundTypos.length === 0 ? 15 : 0) - foundTypos.length * 5));
   const aiUsageAnalysis =
     aiUsagePercentage >= 55
       ? `Presença de ${aiHits} conectivo(s) altamente padronizado(s) e regularidade estrutural típica de texto gerado por IA.`
@@ -258,7 +260,12 @@ export async function POST(req: NextRequest) {
     turma = '',
     maxEssayScore = 5.0,
     minChars = 150,
+    sameClassSimilarity = null,
   } = body;
+
+  const simMatchCount = Number(sameClassSimilarity?.matchCount || 0);
+  const simMaxPercent = Number(sameClassSimilarity?.maxSimilarity || 0);
+  const simTurma = String(sameClassSimilarity?.turma || turma || '').trim();
 
   if (!essayAnswer || typeof essayAnswer !== 'string' || !essayAnswer.trim()) {
     return NextResponse.json(
@@ -318,7 +325,9 @@ INSTRUÇÕES OBRIGATÓRIAS PARA OS 4 CRITÉRIOS + AUTORIA + NOTA:
 2. "keywordsCheck": Se houver palavras-chave esperadas, liste exatamente quais apareceram e quais faltaram. Se não houver lista fixa, indique quais conceitos sociológicos o aluno utilizou corretamente e quais conceitos-chave do enunciado faltaram.
 3. "structureCheck": Avalie a extensão real (${charCountActual}/${numericMinChars} caracteres), divisão em parágrafos, coesão e progressão lógica (início, desenvolvimento e conclusão).
 4. "grammarCheck": Faça uma revisão normativa REAL do texto do aluno: cite literalmente palavras escritas com erro de ortografia, acentuação, concordância, regência ou pontuação (ex.: "escreveu 'nao' em vez de 'não'") ou elogie de forma específica se não houver erros.
-5. "aiUsagePercentage" (número de 0 a 100) e "aiUsageAnalysis": Estime a probabilidade de texto gerado por IA analisando o estilo, vocabulário, conectivos e naturalidade escolar do texto.
+5. "aiUsagePercentage" (número de 0 a 100) e "aiUsageAnalysis": Seja RIGOROSO na detecção de IA e cópia.
+   - Respostas "perfeitas demais" para o Ensino Médio (ortografia e pontuação 100% impecáveis, estrutura tripartite artificialmente simétrica, uso de conectivos padronizados de LLM como "nesse sentido", "diante do exposto", "vale ressaltar", "em suma", vocabulário enciclopédico sem marcas naturais de escrita adolescente) DEVEM receber aiUsagePercentage >= 70% com justificativa explícita.
+   - ALERTA DE SIMILARIDADE NA MESMA SALA (${simTurma || 'Turma'}): ${simMatchCount > 0 ? `ATENÇÃO CRÍTICA — o detector identificou ${simMatchCount} outra(s) resposta(s) da MESMA TURMA com mais de 50% de semelhança (máximo de ${simMaxPercent}%). Mencione isso explicitamente em aiUsageAnalysis e eleve aiUsagePercentage para no mínimo ${Math.max(70, simMaxPercent)}%.` : 'Nenhuma outra resposta da mesma turma ultrapassou 50% de semelhança.'}
 6. "suggestedScore" (número entre 0.0 e ${numericMaxScore} com 1 casa decimal): Calcule a nota de forma coerente e diferenciada:
    - Resposta vazia, "não sei" ou totalmente fora do tema: 0.0 a ${(numericMaxScore * 0.2).toFixed(1)}
    - Resposta superficial, incompleta ou muito abaixo dos caracteres: ${(numericMaxScore * 0.25).toFixed(1)} a ${(numericMaxScore * 0.55).toFixed(1)}
@@ -358,7 +367,15 @@ Retorne EXCLUSIVAMENTE um JSON válido com as chaves exatas:
       ? Math.max(0, Math.min(numericMaxScore, Number(rawScore.toFixed(1))))
       : Number((numericMaxScore * 0.5).toFixed(1));
     const rawAiPct = Number(parsed?.aiUsagePercentage);
-    const safeAiPct = Number.isFinite(rawAiPct) ? Math.max(0, Math.min(100, Math.round(rawAiPct))) : 0;
+    let safeAiPct = Number.isFinite(rawAiPct) ? Math.max(0, Math.min(100, Math.round(rawAiPct))) : 0;
+    let finalAiAnalysis = String(parsed?.aiUsageAnalysis || '').trim();
+    if (simMatchCount > 0) {
+      safeAiPct = Math.max(safeAiPct, Math.min(100, Math.max(70, simMaxPercent)));
+      const simNote = `[Alerta na Turma ${simTurma || ''}]: ${simMatchCount} outra(s) resposta(s) da mesma sala com >50% de semelhança (máx. ${simMaxPercent}%).`;
+      if (!finalAiAnalysis.toLowerCase().includes('mesma')) {
+        finalAiAnalysis = finalAiAnalysis ? `${simNote} ${finalAiAnalysis}` : simNote;
+      }
+    }
 
     return NextResponse.json({
       suggestedScore: safeScore,
@@ -368,7 +385,7 @@ Retorne EXCLUSIVAMENTE um JSON válido com as chaves exatas:
       structureCheck: String(parsed?.structureCheck || '').trim(),
       grammarCheck: String(parsed?.grammarCheck || '').trim(),
       aiUsagePercentage: safeAiPct,
-      aiUsageAnalysis: String(parsed?.aiUsageAnalysis || '').trim(),
+      aiUsageAnalysis: finalAiAnalysis,
       analysisSource: 'gemini',
       modelUsed,
     });

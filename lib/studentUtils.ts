@@ -825,3 +825,170 @@ export function recalculateActivityObjectiveSubmissions(
     skippedWithoutAnswersCount,
   };
 }
+
+
+export interface ClassEssaySimilarityMatch {
+  studentId: string;
+  studentName: string;
+  similarityPercent: number;
+}
+
+export interface ClassEssaySimilarityReport {
+  turma: string;
+  threshold: number;
+  matchCount: number;
+  maxSimilarity: number;
+  matches: ClassEssaySimilarityMatch[];
+}
+
+function cleanEssayForSimilarity(raw: string): string {
+  return (raw || '')
+    .replace(/\[Questão Dissertativa \d+\]:[^\n]*/gi, ' ')
+    .replace(/\bResposta:\s*/gi, ' ')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const SIMILARITY_STOPWORDS = new Set([
+  'que', 'para', 'com', 'uma', 'uns', 'umas', 'dos', 'das', 'nos', 'nas', 'por', 'mais',
+  'como', 'mas', 'foi', 'ser', 'sao', 'esta', 'este', 'esse', 'essa', 'isso', 'isto',
+  'pelo', 'pela', 'pelos', 'pelas', 'sobre', 'entre', 'muito', 'muita', 'tambem', 'quando',
+  'onde', 'porque', 'pois', 'assim', 'entao', 'ainda', 'mesmo', 'cada', 'todo', 'toda',
+  'todos', 'todas', 'pode', 'podem', 'fazer', 'fez', 'ter', 'tem', 'tinha', 'seu', 'sua',
+  'seus', 'suas', 'ele', 'ela', 'eles', 'elas', 'nao', 'sim', 'bem', 'mal', 'ja', 'ate'
+]);
+
+function buildWordNgrams(tokens: string[], n: number): Set<string> {
+  const set = new Set<string>();
+  if (tokens.length < n) {
+    if (tokens.length > 0) set.add(tokens.join(' '));
+    return set;
+  }
+  for (let i = 0; i <= tokens.length - n; i++) {
+    set.add(tokens.slice(i, i + n).join(' '));
+  }
+  return set;
+}
+
+function jaccardSet(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  a.forEach((item) => {
+    if (b.has(item)) inter++;
+  });
+  const union = a.size + b.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
+export function calculateEssaySimilarityPercent(textA: string, textB: string): number {
+  const cleanA = cleanEssayForSimilarity(textA);
+  const cleanB = cleanEssayForSimilarity(textB);
+  if (cleanA.length < 25 || cleanB.length < 25) return 0;
+  if (cleanA === cleanB) return 100;
+
+  const wordsA = cleanA.split(' ').filter(Boolean);
+  const wordsB = cleanB.split(' ').filter(Boolean);
+  if (wordsA.length < 5 || wordsB.length < 5) return 0;
+
+  // 1. Similaridade de bigramas (captura trechos copiados e paráfrases próximas)
+  const biA = buildWordNgrams(wordsA, 2);
+  const biB = buildWordNgrams(wordsB, 2);
+  const biScore = jaccardSet(biA, biB);
+
+  // 2. Similaridade de trigramas (alta precisão para cópia direta)
+  const triA = buildWordNgrams(wordsA, 3);
+  const triB = buildWordNgrams(wordsB, 3);
+  const triScore = jaccardSet(triA, triB);
+
+  // 3. Sobreposição de vocabulário significativo (sem stopwords)
+  const lexA = new Set(wordsA.filter((w) => w.length >= 3 && !SIMILARITY_STOPWORDS.has(w)));
+  const lexB = new Set(wordsB.filter((w) => w.length >= 3 && !SIMILARITY_STOPWORDS.has(w)));
+  const lexScore = jaccardSet(lexA, lexB);
+
+  // Combinação ponderada que captura cópia literal e textos quase idênticos de IA
+  const combined = Math.max(
+    biScore * 0.55 + lexScore * 0.45,
+    triScore * 0.5 + biScore * 0.3 + lexScore * 0.2
+  );
+  return Math.min(100, Math.round(combined * 100));
+}
+
+export function computeClassEssaySimilarity(
+  activity: Activity,
+  students: StudentUser[],
+  targetSub: ActivitySubmission,
+  threshold: number = 50
+): ClassEssaySimilarityReport {
+  const resolveTurma = (sub: any): string => {
+    const st = students.find(
+      (s) =>
+        s.id === sub.studentId ||
+        (Boolean(s.matricula) && (s.matricula === sub.matricula || s.matricula === sub.studentId))
+    );
+    return getTurmaLabel(st?.turma || sub.turma || '');
+  };
+
+  const resolveName = (sub: any): string => {
+    const st = students.find(
+      (s) =>
+        s.id === sub.studentId ||
+        (Boolean(s.matricula) && (s.matricula === sub.matricula || s.matricula === sub.studentId))
+    );
+    return (sub.studentName && sub.studentName.trim()) || st?.fullName || (st as any)?.name || 'Aluno';
+  };
+
+  const targetTurma = resolveTurma(targetSub);
+  const targetText = (targetSub.essayAnswer || '').trim();
+  if (!targetTurma || targetText.length < 25) {
+    return { turma: targetTurma, threshold, matchCount: 0, maxSimilarity: 0, matches: [] };
+  }
+
+  const isGroupWork = Boolean(activity.allowGroupWork || activity.type === 'Trabalho em grupo');
+  const targetGroupSet = new Set(
+    String(targetSub.groupMembers || '')
+      .split(',')
+      .map((n) => normalizeStudentName(n))
+      .filter(Boolean)
+  );
+
+  const matches: ClassEssaySimilarityMatch[] = [];
+  const subs = Array.isArray(activity.submissions) ? activity.submissions : [];
+
+  for (const other of subs) {
+    if (!other || other.studentId === targetSub.studentId) continue;
+    const otherTurma = resolveTurma(other);
+    // Comparação estritamente na MESMA turma
+    if (!otherTurma || otherTurma !== targetTurma) continue;
+
+    // Se for trabalho em grupo, ignora colegas do mesmo grupo
+    if (isGroupWork && targetGroupSet.size > 0) {
+      const otherNameNorm = normalizeStudentName(resolveName(other));
+      if (otherNameNorm && targetGroupSet.has(otherNameNorm)) continue;
+    }
+
+    const otherText = (other.essayAnswer || '').trim();
+    if (otherText.length < 25) continue;
+
+    const sim = calculateEssaySimilarityPercent(targetText, otherText);
+    if (sim > threshold) {
+      matches.push({
+        studentId: other.studentId,
+        studentName: resolveName(other),
+        similarityPercent: sim,
+      });
+    }
+  }
+
+  matches.sort((a, b) => b.similarityPercent - a.similarityPercent);
+  return {
+    turma: targetTurma,
+    threshold,
+    matchCount: matches.length,
+    maxSimilarity: matches.length > 0 ? matches[0].similarityPercent : 0,
+    matches,
+  };
+}

@@ -407,6 +407,8 @@ export async function POST(req: NextRequest) {
       aeeMechanic = "visual_cards",
       aeePromptSettings,
     } = payload;
+    const executionContext = (payload as any).executionContext || "classroom_group";
+    const bookChapterTitle = String((payload as any).bookChapterTitle || "").trim();
 
     const ai = getGeminiClient();
     if (!ai) {
@@ -595,10 +597,46 @@ export async function POST(req: NextRequest) {
     // 3. TODOS OS JOGOS DE SALA E DE CASA (KRONOGAMES): PROMPT DE REGRAS + APOIO
     // ==========================================================================
     const targetStages = Math.max(1, Math.min(12, questionCount || 6));
+    const isHomework = executionContext === "homework_individual" || gameMode === "rpg_campaign" || gameMode === "real_life_lab";
+
+    // Motor de aleatoriedade narrativa e sorteio de recortes do capítulo do livro
+    const homeworkCreativeArchetypes = [
+      "Agência Juvenil de Checagem de Mitos e Fake News no Bairro",
+      "Diário de Campo de um Jovem Pesquisador observando conflitos cotidianos da cidade",
+      "Bastidores de um Podcast Estudantil ao vivo debatendo dilemas reais com ouvintes",
+      "Conselho Comunitário em Crise: decisões práticas com impacto no bairro e na escola",
+      "Crônica das Redes Sociais: desvendando algoritmos, bolhas e pressões culturais",
+      "Simulador de Escolhas Cívicas: cada fase muda o rumo da história do protagonista",
+      "Reportagem Investigativa de Rua: entrevistando personagens com visões opostas",
+      "Arquivo Secreto da Cidade: conectando fatos atuais aos conceitos do capítulo do livro",
+    ];
+    const pickedArchetype = homeworkCreativeArchetypes[Math.floor(Math.random() * homeworkCreativeArchetypes.length)];
+
+    // Extrai subtemas/tópicos do capítulo carregado para sortear um recorte inédito a cada geração
+    const extractedChapterBullets = (supportMaterial || "")
+      .split(/\n+/)
+      .map((line) => line.replace(/^[-*#\s]+/, "").trim())
+      .filter((line) => line.length >= 18 && !line.startsWith("<!--"));
+    const shuffledBullets = [...extractedChapterBullets].sort(() => Math.random() - 0.5).slice(0, 4);
+
+    const creativityDirective = isHomework
+      ? [
+          `🎲 MOTOR DE CRIATIVIDADE & ALEATORIEDADE PARA MISSÃO DE CASA (SEMENTE ${creativeSeed}):`,
+          `- Universo Narrativo Sorteado: "${pickedArchetype}". Construa as ${targetStages} fases como episódios conectados, envolventes e com reviravoltas dentro desse universo (evite enunciados secos de prova tradicional).`,
+          bookChapterTitle ? `- Capítulo do Livro Selecionado: ${bookChapterTitle}.` : "",
+          shuffledBullets.length > 0
+            ? `- Recortes/Conceitos Sorteados deste Capítulo para destacar nesta rodada (use-os de forma criativa e imprevisível):\n  • ${shuffledBullets.join("\n  • ")}`
+            : "",
+          "- Crie personagens fictícios verossímeis (estudantes, moradores, trabalhadores, influenciadores) e dilemas concretos do cotidiano juvenil brasileiro.",
+          "- Proibido repetir a mesma fórmula de pergunta entre as fases: alterne entre dilema ético, análise de diálogo/postagem, decisão estratégica e investigação de causa social.",
+        ].filter(Boolean).join("\n")
+      : "";
+
     const regularPrompt = [
       `Você é um Professor Doutor em ${subject} e Game Designer Pedagógico do Ensino Médio.`,
       `Crie um jogo avaliativo completo na modalidade "${gameMode}" sobre o tema "${topic}" (Título: "${title}").`,
       `SEMENTE CRIATIVA: ${creativeSeed}`,
+      creativityDirective,
       `QUANTIDADE DE FASES/QUESTÕES: Gere EXATAMENTE ${targetStages} fases inéditas e progressivas.`,
       customPrompt.trim()
         ? `⚡ DIRETRIZ SOBERANA / REGRAS DO JOGO DEFINIDAS PELO PROFESSOR (OBRIGATÓRIO CUMPRIR):\n"""\n${customPrompt.trim()}\n"""`
@@ -616,7 +654,7 @@ export async function POST(req: NextRequest) {
 
     const { text: regularText } = await generateContentWithFallback(ai, {
       contents: [{ role: "user", parts: [{ text: regularPrompt }] }],
-      config: { responseMimeType: "application/json", temperature: 0.85 },
+      config: { responseMimeType: "application/json", temperature: isHomework ? 0.95 : 0.85 },
       routeTag: "generate-interactive:regular",
       validateText: (txt) => {
         const cleaned = txt.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();

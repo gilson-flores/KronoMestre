@@ -200,6 +200,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
           topic: gameTopic.trim(),
           supportMaterial: gameMaterial.trim(),
           gameMode: selectedGameMode,
+          executionContext: internalTab === 'create_homework' ? 'homework_individual' : 'classroom_group',
         }),
       });
 
