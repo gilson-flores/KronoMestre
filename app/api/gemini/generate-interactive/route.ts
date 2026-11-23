@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getGeminiClient, isGeminiAuthError } from "@/lib/gemini";
+import { getGeminiClient, isGeminiAuthError, generateContentWithFallback } from '@/lib/gemini';
 import { GameData, GameMode, AeeMechanic, AeePromptSettings, DebateConfig } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -413,7 +413,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ gameData: generateFallbackInteractiveData(payload), isFallback: true });
     }
 
-    const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
     const creativeSeed = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const isUppercase = Boolean(aeePromptSettings?.uppercaseText);
 
@@ -448,22 +447,21 @@ export async function POST(req: NextRequest) {
         .filter(Boolean)
         .join("\n\n");
 
-      for (const model of modelsToTry) {
-        try {
-          const response = await ai.models.generateContent({
-            model,
-            contents: [{ role: "user", parts: [{ text: aeePrompt }] }],
-            config: { responseMimeType: "application/json", temperature: 0.85 },
-          });
-          if (response && response.text) {
-            const cleaned = response.text.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
-            const parsed: GameData = JSON.parse(cleaned);
-            if (parsed && Array.isArray(parsed.stages) && parsed.stages.length > 0) {
-              return NextResponse.json({ gameData: parsed, isFallback: false });
-            }
-          }
-        } catch (err: any) {
-          if (isGeminiAuthError(err)) break;
+      const { text: aeeText } = await generateContentWithFallback(ai, {
+        contents: [{ role: "user", parts: [{ text: aeePrompt }] }],
+        config: { responseMimeType: "application/json", temperature: 0.85 },
+        routeTag: "generate-interactive:aee",
+        validateText: (txt) => {
+          const cleaned = txt.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+          const parsed: GameData = JSON.parse(cleaned);
+          return Boolean(parsed && Array.isArray(parsed.stages) && parsed.stages.length > 0);
+        },
+      });
+      if (aeeText) {
+        const cleaned = aeeText.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+        const parsed: GameData = JSON.parse(cleaned);
+        if (parsed && Array.isArray(parsed.stages) && parsed.stages.length > 0) {
+          return NextResponse.json({ gameData: parsed, isFallback: false });
         }
       }
       return NextResponse.json({ gameData: generateFallbackInteractiveData(payload), isFallback: true });
@@ -494,14 +492,17 @@ export async function POST(req: NextRequest) {
         .filter(Boolean)
         .join("\n\n");
 
-      for (const model of modelsToTry) {
-        try {
-          const response = await ai.models.generateContent({
-            model,
-            contents: [{ role: "user", parts: [{ text: debatePrompt }] }],
-            config: { responseMimeType: "application/json", temperature: 0.85 },
-          });
-          if (response && response.text) {
+      const { response } = await generateContentWithFallback(ai, {
+        contents: [{ role: "user", parts: [{ text: debatePrompt }] }],
+        config: { responseMimeType: "application/json", temperature: 0.85 },
+        routeTag: "generate-interactive:debate",
+        validateText: (txt) => {
+          const cleaned = txt.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+          const parsed = JSON.parse(cleaned);
+          return Boolean(parsed && typeof parsed === "object");
+        },
+      });
+      if (response && response.text) {
             const cleaned = response.text.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
             const parsed = JSON.parse(cleaned);
             const fallbackCfg = createFallbackDebateConfig(topic, subject, targetQuestionsPerGroup);
@@ -587,10 +588,6 @@ export async function POST(req: NextRequest) {
               isFallback: false,
             });
           }
-        } catch (err: any) {
-          if (isGeminiAuthError(err)) break;
-        }
-      }
       return NextResponse.json({ gameData: generateFallbackInteractiveData(payload), isFallback: true });
     }
 
@@ -617,22 +614,21 @@ export async function POST(req: NextRequest) {
       .filter(Boolean)
       .join("\n\n");
 
-    for (const model of modelsToTry) {
-      try {
-        const response = await ai.models.generateContent({
-          model,
-          contents: [{ role: "user", parts: [{ text: regularPrompt }] }],
-          config: { responseMimeType: "application/json", temperature: 0.85 },
-        });
-        if (response && response.text) {
-          const cleaned = response.text.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
-          const parsed: GameData = JSON.parse(cleaned);
-          if (parsed && Array.isArray(parsed.stages) && parsed.stages.length > 0) {
-            return NextResponse.json({ gameData: parsed, isFallback: false });
-          }
-        }
-      } catch (err: any) {
-        if (isGeminiAuthError(err)) break;
+    const { text: regularText } = await generateContentWithFallback(ai, {
+      contents: [{ role: "user", parts: [{ text: regularPrompt }] }],
+      config: { responseMimeType: "application/json", temperature: 0.85 },
+      routeTag: "generate-interactive:regular",
+      validateText: (txt) => {
+        const cleaned = txt.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+        const parsed: GameData = JSON.parse(cleaned);
+        return Boolean(parsed && Array.isArray(parsed.stages) && parsed.stages.length > 0);
+      },
+    });
+    if (regularText) {
+      const cleaned = regularText.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+      const parsed: GameData = JSON.parse(cleaned);
+      if (parsed && Array.isArray(parsed.stages) && parsed.stages.length > 0) {
+        return NextResponse.json({ gameData: parsed, isFallback: false });
       }
     }
 

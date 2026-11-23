@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getGeminiClient, isGeminiAuthError } from '@/lib/gemini';
+import { getGeminiClient, isGeminiAuthError, generateContentWithFallback } from '@/lib/gemini';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -338,76 +338,40 @@ Retorne EXCLUSIVAMENTE um JSON válido com as chaves exatas:
   "aiUsageAnalysis": "..."
 }`;
 
-  const candidateModels = [
-    'gemini-3.5-flash-lite',
-    'gemini-3.8-flash',
-    'gemini-2.5-flash-lite',
-    'gemini-2.5-flash',
-    'gemini-flash-latest',
-  ];
-  let lastErrorMsg = '';
+  const { text: aiText, modelUsed, lastErrorMsg } = await generateContentWithFallback(ai, {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    config: {
+      responseMimeType: 'application/json',
+      temperature: 0.25,
+    },
+    routeTag: 'correct-essay',
+    validateText: (txt) => {
+      const p = extractJson(txt);
+      return Boolean(p && typeof p === 'object');
+    },
+  });
 
-  for (const modelName of candidateModels) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const response = await ai.models.generateContent({
-          model: modelName,
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          config: {
-            responseMimeType: 'application/json',
-            temperature: 0.25,
-          },
-        });
+  if (aiText && modelUsed) {
+    const parsed = extractJson(aiText);
+    const rawScore = Number(parsed?.suggestedScore);
+    const safeScore = Number.isFinite(rawScore)
+      ? Math.max(0, Math.min(numericMaxScore, Number(rawScore.toFixed(1))))
+      : Number((numericMaxScore * 0.5).toFixed(1));
+    const rawAiPct = Number(parsed?.aiUsagePercentage);
+    const safeAiPct = Number.isFinite(rawAiPct) ? Math.max(0, Math.min(100, Math.round(rawAiPct))) : 0;
 
-      if (response && response.text) {
-        const parsed = extractJson(response.text);
-        const rawScore = Number(parsed?.suggestedScore);
-        const safeScore = Number.isFinite(rawScore)
-          ? Math.max(0, Math.min(numericMaxScore, Number(rawScore.toFixed(1))))
-          : Number((numericMaxScore * 0.5).toFixed(1));
-        const rawAiPct = Number(parsed?.aiUsagePercentage);
-        const safeAiPct = Number.isFinite(rawAiPct) ? Math.max(0, Math.min(100, Math.round(rawAiPct))) : 0;
-
-        return NextResponse.json({
-          suggestedScore: safeScore,
-          feedback: String(parsed?.feedback || '').trim(),
-          themeFidelity: String(parsed?.themeFidelity || '').trim(),
-          keywordsCheck: String(parsed?.keywordsCheck || '').trim(),
-          structureCheck: String(parsed?.structureCheck || '').trim(),
-          grammarCheck: String(parsed?.grammarCheck || '').trim(),
-          aiUsagePercentage: safeAiPct,
-          aiUsageAnalysis: String(parsed?.aiUsageAnalysis || '').trim(),
-          analysisSource: 'gemini',
-          modelUsed: modelName,
-        });
-      }
-      } catch (err: any) {
-        lastErrorMsg = String(err?.message || err || 'Erro desconhecido no modelo');
-        console.warn(`[correct-essay] Falha no modelo ${modelName} (tentativa ${attempt + 1}):`, lastErrorMsg);
-        if (isGeminiAuthError(err)) {
-          return NextResponse.json(
-            generateDynamicLocalAnalysis(
-              essayAnswer,
-              questionStatement || activityTitle,
-              keywords,
-              turma,
-              numericMaxScore,
-              numericMinChars,
-              lastErrorMsg
-            )
-          );
-        }
-        const isTransient =
-          lastErrorMsg.includes('503') ||
-          lastErrorMsg.includes('UNAVAILABLE') ||
-          lastErrorMsg.includes('429');
-        if (isTransient && attempt === 0) {
-          await new Promise((r) => setTimeout(r, 800));
-          continue;
-        }
-        break;
-      }
-    }
+    return NextResponse.json({
+      suggestedScore: safeScore,
+      feedback: String(parsed?.feedback || '').trim(),
+      themeFidelity: String(parsed?.themeFidelity || '').trim(),
+      keywordsCheck: String(parsed?.keywordsCheck || '').trim(),
+      structureCheck: String(parsed?.structureCheck || '').trim(),
+      grammarCheck: String(parsed?.grammarCheck || '').trim(),
+      aiUsagePercentage: safeAiPct,
+      aiUsageAnalysis: String(parsed?.aiUsageAnalysis || '').trim(),
+      analysisSource: 'gemini',
+      modelUsed,
+    });
   }
 
   return NextResponse.json(

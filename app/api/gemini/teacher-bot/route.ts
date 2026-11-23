@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getGeminiClient, isGeminiAuthError } from "@/lib/gemini";
+import { getGeminiClient, isGeminiAuthError, generateContentWithFallback } from '@/lib/gemini';
 import { SOCIOLOGIA_EM_MOVIMENTO_CHAPTERS } from "@/lib/textbookMarkdownIndex";
 
 export const maxDuration = 60;
@@ -592,28 +592,21 @@ DIRETRIZES DE HOSPITALIDADE E CLAREZA:
 [BASE DO LIVRO DIDÁTICO - SOCIOLOGIA EM MOVIMENTO]:
 ${textbookContext}`;
 
-      const candidateModels = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
-      for (const modelName of candidateModels) {
-        try {
-          const response = await ai.models.generateContent({
-            model: modelName,
-            contents: `Dúvida do aluno ${firstName} (Turma ${studentTurma}): "${currentMessage}"`,
-            config: {
-              systemInstruction,
-              temperature: 0.4,
-            },
-          });
-          if (response?.text) {
-            const cleanAiText = stripMarkdownAsterisks(response.text);
-            return NextResponse.json({
-              reply: `${headerTag}\n${cleanAiText}${backFooter}`,
-              teacherName: "Bob 🤖 (Agente de Atendimento)",
-              mode: "ai",
-            });
-          }
-        } catch (err: any) {
-          if (isGeminiAuthError(err)) break;
-        }
+      const { text: aiReplyText } = await generateContentWithFallback(ai, {
+        contents: `Dúvida do aluno ${firstName} (Turma ${studentTurma}): "${currentMessage}"`,
+        config: {
+          systemInstruction,
+          temperature: 0.4,
+        },
+        routeTag: "teacher-bot",
+      });
+      if (aiReplyText) {
+        const cleanAiText = stripMarkdownAsterisks(aiReplyText);
+        return NextResponse.json({
+          reply: `${headerTag}\n${cleanAiText}${backFooter}`,
+          teacherName: "Bob 🤖 (Agente de Atendimento)",
+          mode: "ai",
+        });
       }
     }
 

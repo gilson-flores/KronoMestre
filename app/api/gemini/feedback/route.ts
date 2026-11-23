@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getGeminiClient, isGeminiAuthError } from "@/lib/gemini";
+import { getGeminiClient, isGeminiAuthError, generateContentWithFallback } from '@/lib/gemini';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -230,31 +230,10 @@ ${formatSpecificRulesCreative}
 4. Responda estritamente em Português do Brasil.`;
     }
 
-    const candidateModels = [
-      'gemini-3.8-flash',
-      'gemini-3.1-flash-lite',
-      'gemini-flash-latest',
-    ];
-
-    let response: any = null;
-
-    for (const modelName of candidateModels) {
-      try {
-        response = await ai.models.generateContent({
-          model: modelName,
-          contents: prompt,
-        });
-        if (response && response.text) {
-          break;
-        }
-      } catch (err: any) {
-        if (isGeminiAuthError(err)) {
-          // Erro de credenciais/autenticação: encerra imediatamente as tentativas e recorre ao feedback pedagógico seguro
-          break;
-        }
-        console.warn(`Tentativa com modelo ${modelName} no feedback:`, err?.message || err);
-      }
-    }
+    const { response } = await generateContentWithFallback(ai, {
+      contents: prompt,
+      routeTag: 'feedback',
+    });
 
     const generatedFeedback = (response?.text || defaultFallback).trim().slice(0, 400);
     return NextResponse.json({ feedback: generatedFeedback });

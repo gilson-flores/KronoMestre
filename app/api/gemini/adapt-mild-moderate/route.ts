@@ -1,6 +1,6 @@
 import { Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
-import { getGeminiClient, isGeminiAuthError } from '@/lib/gemini';
+import { getGeminiClient, isGeminiAuthError, generateContentWithFallback } from '@/lib/gemini';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -66,23 +66,13 @@ Retorne um objeto JSON contendo:
   - minCharacters: 0 (se type === 'essay')
 `;
 
-    const candidateModels = [
-      'gemini-3.8-flash',
-      'gemini-3.1-flash-lite',
-      'gemini-flash-latest',
-    ];
-
     let response: any = null;
     let lastError: any = null;
 
     if (ai) {
-      for (const modelName of candidateModels) {
-        for (let attempt = 1; attempt <= 2; attempt++) {
-          try {
-            response = await ai.models.generateContent({
-              model: modelName,
-              contents: prompt,
-              config: {
+      const result = await generateContentWithFallback(ai, {
+        contents: prompt,
+        config: {
                 responseMimeType: 'application/json',
                 responseSchema: {
                   type: Type.OBJECT,
@@ -112,38 +102,15 @@ Retorne um objeto JSON contendo:
                   required: ['adaptedTitle', 'adaptedDescription', 'questions'],
                 },
               },
-            });
-
-            if (response && response.text) {
-              break;
-            }
-          } catch (err: any) {
-            lastError = err;
-            const status = err?.status || err?.code;
-            const errMsg = String(err?.message || '');
-            const isQuotaExhausted = status === 429 || errMsg.includes('Quota exceeded') || errMsg.includes('RESOURCE_EXHAUSTED');
-            const isHighDemand = status === 503 || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE');
-
-            if (isGeminiAuthError(err)) {
-              break;
-            }
-
-            console.warn(`Tentativa ${attempt} com ${modelName} na adaptação leve:`, errMsg || err);
-
-            if (isQuotaExhausted) {
-              break;
-            }
-
-            if (isHighDemand && attempt < 2) {
-              await new Promise((r) => setTimeout(r, 600));
-              continue;
-            }
-            break;
-          }
-        }
-        if (response && response.text) {
-          break;
-        }
+        routeTag: 'adapt-mild-moderate',
+        validateText: (txt) => {
+          const parsed = JSON.parse(txt.trim());
+          return Boolean(parsed && Array.isArray(parsed.questions));
+        },
+      });
+      response = result.response;
+      if (!response && result.lastErrorMsg) {
+        lastError = new Error(result.lastErrorMsg);
       }
     }
 

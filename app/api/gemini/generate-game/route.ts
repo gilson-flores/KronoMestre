@@ -1,6 +1,6 @@
 import { Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
-import { getGeminiClient, isGeminiAuthError } from '@/lib/gemini';
+import { getGeminiClient, isGeminiAuthError, generateContentWithFallback } from '@/lib/gemini';
 import { GameData, GameMode, GameStage } from '@/lib/types';
 
 export const maxDuration = 60;
@@ -706,20 +706,11 @@ REGRAS DE OURO DA ARQUITETURA INCLUSIVA (MANDATÓRIO):
 Retorne EXCLUSIVAMENTE o JSON no esquema solicitado.
 `;
 
-    const candidateModels = [
-      'gemini-3.8-flash',
-      'gemini-3.1-flash-lite',
-      'gemini-flash-latest'
-    ];
-
     let gameData: GameData | null = null;
 
-    for (const modelName of candidateModels) {
-      try {
-        const response = await ai.models.generateContent({
-          model: modelName,
-          contents: prompt,
-          config: {
+    const { text: aiGameText } = await generateContentWithFallback(ai, {
+      contents: prompt,
+      config: {
             responseMimeType: 'application/json',
             responseSchema: {
               type: Type.OBJECT,
@@ -793,21 +784,20 @@ Retorne EXCLUSIVAMENTE o JSON no esquema solicitado.
               },
               required: ['introText', 'stages']
             }
-          }
-        });
+          },
+      routeTag: 'generate-game',
+      validateText: (txt) => {
+        const cleaned = txt.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+        const parsed = JSON.parse(cleaned);
+        return Boolean(parsed && Array.isArray(parsed.stages) && parsed.stages.length >= 3);
+      },
+    });
 
-        if (response && response.text) {
-          const parsed = JSON.parse(response.text);
-          if (parsed && Array.isArray(parsed.stages) && parsed.stages.length >= 3) {
-            gameData = parsed as GameData;
-            break;
-          }
-        }
-      } catch (err: any) {
-        if (isGeminiAuthError(err)) {
-          break;
-        }
-        console.warn(`[generate-game] Erro com modelo ${modelName}:`, err?.message || err);
+    if (aiGameText) {
+      const cleaned = aiGameText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+      const parsed = JSON.parse(cleaned);
+      if (parsed && Array.isArray(parsed.stages) && parsed.stages.length >= 3) {
+        gameData = parsed as GameData;
       }
     }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getGeminiClient, isGeminiAuthError } from "@/lib/gemini";
+import { getGeminiClient, isGeminiAuthError, generateContentWithFallback } from '@/lib/gemini';
 import { DebateGuidingQuestion } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -138,7 +138,6 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
     let generatedText: string | null = null;
 
     const proCompiled = (payload.proQuestions || [])
@@ -184,24 +183,20 @@ Retorne EXCLUSIVAMENTE um JSON válido com as chaves:
   "jurorGuideSummary": "..."
 }`;
 
-    for (const model of modelsToTry) {
-      try {
-        const response = await ai.models.generateContent({
-          model,
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          config: {
-            responseMimeType: "application/json",
-            temperature: 0.5,
-          },
-        });
-        if (response && response.text) {
-          generatedText = response.text;
-          break;
-        }
-      } catch (err: any) {
-        if (isGeminiAuthError(err)) break;
-      }
-    }
+    const { text: aiSummaryText } = await generateContentWithFallback(ai, {
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: "application/json",
+        temperature: 0.5,
+      },
+      routeTag: "debate-summary",
+      validateText: (txt) => {
+        const cleaned = txt.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+        const parsed = JSON.parse(cleaned);
+        return Boolean(parsed && typeof parsed === "object");
+      },
+    });
+    generatedText = aiSummaryText;
 
     if (generatedText) {
       try {

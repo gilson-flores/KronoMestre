@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getGeminiClient, isGeminiAuthError } from '@/lib/gemini';
+import { getGeminiClient, isGeminiAuthError, generateContentWithFallback } from '@/lib/gemini';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -168,32 +168,19 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido:
 }
 `;
 
-    const candidateModels = [
-      'gemini-3.8-flash',
-      'gemini-3.1-flash-lite',
-      'gemini-flash-latest',
-    ];
-
-    let response: any = null;
-
-    for (const modelName of candidateModels) {
-      try {
-        response = await ai.models.generateContent({
-          model: modelName,
-          contents: prompt,
-          config: {
-            responseMimeType: 'application/json',
-            temperature: 0.4,
-          },
-        });
-        if (response && response.text) break;
-      } catch (err: any) {
-        if (isGeminiAuthError(err)) {
-          break;
-        }
-        console.warn(`Tentativa com ${modelName} na recuperação:`, err?.message || err);
-      }
-    }
+    const { response } = await generateContentWithFallback(ai, {
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        temperature: 0.4,
+      },
+      routeTag: 'create-parallel-recovery',
+      validateText: (txt) => {
+        const cleaned = txt.replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '').trim();
+        const parsed = JSON.parse(cleaned);
+        return Boolean(parsed && typeof parsed === 'object');
+      },
+    });
 
     if (response && response.text) {
       let rawText = response.text.trim();
