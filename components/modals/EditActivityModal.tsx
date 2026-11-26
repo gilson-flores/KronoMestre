@@ -130,6 +130,19 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
     });
   }, [students, selectedTurmas]);
 
+  const hasObjectiveQuestions = questions.some((q) => q.type === 'multiple_choice');
+  const existingSubmissionsCount = activity?.submissions?.length || 0;
+  const objectiveAnswerKeyChanged = React.useMemo(() => {
+    const origMap = new Map<string, number>();
+    (activity?.questions || []).forEach((q: any) => {
+      if (q.type === 'multiple_choice') origMap.set(q.id, Number(q.correctOptionIndex ?? 0));
+    });
+    return questions.some((q: any) => {
+      if (q.type !== 'multiple_choice') return false;
+      return origMap.has(q.id) && origMap.get(q.id) !== Number(q.correctOptionIndex ?? 0);
+    });
+  }, [activity?.questions, questions]);
+
   if (!isOpen || !activity) return null;
 
   const handleAddMultipleChoice = () => {
@@ -170,19 +183,6 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       })
     );
   };
-
-  const hasObjectiveQuestions = questions.some((q) => q.type === 'multiple_choice');
-  const existingSubmissionsCount = activity?.submissions?.length || 0;
-  const objectiveAnswerKeyChanged = React.useMemo(() => {
-    const origMap = new Map<string, number>();
-    (activity?.questions || []).forEach((q: any) => {
-      if (q.type === 'multiple_choice') origMap.set(q.id, Number(q.correctOptionIndex ?? 0));
-    });
-    return questions.some((q: any) => {
-      if (q.type !== 'multiple_choice') return false;
-      return origMap.has(q.id) && origMap.get(q.id) !== Number(q.correctOptionIndex ?? 0);
-    });
-  }, [activity?.questions, questions]);
 
   const handleUpdateMCOption = (questionId: string, optionIndex: number, text: string) => {
     setQuestions((prev) =>
