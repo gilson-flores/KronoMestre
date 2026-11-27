@@ -24,7 +24,7 @@ import {
   Heart
 } from 'lucide-react';
 
-import { Activity, StudentUser } from '@/lib/types';
+import { Activity, StudentUser, TeacherUser } from '@/lib/types';
 import { DashboardLoadingSkeleton, StandardErrorState } from '@/components/LoadingState';
 import {
   getCanonicalActivities,
@@ -40,6 +40,7 @@ import {
 } from '@/lib/studentUtils';
 
 interface DashboardCentralViewProps {
+  teacher?: TeacherUser;
   activities: Activity[];
   students: StudentUser[];
   isLoading?: boolean;
@@ -63,6 +64,7 @@ export interface TurmaRcoInfo {
 type OperationalTabFilter = 'todas' | 'correcoes' | 'prazos' | 'recuperacao' | 'rco';
 
 export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
+  teacher,
   activities = [],
   students = [],
   isLoading = false,
@@ -404,7 +406,7 @@ export const DashboardCentralView: React.FC<DashboardCentralViewProps> = ({
     }
   };
 
-  return <DashboardCentralBody {...{ students, isLoading, hasError, onRetry, onNavigateToTab, onOpenNewActivityModal, onSelectActivityForGrading, onOpenParallelRecoveryModal, onViewActivity, formatActivityDeadlineBR, totalActivities, missingSubmissions, completionRate, radTotal, turmasReadyForRco, overallAverage, handleDirectCorrection, activeQueueFilter, setActiveQueueFilter, statusScopeFilter, setStatusScopeFilter, pendingCorrections, activitiesWithPendingCorrections, fragmentedAdhesion, dueTodayActivities, approachingDeadlineActivities, studentsNeedingRecoveryCount, activitiesNeedingRecovery }} />;
+  return <DashboardCentralBody {...{ teacher, students, isLoading, hasError, onRetry, onNavigateToTab, onOpenNewActivityModal, onSelectActivityForGrading, onOpenParallelRecoveryModal, onViewActivity, formatActivityDeadlineBR, totalActivities, missingSubmissions, completionRate, radTotal, turmasReadyForRco, overallAverage, handleDirectCorrection, activeQueueFilter, setActiveQueueFilter, statusScopeFilter, setStatusScopeFilter, pendingCorrections, activitiesWithPendingCorrections, fragmentedAdhesion, dueTodayActivities, approachingDeadlineActivities, studentsNeedingRecoveryCount, activitiesNeedingRecovery }} />;
 };
 
 export default DashboardCentralView;

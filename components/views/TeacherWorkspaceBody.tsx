@@ -34,6 +34,7 @@ export const TeacherWorkspaceBody: React.FC<any> = (props) => {
               />
             ) : (
               <DashboardCentralView
+                teacher={teacher}
                 activities={activeActivities}
                 students={visibleStudentsForRole}
                 isLoading={isDataLoading}

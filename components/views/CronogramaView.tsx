@@ -23,6 +23,7 @@ import {
   MapPin,
   Sliders,
   Wand2,
+  Settings,
 } from 'lucide-react';
 import { TeacherUser } from '@/lib/types';
 import {
@@ -367,28 +368,51 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({ teacher, isReadO
     }, 3500);
   }, []);
 
-  // Hidratação Local + Nuvem com migração automática para Turmas "201"/"2002" e Salas separadas
+  // Hidratação Local + Nuvem com migração automática do cache do navegador para o Firestore
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    let localSnapshot: {
+      grade: CronogramaSlot[];
+      intervals: CronogramaIntervalConfig[];
+      planos: CronogramaPlanItem[];
+      observacoes: CronogramaObsItem[];
+    } | null = null;
+
     try {
       const cached = localStorage.getItem(storageKey);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed.grade) && parsed.grade.length > 0) {
-          setGrade(migrateAndNormalizeSlots(parsed.grade));
-        }
-        if (Array.isArray(parsed.intervals) && parsed.intervals.length > 0) {
-          setIntervals(parsed.intervals);
-        }
-        if (Array.isArray(parsed.planos)) setPlanos(parsed.planos);
-        if (Array.isArray(parsed.observacoes)) setObservacoes(parsed.observacoes);
+        const normGrade =
+          Array.isArray(parsed.grade) && parsed.grade.length > 0
+            ? migrateAndNormalizeSlots(parsed.grade)
+            : DEFAULT_CRONOGRAMA_GRADE;
+        const normIntervals =
+          Array.isArray(parsed.intervals) && parsed.intervals.length > 0
+            ? parsed.intervals
+            : DEFAULT_CRONOGRAMA_INTERVALS;
+        const normPlanos = Array.isArray(parsed.planos) ? parsed.planos : [];
+        const normObs = Array.isArray(parsed.observacoes) ? parsed.observacoes : [];
+
+        localSnapshot = {
+          grade: normGrade,
+          intervals: normIntervals,
+          planos: normPlanos,
+          observacoes: normObs,
+        };
+
+        setGrade(normGrade);
+        setIntervals(normIntervals);
+        setPlanos(normPlanos);
+        setObservacoes(normObs);
       }
     } catch (e) {}
 
-    fetch('/api/cronograma')
+    fetch('/api/cronograma', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
       .then((res) => {
-        if (res?.ok && res?.data) {
+        if (!res?.ok) return;
+
+        if (res.data) {
           const d = res.data;
           const normalizedGrade =
             Array.isArray(d.grade) && d.grade.length > 0
@@ -398,25 +422,42 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({ teacher, isReadO
             Array.isArray(d.intervals) && d.intervals.length > 0
               ? d.intervals
               : DEFAULT_CRONOGRAMA_INTERVALS;
+          const loadedPlanos = Array.isArray(d.planos) ? d.planos : [];
+          const loadedObs = Array.isArray(d.observacoes) ? d.observacoes : [];
 
           setGrade(normalizedGrade);
           setIntervals(loadedIntervals);
-          if (Array.isArray(d.planos)) setPlanos(d.planos);
-          if (Array.isArray(d.observacoes)) setObservacoes(d.observacoes);
+          setPlanos(loadedPlanos);
+          setObservacoes(loadedObs);
 
-          localStorage.setItem(
-            storageKey,
-            JSON.stringify({
-              grade: normalizedGrade,
-              intervals: loadedIntervals,
-              planos: d.planos || [],
-              observacoes: d.observacoes || [],
+          const syncedPayload = {
+            grade: normalizedGrade,
+            intervals: loadedIntervals,
+            planos: loadedPlanos,
+            observacoes: loadedObs,
+          };
+          localStorage.setItem(storageKey, JSON.stringify(syncedPayload));
+          window.dispatchEvent(new CustomEvent('krono-cronograma-updated', { detail: syncedPayload }));
+        } else if (localSnapshot) {
+          // Primeira migração: nuvem vazia, mas existem dados locais no navegador -> sobe automaticamente sem perder nada
+          setIsSyncing(true);
+          fetch('/api/cronograma', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(localSnapshot),
+          })
+            .then((r) => {
+              if (r.ok) {
+                showToast('Cronograma local sincronizado com a nuvem (Firestore).');
+                window.dispatchEvent(new CustomEvent('krono-cronograma-updated', { detail: localSnapshot }));
+              }
             })
-          );
+            .catch(() => {})
+            .finally(() => setIsSyncing(false));
         }
       })
       .catch(() => {});
-  }, [storageKey]);
+  }, [storageKey, showToast]);
 
   const persistAll = useCallback(
     async (
@@ -426,17 +467,17 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({ teacher, isReadO
       nextObs: CronogramaObsItem[],
       toastMessage?: string
     ) => {
+      const nextPayload = {
+        grade: nextGrade,
+        intervals: nextIntervals,
+        planos: nextPlanos,
+        observacoes: nextObs,
+      };
+
       if (typeof window !== 'undefined') {
         try {
-          localStorage.setItem(
-            storageKey,
-            JSON.stringify({
-              grade: nextGrade,
-              intervals: nextIntervals,
-              planos: nextPlanos,
-              observacoes: nextObs,
-            })
-          );
+          localStorage.setItem(storageKey, JSON.stringify(nextPayload));
+          window.dispatchEvent(new CustomEvent('krono-cronograma-updated', { detail: nextPayload }));
         } catch (e) {}
       }
 
@@ -444,19 +485,18 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({ teacher, isReadO
 
       setIsSyncing(true);
       try {
-        await fetch('/api/cronograma', {
+        const res = await fetch('/api/cronograma', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            teacherId: teacher?.id,
-            grade: nextGrade,
-            intervals: nextIntervals,
-            planos: nextPlanos,
-            observacoes: nextObs,
-          }),
+          body: JSON.stringify(nextPayload),
         });
+        if (!res.ok) {
+          console.warn('Falha ao gravar cronograma no Firestore:', res.status);
+          showToast('Salvo localmente, mas houve falha ao sincronizar na nuvem. Tente novamente.');
+        }
       } catch (e) {
         console.warn('Aviso ao sincronizar cronograma:', e);
+        showToast('Salvo localmente. Sem conexão com o Firestore no momento.');
       } finally {
         setIsSyncing(false);
       }
@@ -903,14 +943,15 @@ export const CronogramaView: React.FC<CronogramaViewProps> = ({ teacher, isReadO
           <button
             type="button"
             onClick={() => setActiveSubTab('horario')}
-            className={`px-4 py-2 rounded-lg font-semibold text-xs transition-all flex items-center gap-2 cursor-pointer ${
+            title="Configurar horários, recreios, turmas e salas"
+            aria-label="Configurar horários, recreios, turmas e salas"
+            className={`p-2 rounded-lg transition-all flex items-center justify-center cursor-pointer ${
               activeSubTab === 'horario'
                 ? 'bg-zinc-100 text-zinc-950 shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-100'
+                : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/70'
             }`}
           >
-            <Table className="w-3.5 h-3.5" />
-            <span>Horários, Recreios, Turmas & Salas</span>
+            <Settings className="w-4 h-4" />
           </button>
         </div>
       </div>

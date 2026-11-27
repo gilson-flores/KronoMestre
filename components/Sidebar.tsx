@@ -107,8 +107,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const sidebarContent = (
-    <div className="flex flex-col justify-between min-h-full space-y-6 pb-6">
-      <div className="space-y-6">
+    <div className="flex flex-col justify-between min-h-full space-y-5 md:space-y-2.5 pb-6 md:pb-2">
+      <div className="space-y-5 md:space-y-2.5">
         {/* Mobile Header Close Button */}
         <div className="flex md:hidden items-center justify-between pb-2 border-b border-border">
           <div className="flex items-center gap-2">
@@ -127,32 +127,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Brand / Profile section */}
-        <div className="flex flex-col items-center pt-2 text-center">
-          <div className="relative mb-3">
+        <div className="flex flex-col items-center pt-1 md:pt-0 text-center">
+          <div className="relative mb-2.5 md:mb-1.5">
             <img
               src={formatAvatarUrl(teacher.avatarUrl)}
               alt={teacher.name || 'Professor'}
-              className="w-18 h-18 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-primary/40 shadow-lg"
+              className="w-18 h-18 sm:w-20 sm:h-20 md:w-12 md:h-12 rounded-full object-cover border-2 border-primary/40 shadow-md"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=250';
               }}
             />
-            <span className="absolute bottom-0 right-1 w-3.5 h-3.5 sm:w-4 sm:h-4 bg-primary border-2 border-surface rounded-full"></span>
+            <span className="absolute bottom-0 right-0.5 w-3.5 h-3.5 md:w-3 md:h-3 bg-primary border-2 border-surface rounded-full"></span>
           </div>
-          <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground break-words max-w-full">{teacher.name}</h2>
-          <p className="text-xs text-muted font-medium mt-0.5 mb-2.5 break-words">{teacher.subject}</p>
+          <h2 className="text-lg sm:text-xl md:text-sm font-bold tracking-tight text-foreground break-words max-w-full leading-tight">
+            {teacher.name}
+          </h2>
+          <p className="text-xs md:text-[11px] text-muted font-medium mt-0.5 mb-2.5 md:mb-2 break-words">
+            {teacher.subject}
+          </p>
 
-          {/* Configurações & Sair buttons below teacher name */}
-          <div className="flex flex-col items-center gap-2 w-full">
+          {/* Configurações & Sair buttons (empilhados no mobile, lado a lado no desktop) */}
+          <div className="flex flex-col md:grid md:grid-cols-2 items-center gap-2 md:gap-1.5 w-full">
             <button
               onClick={() => handleTabClick('configuracoes')}
-              className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer w-full max-w-[220px] min-h-[44px] active:scale-95 ${
+              className={`inline-flex items-center justify-center gap-1.5 px-4 md:px-2 py-2.5 md:py-1.5 rounded-full md:rounded-xl text-xs md:text-[11px] font-semibold transition-all duration-200 cursor-pointer w-full max-w-[220px] md:max-w-none min-h-[44px] md:min-h-[32px] active:scale-95 ${
                 currentTab === 'configuracoes'
                   ? 'bg-primary text-white shadow-md'
                   : 'bg-[#171f33] text-muted hover:text-foreground hover:bg-surface-hover border border-border'
               }`}
             >
-              <KronoIcon icon={Settings} variant="badge" size="xs" isActive={currentTab === 'configuracoes'} />
+              <Settings className="w-3.5 h-3.5 shrink-0" />
               <span>Configurações</span>
             </button>
 
@@ -162,9 +166,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   if (onCloseMobile) onCloseMobile();
                   onLogout();
                 }}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-xs font-semibold text-rose-400 hover:text-rose-600 hover:bg-rose-500/10 border border-rose-500/20 transition-all duration-200 cursor-pointer w-full max-w-[220px] min-h-[44px] active:scale-95"
+                className="inline-flex items-center justify-center gap-1.5 px-4 md:px-2 py-2.5 md:py-1.5 rounded-full md:rounded-xl text-xs md:text-[11px] font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/25 transition-all duration-200 cursor-pointer w-full max-w-[220px] md:max-w-none min-h-[44px] md:min-h-[32px] active:scale-95"
               >
-                <KronoIcon icon={LogOut} variant="danger" size="xs" />
+                <LogOut className="w-3.5 h-3.5 shrink-0" />
                 <span>Sair</span>
               </button>
             )}
@@ -172,31 +176,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Nav links */}
-        <nav className="space-y-1.5 pt-2">
+        <nav className="space-y-1.5 md:space-y-0.5 pt-2 md:pt-1 border-t border-border/60">
           {navItems.map((item) => {
             const isActive = currentTab === item.id;
             return (
               <button
                 key={item.id}
                 onClick={() => handleTabClick(item.id)}
-                className={`w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer min-h-[44px] active:scale-[0.98] ${
+                title={item.label}
+                className={`w-full flex items-center justify-between px-3.5 md:px-2.5 py-3 md:py-1.5 rounded-2xl md:rounded-xl text-xs sm:text-sm md:text-[12.5px] font-semibold transition-all duration-200 cursor-pointer min-h-[44px] md:min-h-[34px] active:scale-[0.98] ${
                   isActive
                     ? 'bg-primary text-white shadow-md'
                     : 'text-foreground hover:bg-[#171f33] hover:text-foreground'
                 }`}
               >
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center gap-3 md:gap-2.5 min-w-0">
                   <KronoIcon
                     icon={item.icon}
                     variant={item.variant}
-                    size="sm"
+                    size="xs"
                     isActive={isActive}
                     withGlow={isActive}
                   />
-                  <span className="truncate">{item.label}</span>
+                  <span className="truncate md:whitespace-nowrap">{item.label}</span>
                 </div>
                 {item.badge && item.badge > 0 ? (
-                  <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full shrink-0 ml-2 ${
+                  <span className={`px-2 md:px-1.5 py-0.5 text-[10px] font-extrabold rounded-full shrink-0 ml-1.5 ${
                     isActive ? 'bg-[#003919] text-primary' : 'bg-primary text-white'
                   }`}>
                     {item.badge}
@@ -214,7 +219,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-64 bg-background border-r border-border flex-col justify-between p-5 min-h-screen text-foreground shrink-0 sticky top-0 h-screen overflow-y-auto">
+      <aside className="hidden md:flex w-[272px] bg-background border-r border-border flex-col justify-between p-3.5 min-h-screen text-foreground shrink-0 sticky top-0 h-screen overflow-y-auto">
         {sidebarContent}
       </aside>
 

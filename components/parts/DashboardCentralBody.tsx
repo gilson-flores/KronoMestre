@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 
 import { Activity, StudentUser } from '@/lib/types';
+import { DashboardScheduleCard } from '@/components/parts/DashboardScheduleCard';
 import { DashboardLoadingSkeleton, StandardErrorState } from '@/components/LoadingState';
 import {
   getCanonicalActivities,
@@ -39,7 +40,7 @@ import {
 } from '@/lib/studentUtils';
 
 export const DashboardCentralBody: React.FC<any> = (props) => {
-  const { students, isLoading, hasError, onRetry, onNavigateToTab, onOpenNewActivityModal, onSelectActivityForGrading, onOpenParallelRecoveryModal, onViewActivity, formatActivityDeadlineBR, totalActivities, missingSubmissions, completionRate, radTotal, turmasReadyForRco, overallAverage, handleDirectCorrection, activeQueueFilter, setActiveQueueFilter, statusScopeFilter, setStatusScopeFilter, pendingCorrections, activitiesWithPendingCorrections, fragmentedAdhesion, dueTodayActivities, approachingDeadlineActivities, studentsNeedingRecoveryCount, activitiesNeedingRecovery } = props;
+  const { teacher, students, isLoading, hasError, onRetry, onNavigateToTab, onOpenNewActivityModal, onSelectActivityForGrading, onOpenParallelRecoveryModal, onViewActivity, formatActivityDeadlineBR, totalActivities, missingSubmissions, completionRate, radTotal, turmasReadyForRco, overallAverage, handleDirectCorrection, activeQueueFilter, setActiveQueueFilter, statusScopeFilter, setStatusScopeFilter, pendingCorrections, activitiesWithPendingCorrections, fragmentedAdhesion, dueTodayActivities, approachingDeadlineActivities, studentsNeedingRecoveryCount, activitiesNeedingRecovery } = props;
   return (
     <div className="space-y-8 animate-fadeIn pb-16 max-w-6xl w-full mx-auto">
       {/* 1. CABEÇALHO OPERACIONAL */}
@@ -104,6 +105,12 @@ export const DashboardCentralBody: React.FC<any> = (props) => {
         />
       ) : (
         <>
+          {/* 1.5 HORÁRIO GERAL SINCRONIZADO COM O CRONOGRAMA */}
+          <DashboardScheduleCard
+            teacher={teacher}
+            onOpenCronograma={() => onNavigateToTab('cronograma')}
+          />
+
           {/* 2. ÁREA DE PENDÊNCIAS (6 CARDS OPERACIONAIS COM AÇÃO DIRETA) */}
       <section aria-labelledby="heading-pendencias">
         <div className="flex items-center justify-between gap-2 mb-4">
