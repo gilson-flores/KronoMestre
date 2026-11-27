@@ -35,11 +35,7 @@ import {
   Camera,
   Check,
 } from 'lucide-react';
-import {
-  standardizeTurmaCode,
-  doesItemMatchStudentTurma,
-  getEligibleClassmatesForGroup,
-} from '@/lib/groupActivityUtils';
+import { standardizeTurmaCode, doesItemMatchStudentTurma, getEligibleClassmatesForGroup, canStudentSubmitGroupActivity } from '@/lib/groupActivityUtils';
 import { isActivityKronoGame, isActivityAdapted } from '@/lib/studentUtils';
 import { DebatePaperlessView } from '@/components/views/DebatePaperlessView';
 import { KronoGamePlayer } from '@/components/views/KronoGamePlayer';
@@ -636,14 +632,24 @@ export const StudentPortalView: React.FC<StudentPortalViewProps> = ({
         compiledEssay = [parts.join('\n\n'), compiledEssay].filter(Boolean).join('\n\n');
       }
 
+      const groupAccess = canStudentSubmitGroupActivity(executingActivity, activeStudent, rosterStudents);
+      if (!groupAccess.allowed) {
+        showNotice(groupAccess.message || 'Somente o(a) Líder do grupo pode enviar esta atividade.');
+        setIsSubmitting(false);
+        return;
+      }
+
       const isGroupAct =
         executingActivity.type === 'Trabalho em grupo' ||
-        Boolean((executingActivity as any).isGroupWork);
+        Boolean(executingActivity.allowGroupWork) ||
+        Boolean((executingActivity as any).isGroupWork) ||
+        groupAccess.hasConfiguredGroups;
 
-      const groupCsv =
-        isGroupAct && selectedGroupNames.length > 0
-          ? Array.from(new Set([activeStudent.fullName, ...selectedGroupNames])).join(', ')
-          : undefined;
+      const groupCsv = groupAccess.hasConfiguredGroups
+        ? groupAccess.groupMembersCsv
+        : isGroupAct && selectedGroupNames.length > 0
+        ? Array.from(new Set([activeStudent.fullName, ...selectedGroupNames])).join(', ')
+        : undefined;
 
       await onSubmitAnswer(
         executingActivity.id,

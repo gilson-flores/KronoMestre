@@ -12,6 +12,9 @@ import {
   MessageSquare,
   Award,
   RotateCcw,
+  Crown,
+  Lock,
+  Users
 } from 'lucide-react';
 import { isActivityKronoGame } from '@/lib/studentUtils';
 import { DebatePaperlessView } from '@/components/views/DebatePaperlessView';
@@ -20,6 +23,7 @@ import {
   extractLinksFromText,
   formatSubmissionAnswerForDisplay,
 } from './studentPortalUtils';
+import { canStudentSubmitGroupActivity } from '@/lib/groupActivityUtils';
 
 const SafeKronoGamePlayer: any = KronoGamePlayer;
 
@@ -111,6 +115,7 @@ export const StudentActivityExecutionView: React.FC<any> = (props) => {
             student={activeStudent}
             currentStudent={activeStudent}
             students={rosterStudents}
+            allStudents={rosterStudents}
             onClose={() => setExecutingActivity(null)}
             onFinishGame={async (score: number, groupCsv?: string) => {
               if (onSubmitAnswer) {
@@ -159,8 +164,9 @@ export const StudentActivityExecutionView: React.FC<any> = (props) => {
       )
     : null;
 
+  const groupAccess = canStudentSubmitGroupActivity(executingActivity, activeStudent, rosterStudents || []);
   const isReturnedForRedo = myExistingSub?.status === 'returned';
-  const canEditSubmission = !myExistingSub || isReturnedForRedo;
+  const canEditSubmission = (!myExistingSub || isReturnedForRedo) && groupAccess.allowed;
   const teacherFeedbackText = String(
     myExistingSub?.teacherFeedback || (myExistingSub as any)?.feedback || ''
   ).trim();
@@ -467,11 +473,66 @@ export const StudentActivityExecutionView: React.FC<any> = (props) => {
           </section>
         )}
 
-        {/* 4. ÁREA DE RESPOSTA E ENVIO (APENAS SE PENDENTE OU DEVOLVIDA PARA REFAZER) */}
+        {/* PAINEL DE GOVERNANÇA DO GRUPO (QUANDO O PROFESSOR CADASTROU OS GRUPOS) */}
+        {groupAccess.hasConfiguredGroups && (
+          <section
+            className={
+              'p-4 rounded-2xl border space-y-2.5 ' +
+              (groupAccess.allowed
+                ? 'bg-emerald-950/30 border-emerald-700/60'
+                : 'bg-amber-950/30 border-amber-600/50')
+            }
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5 text-amber-300">
+                {groupAccess.allowed ? <Crown className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                <span>
+                  {groupAccess.group
+                    ? groupAccess.group.name + (groupAccess.isLeader ? ' • Você é o(a) Líder' : ' • Somente Leitura')
+                    : 'Aguardando definição de grupo'}
+                </span>
+              </span>
+              {groupAccess.leader && (
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-amber-500/20 text-amber-200 border border-amber-400/40">
+                  👑 Líder: {groupAccess.leader.fullName}
+                </span>
+              )}
+            </div>
+
+            {groupAccess.members.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {groupAccess.members.map((m) => (
+                  <span
+                    key={m.id}
+                    className={
+                      'text-[11px] font-semibold px-2.5 py-1 rounded-lg border ' +
+                      (m.id === groupAccess.group?.leaderId
+                        ? 'bg-amber-500/15 border-amber-400/50 text-amber-200'
+                        : 'bg-background/80 border-border text-foreground')
+                    }
+                  >
+                    {m.id === groupAccess.group?.leaderId ? '👑 ' : ''}
+                    {m.fullName}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {!groupAccess.allowed && (
+              <p className="text-xs text-amber-200/90 leading-relaxed font-medium">
+                {groupAccess.message}
+              </p>
+            )}
+          </section>
+        )}
+
+        {/* 4. ÁREA DE RESPOSTA E ENVIO (APENAS SE PENDENTE/DEVOLVIDA E AUTORIZADO COMO LÍDER) */}
         {canEditSubmission && (
           <>
-            {(executingActivity.type === 'Trabalho em grupo' ||
-              Boolean((executingActivity as any).isGroupWork)) && (
+            {!groupAccess.hasConfiguredGroups &&
+              (executingActivity.type === 'Trabalho em grupo' ||
+                Boolean(executingActivity.allowGroupWork) ||
+                Boolean((executingActivity as any).isGroupWork)) && (
               <section className="p-4 rounded-2xl bg-surface border border-border space-y-3">
                 <div>
                   <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/80 block">

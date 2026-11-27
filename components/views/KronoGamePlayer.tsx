@@ -21,11 +21,13 @@ import {
   VolumeX,
   X,
   Shield,
-  Award
+  Award,
+  Lock
 } from 'lucide-react';
 import { Activity, StudentUser, GameStage, GameData, GameMode } from '@/lib/types';
 import { isStudentPNE, isSevereCondition, isActivityAdapted } from '@/lib/studentUtils';
 import { PlayfulPolymorphicStageView } from '@/components/parts/PlayfulPolymorphicStageView';
+import { canStudentSubmitGroupActivity } from '@/lib/groupActivityUtils';
 
 interface KronoGamePlayerProps {
   activity: Activity;
@@ -118,8 +120,18 @@ export const KronoGamePlayer: React.FC<KronoGamePlayerProps> = ({
   // Sound toggle
   const [soundEnabled, setSoundEnabled] = useState(true);
 
+  const groupAccess = useMemo(
+    () => canStudentSubmitGroupActivity(activity, student, allStudents),
+    [activity, student, allStudents]
+  );
+
   // Group members selection (if classroom_group)
-  const [selectedGroupMembers, setSelectedGroupMembers] = useState<StudentUser[]>([]);
+  const [selectedGroupMembers, setSelectedGroupMembers] = useState<StudentUser[]>(() => {
+    if (groupAccess.hasConfiguredGroups && groupAccess.members.length > 0) {
+      return groupAccess.members.filter((m) => m.id !== student.id);
+    }
+    return [];
+  });
   const [customMembersText, setCustomMembersText] = useState('');
   const [isSetupDone, setIsSetupDone] = useState(false);
 
@@ -251,6 +263,9 @@ export const KronoGamePlayer: React.FC<KronoGamePlayerProps> = ({
   }, [correctCount, stages.length, maxGrade]);
 
   const groupMembersString = useMemo(() => {
+    if (groupAccess.hasConfiguredGroups && groupAccess.groupMembersCsv) {
+      return groupAccess.groupMembersCsv;
+    }
     const list = [student.fullName];
     selectedGroupMembers.forEach((m) => {
       if (!list.includes(m.fullName)) list.push(m.fullName);
@@ -364,8 +379,65 @@ export const KronoGamePlayer: React.FC<KronoGamePlayerProps> = ({
                 </div>
               </div>
 
-              {/* Group Formation if classroom_group */}
-              {isClassroomGroup && (
+              {/* Governança de Grupo cadastrado pelo Professor */}
+              {groupAccess.hasConfiguredGroups && (
+                <div
+                  className={
+                    'p-4 rounded-2xl border space-y-2.5 ' +
+                    (groupAccess.allowed
+                      ? 'bg-emerald-500/10 border-emerald-500/40'
+                      : 'bg-amber-500/10 border-amber-500/40')
+                  }
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs sm:text-sm font-black text-foreground flex items-center gap-2">
+                      {groupAccess.allowed ? (
+                        <Crown className="w-4 h-4 text-amber-400" />
+                      ) : (
+                        <Lock className="w-4 h-4 text-amber-400" />
+                      )}
+                      <span>
+                        {groupAccess.group
+                          ? groupAccess.group.name + (groupAccess.isLeader ? ' • Você é o(a) Líder' : ' • Acesso Somente Leitura')
+                          : 'Aguardando cadastro do grupo pelo professor'}
+                      </span>
+                    </span>
+                    {groupAccess.leader && (
+                      <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-400/40">
+                        👑 Líder: {groupAccess.leader.fullName}
+                      </span>
+                    )}
+                  </div>
+
+                  {groupAccess.members.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {groupAccess.members.map((m) => (
+                        <span
+                          key={m.id}
+                          className={
+                            'text-[11px] font-semibold px-2.5 py-1 rounded-lg border ' +
+                            (m.id === groupAccess.group?.leaderId
+                              ? 'bg-amber-500/15 border-amber-400/50 text-amber-200'
+                              : 'bg-surface border-border text-foreground')
+                          }
+                        >
+                          {m.id === groupAccess.group?.leaderId ? '👑 ' : ''}
+                          {m.fullName}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {!groupAccess.allowed && (
+                    <p className="text-xs text-amber-300 font-medium leading-relaxed">
+                      {groupAccess.message}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Group Formation if classroom_group (legado sem grupos pré-cadastrados) */}
+              {isClassroomGroup && !groupAccess.hasConfiguredGroups && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <label className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-2">
@@ -431,16 +503,27 @@ export const KronoGamePlayer: React.FC<KronoGamePlayerProps> = ({
                 </div>
               )}
 
-              {/* Start Button */}
-              <button
-                type="button"
-                onClick={handleStartGame}
-                className="w-full py-4 rounded-2xl bg-primary hover:bg-primary-hover text-white font-extrabold text-sm sm:text-base shadow-xl shadow-primary/25 flex items-center justify-center gap-2 transition-transform hover:scale-[1.01] cursor-pointer"
-              >
-                <Gamepad2 className="w-5 h-5" />
-                <span>Começar Partida do KronoGames</span>
-                <ArrowRight className="w-5 h-5" />
-              </button>
+              {/* Start Button (liberado apenas para o Líder quando houver grupos cadastrados) */}
+              {groupAccess.allowed ? (
+                <button
+                  type="button"
+                  onClick={handleStartGame}
+                  className="w-full py-4 rounded-2xl bg-primary hover:bg-primary-hover text-white font-extrabold text-sm sm:text-base shadow-xl shadow-primary/25 flex items-center justify-center gap-2 transition-transform hover:scale-[1.01] cursor-pointer"
+                >
+                  <Gamepad2 className="w-5 h-5" />
+                  <span>Começar Partida do KronoGames</span>
+                  <ArrowRight className="w-5 h-5" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-full py-3.5 rounded-2xl bg-surface hover:bg-surface-hover border border-border text-muted font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Lock className="w-4 h-4 text-amber-400" />
+                  <span>Apenas o(a) Líder pode iniciar e enviar esta partida — Voltar</span>
+                </button>
+              )}
             </div>
           )}
 

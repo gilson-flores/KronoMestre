@@ -26,7 +26,7 @@ import {
   AlertTriangle,
   AlertCircle,
 } from 'lucide-react';
-import { Activity, ActivityQuestion, ActivityType, StudentUser, GameMode, GameExecutionContext, GameData } from '@/lib/types';
+import { Activity, ActivityQuestion, ActivityType, StudentUser, GameMode, GameExecutionContext, GameData, ActivityGroup } from '@/lib/types';
 import { doesTurmaHavePNEStudent, canStudentAccessActivity, isStudentPNE, getOriginalTurmas } from '@/lib/studentUtils';
 import { TurmaMultiSelect } from '@/components/TurmaMultiSelect';
 import {
@@ -104,6 +104,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
   const [deadlineDateTime, setDeadlineDateTime] = useState(() => getTomorrowString());
   const [maxGrade, setMaxGrade] = useState<number>(10);
   const [allowGroupWork, setAllowGroupWork] = useState<boolean>(false);
+  const [activityGroups, setActivityGroups] = useState<ActivityGroup[]>([]);
   
   // KronoGames & Standalone Adaptation States
   const [isStandaloneAdaptation, setIsStandaloneAdaptation] = useState(false);
@@ -286,7 +287,8 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
       status: 'Ativo',
       deadline: formattedDeadline,
       maxGrade,
-      allowGroupWork: isParallelRecovery ? false : (isGame ? gameExecutionContext === 'classroom_group' : allowGroupWork),
+      allowGroupWork: isParallelRecovery ? false : (isGame ? gameExecutionContext === 'classroom_group' : allowGroupWork || type === 'Trabalho em grupo'),
+      activityGroups: !isParallelRecovery && (allowGroupWork || type === 'Trabalho em grupo' || (isGame && gameExecutionContext === 'classroom_group')) ? activityGroups : undefined,
       securityFocusLock: isGame ? false : securityFocusLock,
       securityBlockCopyStatement: isGame ? false : securityBlockCopyStatement,
       securityBlockPasteEssay: isGame ? false : securityBlockPasteEssay,
@@ -839,7 +841,7 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
     );
   }
 
-  return <NewActivityModalBody {...{ onClose, availableTurmas, selectedTurmas, setSelectedTurmas, availableParentActivities, pneStudentsInSelectedTurmas, handleGenerateGameWithGemini, handleAddMultipleChoice, handleAddEssay, handleRemoveQuestion, handleUpdateMCQuestion, handleUpdateMCOption, handleUpdateEssayQuestion, handleSubmit, title, setTitle, subject, setSubject, description, setDescription, supportMaterial, setSupportMaterial, supportLinkInput, setSupportLinkInput, type, setType, recoveryFromId, setRecoveryFromId, deadlineDateTime, setDeadlineDateTime, maxGrade, setMaxGrade, allowGroupWork, setAllowGroupWork, isStandaloneAdaptation, setIsStandaloneAdaptation, gameExecutionContext, setGameExecutionContext, gameMode, setGameMode, isGeneratingGame, gameData, gameGenError, includedPneStudentIds, setIncludedPneStudentIds, isPneDropdownOpen, setIsPneDropdownOpen, securityFocusLock, setSecurityFocusLock, securityBlockCopyStatement, setSecurityBlockCopyStatement, securityBlockPasteEssay, setSecurityBlockPasteEssay, questions }} />;
+  return <NewActivityModalBody {...{ onClose, availableTurmas, selectedTurmas, setSelectedTurmas, availableParentActivities, pneStudentsInSelectedTurmas, handleGenerateGameWithGemini, handleAddMultipleChoice, handleAddEssay, handleRemoveQuestion, handleUpdateMCQuestion, handleUpdateMCOption, handleUpdateEssayQuestion, handleSubmit, title, setTitle, subject, setSubject, description, setDescription, supportMaterial, setSupportMaterial, supportLinkInput, setSupportLinkInput, type, setType, recoveryFromId, setRecoveryFromId, deadlineDateTime, setDeadlineDateTime, maxGrade, setMaxGrade, students, allowGroupWork, setAllowGroupWork, activityGroups, setActivityGroups, isStandaloneAdaptation, setIsStandaloneAdaptation, gameExecutionContext, setGameExecutionContext, gameMode, setGameMode, isGeneratingGame, gameData, gameGenError, includedPneStudentIds, setIncludedPneStudentIds, isPneDropdownOpen, setIsPneDropdownOpen, securityFocusLock, setSecurityFocusLock, securityBlockCopyStatement, setSecurityBlockCopyStatement, securityBlockPasteEssay, setSecurityBlockPasteEssay, questions }} />;
 };
 
 export default NewActivityModal;

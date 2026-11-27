@@ -23,7 +23,7 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
-import { Activity, ActivityQuestion, ActivityType, StudentUser } from '@/lib/types';
+import { Activity, ActivityQuestion, ActivityType, StudentUser, ActivityGroup } from '@/lib/types';
 import { getTurmaLabel, canStudentAccessActivity, isStudentPNE, getOriginalTurmas, recalculateActivityObjectiveSubmissions } from '@/lib/studentUtils';
 import { TurmaMultiSelect } from '@/components/TurmaMultiSelect';
 
@@ -68,6 +68,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
   const [deadline, setDeadline] = useState('');
   const [maxGrade, setMaxGrade] = useState<number>(10);
   const [allowGroupWork, setAllowGroupWork] = useState<boolean>(false);
+  const [activityGroups, setActivityGroups] = useState<ActivityGroup[]>([]);
   const [securityFocusLock, setSecurityFocusLock] = useState<boolean>(false);
   const [securityBlockCopyStatement, setSecurityBlockCopyStatement] = useState<boolean>(false);
   const [securityBlockPasteEssay, setSecurityBlockPasteEssay] = useState<boolean>(false);
@@ -105,7 +106,8 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
     setStatus(activity.status || 'Ativo');
     setDeadline(activity.deadline || '');
     setMaxGrade(activity.maxGrade ?? 10);
-    setAllowGroupWork(!!activity.allowGroupWork);
+    setAllowGroupWork(!!activity.allowGroupWork || activity.type === 'Trabalho em grupo' || activity.executionContext === 'classroom_group');
+    setActivityGroups(Array.isArray(activity.activityGroups) ? JSON.parse(JSON.stringify(activity.activityGroups)) : []);
     setSecurityFocusLock(!!activity.securityFocusLock);
     setSecurityBlockCopyStatement(!!activity.securityBlockCopyStatement);
     setSecurityBlockPasteEssay(!!activity.securityBlockPasteEssay);
@@ -256,7 +258,8 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
       status: finalStatus,
       deadline: deadline.trim() || 'Amanhã, 23:59',
       maxGrade,
-      allowGroupWork: isParallelRecovery ? false : allowGroupWork,
+      allowGroupWork: isParallelRecovery ? false : (allowGroupWork || type === 'Trabalho em grupo'),
+      activityGroups: isParallelRecovery ? [] : (allowGroupWork || type === 'Trabalho em grupo' || activity.executionContext === 'classroom_group' ? activityGroups : []),
       securityFocusLock,
       securityBlockCopyStatement,
       securityBlockPasteEssay,
@@ -474,7 +477,7 @@ export const EditActivityModal: React.FC<EditActivityModalProps> = ({
     );
   }
 
-  return <EditActivityModalBody {...{ onClose, availableTurmas, availableParentActivities, pneStudentsInSelectedTurmas, handleAddMultipleChoice, handleAddEssay, handleRemoveQuestion, handleUpdateMCQuestion, handleUpdateMCOption, handleUpdateEssayQuestion, handleSubmit, title, setTitle, subject, setSubject, supportMaterial, setSupportMaterial, supportLinkInput, setSupportLinkInput, selectedTurmas, setSelectedTurmas, type, setType, recoveryFromId, setRecoveryFromId, status, setStatus, deadline, setDeadline, maxGrade, setMaxGrade, allowGroupWork, setAllowGroupWork, securityFocusLock, setSecurityFocusLock, securityBlockCopyStatement, setSecurityBlockCopyStatement, securityBlockPasteEssay, setSecurityBlockPasteEssay, includedPneStudentIds, setIncludedPneStudentIds, isPneDropdownOpen, setIsPneDropdownOpen, questions, hasObjectiveQuestions, existingSubmissionsCount, objectiveAnswerKeyChanged, recalculateObjectivesOnSave, setRecalculateObjectivesOnSave }} />;
+  return <EditActivityModalBody {...{ onClose, availableTurmas, availableParentActivities, pneStudentsInSelectedTurmas, handleAddMultipleChoice, handleAddEssay, handleRemoveQuestion, handleUpdateMCQuestion, handleUpdateMCOption, handleUpdateEssayQuestion, handleSubmit, title, setTitle, subject, setSubject, supportMaterial, setSupportMaterial, supportLinkInput, setSupportLinkInput, selectedTurmas, setSelectedTurmas, type, setType, recoveryFromId, setRecoveryFromId, status, setStatus, deadline, setDeadline, maxGrade, setMaxGrade, students, allowGroupWork, setAllowGroupWork, activityGroups, setActivityGroups, securityFocusLock, setSecurityFocusLock, securityBlockCopyStatement, setSecurityBlockCopyStatement, securityBlockPasteEssay, setSecurityBlockPasteEssay, includedPneStudentIds, setIncludedPneStudentIds, isPneDropdownOpen, setIsPneDropdownOpen, questions, hasObjectiveQuestions, existingSubmissionsCount, objectiveAnswerKeyChanged, recalculateObjectivesOnSave, setRecalculateObjectivesOnSave }} />;
 };
 
 export default EditActivityModal;

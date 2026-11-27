@@ -31,15 +31,7 @@ import {
   FlaskConical,
   RotateCcw
 } from 'lucide-react';
-import {
-  Activity,
-  StudentUser,
-  TeacherUser,
-  GameMode,
-  GameData,
-  GameStage,
-  GameExecutionContext,
-} from '@/lib/types';
+import { Activity, StudentUser, TeacherUser, GameMode, GameData, GameStage, GameExecutionContext, ActivityGroup } from '@/lib/types';
 import { getOriginalTurmas, getTurmaLabel, isActivityAdapted, getLinkableActivitiesWithLabels } from '@/lib/studentUtils';
 import { KronoIcon } from '@/components/ui/KronoIcon';
 import { TurmaFilterDropdown } from '@/components/TurmaFilterDropdown';
@@ -75,6 +67,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
 }) => {
   // Navegação Interna: Galeria, Criar Jogo de Sala (Dupla/Grupo), Criar Missão de Casa (Individual)
   const [internalTab, setInternalTab] = useState<'gallery' | 'create_classroom' | 'create_homework'>('gallery');
+  const [activityGroups, setActivityGroups] = useState<ActivityGroup[]>([]);
 
   // Turmas extraídas dos alunos
   const turmasList = useMemo(() => getOriginalTurmas(students), [students]);
@@ -283,6 +276,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
       status: 'Ativo',
       maxGrade: 10,
       allowGroupWork: isGroup,
+      activityGroups: isGroup && selectedGameMode !== 'debate_paperless' ? activityGroups : undefined,
       isInteractive: true,
       activityDomain: 'interactive_game',
       isGameActivity: true,
@@ -304,6 +298,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
     setGameTitle('');
     setGameTopic('');
     setGameMaterial('');
+    setActivityGroups([]);
     setInternalTab('gallery');
     setTimeout(() => setSuccessBanner(null), 5000);
   };
@@ -592,7 +587,7 @@ export const InteractiveActivitiesView: React.FC<InteractiveActivitiesViewProps>
       {/* =========================================================================
           ABA 2 & 3: FORMULÁRIO DE CRIAÇÃO (SALA EM GRUPO OU MISSÃO DE CASA)
       ========================================================================= */}
-      <InteractiveCreatorBody {...{ activities, students, turmasList, MODE_DEFAULT_GUIDELINES, handleSelectGameMode, handleGenerateGame, handlePublishGame, internalTab, setInternalTab, targetTurmas, setTargetTurmas, gameTitle, setGameTitle, gameTopic, setGameTopic, gameMaterial, setGameMaterial, selectedGameMode, deadline, setDeadline, bindingMode, setBindingMode, linkedFormalActivityId, setLinkedFormalActivityId, isGenerating, stagedGameData, setStagedGameData, isReviewOpen, setIsReviewOpen }} />
+      <InteractiveCreatorBody {...{ activities, students, turmasList, MODE_DEFAULT_GUIDELINES, handleSelectGameMode, handleGenerateGame, handlePublishGame, internalTab, setInternalTab, activityGroups, setActivityGroups, targetTurmas, setTargetTurmas, gameTitle, setGameTitle, gameTopic, setGameTopic, gameMaterial, setGameMaterial, selectedGameMode, deadline, setDeadline, bindingMode, setBindingMode, linkedFormalActivityId, setLinkedFormalActivityId, isGenerating, stagedGameData, setStagedGameData, isReviewOpen, setIsReviewOpen }} />
     </div>
   );
 };

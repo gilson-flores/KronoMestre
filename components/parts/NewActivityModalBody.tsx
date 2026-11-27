@@ -32,9 +32,10 @@ import {
   createAdaptedMildModerateActivity,
   createAdaptedSeverePlayfulActivity,
 } from '@/lib/adaptationUtils';
+import { ActivityGroupManager } from '@/components/parts/ActivityGroupManager';
 
 export const NewActivityModalBody: React.FC<any> = (props) => {
-  const { onClose, availableTurmas, selectedTurmas, setSelectedTurmas, availableParentActivities, pneStudentsInSelectedTurmas, handleGenerateGameWithGemini, handleAddMultipleChoice, handleAddEssay, handleRemoveQuestion, handleUpdateMCQuestion, handleUpdateMCOption, handleUpdateEssayQuestion, handleSubmit, title, setTitle, subject, setSubject, description, setDescription, supportMaterial, setSupportMaterial, supportLinkInput, setSupportLinkInput, type, setType, recoveryFromId, setRecoveryFromId, deadlineDateTime, setDeadlineDateTime, maxGrade, setMaxGrade, allowGroupWork, setAllowGroupWork, isStandaloneAdaptation, setIsStandaloneAdaptation, gameExecutionContext, setGameExecutionContext, gameMode, setGameMode, isGeneratingGame, gameData, gameGenError, includedPneStudentIds, setIncludedPneStudentIds, isPneDropdownOpen, setIsPneDropdownOpen, securityFocusLock, setSecurityFocusLock, securityBlockCopyStatement, setSecurityBlockCopyStatement, securityBlockPasteEssay, setSecurityBlockPasteEssay, questions } = props;
+  const { onClose, availableTurmas, selectedTurmas, setSelectedTurmas, availableParentActivities, pneStudentsInSelectedTurmas, handleGenerateGameWithGemini, handleAddMultipleChoice, handleAddEssay, handleRemoveQuestion, handleUpdateMCQuestion, handleUpdateMCOption, handleUpdateEssayQuestion, handleSubmit, title, setTitle, subject, setSubject, description, setDescription, supportMaterial, setSupportMaterial, supportLinkInput, setSupportLinkInput, type, setType, recoveryFromId, setRecoveryFromId, deadlineDateTime, setDeadlineDateTime, maxGrade, setMaxGrade, students, allowGroupWork, setAllowGroupWork, activityGroups, setActivityGroups, isStandaloneAdaptation, setIsStandaloneAdaptation, gameExecutionContext, setGameExecutionContext, gameMode, setGameMode, isGeneratingGame, gameData, gameGenError, includedPneStudentIds, setIncludedPneStudentIds, isPneDropdownOpen, setIsPneDropdownOpen, securityFocusLock, setSecurityFocusLock, securityBlockCopyStatement, setSecurityBlockCopyStatement, securityBlockPasteEssay, setSecurityBlockPasteEssay, questions } = props;
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
       <div className="w-full max-w-2xl bg-background rounded-3xl border border-border p-5 sm:p-8 space-y-6 shadow-2xl relative my-auto max-h-[90vh] overflow-y-auto custom-scrollbar animate-fadeIn">
@@ -557,12 +558,21 @@ export const NewActivityModalBody: React.FC<any> = (props) => {
                     Permitir Atividade em Grupo?
                   </span>
                   <p className="text-[10px] text-muted">
-                    Quando ativo, os alunos podem escolher os membros da equipe no envio.
+                    Cadastre os grupos e defina o Líder (👑). Somente o líder responde e a nota replica para a equipe.
                   </p>
                 </div>
               </label>
             </div>
           </div>
+
+          {(allowGroupWork || type === 'Trabalho em grupo') && (
+            <ActivityGroupManager
+              students={students || []}
+              selectedTurmas={selectedTurmas || []}
+              groups={activityGroups || []}
+              onChange={setActivityGroups}
+            />
+          )}
 
           {/* Travas de Segurança Anti-Cola */}
           <div className="bg-surface p-4 rounded-2xl border border-amber-500/30 space-y-3">

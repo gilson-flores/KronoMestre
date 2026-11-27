@@ -42,12 +42,13 @@ import { getOriginalTurmas, getTurmaLabel, isActivityAdapted, getLinkableActivit
 import { KronoIcon } from '@/components/ui/KronoIcon';
 import { SOCIOLOGIA_EM_MOVIMENTO_CHAPTERS, getTextbookMarkdownSlice } from '@/lib/textbookMarkdownIndex';
 import { TurmaFilterDropdown } from '@/components/TurmaFilterDropdown';
+import { ActivityGroupManager } from '@/components/parts/ActivityGroupManager';
 
 export const InteractiveCreatorBody: React.FC<any> = (props) => {
   const [selectedBookChapter, setSelectedBookChapter] = useState('cap_1');
   const [quickPasteText, setQuickPasteText] = useState('');
   const [showQuickPaste, setShowQuickPaste] = useState(false);
-  const { activities, students, turmasList, MODE_DEFAULT_GUIDELINES, handleSelectGameMode, handleGenerateGame, handlePublishGame, internalTab, setInternalTab, targetTurmas, setTargetTurmas, gameTitle, setGameTitle, gameTopic, setGameTopic, gameMaterial, setGameMaterial, selectedGameMode, deadline, setDeadline, bindingMode, setBindingMode, linkedFormalActivityId, setLinkedFormalActivityId, isGenerating, stagedGameData, setStagedGameData, isReviewOpen, setIsReviewOpen } = props;
+  const { activities, students, turmasList, MODE_DEFAULT_GUIDELINES, handleSelectGameMode, handleGenerateGame, handlePublishGame, internalTab, setInternalTab, activityGroups, setActivityGroups, targetTurmas, setTargetTurmas, gameTitle, setGameTitle, gameTopic, setGameTopic, gameMaterial, setGameMaterial, selectedGameMode, deadline, setDeadline, bindingMode, setBindingMode, linkedFormalActivityId, setLinkedFormalActivityId, isGenerating, stagedGameData, setStagedGameData, isReviewOpen, setIsReviewOpen } = props;
   return (
     <>
       {(internalTab === 'create_classroom' || internalTab === 'create_homework') && (
@@ -536,6 +537,16 @@ Linha 2: Segunda pergunta..."
                 </div>
               )}
             </div>
+
+            {/* Cadastro de Grupos e Líder para Jogos Cooperativos de Sala (exceto Debate que já tem bancadas) */}
+            {internalTab === 'create_classroom' && selectedGameMode !== 'debate_paperless' && (
+              <ActivityGroupManager
+                students={students || []}
+                selectedTurmas={targetTurmas.length > 0 ? targetTurmas : turmasList}
+                groups={activityGroups || []}
+                onChange={setActivityGroups}
+              />
+            )}
 
             {/* Botões de Geração Completa com IA ou Criação Manual pelo Professor */}
             <div className="flex flex-col sm:flex-row gap-3">

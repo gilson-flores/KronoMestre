@@ -1,4 +1,4 @@
-import { Activity, StudentUser } from '@/lib/types';
+import { Activity, StudentUser, ActivityGroup, ActivitySubmission } from '@/lib/types';
 
 const IGNORED_SCHEDULE_TOKENS = new Set([
   'x',
@@ -243,5 +243,264 @@ export function syncGroupGradeToSubmissions(params: {
     totalSubmissions: currentSubmissions.length,
     pendingCorrection,
     submissions: currentSubmissions,
+  };
+}
+
+
+function normalizePersonKey(name?: string | null): string {
+  return String(name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function isGroupEnabledActivity(activity?: Activity | null): boolean {
+  if (!activity) return false;
+  return Boolean(
+    activity.allowGroupWork ||
+      activity.type === 'Trabalho em grupo' ||
+      activity.executionContext === 'classroom_group' ||
+      (Array.isArray(activity.activityGroups) && activity.activityGroups.length > 0)
+  );
+}
+
+export function findStudentActivityGroup(
+  activity: Activity | null | undefined,
+  studentId?: string | null
+): ActivityGroup | null {
+  if (!activity || !studentId || !Array.isArray(activity.activityGroups)) return null;
+  return (
+    activity.activityGroups.find(
+      (g) => g.leaderId === studentId || (Array.isArray(g.memberIds) && g.memberIds.includes(studentId))
+    ) || null
+  );
+}
+
+export function getActivityGroupMembers(
+  group: ActivityGroup,
+  allStudents: StudentUser[]
+): StudentUser[] {
+  const orderedIds = Array.from(new Set([group.leaderId, ...(group.memberIds || [])].filter(Boolean)));
+  const resolved: StudentUser[] = [];
+  for (const id of orderedIds) {
+    const found = allStudents.find((s) => s.id === id);
+    if (found) resolved.push(found);
+  }
+  return resolved;
+}
+
+export interface StudentGroupAccessResult {
+  isGroupActivity: boolean;
+  hasConfiguredGroups: boolean;
+  allowed: boolean;
+  isLeader: boolean;
+  reason?: 'not_assigned' | 'not_leader';
+  message?: string;
+  group: ActivityGroup | null;
+  leader: StudentUser | null;
+  members: StudentUser[];
+  groupMembersCsv?: string;
+}
+
+export function canStudentSubmitGroupActivity(
+  activity: Activity | null | undefined,
+  student: StudentUser | null | undefined,
+  allStudents: StudentUser[] = []
+): StudentGroupAccessResult {
+  const isGroupAct = isGroupEnabledActivity(activity);
+  const configuredGroups = Array.isArray(activity?.activityGroups) ? activity!.activityGroups! : [];
+  const hasConfiguredGroups = configuredGroups.length > 0;
+
+  if (!isGroupAct || !student) {
+    return {
+      isGroupActivity: isGroupAct,
+      hasConfiguredGroups,
+      allowed: true,
+      isLeader: false,
+      group: null,
+      leader: null,
+      members: [],
+    };
+  }
+
+  if (!hasConfiguredGroups) {
+    return {
+      isGroupActivity: true,
+      hasConfiguredGroups: false,
+      allowed: true,
+      isLeader: true,
+      group: null,
+      leader: student,
+      members: [student],
+    };
+  }
+
+  const group = findStudentActivityGroup(activity, student.id);
+  if (!group) {
+    return {
+      isGroupActivity: true,
+      hasConfiguredGroups: true,
+      allowed: false,
+      isLeader: false,
+      reason: 'not_assigned',
+      message: 'Você ainda não foi vinculado(a) a um grupo nesta atividade. Peça ao professor para registrar seu grupo.',
+      group: null,
+      leader: null,
+      members: [],
+    };
+  }
+
+  const members = getActivityGroupMembers(group, allStudents);
+  const leader =
+    allStudents.find((s) => s.id === group.leaderId) ||
+    (student.id === group.leaderId ? student : null);
+  const isLeader = group.leaderId === student.id;
+  const groupMembersCsv = members.map((m) => m.fullName).join(', ');
+
+  if (!isLeader) {
+    const leaderLabel = leader?.fullName || 'o(a) Líder do grupo';
+    return {
+      isGroupActivity: true,
+      hasConfiguredGroups: true,
+      allowed: false,
+      isLeader: false,
+      reason: 'not_leader',
+      message: 'Somente o(a) Líder do grupo (' + leaderLabel + ') pode responder e enviar esta atividade. Assim que a nota for lançada para o líder, ela será aplicada automaticamente a você.',
+      group,
+      leader,
+      members,
+      groupMembersCsv,
+    };
+  }
+
+  return {
+    isGroupActivity: true,
+    hasConfiguredGroups: true,
+    allowed: true,
+    isLeader: true,
+    group,
+    leader: leader || student,
+    members,
+    groupMembersCsv,
+  };
+}
+
+export interface GroupReplicationPlan {
+  isGroupMember: boolean;
+  isLeader: boolean;
+  shouldReplicate: boolean;
+  group: ActivityGroup | null;
+  groupName?: string;
+  leaderId?: string;
+  targetMembers: StudentUser[];
+  memberNamesCsv?: string;
+}
+
+export function resolveGroupReplicationTargets(
+  activity: Activity,
+  allStudents: StudentUser[],
+  gradedStudentId: string,
+  existingSub?: ActivitySubmission | any
+): GroupReplicationPlan {
+  const configuredGroup = findStudentActivityGroup(activity, gradedStudentId);
+
+  // Caso 1: Grupo oficial cadastrado pelo professor na atividade
+  if (configuredGroup) {
+    const isLeader = configuredGroup.leaderId === gradedStudentId;
+    const members = getActivityGroupMembers(configuredGroup, allStudents);
+    const memberNamesCsv = members.map((m) => m.fullName).join(', ');
+    return {
+      isGroupMember: true,
+      isLeader,
+      shouldReplicate: isLeader,
+      group: configuredGroup,
+      groupName: configuredGroup.name,
+      leaderId: configuredGroup.leaderId,
+      targetMembers: isLeader ? members : [],
+      memberNamesCsv,
+    };
+  }
+
+  // Caso 2: Retrocompatibilidade com atividades em grupo legadas (string groupMembers na submissão)
+  const rawCsv = String(existingSub?.groupMembers || '').trim();
+  if (!rawCsv) {
+    return {
+      isGroupMember: false,
+      isLeader: false,
+      shouldReplicate: false,
+      group: null,
+      targetMembers: [],
+    };
+  }
+
+  const memberNames = rawCsv
+    .split(',')
+    .map((n) => n.trim())
+    .filter(Boolean);
+
+  if (memberNames.length <= 1) {
+    return {
+      isGroupMember: false,
+      isLeader: false,
+      shouldReplicate: false,
+      group: null,
+      targetMembers: [],
+    };
+  }
+
+  const gradedStudent = allStudents.find((s) => s.id === gradedStudentId);
+  const gradedNameNorm = normalizePersonKey(existingSub?.studentName || gradedStudent?.fullName || '');
+  const firstMemberNorm = normalizePersonKey(memberNames[0]);
+
+  // Determina líder legado: flag explícita isGroupLeader / groupLeaderId, ou 1º nome da lista (quem enviou)
+  const isExplicitLeader =
+    existingSub?.isGroupLeader === true ||
+    (Boolean(existingSub?.groupLeaderId) && existingSub.groupLeaderId === gradedStudentId);
+  const isExplicitNonLeader =
+    existingSub?.isGroupLeader === false ||
+    (Boolean(existingSub?.groupLeaderId) && existingSub.groupLeaderId !== gradedStudentId);
+
+  const isLegacyLeader = isExplicitLeader || (!isExplicitNonLeader && Boolean(gradedNameNorm) && gradedNameNorm === firstMemberNorm);
+
+  if (!isLegacyLeader) {
+    return {
+      isGroupMember: true,
+      isLeader: false,
+      shouldReplicate: false,
+      group: null,
+      groupName: existingSub?.groupName,
+      leaderId: existingSub?.groupLeaderId,
+      targetMembers: [],
+      memberNamesCsv: rawCsv,
+    };
+  }
+
+  const matchedMembers: StudentUser[] = [];
+  if (gradedStudent) matchedMembers.push(gradedStudent);
+
+  for (const nameCandidate of memberNames) {
+    const normCandidate = normalizePersonKey(nameCandidate);
+    if (!normCandidate) continue;
+    const found = allStudents.find(
+      (st) =>
+        normalizePersonKey(st.fullName) === normCandidate ||
+        normalizePersonKey((st as any).name) === normCandidate
+    );
+    if (found && !matchedMembers.some((m) => m.id === found.id)) {
+      matchedMembers.push(found);
+    }
+  }
+
+  return {
+    isGroupMember: true,
+    isLeader: true,
+    shouldReplicate: true,
+    group: null,
+    groupName: existingSub?.groupName,
+    leaderId: gradedStudentId,
+    targetMembers: matchedMembers,
+    memberNamesCsv: rawCsv,
   };
 }

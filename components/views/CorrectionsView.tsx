@@ -13,10 +13,12 @@ import {
   ChevronUp,
   FileCheck,
   FileText,
-  Clock
+  Clock,
+  Crown
 } from 'lucide-react';
 import { Activity, StudentUser } from '@/lib/types';
 import { getOriginalTurmas, getTurmaLabel, getYearFromTurma, isActivityAdapted, getActivityStudentAndSubmissionCounts, recalculateActivityObjectiveSubmissions, computeClassEssaySimilarity } from "@/lib/studentUtils";
+import { resolveGroupReplicationTargets } from '@/lib/groupActivityUtils';
 
 interface CorrectionsViewProps {
   onSaveActivity?: (updatedActivity: Activity) => void;
@@ -296,9 +298,11 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
 
   const handleSaveGrade = (act: Activity, studentId: string, action: 'graded' | 'returned', existingSub?: any, studentLabel?: string) => {
     const subKey = `${act.id}_${studentId}`;
-    const rawScore = draftScores[subKey] !== undefined
-      ? draftScores[subKey]
+    const isGameScoreMode = Boolean((act.isGameActivity || act.type === 'Jogo Avaliativo') && !(Number(existingSub?.maxEssayScore || 0) > 0));
+    const fallbackExistingScore = isGameScoreMode
+      ? (existingSub?.objectiveScore !== undefined ? String(existingSub.objectiveScore) : '0')
       : (existingSub?.essayScore !== undefined ? String(existingSub.essayScore) : '0');
+    const rawScore = draftScores[subKey] !== undefined ? draftScores[subKey] : fallbackExistingScore;
     let parsedScore = parseFloat(String(rawScore).replace(',', '.') || '0');
 
     if (action === 'graded' && (isNaN(parsedScore) || parsedScore < 0)) {
@@ -638,6 +642,8 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                         matchedStudent?.turma || (sub as any).turma || ''
                       );
                       const classSimilarity = computeClassEssaySimilarity(originalAct, students, sub, 50);
+                      const groupRole = resolveGroupReplicationTargets(originalAct, students, sub.studentId, sub);
+                      const isGameNoEssay = Boolean((originalAct.isGameActivity || originalAct.type === 'Jogo Avaliativo') && !(Number(sub.maxEssayScore || 0) > 0));
                       
                       return (
                         <div key={sub.studentId} className="animate-fadeIn">
@@ -656,6 +662,33 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                                     </span>
                                   )}
                                   <span className="truncate">{resolvedStudentName}</span>
+                                  {groupRole.isGroupMember && (
+                                    <span
+                                      className={
+                                        'text-[10px] font-black px-2 py-0.5 rounded-md border shrink-0 inline-flex items-center gap-1 ' +
+                                        (groupRole.shouldReplicate
+                                          ? 'bg-amber-500/20 text-amber-300 border-amber-400/40'
+                                          : 'bg-indigo-500/15 text-indigo-300 border-indigo-400/30')
+                                      }
+                                      title={
+                                        groupRole.shouldReplicate
+                                          ? 'Líder do grupo: salvar a nota aqui replica automaticamente para todos os integrantes'
+                                          : 'Integrante do grupo: editar aqui altera somente a nota individual deste aluno'
+                                      }
+                                    >
+                                      {groupRole.shouldReplicate ? (
+                                        <>
+                                          <Crown className="w-3 h-3" />
+                                          <span>Líder{groupRole.groupName ? ' • ' + groupRole.groupName : ''}</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Users className="w-3 h-3" />
+                                          <span>{groupRole.groupName || 'Integrante'}</span>
+                                        </>
+                                      )}
+                                    </span>
+                                  )}
                                   {sub.status === 'graded' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
                                   {sub.status === 'returned' && <RefreshCw className="w-3.5 h-3.5 text-orange-400" />}
                                   {classSimilarity.matchCount > 0 && (
@@ -894,17 +927,53 @@ export const CorrectionsView: React.FC<CorrectionsViewProps> = ({
                                 )}
                               </div>
 
+                              {/* Aviso contextual de Governança de Grupo */}
+                              {groupRole.isGroupMember && (
+                                <div
+                                  className={
+                                    'px-3 py-2 rounded-xl border text-[11px] font-semibold flex items-center gap-2 ' +
+                                    (groupRole.shouldReplicate
+                                      ? 'bg-amber-500/10 border-amber-400/35 text-amber-200'
+                                      : 'bg-indigo-500/10 border-indigo-400/30 text-indigo-200')
+                                  }
+                                >
+                                  {groupRole.shouldReplicate ? (
+                                    <>
+                                      <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                      <span>
+                                        <strong>Nota do Líder:</strong> ao aprovar/atualizar aqui, a nota será replicada automaticamente para todos os integrantes do grupo ({Math.max(1, groupRole.targetMembers.length)} alunos).
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Users className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                                      <span>
+                                        <strong>Ajuste individual:</strong> alterar esta nota modifica apenas este integrante sem mudar o restante do grupo.
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+
                               {/* Campos de Correção / Edição */}
                               <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end pt-2">
                                 <div className="sm:col-span-3">
-                                  <label className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-1">Nota Dissertativa</label>
+                                  <label className="text-[10px] font-bold text-muted uppercase tracking-wider block mb-1">
+                                    {isGameNoEssay ? 'Nota do Jogo' : 'Nota Dissertativa'}
+                                  </label>
                                   <input
                                     type="number"
-                                    step="0.1"
+                                    step="0.5"
                                     min="0"
-                                    max={sub.maxEssayScore || act.maxGrade || 10}
-                                    placeholder={`Máx: ${sub.maxEssayScore || act.maxGrade || 10}`}
-                                    value={draftScores[subKey] !== undefined ? draftScores[subKey] : (sub.essayScore !== undefined ? sub.essayScore : '')}
+                                    max={isGameNoEssay ? (act.maxGrade || 10) : (sub.maxEssayScore || act.maxGrade || 10)}
+                                    placeholder={`Máx: ${isGameNoEssay ? (act.maxGrade || 10) : (sub.maxEssayScore || act.maxGrade || 10)}`}
+                                    value={
+                                      draftScores[subKey] !== undefined
+                                        ? draftScores[subKey]
+                                        : isGameNoEssay
+                                        ? (sub.objectiveScore !== undefined ? sub.objectiveScore : '')
+                                        : (sub.essayScore !== undefined ? sub.essayScore : '')
+                                    }
                                     onChange={(e) => handleScoreChange(subKey, e.target.value)}
                                     className="w-full bg-background border border-border rounded-xl px-3 py-2.5 text-xs text-foreground font-bold focus:outline-none focus:border-sky-400"
                                   />

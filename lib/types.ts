@@ -93,8 +93,20 @@ export interface ActivitySubmission {
   teacherFeedback?: string;
   registeredInStateSystem?: boolean;
   groupMembers?: string;
+  groupId?: string;
+  groupName?: string;
+  groupLeaderId?: string;
+  isGroupLeader?: boolean;
   returnCount?: number;
   isPhysicalDelivery?: boolean;
+}
+
+export interface ActivityGroup {
+  id: string;
+  name: string;
+  turma: string;
+  leaderId: string;
+  memberIds: string[];
 }
 
 export interface MultipleChoiceQuestion {
@@ -289,6 +301,7 @@ export interface Activity {
   dueDate?: string;
   maxGrade?: number;
   allowGroupWork?: boolean;
+  activityGroups?: ActivityGroup[];
   securityFocusLock?: boolean;
   securityBlockCopyStatement?: boolean;
   securityBlockPasteEssay?: boolean;

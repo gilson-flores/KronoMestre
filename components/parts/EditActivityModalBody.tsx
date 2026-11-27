@@ -25,9 +25,10 @@ import {
 import { Activity, ActivityQuestion, ActivityType, StudentUser } from '@/lib/types';
 import { getTurmaLabel, canStudentAccessActivity, isStudentPNE, getOriginalTurmas } from '@/lib/studentUtils';
 import { TurmaMultiSelect } from '@/components/TurmaMultiSelect';
+import { ActivityGroupManager } from '@/components/parts/ActivityGroupManager';
 
 export const EditActivityModalBody: React.FC<any> = (props) => {
-  const { onClose, availableTurmas, availableParentActivities, pneStudentsInSelectedTurmas, handleAddMultipleChoice, handleAddEssay, handleRemoveQuestion, handleUpdateMCQuestion, handleUpdateMCOption, handleUpdateEssayQuestion, handleSubmit, title, setTitle, subject, setSubject, supportMaterial, setSupportMaterial, supportLinkInput, setSupportLinkInput, selectedTurmas, setSelectedTurmas, type, setType, recoveryFromId, setRecoveryFromId, status, setStatus, deadline, setDeadline, maxGrade, setMaxGrade, allowGroupWork, setAllowGroupWork, securityFocusLock, setSecurityFocusLock, securityBlockCopyStatement, setSecurityBlockCopyStatement, securityBlockPasteEssay, setSecurityBlockPasteEssay, includedPneStudentIds, setIncludedPneStudentIds, isPneDropdownOpen, setIsPneDropdownOpen, questions, hasObjectiveQuestions, existingSubmissionsCount, objectiveAnswerKeyChanged, recalculateObjectivesOnSave, setRecalculateObjectivesOnSave } = props;
+  const { onClose, availableTurmas, availableParentActivities, pneStudentsInSelectedTurmas, handleAddMultipleChoice, handleAddEssay, handleRemoveQuestion, handleUpdateMCQuestion, handleUpdateMCOption, handleUpdateEssayQuestion, handleSubmit, title, setTitle, subject, setSubject, supportMaterial, setSupportMaterial, supportLinkInput, setSupportLinkInput, selectedTurmas, setSelectedTurmas, type, setType, recoveryFromId, setRecoveryFromId, status, setStatus, deadline, setDeadline, maxGrade, setMaxGrade, students, allowGroupWork, setAllowGroupWork, activityGroups, setActivityGroups, securityFocusLock, setSecurityFocusLock, securityBlockCopyStatement, setSecurityBlockCopyStatement, securityBlockPasteEssay, setSecurityBlockPasteEssay, includedPneStudentIds, setIncludedPneStudentIds, isPneDropdownOpen, setIsPneDropdownOpen, questions, hasObjectiveQuestions, existingSubmissionsCount, objectiveAnswerKeyChanged, recalculateObjectivesOnSave, setRecalculateObjectivesOnSave } = props;
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-2.5 sm:p-4 md:p-6 overflow-y-auto">
       <div className="bg-background border border-border w-full max-w-3xl rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 md:p-8 space-y-4 sm:space-y-5 my-auto max-h-[94vh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar text-foreground shadow-2xl relative animate-fadeIn">
@@ -341,10 +342,20 @@ export const EditActivityModalBody: React.FC<any> = (props) => {
                   Permitir Atividade em Grupo?
                 </span>
                 <p className="text-[10px] text-muted leading-relaxed">
-                  Quando ativo, os alunos podem escolher os membros da equipe no envio.
+                  Cadastre os grupos e defina o Líder (👑). Somente o líder responde e a nota replica para todos do grupo.
                 </p>
               </div>
             </label>
+            {(allowGroupWork || type === 'Trabalho em grupo') && (
+              <div className="mt-3">
+                <ActivityGroupManager
+                  students={students || []}
+                  selectedTurmas={selectedTurmas || []}
+                  groups={activityGroups || []}
+                  onChange={setActivityGroups}
+                />
+              </div>
+            )}
           </div>
 
           {/* Travas de Segurança Anti-Cola */}

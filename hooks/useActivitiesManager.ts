@@ -4,6 +4,7 @@ import React, { useState, useCallback } from 'react';
 import { Activity, StudentUser, TeacherUser } from '@/lib/types';
 import { setScopedLocalStorageItem } from '@/lib/cacheUtils';
 import { normalizeStudentName, isActivityAdapted } from '@/lib/studentUtils';
+import { resolveGroupReplicationTargets, canStudentSubmitGroupActivity } from '@/lib/groupActivityUtils';
 
 interface UseActivitiesManagerParams {
   initialActivities: Activity[];
@@ -192,49 +193,57 @@ export function useActivitiesManager({
           return;
         }
 
-        const isInitialGroupGrading =
-          currentSub?.status === 'pending' && Boolean(currentSub?.groupMembers);
+        const replicationPlan = resolveGroupReplicationTargets(
+          targetActivity,
+          students,
+          studentId,
+          currentSub
+        );
+
+        const isGameNoEssay = Boolean(
+          (targetActivity.isGameActivity || targetActivity.type === 'Jogo Avaliativo') &&
+            !(Number(currentSub?.maxEssayScore || 0) > 0)
+        );
+
         const targetGroupStudentIds = new Set<string>([studentId]);
         const missingGroupMembers: StudentUser[] = [];
 
-        if (currentSub?.groupMembers) {
-          const memberNames = currentSub.groupMembers
-            .split(',')
-            .map((n) => n.trim())
-            .filter(Boolean);
-
-          memberNames.forEach((memberCandidate) => {
-            const normCandidate = normalizeStudentName(memberCandidate);
-            const matchedSt = students.find(
-              (st) =>
-                normalizeStudentName(st.fullName) === normCandidate ||
-                st.fullName.toLowerCase() === memberCandidate.toLowerCase()
+        if (replicationPlan.shouldReplicate) {
+          replicationPlan.targetMembers.forEach((memberSt) => {
+            targetGroupStudentIds.add(memberSt.id);
+            const existsInActivity = targetActivity.submissions.some(
+              (s) => s.studentId === memberSt.id
             );
-            if (matchedSt) {
-              targetGroupStudentIds.add(matchedSt.id);
-              const existsInActivity = targetActivity.submissions.some(
-                (s) => s.studentId === matchedSt.id
-              );
-              if (!existsInActivity) {
-                missingGroupMembers.push(matchedSt);
-              }
+            if (!existsInActivity) {
+              missingGroupMembers.push(memberSt);
             }
           });
 
-          targetActivity.submissions.forEach((s) => {
-            if (
-              s.groupMembers === currentSub.groupMembers ||
-              memberNames.some((m) => normalizeStudentName(m) === normalizeStudentName(s.studentName))
-            ) {
-              targetGroupStudentIds.add(s.studentId);
-            }
-          });
+          // Também garante inclusão de submissões legadas com o mesmo groupMembers CSV
+          if (!replicationPlan.group && currentSub?.groupMembers) {
+            const memberNames = currentSub.groupMembers
+              .split(',')
+              .map((n) => n.trim())
+              .filter(Boolean);
+            targetActivity.submissions.forEach((s) => {
+              if (
+                s.groupMembers === currentSub.groupMembers ||
+                memberNames.some(
+                  (m) => normalizeStudentName(m) === normalizeStudentName(s.studentName)
+                )
+              ) {
+                targetGroupStudentIds.add(s.studentId);
+              }
+            });
+          }
         }
 
-        const idsToUpdate = isInitialGroupGrading ? Array.from(targetGroupStudentIds) : [studentId];
+        const idsToUpdate = replicationPlan.shouldReplicate
+          ? Array.from(targetGroupStudentIds)
+          : [studentId];
         let updatedSubmissions = [...targetActivity.submissions];
 
-        if (isInitialGroupGrading && missingGroupMembers.length > 0) {
+        if (replicationPlan.shouldReplicate && missingGroupMembers.length > 0) {
           missingGroupMembers.forEach((memberSt) => {
             if (!updatedSubmissions.some((s) => s.studentId === memberSt.id)) {
               updatedSubmissions.push({
@@ -244,15 +253,19 @@ export function useActivitiesManager({
                 tag: memberSt.tag,
                 avatarUrl: memberSt.avatarUrl,
                 submittedAt: currentSub?.submittedAt || new Date().toLocaleDateString('pt-BR'),
-                objectiveScore: currentSub?.objectiveScore || 0,
-                maxObjectiveScore: currentSub?.maxObjectiveScore || 0,
-                maxEssayScore: currentSub?.maxEssayScore || 0,
+                objectiveScore: isGameNoEssay ? essayScore : (currentSub?.objectiveScore || 0),
+                maxObjectiveScore: currentSub?.maxObjectiveScore || (isGameNoEssay ? (targetActivity.maxGrade || 10) : 0),
+                maxEssayScore: isGameNoEssay ? 0 : (currentSub?.maxEssayScore || targetActivity.maxGrade || 0),
                 status: status,
                 essayAnswer: currentSub?.essayAnswer || '',
                 selectedObjectiveAnswers: currentSub?.selectedObjectiveAnswers || {},
-                groupMembers: currentSub?.groupMembers || undefined,
+                groupMembers: replicationPlan.memberNamesCsv || currentSub?.groupMembers || undefined,
+                groupId: replicationPlan.group?.id || currentSub?.groupId,
+                groupName: replicationPlan.groupName || currentSub?.groupName,
+                groupLeaderId: replicationPlan.leaderId || studentId,
+                isGroupLeader: memberSt.id === (replicationPlan.leaderId || studentId),
                 teacherFeedback: feedback,
-                essayScore: essayScore,
+                essayScore: isGameNoEssay ? 0 : essayScore,
                 extraPoints: extraPoints || 0,
                 registeredInStateSystem: registeredInStateSystem || false,
               });
@@ -265,13 +278,26 @@ export function useActivitiesManager({
             const matchedSt = students.find(
               (s) => s.id === sub.studentId || (Boolean(s.matricula) && s.matricula === sub.matricula)
             );
+            const isLeaderRow = replicationPlan.shouldReplicate
+              ? sub.studentId === (replicationPlan.leaderId || studentId)
+              : sub.isGroupLeader;
             return {
               ...sub,
               studentName: (sub.studentName && sub.studentName.trim()) || matchedSt?.fullName || (matchedSt as any)?.name || sub.studentName || '',
               avatarUrl: sub.avatarUrl || matchedSt?.avatarUrl || '',
-              essayScore,
+              objectiveScore: isGameNoEssay ? essayScore : (sub.objectiveScore ?? currentSub?.objectiveScore ?? 0),
+              essayScore: isGameNoEssay ? 0 : essayScore,
               teacherFeedback: feedback,
               status,
+              ...(replicationPlan.shouldReplicate
+                ? {
+                    groupMembers: replicationPlan.memberNamesCsv || sub.groupMembers,
+                    groupId: replicationPlan.group?.id || sub.groupId,
+                    groupName: replicationPlan.groupName || sub.groupName,
+                    groupLeaderId: replicationPlan.leaderId || studentId,
+                    isGroupLeader: isLeaderRow,
+                  }
+                : {}),
               returnCount: status === 'returned' ? (sub.returnCount || 0) + 1 : sub.returnCount,
               extraPoints: extraPoints !== undefined ? extraPoints : sub.extraPoints,
               registeredInStateSystem:
@@ -308,9 +334,12 @@ export function useActivitiesManager({
             body: JSON.stringify(updatedActivity),
           });
           if (!res.ok) throw new Error('Falha ao atualizar a atividade na nuvem.');
+          const replicatedPeers = Math.max(0, idsToUpdate.length - 1);
           showGlobalStatus(
             'success',
-            'Nota e feedback sincronizados diretamente no Firebase com sucesso!',
+            replicatedPeers > 0
+              ? 'Nota do Líder salva e replicada automaticamente para +' + replicatedPeers + ' integrante(s) do grupo!'
+              : 'Nota e feedback sincronizados diretamente no Firebase com sucesso!',
             { skipScroll: true }
           );
         } catch (err) {
@@ -346,8 +375,25 @@ export function useActivitiesManager({
       }
 
       try {
-        const targetStudents: StudentUser[] = [studentUser];
-        if (groupMembers) {
+        const currentAct = activities.find((a) => a.id === activityId);
+        if (!currentAct) {
+          showGlobalStatus('error', 'Atividade não encontrada na lista.');
+          return;
+        }
+
+        const groupAccess = canStudentSubmitGroupActivity(currentAct, studentUser, students);
+        if (!groupAccess.allowed) {
+          showGlobalStatus('error', groupAccess.message || 'Somente o(a) Líder do grupo pode enviar esta atividade.');
+          return;
+        }
+
+        let targetStudents: StudentUser[] = [studentUser];
+        let effectiveGroupCsv = groupMembers;
+
+        if (groupAccess.hasConfiguredGroups && groupAccess.members.length > 0) {
+          targetStudents = groupAccess.members;
+          effectiveGroupCsv = groupAccess.groupMembersCsv || groupMembers;
+        } else if (groupMembers) {
           const memberNames = groupMembers
             .split(',')
             .map((n) => n.trim())
@@ -366,11 +412,7 @@ export function useActivitiesManager({
           });
         }
 
-        const currentAct = activities.find((a) => a.id === activityId);
-        if (!currentAct) {
-          showGlobalStatus('error', 'Atividade não encontrada na lista.');
-          return;
-        }
+        const leaderIdForSubmit = groupAccess.group?.leaderId || (targetStudents.length > 1 ? studentUser.id : undefined);
 
         const updatedSubmissions = [...currentAct.submissions];
 
@@ -400,9 +442,13 @@ export function useActivitiesManager({
               maxEssayScore,
               selectedObjectiveAnswers,
               groupMembers:
-                groupMembers !== undefined
-                  ? groupMembers
+                effectiveGroupCsv !== undefined
+                  ? effectiveGroupCsv
                   : updatedSubmissions[existingIndex].groupMembers,
+              groupId: groupAccess.group?.id || updatedSubmissions[existingIndex].groupId,
+              groupName: groupAccess.group?.name || updatedSubmissions[existingIndex].groupName,
+              groupLeaderId: leaderIdForSubmit || updatedSubmissions[existingIndex].groupLeaderId,
+              isGroupLeader: leaderIdForSubmit ? targetSt.id === leaderIdForSubmit : updatedSubmissions[existingIndex].isGroupLeader,
               status: submissionStatus,
               teacherFeedback: isAutoGradedGame
                 ? updatedSubmissions[existingIndex].teacherFeedback ||
@@ -423,7 +469,11 @@ export function useActivitiesManager({
               status: submissionStatus,
               essayAnswer,
               selectedObjectiveAnswers,
-              groupMembers: groupMembers || undefined,
+              groupMembers: effectiveGroupCsv || undefined,
+              groupId: groupAccess.group?.id,
+              groupName: groupAccess.group?.name,
+              groupLeaderId: leaderIdForSubmit,
+              isGroupLeader: leaderIdForSubmit ? targetSt.id === leaderIdForSubmit : undefined,
               teacherFeedback: isAutoGradedGame
                 ? '🎮 Avaliação automática KronoGames concluída.'
                 : '',
